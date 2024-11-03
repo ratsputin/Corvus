@@ -1,0 +1,303 @@
+
+date created :  23 September 1982
+date modified:  23 September 1982
+file         :  kbrdtbls.text
+author       :  Keith Ball
+Title        :  How to Build and Install Keyboard Translation Tables
+
+
+
+     This document describes the Keyboard Translation Tables and
+how to build them.  These tables are used by the Keyboard driver
+to generate the character sequences coresponding to key presses
+by the user.  If a different set of Key caps are used or a
+different set of character codes are desired then new Translation
+Tables must be built and loaded into the system.
+
+
+        I.   The Keyboard and the Keycodes
+
+     The keyboard is connected to the computer by a transmission
+line.  Through the line, the keyboard sends keycodes describing
+which key has been pressed or released.  These keycodes in
+conjunction with the Translation Tables are used to generate the
+character sequences produced by the Keyboard driver.  Some
+keycodes effect which characters are generated, like the Shift
+key.  Others cause character sequences to be generated.  What
+happens is determined by the Translation Tables.
+
+
+     What are keycodes?  They are 8 bits of data, a byte.  They
+inform which key has been effected and whether it has been
+pressed (closure) or released.  Every key that is pressed on the
+Concept generates 2 keycodes.  They differ only by the most
+significant bit (MSB) of the keycode byte.  If the MSB is set (1)
+then it is the closure.  If the MSB is clear (0) then it is the
+release.  One thing the keycode does not show is the value for
+the key pressed.  This is determined by decoding the keycodes
+using the Translation Tables.  The keyboard generates keycodes
+instead of character sequences to allow the computer system more
+flexibility.  Through a software mechanism, the Translation
+Tables, the user can change the keyboard character set.
+
+     In order to build the Translation Tables you need a Keycode
+map.  This map shows the keycode values for the different key
+positions on the keyboard.  Defining the keycaps in those key
+positions specifies which character sequences must be generated
+for each keycode transmitted.  Figure 1 is a Keycode Map for the
+current keyboard (Version 3, Selectric style keyboard).  Figure 2
+is a map of the keycaps at their key positions.  If you build the
+keycap to key position map for your keyboard, you will be able
+to build the Translation Tables.
+
+     Version 3 keyboard keycaps have either 1 or 2 symbols on
+them.  A single symbol keycap specifys that the character is the
+same when it is either shifted or unshifted, except for the
+alphabet characters which get lower case if unshifted.  Two
+symbol keycaps have the character for the lower symbol when
+unshifted and the character for the upper symbol when shifted.
+
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Last modified : 23-Sep-82 kb
+File : kbrdtbls.text
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+This document describes how to build and install the keyboard driver
+        translation tables.
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Each table that is user definable has a pointer in a table which has a pointer
+to it in the Systems Communcations Area of Merlin.  The pointers in this table
+(called Translation Table) point to the following tables :
+      1) SHIFT_TABLE
+      2) REGULAR_TABLE
+      3) CAPS_QUALIFIER FLAG TABLE
+      4) ESCAPE # SEQUENCE TABLE
+      5) STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+      6) RELEASE TABLE
+      7) BREAK KEYCODE TABLE
+The pointers are in the above order.
+
+
+$$$$$$$$$$ TRANSLATION TABLE $$$$$$$$$$$$$
+
+Each entry in this table is a pointer to a translation table.  There are 7
+entries.  They are pointers to the following tables :
+      1) SHIFT_TABLE
+      2) REGULAR_TABLE
+      3) CAPS_QUALIFIER FLAG TABLE
+      4) ESCAPE # SEQUENCE TABLE
+      5) STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+      6) RELEASE TABLE
+      7) BREAK KEYCODE TABLE
+
+The entries must also be in the above order.
+
+The address of this table is kept in the Systems Communications Area.
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+ -------------------------------------------------------------------
+ Tables for kbrd routines
+
+     - tables are constants at run time.
+     - tables are pre-sorted and their values organized in ascending
+       order by keycode (or other key field).
+ -------------------------------------------------------------------
+
+ $$$$$$$$$$ BREAK KEY CODE TABLE $$$$$$$$$$$$$
+
+ This table consists of one byte.  It is the Keycode for the key which performs
+ the start/stop toggle.  The value for the version 00 keyboard is : $5F.
+ This is the Keycode for BREAK closure.
+
+ $$$$$$$$$$ CAPS LOCK & QUALIFIER FLAG TABLE $$$$$$$$$$$$$
+
+ One single byte entry for each Keycode.  The Keycode is a direct index into
+ the table.  Each byte is a set of possible flags.  All unused bits are
+ cleared (value = 0).  The high order bit is always the Caps lock flag for
+ the corresponding Keycode.  The remaining bits are possible qualifier flags.
+ Only one of these bits can be set at a time.
+
+ The bits currently defined are :
+              D7 - Caps lock flag : when set means this keycode generates a
+                   shifted character when the Caps lock qualifier flag is set.
+              D6 - Qualifier has an ESC # sequence flag.  When set then must process
+                   the keycode as a non-repeating ESC # sequence. Also has a Release
+                   sequence.
+                    ______________
+              D5 - Command        |
+              D4 - Alternate      |
+              D3 - Fast           |      This bit says which type of Qualifier
+              D2 - Caps lock      |_____ key the Keycode represents.
+              D1 - Control        |
+              D0 - Shift  ________|
+
+ The values for the version 00 keyboard is external to this document; see
+ the table sheet for it.
+
+ $$$$$$$$$$ INTERNAL FLAG WORD $$$$$$$$$$$$$
+
+ 16 Bits available.  All unused bits are 0.  The low order byte is the Qualifier
+flag byte.  The high order byte is other miscellaneous internal flags.
+5 bits defined :
+
+  Qualifier byte:
+
+      D0 = Shift flag
+      D1 = Control flag
+      D2 = Caps_lock flag
+      D3 = Fast flag
+      D4 = Alternate character set flag
+      D5 = Command flag
+
+ Other internal flags:
+
+      D8 = BREAK flag - used as start/stop toggle indicator.
+      D9 = Buffer_full flag
+      D10 = Closure flag - set means processing a key closure
+                           clear means processing a key release
+
+      D6 -D7  = unused (clear to 0)
+      D10-D15 = unused (clear to 0)
+
+ The Alternate character set flag is used to create the 8 bit character codes.
+
+ Initial value for all bits of the Internal flag word is clear (0).
+
+ $$$$$$$$$$ STANDARD MULTIPLE CHARACTER SEQUENCE TABLE $$$$$$$$$$$$$
+
+ Each entry is composed of 3 fields. 1) the key field is the keycode.
+ 2) the string length and 3) the string, a variable length field.
+ The string is the sequence of character codes placed in the buffer for
+ this key.
+ The value of $9E as a Table_code signifies to use this table.  Every entry
+ with a $9E Table_code must be in this table.
+
+ Search algorithm:
+
+ i := 0;
+ while ( (Keycode <> SMCS_Table[i]) & (SMCS_Table[i]<>$FF) ) do
+   i := i + 2 + SMCS_Table[i+1];
+ if (SMCS_Table[i] = $FF) then ERROR-value not in table
+                          else i points to SMCS Table entry.
+
+ Values for the version 00 keyboard (programmers) :
+
+ KEYCODES   |   STRING LENGTH | STRING
+ -----------+-----------------+ ---------------------------------------
+ $00 (cursor|        2        |  $1B $42 (esc B)
+      down) |                 |
+ $03 (cursor|        2        |  $1B $43 (esc C)
+      right)|                 |
+ $05 (clear |        2        |  $1B $4B (esc K)
+      line) |                 |
+ $07 (enter)|        2        |  $1B $64 (esc d)
+            |                 |
+ $08 (cursor|        2        |  $1B $44 (esc D)
+      left) |                 |
+ $0B (cursor|        2        |  $1B $41 (esc A)
+      up)   |                 |
+ $3A (back  |        2        |  $1B $69 (esc i)
+      tab)  |                 |
+ $5D (home  |        2        |  $1B $48 (esc H)
+      up)   |                 |
+ $5E (clear |        2        |  $1B $49 (esc J)
+     screen)|                 |
+ $FF        |        0        |  END OF THE TABLE
+------------------------------------------------------------------------
+{$P}
+$$$$$$$$$$ RELEASE TABLE $$$$$$$$$$$$$
+
+This table specifies which keycodes have an action on key release. Each table
+has 2 fields. 1) the key field which is the keycode; 2) the action code.
+
+The action code has 3 different value types. First, $9D this specifies a key
+with a ESCAPE # SEQUENCE TABLE entry to be put in the buffer (must set bit
+D7 of keycode before search). Second, $9E this specifies a qualifier keycode.
+Any other action code is a character code to be placed in the buffer. The end
+of the table is specified by a NULL keycode of $FF.  The value of the NULL
+keycode is not generated by the keyboard.
+
+ Values for the version 00 keyboard (programmers) :
+
+ __________________________________________________
+| KEYCODE | ACTION CODE |  KEY NAME
+|---------+-------------+--------------------------
+|   $1F   |    $9E      |  Right shift
+|   $3C   |    $9E      |  Caps lock
+|   $3E   |    $9E      |  Left shift
+|   $48   |    $9E      |  Control
+|   $49   |    $9E      |  Fast
+|   $4A   |    $9E      |  Alternate
+|   $4C   |    $9E      |  Right command
+|   $FF   |    $00      |  NULL keycode - END OF TABLE
+|_________|_____________|____________________________
+
+{$P}
+$$$$$$$$$$ ESCAPE # SEQUENCE TABLE $$$$$$$$$$$$$
+
+This table is used when a Table_code of $9D is found in key closure or a
+Action code of $9D is found in key release.  It specifies a key which has a
+ESC # AH AH multiple character sequence.  AH stands for ASCII Hex, which is a
+representation of hexidecimal digits in ASCII (0-9 & A-F, capitals only).
+Each keycode may have a different ASCII Hex character pair when the Qualifier
+keys change (shift and control).
+
+Each table entry has the form (entry length = 10 bytes) :
+    1) The key search field - Keycode. (1 byte)
+    2) filler byte : it's value is 0 (zero).  It is used to keep each entrytion.
+                     on a word boundary.
+    3) The 4 ASCII Hex character pairs in priority order.
+        a) Command & Shift together (2 bytes)
+        b) Command only (2 bytes)
+        c) Shift only (2 bytes)
+        d) Unshifted & Uncommanded (2 bytes)
+
+If a Qualifier state is not allowed then use the ASCII Hex character pair of
+the next lowest priority (a is highest and d is lowest) to fill in that
+character pair.
+
+ Values for the version 00 keyboard (programmers) :
+
+ __________________________________________________________________
+| KEYCODE | NULL | US/UC  | S only | C only | C/S | KEY NAME
+|---------+------+--------+--------+--------+-----+----------------
+|   $20   |  00  |   00   |   0A   |   14   | 1E  | Function key 1
+|   $21   |  00  |   01   |   0B   |   15   | 1F  | Function key 2
+|   $22   |  00  |   02   |   0C   |   16   | 20  | Function key 3
+|   $23   |  00  |   03   |   0D   |   17   | 21  | Function key 4
+|   $24   |  00  |   04   |   0E   |   18   | 22  | Function key 5
+|   $4C   |  00  |   FF   |   FF   |   FF   | FF  | Right command (closure)
+|   $58   |  00  |   05   |   0F   |   19   | 23  | Function key 6
+|   $59   |  00  |   06   |   10   |   1A   | 24  | Function key 7
+|   $5A   |  00  |   07   |   11   |   1B   | 25  | Function key 8
+|   $5B   |  00  |   08   |   12   |   1C   | 26  | Function key 9
+|   $5C   |  00  |   09   |   13   |   1D   | 27  | Function key 10
+|   $CC   |  00  |   FE   |   FE   |   FE   | FE  | Right command (release)
+|_________|______|________|________|________|_____|________________
+  Search algorithm:
+  i := 0;
+  while ( (Keycode <> ESC#_Table[i]) & (ESC#_Table[i] <> $FF) ) do
+    i := i + 10;
+  if (ESC#_Table[i] = $FF) then ERROR-value not in table
+                           else i points to ESC# Table entry.
+
+$$$$$$$$$$ SHARED FLAG BYTE BETWEEN CRT DRIVER AND KEYBOARD DRIVER $$$$$$$$$$$$$
+
+This single byte allows the Keyboard to communicate with the CRT.  The flags
+are used by the CRT to control the display.  These flags are set and cleared by
+the Keyboard interrupt service routine depending on user input.
+
+Currently, 1 bit is defined.  All undefined bits are 0.
+
+Defined Bits :
+
+     STOP_GO flag : bit D7  where,
+            1 means stop. It is set when a control-S ($13) character code is
+            detected.  The character is not placed in the buffer.
+            0 means go.  It is cleared when a control-Q ($11) character is
+            detected.  The character is not placed in the buffer.

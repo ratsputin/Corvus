@@ -1,0 +1,31 @@
+;
+; file : CC.BI.ASM.TEXT
+; date : 19-July-1982
+; version : goes with CC.BLDIMGE version 1.1a
+;
+;       FUNCTION CmprDir(Dir1,Dir2 : dirhere; dlen : integer) : boolean;
+;
+;  Compares directories Dir1 and Dir2 byte by byte for dlen bytes.
+;  Returns TRUE if they are equal.
+;
+                GLOBAL  CmprDir
+;
+CmprDir         MOVEA.L (SP)+,A0        ;GET RETURN ADDRESS
+                MOVE.W  (SP)+,D0        ;LENGTH
+                MOVEM.L (SP)+,A1-A2     ;GET DIRECTORY ADDRESSES
+                MOVE.B  (SP)+,D1        ;remove return area from stack
+
+; COMPARE DIRECTORIES
+;
+CDnext          CMPM.B  (A1)+,(A2)+
+                BNE.S   CDERROR
+                SUBQ.W  #1,D0
+                BNE.S   CDnext
+
+                MOVE.B  #1,-(SP)        ;SHOW GOOD
+                JMP     (A0)
+
+CDerror         MOVE.B  #0,-(SP)        ;SHOW NO COMPARE
+                JMP     (A0)
+
+                END

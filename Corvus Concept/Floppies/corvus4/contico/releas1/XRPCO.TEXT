@@ -1,0 +1,418 @@
+
+CP/M Utilities                                 20-Feb-82
+
+This PCO covers CP/M Utilities for the Xerox 820.
+
+            6/10/20 XR (5 1/4" soft-sectored media - 104/1D)
+            6/10/20 XR (8" standard IBM media - 3741)
+
+This release was tested with version 2.2 of CP/M supplied by Xerox.
+CLINK2.ASM is set up as follows:
+
+   - link below
+   - Z80B
+   - 10 MB drive
+   - 2 pseudo drives
+   - pipes area starting at block 64
+   - block size of 8k
+   - memory size of 64k
+
+Known problems
+--------------
+
+   There is a problem with executing the Xerox INIT program when the
+   CLINK is installed.  The INIT program will work properly, but after
+   it is finished, the system must be rebooted.  It is a good idea to
+   initialize the needed floppies before running the CLINK program.  The
+   INIT program apparently overwrites part of the CCP.
+
+
+This release adds the CLINK7 files, and fixes bugs in other programs.
+Files changed include:
+
+   CLINK2FV.COM, CLINK2TN.COM, CLINK2TW.COM - drivers now take 1.25k
+      (500H), where before they took 1k (400H).
+
+   INDEX.DOC - updated to reflect new contents of floppies.
+
+   DRIVEL.COM - was reporting incorrect size for volumes on a 20MB
+      drive; now prints version number.
+
+   CDIAGNOS.ASM, PUTGET.ASM, MIRROR.ASM - moved to separate floppies;
+      these programs are available by special order only.
+
+   CDIAGNOS.COM, PUTGET.COM, MIRROR.COM, SEMA4.COM, CLOADR.ASM,
+   CBOOT.ASM, BIOSC.ASM - prompts are now lined up.
+
+   CPMIO.MAC - equate is set for Xerox; previously it was set for S-100.
+
+   LINKASM.DOC, LINKASM.COM - user's group version of assembler to be
+      used for reassembling CLINK and BIOS files.
+$P
+The floppy labels are listed below.
+
+5 1/4" labels:
+-------------
+  XR Utilities-vol 1 of 4              XR Source Utilities - vol 1 of 3
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+  CP#: 8100-08477
+
+  XR Utilities-vol 2 of 4              XR Source Utilities - vol 2 of 3
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+  CP#: 8100-08478
+
+  XR Utilities-vol 3 of 4              XR Source Utilities - vol 3 of 3
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+  CP#: 8100-08479
+
+  XR Utilities-vol 4 of 4
+  for CP/M 2.2
+  Release date:  17-Feb-82
+  CP#: 8100-08480
+
+8" floppies:
+-----------
+  XR Utilities-vol 1 of 2              XR Source Utilities - vol 1 of 1
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+  CP#: 8100-08475
+
+  XR Utilities-vol 2 of 2
+  for CP/M 2.2
+  Release date:  17-Feb-82
+  CP#: 8100-08476
+
+To copy floppies:
+----------------
+
+   Xerox 5 1/4" floppies are copied on the Xerox 820 using the dual
+   floppy drives.  Xerox 8" floppies are copied on the LSI-11.
+
+   To copy 5 1/4" floppies:
+
+   Boot from the Xerox boot disk.
+
+   Use INIT to format new floppies.
+
+   See Denise Pitsch, Keith Odom, or Bruce Kendall for instructions on
+   copying floppies.
+
+Note there is a difference between 'XR Utilities-vol 1 of 4' and
+'XR Source Utilities-vol 1 of 2'.  Likewise for volume 2.
+
+$P
+Files on each floppy are shown below:
+
+
+Vol 1 (5-1/4")   Version    CRC           Vol 1 (8")
+  INDEX   .DOC   2/15/82    16 7E  6k       x
+  CERROR  .DOC   -          34 81  2k       x
+  PUTGET  .COM   1.4 XE     84 4D  2k       x
+  CLINK2FV.COM   -          6E 2A  2k       x
+  CLINK2TN.COM   -          2D 7B  2k       x
+  CLINK2TW.COM   -          C6 81  2k       x
+  CLINK7FV.COM   -          04 6D  2k       x
+  CLINK7TN.COM   -          00 AC  2k       x
+  CLINK7TW.COM   -          8A D5  2k       x
+  CDIAGNOS.COM   2.2 XE     AA 93 10k       x
+  CDIAGNOS.DOC   -          6C BE  6k       x
+  CORVB173.CLR   17.3       A1 21 31k       x
+  MIRROR  .COM   1.32XE     58 EE  6k       x
+  SEMA4   .COM   1.3 XE     24 1D  3k       x
+
+                       sum= F6 DD
+
+
+Vol 2 (5 1/4")
+  LINKASM .DOC   1/7/80     39 60  5k       x
+  LINKASM .COM   7/13/79    62 C1  6k       x
+
+  PMGR    .COM   1.1        8E C8 17k       x
+  DRIVEL  .COM   1.0        22 D7 15k       x
+  SPOOL   .COM   2.0        38 76 31k       x
+                       sum= 86 36      sum= 7D 13
+
+Vol 3 (5 1/4")                         Vol 2 (8")
+  CLINK2  .ASM   1.09XE     29 DF 34k       x
+  SEMA4   .ASM   1.3 XE     5E 83 18k       x
+  CLOADR  .ASM   1.4 XE     4A C0  6k       x
+  CBOOT   .ASM   1.3 XE     44 AB  5k       x
+                       sum= 17 CD
+
+Vol 4 (5 1/4")
+  SPOOLGEN.SUB    -         4A FF  1k       x
+  SPOOL   .SRC    -         74 75  1k       x
+  SPOOL   .DEF    -         40 8E  3k       x
+  SPOOLC  .PAS    -         D6 44  4k       x
+  SPOOL   .PAS    -         17 01 20k       x
+  SPOOLM  .PAS    -         17 51  2k       x
+
+  PIPEGEN .SUB    -         39 9F  1k       x
+  PIPES   .SRC    -         81 14  1k       x
+  PIPED   .PAS    -         FD 0D  4k       x
+  PIPEC   .PAS    -         C8 C0  4k       x
+  PIPES   .PAS    -         00 73  7k       x
+  CPMIO   .MAC    -         D0 5B  9k       x
+  BIOSC   .ASM   1.23XE     B1 A7 22k       x
+                       sum= 07 8D      sum= 1F 5A
+
+
+$P
+
+Source files on each floppy are shown below:
+
+
+Vol 1 Sources (5 1/4")                    Vol 1 Sources (8")
+  CDIAGNOS.ASM   2.2XE      AC 2B 65k       x
+                       sum= AC 2B
+
+Vol 2 Sources (5 1/4")
+  MIRROR  .ASM   1.32XE     23 AE 33k       x
+  PUTGET  .ASM   1.4 XE     8A A3 20k       x
+                       sum= AE 51
+
+Vol 3 Sources (5 1/4")
+  PMGRGEN .SUB     -        29 F0  1k       x
+  PMGR    .SRC     -        C4 82  1k       x
+  PIPED   .PAS     -        FD 0D  4k       x
+  PIPEC   .PAS     -        C8 C0  4k       x
+  PIPES   .PAS     -        00 73  7k       x
+  DRIVEL  .SUB     -        2B 48  1k       x
+  DRIVEL  .PAS     -        22 7D  9k       x
+  CMULT   .PAS     -        D4 56  1k       x
+                        sum=DC CD       sum=AC A6
+
+
+$P
+
+
+Previous releases:
+------------------
+
+
+XE Utilities 18-Dec-81 new release.  This release includes support for
+pipes and spooling.
+
+This release includes firmware version 17.3.
+
+The floppy labels are listed below including Corvus part numbers.
+
+5 1/4" Floppies                        8" Floppies
+---------------                        -----------
+XE Utilities - vol 1 of 6              XE Utilities - vol 1 of 2
+for CP/M 2.2                           for CP/M 2.2
+Release date:   18-Dec-81              Release date:   18-Dec-81
+CP#: 8100-01992 crc=A3 51              CP#: 8100-01990 crc=8D 46
+
+XE Utilities - vol 2 of 6              XE Utilities - vol 2 of 2
+for CP/M 2.2                           for CP/M 2.2
+Release date:   18-Dec-81              Release date:   18-Dec-81
+CP#: 8100-01993 crc=29 F3              CP#: 8100-01991 crc=A9 8C
+
+XE Utilities - vol 3 of 6
+for CP/M 2.2
+Release date:   18-Dec-81
+CP#: 8100-01994 crc=C0 02
+
+XE Utilities - vol 4 of 6
+for CP/M 2.2
+Release date:   18-Dec-81
+CP#: 8100-01995 crc=AD 6C
+
+XE Utilities - vol 5 of 6
+for CP/M 2.2
+Release date:   18-Dec-81
+CP#: 8100-01996 crc=3C FD
+
+XE Utilities - vol 6 of 6
+for CP/M 2.2
+Release date:   18-Dec-81
+CP#: 8100-01997 crc=BF 23
+$P
+
+
+
+CP/M Utilities                                 20-Feb-82
+
+This PCO covers CP/M Utilities for the Xerox 820.
+
+            6/10/20 XR (5 1/4" soft-sectored media - 104/1D)
+            6/10/20 XR (8" standard IBM media - 3741)
+
+This release was tested with version 2.2 of CP/M supplied by Xerox.
+CLINK2.ASM is set up as follows:
+
+   - link below
+   - Z80B
+   - 10 MB drive
+   - 2 pseudo drives
+   - pipes area starting at block 64
+   - block size of 8k
+   - memory size of 64k
+
+Known problems
+--------------
+
+   There is a problem with executing the Xerox INIT program when the
+   CLINK is installed.  The INIT program will work properly, but after
+   it is finished, the system must be rebooted.  It is a good idea to
+   initialize the needed floppies before running the CLINK program.  The
+   INIT program apparently overwrites part of the CCP.
+
+
+This release adds the CLINK7 files, and fixes bugs in other programs.
+Files changed include:
+
+   CLINK2FV.COM, CLINK2TN.COM, CLINK2TW.COM - drivers now take 1.25k
+      (500H), where before they took 1k (400H).
+
+   INDEX.DOC - updated to reflect new contents of floppies.
+
+   DRIVEL.COM - was reporting incorrect size for volumes on a 20MB
+      drive; now prints version number.
+
+   CDIAGNOS.ASM, PUTGET.ASM, MIRROR.ASM - moved to separate floppies;
+      these programs are available by special order only.
+
+   CDIAGNOS.COM, PUTGET.COM, MIRROR.COM, SEMA4.COM, CLOADR.ASM,
+   CBOOT.ASM, BIOSC.ASM - prompts are now lined up.
+
+   CPMIO.MAC - equate is set for Xerox; previously it was set for S-100.
+
+   LINKASM.DOC, LINKASM.COM - user's group version of assembler to be
+      used for reassembling CLINK and BIOS files.
+$P
+The floppy labels are listed below.
+
+5 1/4" labels:
+-------------
+  XR Utilities-vol 1 of 4              XR Source Utilities - vol 1 of 3
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+
+  XR Utilities-vol 2 of 4              XR Source Utilities - vol 2 of 3
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+
+  XR Utilities-vol 3 of 4              XR Source Utilities - vol 3 of 3
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+
+  XR Utilities-vol 4 of 4
+  for CP/M 2.2
+  Release date:  17-Feb-82
+
+8" floppies:
+-----------
+  XR Utilities-vol 1 of 2              XR Source Utilities - vol 1 of 1
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+
+  XR Utilities-vol 2 of 2
+  for CP/M 2.2
+  Release date:  17-Feb-82
+
+
+To copy floppies:
+----------------
+
+   Xerox 5 1/4" floppies are copied on the Xerox 820 using the dual
+   floppy drives.  Xerox 8" floppies are copied on the LSI-11.
+
+   To copy 5 1/4" floppies:
+
+   Boot from the Xerox boot disk.
+
+   Use INIT to format new floppies.
+
+   See Denise Pitsch, Keith Odom, or Bruce Kendall for instructions on
+   copying floppies.
+
+Note there is a difference between 'XR Utilities-vol 1 of 4' and
+'XR Source Utilities-vol 1 of 2'.  Likewise for volume 2.
+
+$P
+Files on each floppy are shown below:
+
+
+Vol 1 (5-1/4")   Version    CRC           Vol 1 (8")
+  INDEX   .DOC   2/15/82    16 7E  6k       x
+  CERROR  .DOC   -          34 81  2k       x
+  PUTGET  .COM   1.4 XE     84 4D  2k       x
+  CLINK2FV.COM   -          6E 2A  2k       x
+  CLINK2TN.COM   -          2D 7B  2k       x
+  CLINK2TW.COM   -          C6 81  2k       x
+  CLINK7FV.COM   -          04 6D  2k       x
+  CLINK7TN.COM   -          00 AC  2k       x
+  CLINK7TW.COM   -          8A D5  2k       x
+  CDIAGNOS.COM   2.2 XE     AA 93 10k       x
+  CDIAGNOS.DOC   -          6C BE  6k       x
+  CORVB173.CLR   17.3       A1 21 31k       x
+  MIRROR  .COM   1.32XE     58 EE  6k       x
+  SEMA4   .COM   1.3 XE     24 1D  3k       x
+
+                       sum= F6 DD
+
+
+Vol 2 (5 1/4")
+  LINKASM .DOC   1/7/80     39 60  5k       x
+  LINKASM .COM   7/13/79    62 C1  6k       x
+
+  PMGR    .COM   1.1        8E C8 17k       x
+  DRIVEL  .COM   1.0        22 D7 15k       x
+  SPOOL   .COM   2.0        38 76 31k       x
+                       sum= 86 36      sum= 7D 13
+
+Vol 3 (5 1/4")                         Vol 2 (8")
+  CLINK2  .ASM   1.09XE     29 DF 34k       x
+  SEMA4   .ASM   1.3 XE     5E 83 18k       x
+  CLOADR  .ASM   1.4 XE     4A C0  6k       x
+  CBOOT   .ASM   1.3 XE     44 AB  5k       x
+                       sum= 17 CD
+
+Vol 4 (5 1/4")
+  SPOOLGEN.SUB    -         4A FF  1k       x
+  SPOOL   .SRC    -         74 75  1k       x
+  SPOOL   .DEF    -         40 8E  3k       x
+  SPOOLC  .PAS    -         D6 44  4k       x
+  SPOOL   .PAS    -         17 01 20k       x
+  SPOOLM  .PAS    -         17 51  2k       x
+
+  PIPEGEN .SUB    -         39 9F  1k       x
+  PIPES   .SRC    -         81 14  1k       x
+  PIPED   .PAS    -         FD 0D  4k       x
+  PIPEC   .PAS    -         C8 C0  4k       x
+  PIPES   .PAS    -         00 73  7k       x
+  CPMIO   .MAC    -         D0 5B  9k       x
+  BIOSC   .ASM   1.23XE     B1 A7 22k       x
+                       sum= 07 8D      sum= 1F 5A
+
+
+$P
+
+Source files on each floppy are shown below:
+
+
+Vol 1 Sources (5 1/4")                    Vol 1 Sources (8")
+  CDIAGNOS.ASM   2.2XE      AC 2B 65k       x
+                       sum= AC 2B
+
+Vol 2 Sources (5 1/4")
+  MIRROR  .ASM   1.32XE     23 AE 33k       x
+  PUTGET  .ASM   1.4 XE     8A A3 20k       x
+                       sum= AE 51
+
+Vol 3 Sources (5 1/4")
+  PMGRGEN .SUB     -        29 F0  1k       x
+  PMGR    .SRC     -        C4 82  1k       x
+  PIPED   .PAS     -        FD 0D  4k       x
+  PIPEC   .PAS     -        C8 C0  4k       x
+  PIPES   .PAS     -        00 73  7k       x
+  DRIVEL  .SUB     -        2B 48  1k       x
+  DRIVEL  .PAS     -        22 7D  9k       x
+  CMULT   .PAS     -        D4 56  1k       x
+                        sum=DC CD       sum=AC A6
+

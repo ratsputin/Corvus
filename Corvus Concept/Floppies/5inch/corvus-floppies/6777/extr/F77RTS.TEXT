@@ -1,0 +1,561 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                                                                           *)
+(*                                Unit F77RTS                                *)
+(*                                                                           *)
+(*                         FORTRAN77 Run Time System                         *)
+(*                                                                           *)
+(*                                                                           *)
+(*                          (C) Copyright 1982, 1983                         *)
+(*                                                                           *)
+(*                            R. Steven Glanville                            *)
+(*                                                                           *)
+(*                              Jeffrey M. Barth                             *)
+(*                                                                           *)
+(*                        Silicon Valley Software, Inc.                      *)
+(*                                                                           *)
+(*                            All Rights Reserved.                           *)
+(*                                                                           *)
+(*                                                               11-Jan-83   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+{$%+}
+{$R-}
+{$I-}
+unit %f77rts;
+
+interface
+
+const DATE = '11-Jan-83'; VERSION = 'V1.1';
+      COPYRIGHT = '(C) Copyright 1983 Silicon Valley Software, Inc.';
+      RIGHTS    = '    All rights reserved.';
+
+type byte = -128..127;
+     pac = packed array[1..32000] of char;
+     ppac = ^pac;
+
+function iargc: longint;
+procedure getarg(var farg: longint; t: ppac; len: integer);
+function peek(var loc: longint): byte;
+procedure poke(var loc: longint; var val: byte);
+procedure vers;
+function ran(var fa: longint): real;
+procedure fchain(name: ppac; len: integer; var driveno: longint);
+
+implementation
+
+const
+  MAXFILENAMELEN = 50;
+  MAXRECLEN = 512;
+  CHARVALMAX = 256;
+  FBLKSIZE = 512;
+  SEEK_ABSOLUTE = 0; SEEK_RELATIVE = 1;
+  
+  MERLIN = 0; IDRIS = 1; UNISOFT = 2; UNOS = 3; CROMIX = 4;
+  ADVENTURE = 6;
+  
+  ENVIRONMENT = MERLIN;
+  
+  { Merlin }
+  ERRPROMPT = '<space> to continue, <ESC> to exit - ';
+  EOLCH = '\0D';
+  OKHALT = 0;
+  ERRHALT = -1;
+  EMESSFILE = '!ftnrterrs.text';
+  EMESS2FILE = 'ftnrterrs.text';
+  {}
+  
+  { Idris 
+  (*$S %_F77RTS *)
+  ERRPROMPT = '<return> to continue, <delete> to exit - ';
+  EOLCH = '\0A';
+  OKHALT = 1;
+  ERRHALT = 0;
+  EMESSFILE = '/lib/ftnrterrs';
+  EMESS2FILE = '/usr/lib/ftnrterrs';
+  }
+  
+  { Unisoft 
+  (*$S %_F77RTS *)
+  ERRPROMPT = '<return> to continue, <delete> to exit - ';
+  EOLCH = '\0A';
+  OKHALT = 0;
+  ERRHALT = -1;
+  EMESSFILE = '/lib/ftnrterrs';
+  EMESS2FILE = '/usr/lib/ftnrterrs';
+  }
+  
+  { Unos 
+  (*$S %_F77RTS *)
+  ERRPROMPT = '<return> to continue, <ctrl-C> to exit - ';
+  EOLCH = '\0A';
+  OKHALT = 0;
+  ERRHALT = -1;
+  EMESSFILE = '/lib/ftnrterrs';
+  EMESS2FILE = '/usr/lib/ftnrterrs';
+  }
+  
+  { Cromix 
+  (*$S %_F77RTS *)
+  ERRPROMPT = '<return> to continue, <ctrl-C> to exit - ';
+  EOLCH = '\0A';
+  OKHALT = 0;
+  ERRHALT = -1;
+  EMESSFILE = '/lib/ftnrterrs';
+  EMESS2FILE = '/usr/lib/ftnrterrs';
+  }
+  
+  { Adventure 
+  (*$S %_F77RTS *)
+  ERRPROMPT = '<return> to continue, <ESC-return> to exit - ';
+  EOLCH = '\0D';
+  OKHALT = 0;
+  ERRHALT = -1;
+  EMESSFILE = 'jjj:ftnrterr.src';
+  EMESS2FILE = 'ftnrterr.src';
+  }
+  
+
+type
+  
+  int1 = byte; int2 = integer; int4 = longint;
+  pbyte = ^byte;
+  
+  aint12 = array[1..2] of int1; { Two bytes   }
+  aint14 = array[1..4] of int1; { Four bytes  }
+  aint18 = array[1..8] of int1; { Eight bytes }
+  
+  real4 = real; real8 = double;
+  
+  complex = record
+    realpart: real;
+    imagpart: real;
+  end;
+  
+  many = 1..100000;
+  int1array = array[many] of int1;
+  int2array = array[many] of int2;
+  int4array = array[many] of int4;
+  real4array = array[many] of real4;
+  real8array = array[many] of real8;
+  complexarray = array[many] of complex;
+  
+  pint1array = ^int1array;
+  plongint = ^longint;
+  
+  filenamestring = string[MAXFILENAMELEN];
+  
+  string16 = string[16];
+  
+  pcode = ^code;
+  code = record
+           dylink: longint;
+           returnaddr: pcode;
+         end;
+  pcodearray = array[1..1] of pcode;
+  
+  ptext = ^text;
+  filetype = file;
+  
+  { Merlin data structures }
+  
+  filekind = (UNTYPEDFILE,XDSKFILE,CODEFILE,TEXTFILE,INFOFILE,
+              DATAFILE,GRAFFILE,FOTOFILE,SECURDIR);
+  
+  merfib = record
+             fwindow: ^int1array;
+             FEOLN: Boolean;
+             FEOF: Boolean;
+             FText: Boolean;
+             fstate: (FTVALID,FIEMPTY,FIVALID,FTEMPTY);
+             frecsize: integer;
+             case FIsOpen: Boolean of
+               TRUE: (FIsBlocked: Boolean;
+                      funit: integer;
+                      fvid: string[7];
+                      frepeatcount,
+                      fnextblock,
+                      fmaxblock: integer;
+                      FModified: Boolean;
+                      fheader: packed record
+                                 firstblock: integer;
+                                 nextblock: integer;
+                                 MarkBit: Boolean;
+                                 filler: 0..2047;
+                                 case fkind: filekind of
+                                   SECURDIR,
+                                   UNTYPEDFILE: ();
+                                   XDSKFILE,CODEFILE,TEXTFILE,INFOFILE,
+                                   DATAFILE,GRAFFILE,FOTOFILE:
+                                     (filler2: string[15];
+                                      dlastbyte: integer; {Bytes in last block}
+                                      filler3: integer);
+                               end;
+                      case FSoftBuf: Boolean  of
+                        TRUE: (fnextbyte,fmaxbyte: integer;
+                               FBufChanged: Boolean;
+                               fbuffer: array[0..511] of byte;
+                               fuparrow: integer));
+           end;
+  
+  { Idris data structures }
+  
+  bstates = (BEMPTY,BRDING,BWRING);
+  
+  idfib = record
+            fwindow: pint1array;                            { 0 }
+            FEOLN: Boolean;                                 { 4 }
+            FEOF: Boolean;                                  { 5 }
+            FTEXT: Boolean;                                 { 6 }
+            fstate: (IDFTVAL, IDFIEMPTY, IDFIVAL, IDFTEMP); { 7 }
+            frecsize: integer;                              { 8 }
+            fnextblock: integer;                            { 10 }
+            fd: longint;                                    { 12 }
+            buffed: Boolean;                                { 16 }
+            bstate: bstates;                                { 17 }
+            bnxtby: pint1array;                             { 18 }
+            blstby: pint1array;                             { 22 }
+            filepos: longint; {for Adventure}               { 26 }
+          end;
+  
+  { Cromix data structures }
+  
+  crofib = record
+             fwindow: pint1array;                            { 0 }
+             FEOLN: Boolean;                                 { 4 }
+             FEOF: Boolean;                                  { 5 }
+             FTEXT: Boolean;                                 { 6 }
+             fstate: (CRFTVAL, CRFIEMPTY, CRFIVAL, CRFTEMP); { 7 }
+             frecsize: integer;                              { 8 }
+             fnextblock: integer;                            { 10 }
+             fd: integer;                                    { 12 }
+             fibmark: integer; {  Magic number }             { 14 }
+             FOpen: Boolean;                                 { 16 }
+             fhole: byte;                                    { 17 }
+             Buffed: Boolean;                                { 18 }
+             bstate: bstates;                                { 19 }
+             bnxtby: pint1array;                             { 20 }
+             blstby: pint1array;                             { 24 }
+             buffer: array[0..511] of byte;                  { 28 }
+           end;
+  
+  punitrec = ^unitrec;
+  
+  unitrec = record
+    nextunit:    punitrec;
+    unitid:      longint;
+    fname:       filenamestring;
+    reclen:      longint;  { defined if not Seqen }
+    Scratch:     Boolean;  { status = SCRATCH in open statement }
+    Seqen:       Boolean;
+    Formted:     Boolean;
+    BlankNull:   Boolean;
+    PastEndFile: Boolean;  { is the file positioned beyond the endfile record }
+    lastop:      (READOP,WRITEOP);
+    case integer of
+      0: (osfile: ^filetype);
+      1: (osfib: ^merfib);
+      2: (idosfib: ^idfib);
+      3: (ostextfile: ptext);
+      4: (crosfib: ^crofib);
+  end;
+  
+  listitems = (INTITEM, REALITEM, CHARITEM, LOGITEM, COMPLEXITEM, NULLITEM);
+  charvaltype = packed array[1..CHARVALMAX] of char;
+  
+  str64 = string[64]; pstring = ^ str64; { For stop and pause }
+  
+  unpkrec = record u,l: longint;         { Form of unpacked real }
+                   exp: integer;
+                   sign: -128..127;
+                   kind: 1..5;           { 4 = infinity, 5 = NAN }
+            end;
+  
+var
+  
+  curunit,                            { Unit for current I/O action         }
+  units,                              { List of connected units             }
+  consoleunit,                        { Reading from is special             }
+  stderrunit,                         { Don't close under MERLIN            }
+  freeunits: punitrec;                { Free list of closed units           }
+  
+  errornumber: integer;               { 0 is no error detected              }
+  tempfilectr: integer;               { used to generate temp file names    }
+  
+  Reading: Boolean;                   { Reading or writing                  }
+  col: integer;                       { Used for counting columns on input  }
+  reclenctr: integer;                 { Used to count bytes in direct I/O   }
+  EofFlag: Boolean;                   { End of file encountered on reading  }
+  
+  fmttok: char;                       { Last format token scanned           }
+  fmtintval: integer;                 { Last integer scanned out of format  }
+  
+  { Describing a format, and the state of scanning it is at }
+  
+  curfmt: ppac;                       { Pointer to current format           }
+  fmtp: integer;                      { curfmt^[fmtp] is next char to read  }
+  gpcount: array[1..11] of integer;   { Reps left in fmt group at a level   }
+  gpbegin: array[1..11] of integer;   { curfmt^[gpbegin[i]] is '(^' of gp   }
+  gplevel: 1..11;                     { Currently processing this gp level  }
+  lastgppos: integer;                 { Backup position for end of fmt      }
+  lastgprep: integer;                 { Reps for backup group               }
+  lastgplevel: 1..2;                  { Level after backup                  }
+  OKToExit: Boolean;                  { Is there another item in I/O list   }
+  InhibitFinalCR: Boolean;            { Allow partial line prompting to *   }
+  FieldFound: Boolean;                { Has a repeatable ed been found      }
+  Gp2FieldFound: Boolean;             { Was a field found in last lev 2 gp  }
+  
+  { Edit descriptor - Describes next repeatable format }
+  
+  edcnt: integer;                     { More times to use ed                }
+  edlet: char;                        { Key letter for ed                   }
+  edw, edd, ede, edm: integer;        { Integer parameters to ed, see 13.2  }
+  EdePresent: Boolean;                { Is final Ee present for edlet = 'E' }
+  EdwPresent: Boolean;                { Is w field present in a format      }
+  BZFlag: Boolean;                    { BZ or BN currently in force         }
+  pval: integer;                      { Scale factor value                  }
+  PrintOptionalPlus: Boolean;         { Controlled by S, SP, and SS format  }
+  
+  { Record I/O is being done to }
+  
+  recbuf: array[1..MAXRECLEN] of int1;
+  recbufp: integer;                   { recbuf[recbufp] is next I/O char    }
+  lastwritten: integer;               { position in recbuf of last write    }
+  maxlastwritten: integer;            { max position in recbuf written      }
+  recbuflen: integer;                 { number of chars in recbuf for Rding }
+  
+  
+  { Variables for list directed I/O }
+  
+  itemcnt: integer;                   { Repeat count for current list item  }
+  itemtoken: listitems;               { What kind of list item was scanned  }
+  listch: char;                       { Look ahead char for list input      }
+  FirstItem: Boolean;                 { ListScan needs to know if fst call  }
+  NeedBlank: Boolean;                 { Is a blank required before next wrl }
+  
+  intval: longint;                    { Value of INTITEM or LOGITEM         }
+  realval: real8;                     { Value of REALITEM                   }
+  charval: charvaltype;               { Value of CHARITEM                   }
+  charlen: integer;                   { Length of value of CHARITEM         }
+  complexval: complex;                { Value of COMPLEXITEM                }
+  
+  { Variables for internal I/O }
+  
+  InternalIO: Boolean;                { So that nextrec knows if internal   }
+  intfile: pint1array;                { Pointer to internal file            }
+  intreclen: integer;                 { Record length of internal file      }
+  intbufp: longint;                   { intfile[intbufp] is next ch for I/O }
+  
+  ranseed: longint;                   { Random number seed                  }
+  lastran: real;                      { Last random number returned         }
+  
+  
+procedure %_stop(s: ppac; len: integer); forward;
+procedure %_pause(s: ppac; len: integer); forward;
+
+procedure %f821201; forward;
+procedure %_rtsfin; forward;
+procedure %_rtscl(unitnum: longint;
+                  fiostat: plongint;
+                  errexit: pcodearray;
+                  fstatus: ppac; fstatuslen: integer); forward;
+procedure %_rtsop(unitnum: longint;
+                  fiostat: plongint;
+                  errexit: pcodearray;
+                  name: ppac; namelen: integer;
+                  fstatus: ppac; fstatuslen: integer;
+                  faccess: ppac; faccesslen: integer;
+                  fform: ppac; fformlen: integer;
+                  frecl: longint; FReclPresent: integer;
+                  fblank: ppac; fblanklen: integer;
+                  fbuffed: ppac; fbuffedlen: integer); forward;
+procedure %_rewd(unitnum: longint; fiostat: plongint; errexit: pcodearray); forward;
+procedure %_endf(unitnum: longint; fiostat: plongint; errexit: pcodearray); forward;
+procedure %_back(unitnum: longint; fiostat: plongint; errexit: pcodearray); forward;
+procedure %_inq(unitnum: longint;
+                name: ppac; namelen: integer;
+                fiostat: plongint;
+                exist: plongint;  { really plogical*4 }
+                opened: plongint; { really plogical*4 }
+                number: plongint;
+                named: plongint;  { really plogical*4 }
+                recl: plongint;
+                nextrec: plongint;
+                errexit: pcodearray;
+                nm: ppac; nmlen: integer;
+                access: ppac; accesslen: integer;
+                seq: ppac; seqlen: integer;
+                dir: ppac; dirlen: integer;
+                form: ppac; formlen: integer;
+                ftted: ppac; fttedlen: integer;
+                unftted: ppac; unfttedlen: integer;
+                blank: ppac; blanklen: integer); forward;
+
+{ Formatted I/O }
+
+procedure %_ixfwr(unitnum: longint; ffmt: ppac; ffmtlen: integer); forward;
+procedure %_pxfwr(unitnum: longint; ffmt: ppac; ffmtlen: integer;
+                  rec: longint); forward;
+procedure %_iifwr(fintfile: pint1array; fintreclen: integer; 
+                  ffmt: ppac; ffmtlen: integer); forward;
+procedure %_tfwr(fiostat: plongint; errexit: pcodearray); forward;
+procedure %_ixfrd(unitnum: longint; ffmt: ppac; ffmtlen: integer); forward;
+procedure %_pxfrd(unitnum: longint; ffmt: ppac; ffmtlen: integer;
+                  rec: longint); forward;
+procedure %_iifrd(fintfile: pint1array; fintreclen: integer; 
+                  ffmt: ppac; ffmtlen: integer); forward;
+procedure %_tfrd(fiostat: plongint; errexit, endexit: pcodearray); forward;
+procedure %_wrfi4(fint: int4); forward;
+procedure %_wrfi2(fint: int2); forward;
+procedure %_wrfi1(fint: int1); forward;
+procedure %_wrfr8(freal: real8); forward;
+procedure %_wrfr4(freal: real4); forward;
+procedure %_wrfl4(flog: int4); forward;
+procedure %_wrfl2(flog: int2); forward;
+procedure %_wrfl1(flog: int1); forward;
+procedure %_wrfc8(fimag,freal: real4); forward;
+procedure %_wrfch(fpac: ppac; paclen: integer); forward;
+procedure %_rdfi4(var fint: int4); forward;
+procedure %_rdfi2(var fint: int2); forward;
+procedure %_rdfi1(var fint: int1); forward;
+procedure %_rdfr8(var freal: real8); forward;
+procedure %_rdfr4(var freal: real4); forward;
+procedure %_rdfl4(var flog: int4); forward;
+procedure %_rdfl2(var flog: int2); forward;
+procedure %_rdfl1(var flog: int1); forward;
+procedure %_rdfc8(var fcomplex: complex); forward;
+procedure %_rdfch(fpac: ppac; paclen: integer); forward;
+
+procedure %_wafi4(var fintarray: int4array; count: int4); forward;
+procedure %_wafi2(var fintarray: int4array; count: int4); forward;
+procedure %_wafi1(var fintarray: int1array; count: int4); forward;
+procedure %_wafr8(var frealarray: real8array; count: int4); forward;
+procedure %_wafr4(var frealarray: real4array; count: int4); forward;
+procedure %_wafl4(var flogarray: int4array; count: int4); forward;
+procedure %_wafl2(var flogarray: int2array; count: int4); forward;
+procedure %_wafl1(var flogarray: int1array; count: int4); forward;
+procedure %_wafc8(var fcomplexarray: complexarray; count: int4); forward;
+procedure %_wafch(fpac: pbyte; paclen: integer; count: int4); forward;
+procedure %_rafi4(var fintarray: int4array; count: int4); forward;
+procedure %_rafi2(var fintarray: int2array; count: int4); forward;
+procedure %_rafi1(var fintarray: int1array; count: int4); forward;
+procedure %_rafr8(var frealarray: real8array; count: int4); forward;
+procedure %_rafr4(var frealarray: real4array; count: int4); forward;
+procedure %_rafl4(var flogarray: int4array; count: int4); forward;
+procedure %_rafl2(var flogarray: int2array; count: int4); forward;
+procedure %_rafl1(var flogarray: int1array; count: int4); forward;
+procedure %_rafc8(var fcomplexarray: complexarray; count: int4); forward;
+procedure %_rafch(fpac: pbyte; paclen: integer; count: int4); forward;
+
+{ List Directed I/O }
+
+procedure %_ixlwr(unitnum: longint); forward;
+procedure %_tlwr(fiostat: plongint; errexit: pcodearray); forward;
+procedure %_ixlrd(unitnum: longint); forward;
+procedure %_tlrd(fiostat: plongint; errexit, endexit: pcodearray); forward;
+procedure %_wrli4(fint: int4); forward;
+procedure %_wrli2(fint: int2); forward;
+procedure %_wrli1(fint: int1); forward;
+procedure %_wrlr8(freal: real8); forward;
+procedure %_wrlr4(freal: real4); forward;
+procedure %_wrll4(flog: int4); forward;
+procedure %_wrll2(flog: int2); forward;
+procedure %_wrll1(flog: int1); forward;
+procedure %_wrlc8(fimag,freal: real4); forward;
+procedure %_wrlch(fpac: ppac; paclen: integer); forward;
+procedure %_rdli4(var fint: int4); forward;
+procedure %_rdli2(var fint: int2); forward;
+procedure %_rdli1(var fint: int1); forward;
+procedure %_rdlr8(var freal: real8); forward;
+procedure %_rdlr4(var freal: real4); forward;
+procedure %_rdll4(var flog: int4); forward;
+procedure %_rdll2(var flog: int2); forward;
+procedure %_rdll1(var flog: int1); forward;
+procedure %_rdlc8(var fcomplex: complex); forward;
+procedure %_rdlch(fpac: ppac; paclen: integer); forward;
+
+procedure %_wali4(var fintarray: int4array; count: int4); forward;
+procedure %_wali2(var fintarray: int2array; count: int4); forward;
+procedure %_wali1(var fintarray: int1array; count: int4); forward;
+procedure %_walr8(var frealarray: real8array; count: int4); forward;
+procedure %_walr4(var frealarray: real4array; count: int4); forward;
+procedure %_wall4(var flogarray: int4array; count: int4); forward;
+procedure %_wall2(var flogarray: int2array; count: int4); forward;
+procedure %_wall1(var flogarray: int1array; count: int4); forward;
+procedure %_walc8(var fcomplexarray: complexarray; count: int4); forward;
+procedure %_walch(fpac: pbyte; paclen: integer; count: int4); forward;
+procedure %_rali4(var fintarray: int4array; count: int4); forward;
+procedure %_rali2(var fintarray: int2array; count: int4); forward;
+procedure %_rali1(var fintarray: int1array; count: int4); forward;
+procedure %_ralr8(var frealarray: real8array; count: int4); forward;
+procedure %_ralr4(var frealarray: real4array; count: int4); forward;
+procedure %_rall4(var flogarray: int4array; count: int4); forward;
+procedure %_rall2(var flogarray: int2array; count: int4); forward;
+procedure %_rall1(var flogarray: int1array; count: int4); forward;
+procedure %_ralc8(var fcomplexarray: complexarray; count: int4); forward;
+procedure %_ralch(fpac: pbyte; paclen: integer; count: int4); forward;
+
+{ Unformatted I/O }
+
+procedure %_ixuwr(unitnum: longint); forward;
+procedure %_pxuwr(unitnum: longint; rec: longint); forward;
+procedure %_tuwr(fiostat: plongint; errexit: pcodearray); forward;
+procedure %_ixurd(unitnum: longint); forward;
+procedure %_pxurd(unitnum: longint; rec: longint); forward;
+procedure %_turd(fiostat: plongint; errexit, endexit: pcodearray); forward;
+procedure %_wru1(fval: int1); forward;
+procedure %_wru2(fval: aint12); forward;
+procedure %_wru4(fval: aint14); forward;
+procedure %_wru8(fvalmsbytes, fvallsbytes: aint14); forward;
+procedure %_wruch(var fpac: int1array; paclen: integer); forward;
+procedure %_rdu1(var fval: int1); forward;
+procedure %_rdu2(var fval: aint12); forward;
+procedure %_rdu4(var fval: aint14); forward;
+procedure %_rdu8(var fval: aint18); forward;
+procedure %_rduch(var fpac: int1array; paclen: integer); forward;
+procedure %_wau8(var fintarray: int1array; count: int4); forward;
+procedure %_wau4(var fintarray: int1array; count: int4); forward;
+procedure %_wau2(var fintarray: int1array; count: int4); forward;
+procedure %_wau1(var fintarray: int1array; count: int4); forward;
+procedure %_wauch(var fpac: int1array; paclen: integer; count: int4); forward;
+procedure %_rau8(var fintarray: int1array; count: int4); forward;
+procedure %_rau4(var fintarray: int1array; count: int4); forward;
+procedure %_rau2(var fintarray: int1array; count: int4); forward;
+procedure %_rau1(var fintarray: int1array; count: int4); forward;
+procedure %_rauch(var fpac: int1array; paclen: integer; count: int4); forward;
+
+procedure %_ferror(addr: longint; n: integer); forward;
+
+procedure %pf_unpk(r: real4; var u: unpkrec); external;
+procedure %pd_unpk(var d: real8; var u: unpkrec); external;
+
+procedure %_fwrite(count: integer; buff: plongint; fib: ptext); external;
+procedure %_fread(buff: plongint; fib: ptext; var count: integer); external;
+procedure %_fseek(fib: ptext; targetpos,sense: longint); external;
+
+procedure %_prloc(addr: longint); external;
+
+function %_dpwr10(n: integer): double; external;
+
+function _lseek(sense: longint; 
+                targetposition: longint;
+                fd: longint): longint; external; {UNISOFT external}
+
+function _jfilepos(fd: longint): longint; external; {UNOS external}
+
+{$I subrs }
+{$I auxio }
+
+{$I scanfmt }
+{$I frdwr }
+{$I farray }
+
+{$I list }
+{$I lrdwr }
+
+{$I urdwr }
+
+end.
+

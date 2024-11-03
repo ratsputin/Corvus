@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'ffortrn_feb83.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FFORTRN has 6 files,  0 to 6 (6), eov 500, size 47, free 6
+
+ 1: FORTRAN         Data  4-Feb-83    6- 196( 190), 97280+512= 97792 bytes
+ 2: FTNLIB.OBJ      Data  4-Feb-83  196- 395( 199), 101888+512= 102400 bytes
+ 3: FTNCTERRS.TEXT  Text  4-Feb-83  395- 423(  28), 14336+512= 14848 bytes
+ 4: FTNRTERRS.TEXT  Text  4-Feb-83  423- 437(  14),  7168+512=  7680 bytes
+ 5: SYSTEM.UPDATE   Text  4-Feb-83  437- 441(   4),  2048+512=  2560 bytes
+ 6: BLUESKY.TEXT    Text  6-Jan-83  441- 453(  12),  6144+512=  6656 bytes

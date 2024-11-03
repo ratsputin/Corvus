@@ -1,0 +1,337 @@
+{$S desk }
+procedure Clock;
+type byte = -128..127;
+     ClkPB = record
+           DayofWeek,Month,Day:            integer; { set by driver }
+           Hour,Mins,Secs,Tenths,LeapYear: integer; { set by driver }
+           Year:                           integer; { set by unit   }
+        end;
+     pClkDateRcd = ^ClkDateRcd;
+     ClkDateRcd  = packed record
+           year: 0..100;
+            day: 0..31;
+          month: 0..12;
+        end;
+
+
+var xoff, yoff: integer;
+    ScrX, ScrY: integer;
+    Secs, Mins, hour: integer;
+    ClkMS50, StartTime, StopTime: longint;
+    Done, StopWatch, ZeroStp: boolean;
+    AM, PM: StrTyp;
+
+function WeekDay (d,m,y: integer): integer;
+begin
+   if m <= 2 then begin
+      m := m + 12;
+      y := y - 1;
+   end;
+   WeekDay := ((y{*365} + (y div 4) + m*28 +
+              ((13*m - 12) div 5) + d - 30) mod 7) + 1;
+end;
+
+procedure ClkWrite( CPB: ClkPB );
+var timer: integer;
+    psysdate: pClkDateRcd;
+begin
+   psysdate := pointer(pOSDate);
+   with CPB do begin
+      DayofWeek := WeekDay (Day,Month,psysdate^.year);
+      LeapYear := Year mod 4;
+   end;
+   timer := OStimDv;
+   unitwrite (timer,CPB,$10);
+   timer := ioresult;
+   if timer <> 0 then writeln ('Clock write error: ',timer:1);
+end;
+
+procedure ClkRead( var CPB: ClkPB);
+var timer: integer;
+    psysdate: pClkDateRcd;
+begin
+   timer := OStimDv;
+   unitread (timer,CPB,$0E);
+   timer := ioresult;
+   if timer <> 0 then writeln ('Clock read error: ',timer:1);
+   psysdate := pointer(pOSdate);
+   with CPB do begin
+      Year := psysdate^.year;
+      LeapYear := Year mod 4;
+   end;
+end;
+
+function radians( degrees: real ): real;
+begin
+   radians := degrees * 3.1415926 / 180.0;
+end;
+
+procedure drawsec( tim: integer );
+const len1 = 50;
+      len2 = -10;
+var angle: real;
+    dx1, dy1, dx2, dy2: integer;
+    wx, wy: integer;
+begin
+   angle := radians(tim * 6);
+   dx1 := round( len1 * sin(angle));
+   dy1 := round( len1 * cos(angle));
+   dx2 := round( len2 * sin(angle));
+   dy2 := round( len2 * cos(angle));
+   drawline( xoff+dx2, yoff+dy2, xoff+dx1, yoff+dy1, -1 );
+end;
+
+procedure drawface;
+const len1 = 50;
+      len2 = 47;
+var angle: real;
+    dx1, dy1, dx2, dy2: integer;
+    tim, wx, wy: integer;
+begin
+   for tim := 0 to 11 do begin
+      angle := radians(tim * 30);
+      dx1 := round( len1 * sin(angle));
+      dy1 := round( len1 * cos(angle));
+      plotpoint( xoff+dx1, yoff+dy1,-1 );
+      plotpoint( xoff+dx1+1, yoff+dy1+1,-1 );
+      plotpoint( xoff+dx1, yoff+dy1+1,-1 );
+      plotpoint( xoff+dx1+1, yoff+dy1,-1 );
+   end;
+end;
+
+procedure drawhourmin( len, tim, m: integer );
+var angle: real;
+    dx1, dy1, dx2, dy2: integer;
+    wx, wy: integer;
+begin
+   drawsec( Secs );
+   angle := radians(tim * 6);
+   dx1 := round( len * sin(angle));
+   dy1 := round( len * cos(angle));
+   dx2 := round( (-0.15*len) * sin(angle));
+   dy2 := round( (-0.15*len) * cos(angle));
+   drawline( xoff+dx2, yoff+dy2, xoff+dx1, yoff+dy1, m );
+   wx := round( sin(angle+radians(135)) );
+   wy := round( cos(angle+radians(135)) );
+   drawline( xoff+dx2+wx, yoff+dy2+wy, xoff+dx1+wx, yoff+dy1+wy, m );
+   wx := round( sin(angle-radians(135)) );
+   wy := round( cos(angle-radians(135)) );
+   drawline( xoff+dx2+wx, yoff+dy2+wy, xoff+dx1+wx, yoff+dy1+wy, m );
+   drawsec( Secs );
+end;
+
+procedure tick( len: integer; var tim: integer );
+begin
+   drawhourmin( len, tim, 0 );
+   tim := (tim + 1) mod 60;
+   drawhourmin( len, tim, 1 );
+end;
+
+procedure DpyTimeZones;
+var i: integer;
+    p: pStrTyp;
+begin
+   for i := 1 to 24 do begin
+      gotoxy( ScrX+1, ScrY+i+1);
+      p := Msg( 2, i );
+      write( i:3, '.', p^, '\1BK' );
+   end;
+end;
+
+procedure UpdtTimeZones;
+var M, S: string[20];
+    i, Tim: integer;
+begin
+   S := ':   ';
+   S[2] := chr((Mins div 10) + ord('0'));
+   S[3] := chr((Mins mod 10) + ord('0'));
+   for i := 1 to 24 do begin
+      gotoxy( ScrX+21, ScrY+i+1);
+      Tim := ((Hour div 5) + i - TimZon + 24) mod 24;
+      if Tim<12 then M := AM else M := PM;
+      Tim := Tim mod 12;
+      if Tim=0 then Tim := 12;
+      write( Tim:2, S, M );
+   end;
+end;
+
+procedure InvertTZ( TZ: integer );
+begin
+   gotoxy( ScrX+5, ScrY+TZ+1 );
+   write( '\1BZ\F' );
+end;
+
+procedure init;
+var CPB: ClkPB;
+    p: pStrTyp;
+begin
+   write( '\1Bb\1BG4' );
+   ClkRead( CPB );
+   Secs := CPB.Secs;
+   Mins := CPB.Mins;
+   hour := CPB.Hour*5 + (CPB.Mins div 12);
+   xoff := 75;
+   yoff := 75;
+   ScrY := WinRws-24;
+   ScrX := ScrWid-50;
+   ZeroStp := true;
+   StopWatch := false;
+   gotoxy( ScrX+30, ScrY+15 );
+   write( '\1Bo\0\0\0\0\3' );
+   p := Msg(2,25);
+   AM := p^;
+   p := Msg(2,26);
+   PM := p^;
+   DpyTimeZones;
+   drawface;
+   ClkMS50 := ms50;
+   drawsec( Secs );
+   drawhourmin( 35, hour, 1 );
+   drawhourmin( 45, Mins, 1 );
+   InvertTZ( TimZon );
+   UpdtTimeZones;
+end;
+
+procedure UpdtClock;
+var T: integer;
+begin
+   if ms50-ClkMS50>20 then begin
+      ClkMS50 := ClkMS50+20;
+      drawsec( Secs );
+      Secs := (Secs + 1) mod 60;
+      drawsec( Secs );
+      if Secs=0 then begin
+         tick( 45, Mins );
+         UpdtTimeZones;
+         if Mins mod 12=0 then begin
+            tick( 35, hour );
+            drawhourmin( 45, Mins, 1 );
+         end else begin
+            drawhourmin( 35, hour, 1 );
+         end;
+      end;
+   end;
+   if StopWatch then begin
+      gotoxy( ScrX+35, ScrY+21 );
+      T := (ms50-StartTime) div 2;
+      write( (T div 600):1, '''', ((T mod 600)/10.0):4:1 );
+   end;
+end;
+
+procedure DoTimeZone;
+var i: integer;
+begin
+   i := TimZon;
+   if PmtInt( Msg(2,27), TimZon ) then begin
+      TimZon := min(24,max(1,TimZon));
+      InvertTZ( i );
+      InvertTZ( TimZon );
+      if NamStor( 'TimZon', TimZon ) then begin
+         UpdtTimeZones;
+      end;
+   end;
+end;
+
+procedure IncTimZon( T: integer );
+var Dum: boolean;
+begin
+   InvertTZ( TimZon );
+   TimZon := TimZon + T;
+   if TimZon<1 then TimZon := 24;
+   if TimZon>24 then TimZon := 1;
+   InvertTZ( TimZon );
+   Dum := NamStor( 'TimZon', TimZon );
+   UpdtTimeZones;
+end;
+
+procedure DoLap;
+var T: integer;
+begin
+   if StopWatch then begin
+      gotoxy( ScrX+35, ScrY+22 );
+      T := (ms50-StartTime) div 2;
+      write( (T div 600):1, '''', ((T mod 600)/10.0):4:1, ' Lap' );
+   end else begin
+      ZeroStp := true;
+      gotoxy( ScrX+35, ScrY+21 );
+      write( '\1BK' );
+      gotoxy( ScrX+35, ScrY+22 );
+      write( '\1BK' );
+   end;
+end;
+
+procedure DoStopWatch;
+begin
+   Bell(BelAck);
+   StopWatch := not StopWatch;
+   if ZeroStp then begin
+      ZeroStp := false;
+      StartTime := ms50;
+      StopTime := ms50;
+   end;
+   if StopWatch then begin
+      StartTime := StartTime + ms50 - StopTime;
+   end else begin
+      StopTime := ms50;
+   end;
+end;
+
+procedure DoSetTime;
+var CPB: ClkPB;
+begin
+   ClkRead(CPB);
+   if PmtInt( Msg(2,28), CPB.Hour ) then begin
+      if PmtInt( Msg(2,29), CPB.Mins ) then begin
+         CPB.Secs := 0;
+         ClkWrite(CPB);
+         DrawHourMin( 35, Hour, 0 );
+         DrawHourMin( 45, Mins, 0 );
+         DrawSec( Secs );
+         Hour := CPB.Hour * 5 + (CPB.Mins div 12);
+         Mins := CPB.Mins;
+         Secs := CPB.Secs;
+         DrawHourMin( 45, Mins, 1 );
+         DrawHourMin( 35, Hour, 1 );
+         DrawSec( Secs );
+         UpdtTimeZones;
+      end;
+   end;
+end;
+
+begin
+   Init;
+   LoadLabels( ClockFrame );
+   Done := false;
+   CsrWid := 0;
+   while not Done do begin
+      while UserIdle do begin
+         UpdtClock;
+         if not StopWatch then BackGround;
+      end;
+      NextCmd;
+      case Cmd of
+         KF1: DoTimeZone;
+         KF4: DoLap;
+         KF5: DoStopWatch;
+         KF8: DoSetTime;
+         KCSRU: IncTimZon(-1);
+         KCSRD: IncTimZon(1);
+         KCR,
+         KTEXT,
+         KCSRR,
+         KCSRL: Bell(BelErr);
+         otherwise: Done := true;
+      end;
+   end;
+   write( '\1BG0' );
+   Redraw( WinTop );
+   CsrWid := 1;
+   write( '\1Bc' );
+end;
+
+
+
+
+
+
+

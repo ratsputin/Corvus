@@ -1,0 +1,238 @@
+{----------------------------------------------------------------------}
+{ File: DCOMM3.TEXT -- RecvFile processing
+{----------------------------------------------------------------------}
+
+{$S RECVSEG}
+
+{ RecvFile ------------------------------------------------------------}
+{ handles entry into file receive routines
+{----------------------------------------------------------------------}
+PROCEDURE RcvFile;
+      var menu: boolean; choice: char;
+
+{ RecvFile.LabelsRecv -------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE LabelsRecv;
+      begin
+      LblsInit;
+    { iores := lblset (02, 'Binary',   concat (pfx,'A')); }
+      iores := lblset (03, 'XMODEM',   concat (pfx,'B'));
+    { iores := lblset (04, 'KERMIT',   concat (pfx,'C')); }
+    { iores := lblset (08, 'Help',     concat (pfx,'H')); }
+      iores := lblset (09, 'Exit',     concat (pfx,'X'));
+      LblsOn;
+      LevelName := 'RecvFile';
+      end;
+
+{ RecvFile.Checksum ---------------------------------------------------}
+{ input is an integer, output is LSB
+{----------------------------------------------------------------------}
+FUNCTION Checksum (sum: integer): integer;
+      var trick: packed array [0..1] of char;
+      begin
+      trick[0] := chr(sum);
+      Checksum := ord(trick[0]);
+      end;
+
+{ RecvFile.RcvKermit --------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE RcvKermit;
+      begin
+      StatMsg ('KERMIT receive protocol not implemented yet');
+      end;
+
+{ RecvFile.RcvBin -----------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE RcvBin;
+      begin
+      StatMsg ('Binary receive protocol not implemented yet');
+      end;
+
+{$P}
+{ RecvFile.RcvXmodem --------------------------------------------------}
+{ implements Christensen / XMODEM / MODEM7 protocol
+{----------------------------------------------------------------------}
+PROCEDURE RcvXmodem;
+
+      var ch: char;
+          blkrcvd, numtries, n, lastblock,
+             timeout, k, sum, doubchk, endline: integer;
+          blk: packed array [1..132] of char;
+          xescape, EOT_RCVD: boolean;
+          infile: text;
+          binfile: packed file of char;
+
+{ RecvFile.RcvXmodem.Skip ---------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Skip;
+      begin
+      endline := endline+1;
+      if endline=10 then begin endline := 0; writeln; end;
+      end;
+
+{ RecvFile.RcvXmodem.Xit ----------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Xit;
+      begin
+      StatMsg ('');
+      StatMsg ('Aborting at your request...');
+      CR_PUTREM (can);
+      close (binfile,crunch);
+      SetComm (2);
+      ShortStat;
+      exit (RcvXmodem);
+      end;
+
+{ RecvFile.RcvXmodem --------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      StatMsg ('');
+      StatMsg ('Note: to receive files using the XMODEM file protocol,');
+      StatMsg ('the distant computer must be using XMODEM');
+      StatMsg ('protocol for transmission.');
+      StatMsg ('');
+      repeat
+          ChgString (filename,'XMODEM','',
+                     'Enter name of file to be received');
+          if (cst <> Normal) OR (filename = '') then exit (RcvXmodem);
+          iores := FileAgent (infile,filename,opn,wr,bin);
+          until iores > 0;
+      close (infile);
+      rewrite (binfile,filename);
+
+      databits[3] := 8; parity[3] := 'N'; XON_XOFF[3] := 'N';
+      SetComm (3);                          { set comm to bin xfer }
+
+      StatMsg ('Press any key to start receiving'); write (pbeep);
+      keychar := CR_GETKB;
+      ShortStat;
+      StatMsg ('');
+      StatMsg (' . = receipt of block acknowledged');
+      StatMsg (' X = block not acknowledged');
+      StatMsg (' T = Timed out waiting for response from recipient');
+      StatMsg ('');
+      StatMsg ('Press ESC to pause or abort');
+      StatMsg ('');
+
+      blkrcvd := 0;
+      endline := 0;
+      lastblock := 0;          { last block # received }
+      numtries := 0;           { tracks timeouts and bad blocks }
+      xescape := FALSE;
+      EOT_RCVD := FALSE;
+      CR_PUTREM (nak);
+      while not EOT_RCVD do begin
+         sum := 0;        { sum is used to sum all chars rcvd and obtain checksum }
+         n := 0;          { n is counter for number of char so far this block }
+         timeout := 0;    { timeout counter }
+
+         while (not EOT_RCVD) and
+               (not xescape) and
+               (n <= 131) and
+               (timeout <= 8000) do begin
+             if CR_KBSTAT then begin
+                 ch := CR_GETKB; if ch = chr(27) then XIT; end;
+             if CR_REMSTAT
+                 then begin
+                     n := n+1;
+                     blk[n] := CR_GETREM;
+                     if n = 1 then EOT_RCVD := (blk[1] = EOT);
+                     if blk[1] <> SOH then n := 0;
+                     end
+                 else timeout := timeout+1;
+             end;
+
+         if (n = 132) and (timeout < 8000) then begin
+             sum := 0;
+             for k := 1 to 131 do sum := sum + ord(blk[k]);
+             sum := checksum (sum);
+             doubchk := checksum (ord(blk[1])+ord(blk[2])+ord(blk[3]));
+             if (sum = ord(blk[132])) and (doubchk = 0)
+                 then begin {good checksum }
+                    if lastblock = ord(blk[2])
+                    then CR_PUTREM (ack)   { send ACK... this is a duplicate block }
+                    else begin
+                       blkrcvd := blkrcvd+1;
+                       lastblock := ord(blk[2]);
+                       for k := 4 to 131 do write (binfile, blk[k]);
+                       CR_PUTREM (ack);  { send ACK for good block }
+                       write (blkrcvd:6);
+                       iores := BellTone (1,1,5);
+                       skip;
+                       end;
+                    end
+                 else begin { bad block }
+                    write (' ',blkrcvd+1:4,' X');
+                    iores := BellTone (1,1,11);
+                    skip;
+                    numtries := succ(numtries);
+                    if numtries >= 10 then begin
+                        writeln; writeln;
+                        writeln ('Having trouble... continue? ');
+                        unitread(2,ch,1);
+                        if (ch = 'y') or (ch = 'Y')
+                            then numtries := 0 else Xit;
+                        end;
+                    CR_PUTREM (nak); { send NAK.... bad block }
+                    end;
+             end;
+
+         if timeout >= 8000 then begin { timeout before 128 bytes rcvd }
+             numtries := succ(numtries);
+             write (' ',blkrcvd+1:4,' T');
+             skip;
+             if numtries >= 10 then begin
+                 writeln; writeln;
+                 writeln ('Having trouble..... continue? ');
+                 unitread(2,ch,1);
+                 if (ch = 'y') or (ch = 'Y') then numtries := 0 else Xit;
+                 end;
+             CR_PUTREM (nak); {  NAK... timeout }
+             end;
+         end;
+      close (binfile,crunch);
+      CR_PUTREM (ack);{ finish the transfer session }
+      StatMsg (''); write (pbeep);
+      StatMsg ('File transfer complete');
+      writeln (blkrcvd:5,' 128 byte blocks received.');
+      SetComm (2);        { reset original comm parms }
+      ShortStat;
+      end;
+
+{$P}
+{ RecvFile ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      HoldComm;
+      LevelName := 'RecvFile';
+      filename := '';
+      menu := FALSE;
+
+      case how of
+         binary: if GetYN ('','Confirm - Receive binary file')
+                     then RcvBin else menu := TRUE;
+         xmodem: if GetYN ('','Confirm - Receive file using XMODEM protocol')
+                     then RcvXmodem else menu := TRUE;
+         kermit: if GetYN ('','Confirm - Receive file using KERMIT protocol')
+                     then RcvKermit else menu := TRUE;
+            any: menu := TRUE;
+            end; {case}
+
+      if menu then begin
+          LabelsRecv;
+          repeat until CR_GETKB = FUNCPFX; choice := CR_GETKB;
+          LblsOff;
+          case choice of
+            { 'A': RcvBin;    }
+              'B': RcvXmodem;
+            { 'C': RcvKermit; }
+            { 'H': Help;      }
+              'X': ;
+              end; {case}
+          LabelsMain;
+          end;
+      end;
+{$S}
+
+
+

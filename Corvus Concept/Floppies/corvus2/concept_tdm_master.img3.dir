@@ -1,0 +1,11 @@
+
+Directory of UCSD disk image file 'concept_tdm_master.img3'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 3 files,  0 to 6 (6), eov 500, size 108, free 3
+
+ 1: TDM.CODE        Code  4-Mar-83    6- 299( 293), 150016+512= 150528 bytes
+ 2: CVCCONSOLE.CODE Code  1-Mar-83  299- 324(  25), 12800+512= 13312 bytes
+ 3: CPLIB           Data 24-Jan-83  324- 392(  68), 34816+512= 35328 bytes

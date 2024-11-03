@@ -1,0 +1,29 @@
+
+Directory of UCSD disk image file 'ccutil#2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 21 files,  0 to 6 (6), eov 500, size 16, free 21
+
+ 1: SYSGEN          Data 20-Sep-83    6- 134( 128), 65536+512= 66048 bytes
+ 2: BOOT.CONCEPT    Data 20-Sep-83  134- 144(  10),  5120+512=  5632 bytes
+ 3: VOLUTIL         Data 20-Sep-83  144- 238(  94), 48128+512= 48640 bytes
+ 4: TERMINAL        Data 20-Sep-83  238- 281(  43), 22016+512= 22528 bytes
+ 5: OTEST           Data 20-Sep-83  281- 318(  37), 18944+512= 19456 bytes
+ 6: BLDACT          Data 20-Sep-83  318- 353(  35), 17920+512= 18432 bytes
+ 7: BLDALT          Data 20-Sep-83  353- 391(  38), 19456+512= 19968 bytes
+ 8: CSD.06.10       Data 20-Sep-83  391- 393(   2),  1024+512=  1536 bytes
+ 9: CSD.06.10.ALT   Data 20-Sep-83  393- 398(   5),  2560+512=  3072 bytes
+10: CSD.07.11       Data 20-Sep-83  398- 401(   3),  1536+512=  2048 bytes
+11: CSD.07.11.ALT   Data 20-Sep-83  401- 406(   5),  2560+512=  3072 bytes
+12: CSD.08.13.ALT   Data 20-Sep-83  406- 412(   6),  3072+512=  3584 bytes
+13: CSD.09.14.ALT   Data 20-Sep-83  412- 425(  13),  6656+512=  7168 bytes
+14: CSD.IBM         Data 20-Sep-83  425- 432(   7),  3584+512=  4096 bytes
+15: C2.MISC.TEXT    Text 20-Jul-83  432- 436(   4),  2048+512=  2560 bytes
+16: PRTWND          Data 20-Sep-83  436- 438(   2),  1024+512=  1536 bytes
+17: BOOT.FLOPPY     Data 20-Sep-83  438- 440(   2),  1024+512=  1536 bytes
+18: WRITEBOOT       Data 20-Sep-83  440- 445(   5),  2560+512=  3072 bytes
+19: USERKEYS.TEXT   Text 20-Sep-83  445- 451(   6),  3072+512=  3584 bytes
+20: FFRMT           Data 20-Sep-83  451- 464(  13),  6656+512=  7168 bytes
+21: DELPIPE         Data 19-Nov-83  464- 484(  20), 10240+512= 10752 bytes

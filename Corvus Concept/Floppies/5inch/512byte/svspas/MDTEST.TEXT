@@ -1,0 +1,108 @@
+Program MouseTest;
+
+Uses {$U /ccutil/cclib}
+  ccdefn,
+  ccGRFio,
+  ccCRTio,
+     {$U mouse}
+  Mouse;
+
+Var
+ SX,SY,
+ XS,YS,
+ MX, MY : Integer;
+ OldX, OldY : Integer;
+ ForcedDraw;
+ CrossExists,
+ Valid, LB,CB,RB : Boolean;
+
+Procedure Make_Cross(X,Y : Integer);
+
+Begin
+  DrawLine(X-3,Y,X+3,Y,-1);
+  DrawLine(X,Y-3,X,Y+3,-1);
+  CrossExists := True
+End;
+
+
+Procedure Erase_Cross(X,Y : Integer);
+
+Begin
+  DrawLine(X-3,Y,X+3,Y,-1);
+  DrawLine(X,Y-3,X,Y+3,-1);
+  CrossExists := False
+End;
+
+Procedure DrawCross;
+
+Begin
+  Repeat Until UnitBusy(2) Or MouseBusy or ForcedDraw;
+  If UnitBusy(2) Then Exit(MouseTest);
+  MouseData(Valid,LB,CB,RB,MX,MY);
+  If (MX <> OldX) or (MY <> OldY) Then Begin
+    If CrossExists Then Erase_Cross(OldX,OldY);
+    Make_Cross(MX,MY);
+    OldX := MX; OldY := MY
+    End;
+  ForcedDraw := False
+End;
+
+
+Begin
+  CCcrtIOinit;
+  CCgrfIOinit;
+  InitMouse;
+  CrossExists := False;
+  ForcedDraw := False;
+  CrtAction(EraseAll);
+  Write('X scaling factor? ');
+  ReadLn(XS);
+  Write('Y scaling factor? ');
+  ReadLn(YS);
+  SetScale(XS,YS);
+  Write('Enter 0 for graphics mode, 1 for text mode: ');
+  ReadLn(XS);
+  If XS = 0 Then MouseMode(Grf) Else MouseMode(Txt);
+  CrtAction(EraseAll);
+  OldX := 300;
+  OldY := 200;
+  SetMouse(OldX,OldY);
+  Repeat
+    Repeat DrawCross Until (LB or CB or RB);
+    If CrossExists Then Erase_Cross(OldX,OldY);
+    If RB Then Begin
+      CrtAction(EraseAll);
+      Repeat MouseData(Valid,LB,CB,RB,MX,MY) Until Not(RB);
+      ForcedDraw := True;
+      DrawCross
+      End;
+    If CB Then SetMouse(300,200);
+    If LB Then Repeat
+      MouseData(Valid,LB,CB,RB,MX,MY);
+      If (MX <> OldX) Or (MY <> OldY) Then Begin
+        DrawLine(OldX,OldY,MX,MY,1);
+        OldX := MX; OldY := MY
+        End
+    Until Not(LB)
+(*
+            DrawLine(SX,SY,SX,OldY,-1);
+            DrawLine(SX,OldY,OldX,OldY,-1);
+            DrawLine(OldX,OldY,OldX,SY,-1);
+            DrawLine(OldX,Sy,SX,SY,-0);
+            DrawLine(SX,SY,SX,MY,-1);
+            DrawLine(SX,MY,MX,MY,-1);
+            DrawLine(MX,MY,MX,SY,-1);
+            DrawLine(MX,Sy,SX,SY,-1);
+            OldX := MX; OldY := MY
+            End
+          Until Not(CB);
+          DrawLine(SX,SY,SX,MY,1);
+          DrawLine(SX,MY,MX,MY,1);
+          DrawLine(MX,MY,MX,SY,1);
+          DrawLine(MX,Sy,SX,SY,1)
+          End*)
+  Until UnitBusy(2);
+  UnitClear(2)
+End.
+
+

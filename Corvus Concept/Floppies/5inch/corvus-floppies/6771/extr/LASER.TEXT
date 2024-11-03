@@ -1,0 +1,26 @@
+
+program laser;
+
+var f1,f2: text; ln: string[255]; ESC: string[1];
+
+begin
+ESC := '-'; ESC[1] := chr(27);
+writeln; write (' Enter input file name: '); readln (ln);
+reset (f1,ln);
+if ioresult <> 0 then halt (0);
+rewrite (f2,'.LASER.TEXT');
+if ioresult <> 0 then halt (0);
+
+write (f2,ESC,'E');     { reset escape sequence     }
+write (f2,ESC,'&l1O');  { set landscape orientation }
+write (f2,ESC,'(s16H'); { set 16.67 pitch           }
+write (f2,ESC,'&l8D');  { set 8 lines per inch      }
+
+while NOT eof (f1) do begin
+    readln (f1,ln); writeln (f2,' ':16,ln); write ('.'); end;
+
+write (f2,ESC,'E');     { reset escape sequence     }
+writeln (f2);
+
+close (f1); close (f2,lock);
+end.

@@ -1,0 +1,3945 @@
+
+Contents of C:\Corvus Stuff\Floppies\5inch\128byte\vsiutl_findtext.img:
+FLOPPY
+------------------------  ------ ---------------
+FINDTEXT            	      14  DATA 22-APR-86
+VSIUTL              	     138  DATA 15-FEB-85
+------------------------  ------ ---------------
+       2 File(s)             152 bytes
+                        4294946726 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\256byte\ccsys_1of3.img:
+BACKUP1
+------------------------  ------ ---------------
+CC.CPM              	      28  DATA 12-MAY-83
+CC.CPM1             	      11  DATA 13-AUG-83
+CC.EDCHAR           	      43  DATA 11-NOV-85
+LC                  	     201  DATA 01-FEB-84
+CC.MNTMGR           	     101  DATA 11-NOV-85
+HELP.TEXT           	      22  TEXT 01-FEB-84
+CC.PSYSTEM          	      23  DATA 01-FEB-84
+CC.SETDCP           	      43  DATA 11-NOV-85
+CPMD.DEFAULT        	       1  DATA 13-AUG-83
+CSD.CCOS            	       2  DATA 01-FEB-84
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSK.DEFAULT         	       2  DATA 01-FEB-84
+CON.SYS.TEXT        	       4  TEXT 11-NOV-85
+DEBUG               	      12  DATA 01-FEB-84
+DRV.APIO            	       2  DATA 01-FEB-84
+DRV.DISPVT          	      11  DATA 11-NOV-85
+DRV.DTACOM          	       8  DATA 11-NOV-85
+DRV.EPRNT           	       5  DATA 11-NOV-85
+DRV.FDISK1          	       4  DATA 11-NOV-85
+ED                  	     326  DATA 01-FEB-84
+EDINIT.TEXT         	      12  TEXT 01-FEB-84
+HELP.LC.TEXT        	      22  TEXT 01-FEB-84
+KEYS.ED.TEXT        	      14  TEXT 01-FEB-84
+KEYS.ISYS           	      33  DATA 01-FEB-84
+KEYS.LC.TEXT        	      12  TEXT 01-FEB-84
+LOADER.IMAGE        	       1  DATA 01-FEB-84
+MEM                 	       5  DATA 16-JUL-82
+SYSMSG              	      33  DATA 01-FEB-84
+WNDUTIL             	      57  DATA 01-FEB-84
+MOUNT               	      43  DATA 11-NOV-85
+1CC.LGICLC          	     191  DATA 15-MAY-84
+------------------------  ------ ---------------
+      31 File(s)            1274 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\256byte\ccsys_2of3.img:
+BACKUP2
+------------------------  ------ ---------------
+2CC.LGICLC          	      42  DATA 15-MAY-84
+KEYS.LCI.TEXT       	      14  TEXT 09-MAY-84
+PASCTERRS.TEXT      	      14  TEXT 10-SEP-85
+FTNRTERRS.TEXT      	      14  TEXT 10-SEP-85
+LIBRARY             	      27  DATA 10-SEP-85
+FTNLIB.OBJ          	     175  DATA 10-SEP-85
+FTNCTERRS.TEXT      	      30  TEXT 10-SEP-85
+ASM68K              	      63  DATA 10-SEP-85
+PASLIB.OBJ          	     110  DATA 10-SEP-85
+H3.CODE             	     142  DATA 10-SEP-85
+LINKER              	      49  DATA 10-SEP-85
+H.CODE              	     116  DATA 14-JAN-85
+DBG                 	      95  DATA 10-SEP-85
+SGEN.TEXT           	       4  TEXT 22-NOV-85
+CC.DISPAT           	      25  DATA 11-NOV-85
+CC.EXEC             	      15  DATA 11-NOV-85
+CC.HELP             	      10  DATA 11-NOV-85
+CC.ISYS             	      35  DATA 14-JAN-85
+CC.SYSMGR           	      21  DATA 11-NOV-85
+CC.WNDMGR           	      31  DATA 15-APR-85
+VSIPPP              	      47  DATA 09-MAR-84
+DRV.CDISK1          	       4  DATA 11-NOV-85
+DRV.CDISK2          	       4  DATA 11-NOV-85
+DRV.DISPHZ          	      11  DATA 11-NOV-85
+DRV.FDISK2          	       6  DATA 11-NOV-85
+DRV.KYBD            	       6  DATA 11-NOV-85
+CC.C2MGR            	      70  DATA 11-NOV-85
+CCTERRS.TEXT        	      14  TEXT 26-OCT-83
+CLIB.OBJ            	      38  DATA 26-OCT-83
+STDIO.M.TEXT        	       8  TEXT 26-OCT-83
+2CC.FILMGR          	      34  DATA 11-NOV-85
+------------------------  ------ ---------------
+      31 File(s)            1274 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\256byte\ccutil_1of3.img:
+BACKUP1
+------------------------  ------ ---------------
+BLDACT              	      29  DATA 11-NOV-85
+BLDALT              	      18  DATA 11-NOV-85
+CSD.06.10           	       2  DATA 01-FEB-84
+CSD.07.11           	       3  DATA 01-FEB-84
+DSRV.DIAG.DATA      	       1  DATA 04-JUL-84
+BOOT.CONCEPT        	      10  DATA 01-FEB-84
+BOOT.FLOPPY         	       2  DATA 01-FEB-84
+C2.HELP.TEXT        	       4  TEXT 11-NOV-85
+CC.CPMUTIL          	      52  DATA 12-MAY-83
+CITOH.TEXT          	       4  TEXT 01-FEB-84
+CMP                 	       9  DATA 27-JUL-83
+CPLIB               	      64  DATA 01-FEB-84
+CSD.06.10.ALT       	       5  DATA 01-FEB-84
+CSD.07.11.ALT       	       5  DATA 01-FEB-84
+CSD.07.14.ALT       	       7  DATA 01-FEB-84
+CSD.08.13.ALT       	       6  DATA 01-FEB-84
+CSD.09.14.ALT       	      13  DATA 01-FEB-84
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSD.IBM             	       7  DATA 01-FEB-84
+FIRM.BOOT.A2        	       2  DATA 24-SEP-84
+DIABLO.TEXT         	       4  TEXT 01-FEB-84
+DIFF                	      22  DATA 17-AUG-82
+DISASM              	      58  DATA 18-JUN-83
+PRTWND              	       3  DATA 11-NOV-85
+WRITEBOOT           	       5  DATA 01-FEB-84
+MBACKUP             	      71  DATA 11-NOV-85
+MIRROR              	     108  DATA 11-NOV-85
+MOVE                	      32  DATA 01-FEB-84
+OTEST               	      30  DATA 11-NOV-85
+DIAG.INFO.TEXT      	       4  TEXT 31-JAN-86
+BANK.DIAG.DATA      	       4  DATA 01-FEB-84
+SYSGEN              	     119  DATA 11-NOV-85
+BOOT.CONCEPT2       	      11  DATA 22-APR-85
+ODRV.DIAG.DATA      	       2  DATA 02-AUG-84
+SYSTEM.MISCINFO     	       1  DATA 10-SEP-85
+SYSTEM.PASCAL       	     129  DATA 01-FEB-84
+TERMINAL            	      37  DATA 11-NOV-85
+UNCAT               	      12  DATA 01-FEB-84
+USERKEYS.TEXT       	       6  TEXT 01-FEB-84
+ZAP                 	      42  DATA 01-FEB-84
+...NEW.STUFF...     	       1  DATA 17-APR-84
+FIXIT               	      51  DATA 02-APR-84
+DEVUTIL             	      57  DATA 28-OCT-83
+PSMGR               	      84  DATA 22-SEP-83
+TSMGR               	      44  DATA 24-JAN-84
+BLD.MAC.LOAD        	      27  DATA 06-JUL-84
+C2.MISC.TEXT        	       4  TEXT 11-NOV-85
+BANK.CRVS.VOL       	       8  DATA 02-FEB-86
+BANK.DIAG.NEW       	       3  DATA 06-FEB-86
+DSRV.FIRMWARE       	      40  DATA 21-SEP-84
+1ODRV.FIRMWARE      	      10  DATA 21-SEP-84
+------------------------  ------ ---------------
+      51 File(s)            1274 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\256byte\ccutil_2of3.img:
+BACKUP2
+------------------------  ------ ---------------
+2ODRV.FIRMWARE      	      26  DATA 21-SEP-84
+NETMAP.TEXT         	      12  TEXT 27-SEP-84
+CCOS.1.TEXT         	       8  TEXT 16-OCT-84
+OMNIVIEW            	     103  DATA 23-MAY-84
+BANK.FIRMWARE       	      36  DATA 06-FEB-86
+VOLMGR              	     128  DATA 11-NOV-85
+ACCMGR              	      97  DATA 11-NOV-85
+USRMGR              	     110  DATA 11-NOV-85
+PARMGR              	      90  DATA 11-NOV-85
+C2LIB.OBJ           	      56  DATA 10-SEP-85
+FUTIL               	      69  DATA 11-NOV-85
+DEBUGGER.OBJ        	       7  DATA 15-FEB-85
+VOLUTIL             	     100  DATA 15-FEB-85
+DISKX               	       8  DATA 15-FEB-85
+SPOOL               	      77  DATA 21-SEP-84
+DESPOOL             	      81  DATA 21-SEP-84
+OUTPUT.TEXT         	      12  TEXT 22-MAR-85
+CCLIB.OBJ           	     206  DATA 10-SEP-85
+SYSTEM.LIBRARY      	      43  DATA 10-SEP-85
+------------------------  ------ ---------------
+      19 File(s)            1269 bytes
+                           21774 bytes free
+
+
+Contents of C:\Corvus Stuff\Floppies\5inch\256byte\isis1of2.img:
+BACKUP1
+------------------------  ------ ---------------
+BOOM                	      12  DATA 16-JAN-84
+CC.CALC             	      72  DATA 01-FEB-84
+CC.CALEN            	      51  DATA 01-FEB-84
+CC.CLOCK            	      58  DATA 01-FEB-84
+CC.DCOMM            	     129  DATA 01-FEB-84
+CC.GR.FONTS         	      20  DATA 01-FEB-84
+CC.GR.IPC.TEXT      	      12  TEXT 01-FEB-84
+CC.GR.LST.TEXT      	      18  TEXT 01-FEB-84
+CC.GR.TMPLTS        	     203  DATA 01-FEB-84
+CC.GRAPH            	     247  DATA 01-FEB-84
+CC.LOOKUP           	      66  DATA 01-FEB-84
+CC.SORT             	      53  DATA 01-FEB-84
+1CC.WP              	     333  DATA 01-FEB-84
+------------------------  ------ ---------------
+      13 File(s)            1274 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\c1prom.img:
+FLOPPY
+------------------------  ------ ---------------
+C1.L.TEXT           	     830  TEXT 21-JUN-85
+C                   	     137  DATA 23-JAN-84
+STDIO.M.TEXT        	       6  TEXT 23-JAN-84
+CLIB.OBJ            	      42  DATA 23-JAN-84
+PASLIB.OBJ          	     105  DATA 01-FEB-84
+PASCAL              	     197  DATA 01-FEB-84
+PASCTERRS.TEXT      	      14  TEXT 01-FEB-84
+SEE.TEXT            	       4  TEXT 04-OCT-84
+SEE.I               	       2  DATA 19-OCT-85
+SEE.OBJ             	      48 DATA 00-(nu-100
+------------------------  ------ ---------------
+      10 File(s)            1385 bytes
+                        4294848368 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\ccos2.0_C_1985.img:
+FCCOMP
+------------------------  ------ ---------------
+CC.KERNEL           	      48  DATA 11-JUL-85
+C                   	     134  DATA 15-APR-85
+CCTERRS.TEXT        	      14  TEXT 15-APR-85
+CLIB.OBJ            	      40  DATA 15-APR-85
+STDIO.M.TEXT        	       8  TEXT 15-APR-85
+H3.CODE             	     139  DATA 15-APR-85
+SYSTEM.UPDATE       	       4  TEXT 27-AUG-85
+SEE.TEXT            	       4  TEXT 04-OCT-84
+SEE                 	      26  DATA 19-OCT-85
+SEE                 	      26  DATA 19-OCT-85
+SEE                 	     507 DATA 00-(nu-100
+------------------------  ------ ---------------
+      11 File(s)             950 bytes
+                        4294528444 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\fboot_vsiutl_mount.img:
+FBOOT
+------------------------  ------ ---------------
+CC.KERNEL           	      51  DATA 13-MAR-86
+CC.SETUP            	      34  DATA 03-MAR-86
+CC.DISPAT           	      24  DATA 13-MAR-86
+CC.EXEC             	      17  DATA 13-MAR-86
+CC.FILMGR           	      45  DATA 03-MAR-86
+CC.SYSMGR           	      21  DATA 03-MAR-86
+CC.WNDMGR           	      32  DATA 03-MAR-86
+DRV.CDISK1          	       4  DATA 13-MAR-86
+DRV.CDISK2          	       4  DATA 13-MAR-86
+DRV.DISPHZ          	      11  DATA 11-NOV-85
+DRV.DISPVT          	      11  DATA 11-NOV-85
+DRV.DTACOM          	       8  DATA 11-NOV-85
+DRV.EPRNT           	       5  DATA 11-NOV-85
+DRV.FDISK1          	       4  DATA 11-NOV-85
+DRV.FDISK2          	       6  DATA 11-NOV-85
+DRV.KYBD            	       6  DATA 11-NOV-85
+DRV.OMNINET         	       4  DATA 13-MAR-86
+DRV.RDISK           	       2  DATA 22-NOV-85
+DRV.SPOOL           	       4  DATA 13-MAR-86
+DRV.SYSTRM          	       7  DATA 11-NOV-85
+DRV.TIMER           	       4  DATA 11-NOV-85
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSK.DEFAULT         	       2  DATA 01-FEB-84
+ASSIGN              	      15  DATA 13-MAR-86
+MOUNT               	      43  DATA 11-NOV-85
+PIPES               	      13  DATA 03-MAR-86
+VOLUTIL             	     100  DATA 15-FEB-85
+MDIAG               	     186  DATA 28-MAR-86
+DIAG.INFO.TEXT      	       4  TEXT 31-JAN-86
+FIRM.BOOT.A2        	       2  DATA 24-SEP-84
+BANK.CRVS.VOL       	       8  DATA 14-FEB-86
+BANK.DIAG.OLD       	       4  DATA 01-FEB-84
+BANK.DIAG.NEW       	       3  DATA 21-MAR-86
+BANK.FIRMWARE       	      36  DATA 21-MAR-86
+DSRV.DIAG.DATA      	       1  DATA 04-JUL-84
+DSRV.FIRMWARE       	      40  DATA 21-SEP-84
+ODRV.DIAG.DATA      	       2  DATA 02-AUG-84
+ODRV.FIRMWARE       	      36  DATA 21-SEP-84
+XFRMGR              	     148  DATA 28-MAR-86
+DEBUG               	      12  DATA 01-FEB-84
+SYSGEN              	     120  DATA 10-JAN-86
+BOOT.CONCEPT        	      10  DATA 01-FEB-84
+BOOT.CONCEPT2       	      11  DATA 22-APR-85
+TERMINAL            	      37  DATA 11-NOV-85
+OTEST               	      30  DATA 11-NOV-85
+BLDACT              	      29  DATA 11-NOV-85
+BLDALT              	      18  DATA 11-NOV-85
+CSD.06.10           	       2  DATA 01-FEB-84
+CSD.06.10.ALT       	       5  DATA 01-FEB-84
+CSD.07.11           	       3  DATA 01-FEB-84
+CSD.07.11.ALT       	       5  DATA 01-FEB-84
+CSD.07.14.ALT       	       7  DATA 01-FEB-84
+CSD.08.13.ALT       	       6  DATA 01-FEB-84
+CSD.09.14.ALT       	      13  DATA 01-FEB-84
+CSD.IBM             	       7  DATA 01-FEB-84
+PURG.2.0.TEXT       	      10  TEXT 13-MAR-86
+SGEN.TEXT           	       4  TEXT 13-MAR-86
+SYSTEM.UPDATE       	       4  TEXT 13-MAR-86
+VSIUTL              	     138  DATA 15-FEB-85
+BANK.DIAG.DATA      	       4  DATA 01-FEB-84
+------------------------  ------ ---------------
+      60 File(s)            1424 bytes
+                        4293062789 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy1.img:
+FLOPPY1
+------------------------  ------ ---------------
+AGENDA.TEXT         	       8  TEXT 03-JAN-84
+BOOTFILES.TEXT      	      22  TEXT 23-FEB-83
+BUGREPORT.TEXT      	       4  TEXT 29-NOV-82
+C2.SCHED.TEXT       	      10  TEXT 17-FEB-84
+C2CHNG.DOC.TEXT     	      20  TEXT 07-DEC-83
+C2MEET.TEXT         	       4  TEXT 13-DEC-83
+C2MEET2.TEXT        	      12  TEXT 06-JAN-84
+C2RESCHED.TEXT      	       4  TEXT 04-JAN-84
+CCOSINIT.TEXT       	      14  TEXT 09-FEB-84
+CONST2.DOC.TEXT     	      18  TEXT 14-NOV-83
+DC.DOC.TEXT         	       4  TEXT 23-FEB-83
+DCDSGN.TEXT         	      38  TEXT 23-FEB-83
+DCEVAL.TEXT         	       8  TEXT 23-FEB-83
+DCPCMDLINE.TEXT     	      12  TEXT 20-JAN-83
+DEVTYP.TEXT         	       4  TEXT 14-MAR-84
+DSKDRV.DOC.TEXT     	      18  TEXT 21-FEB-84
+EXCEPDSGN.TEXT      	      16  TEXT 23-FEB-83
+FILEDIR.TEXT        	      12  TEXT 24-FEB-83
+FILEHDR.TEXT        	      12  TEXT 24-FEB-83
+FIRSTC2.TEXT        	      10  TEXT 13-DEC-83
+FLOP.MAN.TEXT       	      26  TEXT 21-JUN-83
+FLOP48TPI.TEXT      	       6  TEXT 16-NOV-83
+FLPY.DOC.TEXT       	      10  TEXT 10-MAY-83
+FLPYSPEC.TEXT       	       8  TEXT 11-APR-83
+INCOMPAT.TEXT       	       6  TEXT 01-DEC-82
+INTERRUPTS.TEXT     	      12  TEXT 23-FEB-83
+KBRDCHRRV3.TEXT     	      16  TEXT 01-JUN-82
+KBRDDSGN.TEXT       	      66  TEXT 02-MAR-82
+KBRDSTAT.TEXT       	       6  TEXT 10-JAN-83
+KBRDTBLS.TEXT       	      28  TEXT 23-SEP-82
+KYBD.TEMP           	       1  DATA 21-MAR-83
+LABELDSGN.TEXT      	      56  TEXT 16-MAR-82
+LETTER.TEXT         	       6  TEXT 07-OCT-83
+LTR.MCS.TEXT        	      10  TEXT 15-MAR-84
+MN.ASMXREF.TEXT     	      10  TEXT 10-SEP-82
+MSDOS.DOC.TEXT      	     124  TEXT 02-NOV-83
+NET.OUT.TEXT        	      60  TEXT 09-MAR-83
+NEWDRVCMD.TEXT      	      10  TEXT 31-OCT-83
+NEWDRVINT.TEXT      	       8  TEXT 15-MAR-83
+OUTKTBLS.TEXT       	      18  TEXT 23-SEP-82
+PD.DOC.TEXT         	      14  TEXT 08-AUG-83
+PIPES.DOC.TEXT      	      10  TEXT 14-FEB-84
+PRNT.DOC.TEXT       	      52  TEXT 27-JAN-83
+PRNTDSGN.TEXT       	      18  TEXT 01-JUN-82
+PTP.DOC.TEXT        	     104  TEXT 17-FEB-84
+PTP.MEMO.TEXT       	       6  TEXT 08-FEB-84
+SCHEDULE.TEXT       	      12  TEXT 02-NOV-82
+SIMPLEKBRD.TEXT     	      14  TEXT 10-MAR-82
+SPLDRV.DOC.TEXT     	      14  TEXT 06-JAN-84
+STATREPORT.TEXT     	      12  TEXT 29-APR-83
+TIMER.DOC.TEXT      	      24  TEXT 08-FEB-83
+TIMERDSGN.TEXT      	      44  TEXT 26-JAN-82
+TRANPDOC.TEXT       	      32  TEXT 18-JUL-83
+TRANPDSGN.TEXT      	      18  TEXT 18-MAR-82
+TRMNL.DOC.TEXT      	      12  TEXT 11-MAY-83
+UP.CCOS.TEXT        	       4  TEXT 27-JAN-84
+VOLLCK.DC2.TEXT     	      10  TEXT 02-DEC-83
+VOLLCK.DC3.TEXT     	      12  TEXT 06-JAN-84
+VOLLCK.DOC.TEXT     	      10  TEXT 02-DEC-83
+XTRAPROM.TEXT       	       6  TEXT 15-MAR-83
+ONE.TEXT            	      10  TEXT 04-APR-84
+------------------------  ------ ---------------
+      61 File(s)            1175 bytes
+                        4294394291 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy2.img:
+FLOPPY2
+------------------------  ------ ---------------
+BUILDIMAGE.TEXT     	      24  TEXT 19-JUL-82
+CC.BI.ASM.TEXT      	       4  TEXT 21-JUL-82
+CC.BLDIMGE.TEXT     	      38  TEXT 19-JUL-82
+CCDRVHDR.TEXT       	      12  TEXT 02-SEP-82
+COPYMASTER.TEXT     	      12  TEXT 21-JUL-82
+DUPMASTER.TEXT      	      12  TEXT 21-JUL-82
+FORMINIT            	      18  DATA 20-NOV-82
+FORMINIT.TEXT       	      12  TEXT 20-NOV-82
+HJELP               	      13  DATA 20-NOV-82
+HJELP.TEXT          	      10  TEXT 20-NOV-82
+IECBUS2.TEXT        	      16  TEXT 11-DEC-82
+M.COPY.TEXT         	       4  TEXT 18-JAN-83
+MBUG.CCPT.TEXT      	     224  TEXT 17-AUG-82
+MBUG.NEW.PROM       	      16  DATA 21-AUG-82
+MBUG.PROM1.TEXT     	     132  TEXT 21-AUG-82
+MBUG.PROM2.TEXT     	     106  TEXT 19-AUG-82
+OCS.TEXT            	      32  TEXT 20-NOV-82
+OCSFILE.TEXT        	      14  TEXT 20-NOV-82
+OCSLIB.OBJ          	      39  DATA 20-NOV-82
+OLDVT               	      31  DATA 22-JUL-82
+RANDOM.TEXT         	       4  TEXT 15-MAR-82
+TWO.TEXT            	       6  TEXT 04-APR-84
+SECBOOT3.TEXT       	      92  TEXT 31-AUG-83
+SECBOOT4.TEXT       	      38  TEXT 31-AUG-83
+SECBOOT2.TEXT       	      36  TEXT 07-OCT-83
+SECBOOT2.TEXT       	      36  TEXT 07-OCT-83
+UP.PROM             	      15  DATA 09-FEB-84
+UP.PROM.TEXT        	     412  TEXT 09-FEB-84
+------------------------  ------ ---------------
+      28 File(s)            1408 bytes
+                        4294344030 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy3_sysmake.img:
+FLOPPY3
+------------------------  ------ ---------------
+BLDACT              	      35  DATA 21-JAN-83
+BLDACT.EQU.OBJ      	       5  DATA 21-JAN-83
+BLDACT.EQU.TEXT     	       6  TEXT 21-JAN-83
+BLDACT.TEXT         	      54  TEXT 21-JAN-83
+BLDALT              	      38  DATA 03-AUG-83
+BLDALT.EQU.OBJ      	       5  DATA 03-AUG-83
+BLDALT.EQU.TEXT     	       6  TEXT 03-AUG-83
+BLDALT.OBJ          	      28  DATA 03-AUG-83
+BLDALT.TEXT         	      42  TEXT 03-AUG-83
+CC.SETDCP           	      52  DATA 03-AUG-83
+CC.SETDCP.OBJ       	      47  DATA 03-AUG-83
+CC.SETDCP.TEXT      	      70  TEXT 15-APR-83
+CCDCPIO.OBJ         	      21  DATA 20-JAN-83
+CCDCPIO.TEXT        	      26  TEXT 08-FEB-83
+DIABLO.TEXT         	       4  TEXT 24-JAN-83
+DONTPANIC           	      12  DATA 09-FEB-83
+DONTPANIC.TEXT      	       4  TEXT 09-FEB-83
+ED.USERKEY.TEXT     	       4  TEXT 26-JAN-83
+FLOPE               	      48  DATA 13-JUL-83
+FLOPE.TEXT          	      96  TEXT 13-JUL-83
+ILEAVE              	       6  DATA 11-APR-83
+ILEAVE.TEXT         	       4  TEXT 11-APR-83
+JUNKKK              	       3  DATA 28-APR-83
+JUNKKK.TEXT         	       4  TEXT 28-APR-83
+LDACTTBL.TEXT       	      14  TEXT 20-DEC-82
+LDNETPRNT           	       5  DATA 10-FEB-84
+LDNETPRNT.OBJ       	       2  DATA 10-FEB-84
+LDNETPRNT.TEXT      	       6  TEXT 10-FEB-84
+LDPRTALT.TEXT       	      14  TEXT 06-JAN-83
+NEWBUFF.TEXT        	      10  TEXT 11-JAN-83
+OUR.PAY.LC          	       3  DATA 25-FEB-83
+PALT.TEST           	       3  DATA 12-APR-83
+PAT.DIABLO15        	       1  DATA 01-MAR-83
+PAT.DIABLO630       	       1  DATA 21-JAN-83
+PAT.NOENHANCE       	       1  DATA 21-JAN-83
+PRIME.TEXT          	       4  TEXT 11-FEB-83
+TERMINAL            	      41  DATA 21-JUN-83
+TERMINAL.TEXT       	      34  TEXT 21-JUN-83
+TMPFL.TEXT          	       4  TEXT 12-JAN-83
+W                   	     274  DATA 14-FEB-84
+XYZ.PAL             	       4  DATA 03-AUG-83
+SBOOT.40.1.TEXT     	      24  TEXT 26-JAN-84
+SBOOT.40.2.TEXT     	      38  TEXT 26-JAN-84
+SBOOT.40.3.TEXT     	      96  TEXT 08-FEB-84
+SBOOT.40.4.TEXT     	      46  TEXT 26-JAN-84
+SBOOT.40.OBJ        	      10  DATA 08-FEB-84
+SBOOT.40.TEXT       	      40  TEXT 08-FEB-84
+------------------------  ------ ---------------
+      47 File(s)            1295 bytes
+                        4293647534 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy4_bootproms.img:
+FLOPPY4
+------------------------  ------ ---------------
+BLD.CC.TEXT         	       4  TEXT 16-NOV-83
+BLD.CP.TEXT         	       4  TEXT 02-JUL-83
+BLD.UP.LST.TEXT     	       4  TEXT 22-SEP-83
+BLD.UP.TEXT         	       4  TEXT 23-SEP-83
+BLD.VN.TEXT         	       4  TEXT 28-JUN-83
+CC.PROM             	      17  DATA 18-NOV-83
+CC.PROM.TEXT        	     462  TEXT 18-NOV-83
+CURR.SP.TEXT        	      36  TEXT 26-OCT-83
+DECISION.TEXT       	      38  TEXT 06-DEC-83
+LDNETPRNT           	       5  DATA 10-FEB-84
+LDNETPRNT.OBJ       	       2  DATA 10-FEB-84
+LDNETPRNT.TEXT      	       6  TEXT 10-FEB-84
+MODS.0.7.TEXT       	       4  TEXT 07-JUN-83
+MODS.1.0.TEXT       	       4  TEXT 07-FEB-84
+OLD.PROM.TEXT       	      90  TEXT 06-FEB-84
+P.PROM.DS.TEXT      	      58  TEXT 15-NOV-83
+P.PROM.EQ.TEXT      	      34  TEXT 09-FEB-84
+P.PROM.FB.TEXT      	     110  TEXT 13-JUN-83
+P.PROM.FD.TEXT      	      82  TEXT 13-MAY-83
+P.PROM.FE.TEXT      	      36  TEXT 13-JUN-83
+P.PROM.LD.TEXT      	      26  TEXT 25-JAN-84
+P.PROM.OD.TEXT      	      76  TEXT 13-JAN-84
+P.PROM.SP.TEXT      	      38  TEXT 14-DEC-83
+P.PROM.TEXT         	      92  TEXT 27-JAN-84
+P.PROM.KB.TEXT      	      32  TEXT 15-NOV-83
+TST.CC              	      17  DATA 16-NOV-83
+------------------------  ------ ---------------
+      26 File(s)            1285 bytes
+                        4294018610 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy5.img:
+FLOPPY5
+------------------------  ------ ---------------
+ASMXREF             	      29  DATA 21-JAN-83
+ASMXREF.TEXT        	      60  TEXT 21-JAN-83
+BOOT.CONCEPT2       	      10  DATA 08-FEB-84
+CC.EXEC             	      17  DATA 10-FEB-84
+CC.EXEC.OBJ         	      18  DATA 10-FEB-84
+CC.EXEC.TEXT        	      38  TEXT 10-FEB-84
+CC.PROM.FB.TEXT     	     110  TEXT 21-JUL-83
+CC.PROM.FE.TEXT     	      36  TEXT 13-JUN-83
+CCOTCIO.TEXT        	      58  TEXT 07-FEB-84
+CF18.4CC.DATA       	      40  DATA 23-JAN-84
+CONCEPT.BLOCKS      	       4  DATA 25-JAN-84
+CTRLZ.TEXT          	       4  TEXT 04-JAN-83
+DISKX.TEXT          	       6  TEXT 29-JUL-83
+DRV.CDISK1          	       4  DATA 13-FEB-84
+DRV.CDISK1.TEXT     	     110  TEXT 13-FEB-84
+DRV.CDISK2          	       4  DATA 13-FEB-84
+DRV.CDISK2.TEXT     	     118  TEXT 13-FEB-84
+DRV.FLOP            	       5  DATA 23-JUN-83
+DRV.FLOP.TEXT       	     172  TEXT 16-NOV-83
+DRV.KYBD.TEXT       	     112  TEXT 02-FEB-83
+DRV.KYBDTM.TEXT     	      12  TEXT 23-AUG-82
+DRV.SLTIO.TEXT      	      10  TEXT 13-FEB-84
+DRV.SPOOL           	       4  DATA 22-FEB-84
+E80PM.ASM.TEXT      	       8  TEXT 17-AUG-83
+ECHO80PM.TEXT       	      40  TEXT 19-AUG-83
+FC1.UPDATE.TEXT     	       4  TEXT 15-MAR-84
+FC2.UPDATE.TEXT     	       4  TEXT 09-MAR-84
+FDIAG.ASM.TEXT      	      34  TEXT 10-MAY-82
+FDIAG.PAS.TEXT      	      52  TEXT 30-APR-82
+FG.UPDATE.TEXT      	       4  TEXT 09-MAR-84
+FI.UPDATE.TEXT      	       4  TEXT 16-MAR-84
+FLOP.EQU.TEXT       	      36  TEXT 22-JUN-83
+FORMATTER.TEXT      	      16  TEXT 19-MAY-82
+FRMT.ASM.TEXT       	       6  TEXT 10-MAY-82
+LDNETPRNT.OBJ       	       2  DATA 10-FEB-84
+LDNETPRNT.TEXT      	       6  TEXT 10-FEB-84
+LNKMAP.TEXT         	      18  TEXT 26-JAN-84
+LOADSPOOLER         	       5  DATA 10-FEB-84
+NDRV.SPOOL.OBJ      	       4  DATA 22-FEB-84
+NDRV.SPOOL.TEXT     	      54  TEXT 22-FEB-84
+NETGLOBALS.TEXT     	      14  TEXT 19-AUG-83
+PARM.TEXT           	       4  TEXT 10-FEB-84
+PIPES               	       9  DATA 22-FEB-84
+PIPES.OBJ           	      10  DATA 22-FEB-84
+PIPES.TEXT          	      12  TEXT 22-FEB-84
+PMGRASM.TEXT        	      12  TEXT 16-AUG-83
+PMGRUNIT.TEXT       	       6  TEXT 17-AUG-83
+PROMTST             	       3  DATA 14-JUN-83
+PROMTST.TEXT        	       4  TEXT 04-MAY-83
+PRTCLDSP.TEXT       	      32  TEXT 18-AUG-83
+PRTDSPASM.TEXT      	      10  TEXT 04-AUG-83
+S.TEXT              	       4  TEXT 23-JAN-84
+SBOOT.40.1.TEXT     	      24  TEXT 26-JAN-84
+SBOOT.40.OBJ        	      10  DATA 08-FEB-84
+------------------------  ------ ---------------
+      54 File(s)            1432 bytes
+                        4293327629 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy6.img:
+FLOPPY6
+------------------------  ------ ---------------
+BLDTST              	       7  DATA 26-JUL-83
+BLDTST.TEXT         	       6  TEXT 26-JUL-83
+CC.EXEC             	      17  DATA 18-JAN-84
+CC.OTEST.TEXT       	      48  TEXT 02-NOV-83
+CCOVIEW             	      74  DATA 08-NOV-83
+CHKPRNTR.TEXT       	      24  TEXT 18-NOV-82
+CHKZERO             	       6  DATA 30-JUN-83
+CHKZERO.TEXT        	       6  TEXT 30-JUN-83
+CLOCK               	      11  DATA 29-DEC-83
+CLOCKTST.TEXT       	      12  TEXT 22-OCT-82
+CTRLZ.TEXT          	       4  TEXT 04-JAN-83
+DEMOBELL.TEXT       	      12  TEXT 11-MAR-82
+DEMOTIMER.TEXT      	       4  TEXT 11-MAR-82
+DISKX.TEXT          	       6  TEXT 29-JUL-83
+DISKX1              	       6  DATA 10-AUG-83
+DISKX1.TEXT         	       8  TEXT 10-AUG-83
+DONADA.OBJ          	       1  DATA 24-MAY-82
+DONADA.TEXT         	       4  TEXT 19-JAN-82
+LC.LST.TEXT         	      18  TEXT 12-JAN-84
+LINKT.TEXT          	       4  TEXT 20-JAN-82
+MOVEBOOT            	       5  DATA 07-SEP-83
+MOVEBOOT.TEXT       	       4  TEXT 07-SEP-83
+MS.LINKCHK.TEXT     	       8  TEXT 13-JAN-84
+MV11.OBJ            	       1  DATA 13-JAN-84
+MV11.TEXT           	       4  TEXT 13-JAN-84
+OD                  	      64  DATA 06-JAN-84
+OD.DOC.TEXT         	      12  TEXT 24-AUG-82
+OD.MAIN.TEXT        	      56  TEXT 06-JAN-83
+OD.SCREEN.TEXT      	      22  TEXT 30-DEC-83
+OD.UTILS.TEXT       	      20  TEXT 30-DEC-83
+OD1                 	      65  DATA 11-JAN-84
+ODMAKE.TEXT         	       4  TEXT 06-JAN-84
+ODWIN.TEXT          	       4  TEXT 21-FEB-83
+PEEK.TEXT           	       4  TEXT 09-JAN-82
+READKBRD            	       4  DATA 19-AUG-82
+READKBRD.TEXT       	       6  TEXT 25-OCT-82
+SETKBRD.TEXT        	       4  TEXT 25-JAN-82
+TESTBOOT            	       6  DATA 28-SEP-83
+TESTBOOT.TEXT       	      10  TEXT 28-SEP-83
+TIMER1              	      10  DATA 10-FEB-82
+TIMER1.TEXT         	      12  TEXT 11-MAR-82
+TIMER2              	      10  DATA 24-MAY-82
+TIMER2.TEXT         	      12  TEXT 24-MAY-82
+TIMERRTNS           	       5  DATA 02-AUG-83
+TIMERRTNS.TEXT      	      10  TEXT 02-AUG-83
+TRAP                	       2  DATA 18-AUG-82
+TRAP.TEXT           	       4  TEXT 18-AUG-82
+UNITST.TEXT         	       6  TEXT 19-JAN-82
+USTAT               	       5  DATA 17-MAY-83
+USTAT.OBJ           	       3  DATA 17-MAY-83
+USTAT.TEXT          	       6  TEXT 17-MAY-83
+VEC6                	       2  DATA 19-JAN-82
+VEC6.TEXT           	       4  TEXT 19-JAN-82
+ZED                 	      96  DATA 01-MAY-82
+------------------------  ------ ---------------
+      54 File(s)             768 bytes
+                        4293310805 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy7.img:
+FLOPPY7
+------------------------  ------ ---------------
+ASMLIST.TEXT        	       4  TEXT 14-FEB-84
+CMDFL.TEXT          	       4  TEXT 19-JAN-83
+CSK.FAST            	       2  DATA 16-MAY-83
+CSK.FAST.TEXT       	      24  TEXT 21-JUN-83
+DONTPANIC           	      12  DATA 09-FEB-83
+DRV.KYBD            	       5  DATA 10-JAN-83
+DRV.KYBD.TEXT       	     114  TEXT 10-JAN-83
+DRV.KYBDTM.TEXT     	      12  TEXT 23-AUG-82
+DRV.OMNI.TEXT       	     100  TEXT 01-FEB-84
+DRV.OMNINET         	       3  DATA 01-FEB-84
+DRV.SYSTRM          	       7  DATA 31-MAR-83
+DRV.SYSTRM.TEXT     	     108  TEXT 31-MAR-83
+DRV.TIMER           	       4  DATA 05-JAN-83
+DRVLD.TEXT          	       4  TEXT 31-MAR-83
+KBRD.TBLS           	       2  DATA 13-APR-82
+KBRD.TBLS.TEXT      	      14  TEXT 13-APR-82
+KBRD.VR3.TEXT       	     104  TEXT 06-APR-82
+KBRDCHRRV0.TEXT     	      14  TEXT 10-MAY-82
+LINKT.TEXT          	       4  TEXT 20-JAN-82
+PRNT.DRV            	       3  DATA 07-JUL-82
+PRNT.DRV.TEXT       	      76  TEXT 07-JUL-82
+SETKBRD.TEXT        	       4  TEXT 14-APR-82
+SETSR               	       5  DATA 19-JAN-82
+SPC2000.TEXT        	       4  TEXT 14-JUL-83
+STARTUP.TEXT        	       4  TEXT 14-FEB-84
+TIMER.CLK.TEXT      	      48  TEXT 05-JAN-83
+TIMER.DRV.TEXT      	      56  TEXT 05-JAN-83
+TURNOFF.TEXT        	      10  TEXT 24-FEB-83
+USERKEYS.TEXT       	       6  TEXT 17-AUG-83
+VRS3KBRD            	       2  DATA 13-APR-82
+VRS3KBRD.TEXT       	      14  TEXT 13-APR-82
+------------------------  ------ ---------------
+      31 File(s)             773 bytes
+                        4293929756 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy8.img:
+FLOPPY8
+------------------------  ------ ---------------
+DCOM.EQU.TEXT       	      36  TEXT 10-AUG-83
+DRV.DTACOM          	       8  DATA 10-AUG-83
+DRV.DTACOM.TEXT     	     184  TEXT 10-AUG-83
+DRV.EPRNT           	       5  DATA 20-SEP-83
+DRV.EPRNT.TEXT      	     148  TEXT 14-DEC-83
+EPTST               	       9  DATA 18-NOV-82
+EPTST.TEXT          	      12  TEXT 15-NOV-82
+TESTP               	       3  DATA 19-JAN-83
+TESTP.TEXT          	       4  TEXT 19-JAN-83
+TSTTR               	       3  DATA 11-JAN-83
+TTY.TEXT            	       6  TEXT 27-OCT-82
+TTY2                	      10  DATA 09-FEB-83
+TTY2.TEXT           	      46  TEXT 29-JAN-83
+------------------------  ------ ---------------
+      13 File(s)             474 bytes
+                        4294531746 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\floppy9.img:
+FLOPPY9
+------------------------  ------ ---------------
+SUPER               	     191  DATA 12-MAR-84
+SBOOT.40.1.TEXT     	      24  TEXT 26-JAN-84
+SBOOT.40.2.TEXT     	      38  TEXT 26-JAN-84
+SBOOT.40.3.TEXT     	      96  TEXT 08-FEB-84
+SBOOT.40.4.TEXT     	      46  TEXT 26-JAN-84
+SBOOT.40.OBJ        	      10  DATA 08-FEB-84
+SBOOT.40.TEXT       	      40  TEXT 08-FEB-84
+UP.PROM             	      15  DATA 09-FEB-84
+UP.PROM.TEXT        	     412  TEXT 09-FEB-84
+------------------------  ------ ---------------
+       9 File(s)             872 bytes
+                        4294660382 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\mostofCCsys2.0x5.img:
+FLOPPY
+------------------------  ------ ---------------
+FUTIL               	      86  DATA 10-JAN-84
+ASM68K              	      75  DATA 01-FEB-84
+ASSIGN              	      13  DATA 01-FEB-84
+CC.BLDPARMS         	      26  DATA 21-JUN-84
+CC.C2MGR            	      90  DATA 17-MAR-84
+CC.DISPAT           	      29  DATA 01-FEB-84
+CC.EDCHAR           	      51  DATA 01-FEB-84
+CC.EXEC             	      16  DATA 01-FEB-84
+CC.FILMGR           	      52  DATA 01-FEB-84
+CC.HELP             	       9  DATA 01-FEB-84
+CC.KERNEL           	      48  DATA 11-NOV-85
+CC.MNTMGR           	     125  DATA 01-FEB-84
+CC.SETDCP           	      52  DATA 01-FEB-84
+CC.SETUP            	      37  DATA 01-FEB-84
+CC.SYSMGR           	      23  DATA 01-FEB-84
+CC.WNDMGR           	      36  DATA 01-FEB-84
+CCTERRS.TEXT        	      14  TEXT 23-JAN-84
+CODE                	     105  DATA 01-FEB-84
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSK.DEFAULT         	       2  DATA 01-FEB-84
+DEBUG               	      12  DATA 01-FEB-84
+DESPOOL             	      81  DATA 21-SEP-84
+DIAG.DATA           	       1  DATA 01-FEB-84
+DRV.ADISK           	       6  DATA 01-FEB-84
+DRV.CDISK1          	       4  DATA 01-FEB-84
+DRV.CDISK2          	       4  DATA 01-FEB-84
+DRV.DISPHZ          	      11  DATA 01-FEB-84
+DRV.DISPVT          	      11  DATA 01-FEB-84
+DRV.DTACOM          	       8  DATA 01-FEB-84
+DRV.EPRNT           	       5  DATA 01-FEB-84
+DRV.FDISK1          	       4  DATA 01-FEB-84
+DRV.FDISK2          	       5  DATA 01-FEB-84
+DRV.KYBD            	       5  DATA 01-FEB-84
+DRV.OMNINET         	       3  DATA 01-FEB-84
+DRV.SYSTRM          	       7  DATA 01-FEB-84
+DRV.TIMER           	       4  DATA 01-FEB-84
+HELP.TEXT           	       4  TEXT 14-OCT-85
+KEYS.ED.TEXT        	      14  TEXT 01-FEB-84
+LINKER              	      53  DATA 01-FEB-84
+LOADER.IMAGE        	       1  DATA 01-FEB-84
+SPOOL               	      77  DATA 21-SEP-84
+SYSMSG              	      33  DATA 01-FEB-84
+WNDUTIL             	      57  DATA 01-FEB-84
+------------------------  ------ ---------------
+      43 File(s)            1301 bytes
+                        4294600201 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\svspas.img:
+FLOPPY
+------------------------  ------ ---------------
+ACLOCK.TEXT         	      28  TEXT 19-JUL-84
+ANIMATE.TEXT        	       6  TEXT 05-JAN-85
+CALENDAR.TEXT       	      20  TEXT 28-JUL-83
+CC.PPP.TEXT         	     162  TEXT 17-JUL-84
+FINDSTR.TEXT        	       8  TEXT 27-NOV-83
+FMA.3.2.TEXT        	     142  TEXT 28-MAR-84
+FMA.TEXT            	     120  TEXT 16-APR-84
+HELP.FMA.TEXT       	      54  TEXT 09-FEB-84
+KEYB.TEXT           	       4  TEXT 31-MAY-84
+KEYS.ISYS.TEXT      	      22  TEXT 21-AUG-84
+KEYS.PED.TEXT       	      12  TEXT 18-AUG-84
+LOOKUP.TEXT         	      22  TEXT 16-JUN-83
+MDTEST.TEXT         	       8  TEXT 14-JAN-84
+ML.TEXT             	       4  TEXT 19-JUL-84
+MOUSE.TEXT          	      14  TEXT 25-NOV-83
+MY.SETDCP.TEXT      	      74  TEXT 13-DEC-83
+NBLDMSG.TEXT        	      12  TEXT 16-AUG-84
+NML.TEXT            	      12  TEXT 01-AUG-84
+OLDLOOK.TEXT        	      26  TEXT 26-FEB-84
+P.SPL.TEXT          	      22  TEXT 22-OCT-84
+PRETTY.TEXT         	       4  TEXT 21-NOV-83
+WPSYSMSG.TEXT       	      38  TEXT 28-AUG-84
+------------------------  ------ ---------------
+      22 File(s)             814 bytes
+                        4294432939 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\wordpro.img:
+FLOPPY
+------------------------  ------ ---------------
+ADJUST.TEXT         	      20  TEXT 27-SEP-84
+BLKMGR.TEXT         	      18  TEXT 08-MAY-84
+BOUND.TEXT          	      10  TEXT 11-JUN-84
+CALC.TEXT           	      20  TEXT 18-FEB-84
+CALENDAR.TEXT       	      14  TEXT 28-NOV-83
+CALL.TEXT           	       6  TEXT 12-JUN-84
+CC.VSIXDBM.TEXT     	      86  TEXT 03-JUN-84
+FORMS.TEXT          	      26  TEXT 28-MAY-84
+SORT.TEXT           	      30  TEXT 12-JUN-84
+USERIO.TEXT         	      76  TEXT 22-APR-84
+UTIL.TEXT           	      16  TEXT 30-JUN-83
+WKSP.TEXT           	      30  TEXT 13-JAN-84
+WKSPMGR.TEXT        	      16  TEXT 02-FEB-83
+CLOCK.TEXT          	      18  TEXT 28-NOV-83
+DIAG.TEXT           	       6  TEXT 07-JUN-83
+DMS.TEXT            	      52  TEXT 19-JUN-84
+DSKMGR.TEXT         	      12  TEXT 18-FEB-84
+EDIT.TEXT           	      26  TEXT 28-JUL-84
+ENHANCE.TEXT        	      14  TEXT 15-AUG-84
+EXTASK.TEXT         	      10  TEXT 29-JUL-84
+FILE.TEXT           	      38  TEXT 10-JAN-84
+FORMAT.TEXT         	      20  TEXT 12-JUN-83
+GETLINE.TEXT        	      12  TEXT 21-JUL-83
+GG.TEXT             	       4  TEXT 20-JUN-84
+INIT.TEXT           	      18  TEXT 22-APR-84
+IPC.TEXT            	       4  TEXT 14-SEP-83
+KERNEL.OBJ          	      92  DATA 22-APR-84
+KERNEL.TEXT         	     114  TEXT 22-APR-84
+LAST.EX             	       1  DATA 24-JUL-84
+LNK.TEXT            	       4  TEXT 22-APR-84
+LNK1.TEXT           	      52  TEXT 02-APR-84
+LNKMAP.TEXT         	      64  TEXT 23-APR-84
+LOCALEDIT.TEXT      	      26  TEXT 22-JUL-84
+MAIN.TEXT           	      10  TEXT 18-APR-84
+MOUSE.TEXT          	      14  TEXT 25-JUL-84
+MOVETEXT.TEXT       	      24  TEXT 21-JUN-84
+PRGRMR.TEXT         	       4  TEXT 08-JUN-83
+PRINT.TEXT          	      66  TEXT 23-APR-84
+PRTWND.TEXT         	      26  TEXT 29-AUG-84
+RECMGR.TEXT         	      40  TEXT 04-MAR-84
+SEARCH.TEXT         	      22  TEXT 21-JUN-84
+SETTASK.TEXT        	      16  TEXT 04-SEP-84
+SETTASK.TEXT        	      16  TEXT 04-SEP-84
+SETTASK.TEXT        	      16  TEXT 04-SEP-84
+------------------------  ------ ---------------
+      44 File(s)            1209 bytes
+                        4293623906 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\5inch\512byte\wpspec_cvcrypt.img:
+FLOPPY
+------------------------  ------ ---------------
+ALMOST.TEXT         	      30  TEXT 29-MAY-84
+BLD.DCOMM.TEXT      	       4  TEXT 16-AUG-83
+BT.CVCRYPT.TEXT     	      32  TEXT 14-JAN-83
+BT.CVDEFN.TEXT      	      18  TEXT 14-JAN-83
+BT.CVOMNI.TEXT      	      30  TEXT 04-JUN-83
+BT.CVTABS.TEXT      	      18  TEXT 14-JAN-83
+CC.DRVIO.TEXT       	      44  TEXT 19-FEB-84
+CC.PIPES.TEXT       	      28  TEXT 05-JUN-83
+CC.SEMA4.TEXT       	      12  TEXT 14-JUN-84
+CCDIRIO.TEXT        	       8  TEXT 08-JAN-83
+CS.VSIUTXT.TEXT     	      74  TEXT 20-JUN-84
+DCOMM.TEXT          	      74  TEXT 04-APR-84
+DCOMM1.TEXT         	      66  TEXT 28-SEP-83
+DCOMM2.TEXT         	      32  TEXT 20-SEP-83
+DCOMM3.TEXT         	      20  TEXT 20-SEP-83
+DCOMM4.TEXT         	      26  TEXT 10-JAN-84
+DCOMM9.TEXT         	      66  TEXT 02-SEP-83
+FILE.TEXT           	      36  TEXT 14-JAN-84
+KERNEL.TEXT         	     104  TEXT 02-JUN-84
+OS.GBL.ASM.TEXT     	      28  TEXT 01-FEB-84
+P.VSIDMS.TEXT       	      62  TEXT 26-MAR-84
+VSIDMS.TEXT         	      58  TEXT 26-MAR-84
+WP12BF.TEXT         	       6  TEXT 29-MAY-84
+WP20.TEXT           	       4  TEXT 29-MAY-84
+XFR.RSLTS.TEXT      	       4  TEXT 16-APR-84
+ACLOCK.TEXT         	      28  TEXT 19-JUL-84
+ANIMATE.TEXT        	       6  TEXT 05-JAN-85
+CALENDAR.TEXT       	      20  TEXT 28-JUL-83
+CC.PPP.TEXT         	     162  TEXT 17-JUL-84
+FINDSTR.TEXT        	       8  TEXT 27-NOV-83
+FMA.3.2.TEXT        	     142  TEXT 28-MAR-84
+FMA.TEXT            	     120  TEXT 16-APR-84
+HELP.FMA.TEXT       	      54  TEXT 09-FEB-84
+KEYB.TEXT           	       4  TEXT 31-MAY-84
+ML.TEXT             	       4  TEXT 19-JUL-84
+------------------------  ------ ---------------
+      35 File(s)            1432 bytes
+                        4293893193 bytes free
+
+
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\8080_emulator.img:
+CPMDIST
+------------------------  ------ ---------------
+SYSTEM.UPDATE       	       4  DATA 12-MAY-83
+CC.CPM              	      28  DATA 12-MAY-83
+CC.CPMUTIL          	      52  DATA 12-MAY-83
+CPMD.ADM3           	       1  DATA 21-MAR-83
+CPMD.DEFAULT        	       1  DATA 27-APR-83
+CPMD.SOROC          	       1  DATA 21-MAR-83
+CPMD.TELEV          	       1  DATA 20-MAR-83
+------------------------  ------ ---------------
+       7 File(s)              88 bytes
+                            1865 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\basic_for_concept.img:
+FLOPPY
+------------------------  ------ ---------------
+BASIC               	     180  DATA 12-DEC-83
+SYSTEM.UPDATE       	       4  TEXT 12-DEC-83
+------------------------  ------ ---------------
+       2 File(s)             184 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\bk_4th.img:
+FLOPPY
+------------------------  ------ ---------------
+BOB.TEXT            	      38  TEXT 09-AUG-82
+------------------------  ------ ---------------
+       1 File(s)              38 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\concept_tdm_master.img:
+FLOPPY
+------------------------  ------ ---------------
+TDM.CODE            	     293  CODE 04-MAR-83
+CVCCONSOLE.CODE     	      25  CODE 01-MAR-83
+CPLIB               	      68  DATA 24-JAN-83
+HOMEINVENTOY.LC     	       6  DATA 15-FEB-83
+NETWORTH.LC         	      12  DATA 10-FEB-83
+SS.LC               	       3  DATA 04-FEB-83
+TDM.CODE            	     293  CODE 04-MAR-83
+NETWORTH.LC         	      12  DATA 10-FEB-83
+SS.LC               	       3  DATA 04-FEB-83
+TDM.CODE            	     293  CODE 04-MAR-83
+------------------------  ------ ---------------
+      10 File(s)            1008 bytes
+                        4294888186 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\concept_tdm_master.img2:
+FLOPPY
+------------------------  ------ ---------------
+TDM.CODE            	     293  CODE 04-MAR-83
+CVCCONSOLE.CODE     	      25  CODE 01-MAR-83
+CPLIB               	      68  DATA 24-JAN-83
+HOMEINVENTOY.LC     	       6  DATA 15-FEB-83
+NETWORTH.LC         	      12  DATA 10-FEB-83
+SS.LC               	       3  DATA 04-FEB-83
+TDM.CODE            	     293  CODE 04-MAR-83
+NETWORTH.LC         	      12  DATA 10-FEB-83
+SS.LC               	       3  DATA 04-FEB-83
+TDM.CODE            	     293  CODE 04-MAR-83
+------------------------  ------ ---------------
+      10 File(s)            1008 bytes
+                        4294888186 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\concept_tdm_master.img3:
+FLOPPY
+------------------------  ------ ---------------
+TDM.CODE            	     293  CODE 04-MAR-83
+CVCCONSOLE.CODE     	      25  CODE 01-MAR-83
+CPLIB               	      68  DATA 24-JAN-83
+HOMEINVENTOY.LC     	       6  DATA 15-FEB-83
+NETWORTH.LC         	      12  DATA 10-FEB-83
+SS.LC               	       3  DATA 04-FEB-83
+TDM.CODE            	     293  CODE 04-MAR-83
+NETWORTH.LC         	      12  DATA 10-FEB-83
+SS.LC               	       3  DATA 04-FEB-83
+TDM.CODE            	     293  CODE 04-MAR-83
+------------------------  ------ ---------------
+      10 File(s)            1008 bytes
+                        4294888186 bytes free
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\cpyvl.img:
+FLOPPY
+------------------------  ------ ---------------
+1FIND.DAT           	       4  DATA 14-SEP-83
+1PROFILE            	      21  DATA 14-SEP-83
+ACCOUNT.TEXT        	       4  TEXT 16-AUG-83
+ADRFILE             	      30  DATA 14-SEP-83
+AMAINS.TEXT         	       6  TEXT 16-JUL-83
+APPT.TEXT           	       4  TEXT 20-JUN-83
+BDRFILE             	      30  DATA 14-SEP-83
+BLSINS.TEXT         	       6  TEXT 16-JUL-83
+CHARTLIST.TEXT      	       4  TEXT 15-JUN-83
+COLLECT.TEXT        	       4  TEXT 14-AUG-83
+FACCOUNT.TEXT       	       4  TEXT 14-AUG-83
+GARBDAT             	       2  DATA 14-SEP-83
+INITDEMO            	      15  DATA 15-SEP-83
+INSHELP.TEXT        	       8  TEXT 15-AUG-83
+MAILLIST.TEXT       	       4  TEXT 15-JUN-83
+MBSHELP.TEXT        	      12  TEXT 15-AUG-83
+MBSINT.DAT          	       1  DATA 14-SEP-83
+MBSSTR.DAT          	       3  DATA 03-OCT-83
+MCAINS.TEXT         	       6  TEXT 16-JUL-83
+MCRINS.TEXT         	       6  TEXT 20-JUN-83
+PROFILE             	      62  DATA 14-SEP-83
+REPHELP.TEXT        	       8  TEXT 15-AUG-83
+TRANSHELP.TEXT      	       8  TEXT 15-AUG-83
+WRKINS.TEXT         	       6  TEXT 16-JAN-83
+ISPOOL.TEXT         	       4  TEXT 03-OCT-83
+SPINS.DAT           	      17  DATA 03-OCT-83
+MEDAID              	     188  DATA 15-SEP-83
+------------------------  ------ ---------------
+      27 File(s)             467 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\cpyvl.img2:
+FLOPPY
+------------------------  ------ ---------------
+1FIND.DAT           	       4  DATA 14-SEP-83
+1PROFILE            	      21  DATA 14-SEP-83
+ACCOUNT.TEXT        	       4  TEXT 16-AUG-83
+ADRFILE             	      30  DATA 14-SEP-83
+AMAINS.TEXT         	       6  TEXT 16-JUL-83
+APPT.TEXT           	       4  TEXT 20-JUN-83
+BDRFILE             	      30  DATA 14-SEP-83
+BLSINS.TEXT         	       6  TEXT 16-JUL-83
+CHARTLIST.TEXT      	       4  TEXT 15-JUN-83
+COLLECT.TEXT        	       4  TEXT 14-AUG-83
+FACCOUNT.TEXT       	       4  TEXT 14-AUG-83
+GARBDAT             	       2  DATA 14-SEP-83
+INITDEMO            	      15  DATA 15-SEP-83
+INSHELP.TEXT        	       8  TEXT 15-AUG-83
+MAILLIST.TEXT       	       4  TEXT 15-JUN-83
+MBSHELP.TEXT        	      12  TEXT 15-AUG-83
+MBSINT.DAT          	       1  DATA 14-SEP-83
+MBSSTR.DAT          	       3  DATA 03-OCT-83
+MCAINS.TEXT         	       6  TEXT 16-JUL-83
+MCRINS.TEXT         	       6  TEXT 20-JUN-83
+PROFILE             	      62  DATA 14-SEP-83
+REPHELP.TEXT        	       8  TEXT 15-AUG-83
+TRANSHELP.TEXT      	       8  TEXT 15-AUG-83
+WRKINS.TEXT         	       6  TEXT 16-JAN-83
+ISPOOL.TEXT         	       4  TEXT 03-OCT-83
+SPINS.DAT           	      17  DATA 03-OCT-83
+MEDAID              	     188  DATA 15-SEP-83
+------------------------  ------ ---------------
+      27 File(s)             467 bytes
+                            4944 bytes free
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\drivers.img:
+FLOPPY
+------------------------  ------ ---------------
+DRV.KYBD            	       5  DATA 03-SEP-82
+DRV.FDISK           	       4  DATA 03-SEP-82
+------------------------  ------ ---------------
+       2 File(s)               9 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\gog_1.img:
+FLOPPY
+------------------------  ------ ---------------
+DLMARCH.LC          	       6  DATA 19-AUG-83
+DLHEADER.LC         	       1  DATA 19-AUG-83
+DLAPRIL.LC          	       4  DATA 19-AUG-83
+DLMAY.LC            	       3  DATA 19-AUG-83
+DLJUNE.LC           	       8  DATA 19-AUG-83
+DLJULY.LC           	       5  DATA 19-AUG-83
+DLAUG.LC            	       5  DATA 19-AUG-83
+DLCHARGES.LC        	      17  DATA 20-JUN-83
+STAX1.LC            	      28  DATA 27-JUL-83
+PAPERSALE.LC        	      15  DATA 21-JUN-83
+------------------------  ------ ---------------
+      10 File(s)              92 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\logicalc_demo_models.img:
+FLOPPY
+------------------------  ------ ---------------
+MODEL3.LC           	      16  DATA 29-MAR-83
+MODEL1.LC           	       5  DATA 29-MAR-83
+MODEL2.LC           	       8  DATA 29-MAR-83
+MORAMOR.LC          	      10  DATA 01-APR-83
+DIRECTORY.TEXT      	       4  TEXT 29-MAR-83
+MODEL7.LC           	      33  DATA 06-APR-83
+MODEL5A.LC          	      21  DATA 03-APR-83
+MODEL5B.LC          	      12  DATA 03-APR-83
+MODEL5C.LC          	      14  DATA 03-APR-83
+MODEL5D.LC          	       8  DATA 03-APR-83
+MODEL9.LC           	      15  DATA 03-APR-83
+MODEL14.LC          	       2  DATA 03-APR-83
+MODEL5X.LC          	      21  DATA 26-NOV-83
+MODEL5Y.LC          	      17  DATA 26-NOV-83
+MODEL15.LC          	       2  DATA 04-APR-83
+MODEL16.LC          	      11  DATA 04-APR-83
+MODEL17.LC          	       2  DATA 04-APR-83
+MODEL4.LC           	      14  DATA 06-APR-83
+MODEL5.LC           	      38  DATA 06-APR-83
+MODEL8.LC           	       2  DATA 06-APR-83
+MODEL10.LC          	       3  DATA 06-APR-83
+MODEL11.LC          	      10  DATA 06-APR-83
+MODEL12.LC          	       2  DATA 06-APR-83
+MODEL13.LC          	       2  DATA 06-APR-83
+MODEL21.LC          	      24  DATA 04-APR-83
+MODEL20.LC          	      12  DATA 04-APR-83
+LOANPAY.LC          	       1  DATA 22-JUN-83
+LOANPAY.LC          	       1  DATA 22-JUN-83
+------------------------  ------ ---------------
+      28 File(s)             310 bytes
+                            4944 bytes free
+
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus2\p_system_runtime.img:
+FPSYS
+------------------------  ------ ---------------
+CC.PSYSTEM          	      23  DATA 04-FEB-83
+SYSTEM.INTERP       	      24  DATA 04-FEB-83
+SYSTEM.PASCAL       	     122  DATA 04-FEB-83
+SYSTEM.MISCINFO     	       1  DATA 04-FEB-83
+SYSTEM.LIBRARY      	       7  DATA 04-FEB-83
+CPLIB               	      64  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       7 File(s)             245 bytes
+                        4294872444 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\arizonaCCsrc#1.img:
+ARIZONA
+------------------------  ------ ---------------
+CCLIB.OBJ           	     216  DATA 20-SEP-83
+CIILIB.OBJ          	     190  DATA 02-FEB-84
+CC.C2BATCH.TEXT     	      86  TEXT 02-MAR-84
+------------------------  ------ ---------------
+       3 File(s)             492 bytes
+                            7503 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\bootmgr_1feb84.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.KERNEL           	      54  DATA 01-FEB-84
+CC.SETUP            	      37  DATA 01-FEB-84
+CC.DISPAT           	      29  DATA 01-FEB-84
+CC.EXEC             	      16  DATA 01-FEB-84
+CC.FILMGR           	      52  DATA 01-FEB-84
+CC.WNDMGR           	      36  DATA 01-FEB-84
+DRV.DISPHZ          	      11  DATA 01-FEB-84
+DRV.DISPVT          	      11  DATA 01-FEB-84
+DRV.KYBD            	       5  DATA 01-FEB-84
+DRV.SYSTRM          	       7  DATA 01-FEB-84
+DRV.TIMER           	       4  DATA 01-FEB-84
+DRV.FDISK1          	       4  DATA 01-FEB-84
+DRV.FDISK2          	       5  DATA 01-FEB-84
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSK.DEFAULT         	       2  DATA 01-FEB-84
+ASSIGN              	      13  DATA 01-FEB-84
+DRV.OMNINET         	       3  DATA 01-FEB-84
+BOOT.CONCEPT        	      10  DATA 01-FEB-84
+BOOTMGR             	      93  DATA 01-FEB-84
+------------------------  ------ ---------------
+      19 File(s)             394 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\bugvol1of4.img:
+BACKUP1
+------------------------  ------ ---------------
+BUGDATA.TEXT        	       6  TEXT 08-OCT-82
+BUGHLP.TEXT         	       6  TEXT 30-JUL-82
+BUGMAIN.TEXT        	      20  TEXT 08-OCT-82
+BUGLST.TEXT         	      20  TEXT 30-JUL-82
+BUGRPT              	      41  DATA 08-OCT-82
+BUGUR.TEXT          	      12  TEXT 30-JUL-82
+BUGMAIN.OBJ         	      35  DATA 08-OCT-82
+1CCOS.BUGS          	     354  DATA 06-APR-84
+------------------------  ------ ---------------
+       8 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\bugvol2of4.img:
+BACKUP2
+------------------------  ------ ---------------
+2CCOS.BUGS          	     494  DATA 06-APR-84
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\bugvol3of4.img:
+BACKUP3
+------------------------  ------ ---------------
+3CCOS.BUGS          	      74  DATA 06-APR-84
+NLIST               	     200  DATA 17-JAN-88
+LOGCAL.TEXT         	      88  TEXT 12-JUL-89
+3THEODORE           	     132  DATA 12-JUL-89
+------------------------  ------ ---------------
+       4 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\bugvol4of4.img:
+BACKUP4
+------------------------  ------ ---------------
+4THEODORE           	     362  DATA 12-JUL-89
+------------------------  ------ ---------------
+       1 File(s)             362 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\ccsys_1of6.img:
+FCCSYS1
+------------------------  ------ ---------------
+CC.C2MGR            	      77  DATA 20-JUL-83
+CC.DISPAT           	      27  DATA 04-FEB-83
+CC.EDCHAR           	      49  DATA 04-FEB-83
+CC.EXEC             	      15  DATA 04-FEB-83
+CC.FILMGR           	      50  DATA 04-FEB-83
+CC.HELP             	       9  DATA 04-FEB-83
+CC.KERNEL           	      51  DATA 08-FEB-83
+CC.MNTMGR           	     114  DATA 04-FEB-83
+CC.PSYSTEM          	      23  DATA 04-FEB-83
+CC.SETDCP           	      52  DATA 04-FEB-83
+1CC.SETUP           	      27  DATA 04-FEB-83
+------------------------  ------ ---------------
+      11 File(s)             494 bytes
+                           22806 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\ccsys_2of6.img:
+FCCSYS2
+------------------------  ------ ---------------
+2CC.SETUP           	      22  DATA 04-FEB-83
+CC.SYSMGR           	      22  DATA 04-FEB-83
+CC.WNDMGR           	      35  DATA 04-FEB-83
+CSD.DEFAULT         	       2  DATA 04-FEB-83
+CSK.DEFAULT         	       2  DATA 04-FEB-83
+DIAG.DATA           	       1  DATA 04-FEB-83
+DRV.ADISK           	       6  DATA 04-FEB-83
+DRV.CDISK1          	       4  DATA 20-SEP-83
+DRV.CDISK2          	       4  DATA 20-SEP-83
+DRV.DISPHZ          	       9  DATA 04-FEB-83
+DRV.DISPVT          	      10  DATA 04-FEB-83
+DRV.DTACOM          	       8  DATA 08-FEB-83
+DRV.EPRNT           	       5  DATA 04-FEB-83
+DRV.FDISK           	       4  DATA 04-FEB-83
+DRV.FDISK1          	       4  DATA 20-SEP-83
+DRV.FDISK2          	       5  DATA 20-SEP-83
+DRV.KYBD            	       5  DATA 04-FEB-83
+DRV.OMNINET         	       3  DATA 20-SEP-83
+DRV.SYSTRM          	       7  DATA 18-APR-83
+DRV.TIMER           	       4  DATA 04-FEB-83
+EDINIT.TEXT         	      12  TEXT 04-FEB-83
+FTNCTERRS.TEXT      	      28  TEXT 04-FEB-83
+FTNLIB.OBJ          	     199  DATA 04-FEB-83
+FTNRTERRS.TEXT      	      14  TEXT 04-FEB-83
+HELP.TEXT           	      22  TEXT 04-FEB-83
+LIST.TEXT           	       8  TEXT 02-OCT-89
+LOADER.IMAGE        	       1  DATA 04-FEB-83
+2PAINT.MOUSE        	      48  DATA 20-SEP-83
+------------------------  ------ ---------------
+      28 File(s)             494 bytes
+                           22806 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\ccsys_3of6.img:
+FCCSYS3
+------------------------  ------ ---------------
+3PAINT.MOUSE        	     258  DATA 20-SEP-83
+PASCTERRS.TEXT      	      14  TEXT 04-FEB-83
+PASLIB.OBJ          	      95  DATA 04-FEB-83
+SGEN.TEXT           	       6  TEXT 20-SEP-83
+SYSTEM.INTERP       	      24  DATA 04-FEB-83
+ASSIGN              	      10  DATA 04-FEB-83
+DEBUG               	      12  DATA 04-FEB-83
+ASM68K              	      74  DATA 04-FEB-83
+3LINKER             	       1  DATA 04-FEB-83
+------------------------  ------ ---------------
+       9 File(s)             494 bytes
+                        4294850036 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\ccsys_4of6.img:
+FCCSYS4
+------------------------  ------ ---------------
+4LINKER             	      50  DATA 04-FEB-83
+LIBRARY             	      25  DATA 04-FEB-83
+SPOOL               	      76  DATA 04-FEB-83
+CODE                	      87  DATA 04-FEB-83
+PASCAL              	     197  DATA 04-FEB-83
+4FORTRAN            	      59  DATA 04-FEB-83
+------------------------  ------ ---------------
+       6 File(s)             494 bytes
+                           22806 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\ccsys_5of6.img:
+FCCSYS5
+------------------------  ------ ---------------
+5FORTRAN            	     131  DATA 04-FEB-83
+ED                  	     315  DATA 04-FEB-83
+5W                  	      48  DATA 14-JUL-89
+------------------------  ------ ---------------
+       3 File(s)             494 bytes
+                           22806 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\ccsys_6of6.img:
+FCCSYS6
+------------------------  ------ ---------------
+6W                  	     152  DATA 14-JUL-89
+------------------------  ------ ---------------
+       1 File(s)             152 bytes
+                           22806 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dor-1.img:
+DOR.1
+------------------------  ------ ---------------
+MOVE                	      31  DATA 04-FEB-83
+BRPTMEMO.TEXT       	       6  TEXT 28-FEB-83
+DUMP.TEXT           	       6  TEXT 19-JUN-83
+DUMP.OBJ            	       3  DATA 19-JUN-83
+DUMP                	       6  DATA 19-JUN-83
+AP3BUGS.TEXT        	       8  TEXT 30-MAR-83
+CPMBUGS.TEXT        	       6  TEXT 25-MAY-83
+ALL.OS.TEXT         	       4  TEXT 10-NOV-83
+CCOSPSERV.TEXT      	       4  TEXT 10-NOV-83
+IBMPSERV.TEXT       	       6  TEXT 04-OCT-83
+TIPSERV.TEXT        	       6  TEXT 01-FEB-84
+TIBUGS.TEXT         	       8  TEXT 01-FEB-84
+DRBBUGS.TEXT        	      14  TEXT 05-DEC-83
+DRBPSERV.TEXT       	       6  TEXT 05-DEC-83
+IB2BNK.TEXT         	      10  TEXT 01-FEB-84
+AP2C2BGS.TEXT       	      10  TEXT 29-MAY-84
+CCOSBANK1.TEXT      	      12  TEXT 29-MAY-84
+TBLCNTS.TEXT        	      22  TEXT 30-MAY-84
+PRINTER             	       3  DATA 06-JUN-88
+LIST.TEXT           	       4  TEXT 02-OCT-89
+W                   	     200  DATA 02-OCT-89
+------------------------  ------ ---------------
+      21 File(s)             375 bytes
+                           12529 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_1.img:
+DREEN.1
+------------------------  ------ ---------------
+BUGRPT              	      58  DATA 17-FEB-83
+CPM.BUGS            	      12  DATA 21-MAY-83
+IBM.PSERV           	      34  DATA 04-OCT-83
+AP2.BUGS            	      12  DATA 11-SEP-83
+CCOS.PSERV          	      45  DATA 09-NOV-83
+DRB.BUGS            	     102  DATA 02-DEC-83
+DRB.PSERV           	      34  DATA 17-NOV-83
+ALL.OS.BUGS         	      12  DATA 09-NOV-83
+CCBUG.TEXT          	      24  TEXT 10-APR-84
+TI.PSERV            	      34  DATA 30-JAN-84
+TI.BUGS             	      45  DATA 30-JAN-84
+1IBM.BUGS           	      82  DATA 09-APR-84
+------------------------  ------ ---------------
+      12 File(s)             494 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_2.img:
+DREEN.2
+------------------------  ------ ---------------
+2IBM.BUGS           	     199  DATA 09-APR-84
+BACKUP.HPIC         	      83  DATA 08-AUG-85
+2CCOS.BUGS          	     212  DATA 06-APR-84
+------------------------  ------ ---------------
+       3 File(s)             494 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_3.img:
+DREEN.3
+------------------------  ------ ---------------
+3CCOS.BUGS          	     494  DATA 06-APR-84
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_4.img:
+DREEN.4
+------------------------  ------ ---------------
+4CCOS.BUGS          	     216  DATA 06-APR-84
+SYSTEM.COMSRV       	      23  DATA 11-JUL-83
+SYSTEM.MISCINFO     	       1  DATA 15-MAY-88
+SYSTEM.PASCAL       	      34  DATA 09-DEC-81
+SYSTEM.STARTUP      	      32  CODE 21-SEP-83
+P.CONFG             	       1  DATA 17-JAN-88
+P.CONFG.TEST3       	       1  DATA 17-JAN-88
+P.CONFG.TESTA       	       1  DATA 17-JAN-88
+P.SERV.TBL          	       1  DATA 10-NOV-83
+P.SERVER.BOOT       	       2  DATA 02-AUG-83
+PSMGR               	      84  DATA 22-SEP-83
+TSMGR               	      44  DATA 22-SEP-83
+BOOT.PRINTSRV       	       2  DATA 28-SEP-83
+4THEODORE.TEXT      	      52 TEXT 00-(nu-100
+------------------------  ------ ---------------
+      14 File(s)             494 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_5.img:
+DREEN.5
+------------------------  ------ ---------------
+5THEODORE.TEXT      	     494 TEXT 00-(nu-100
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_6.img:
+DREEN.6
+------------------------  ------ ---------------
+6THEODORE.TEXT      	     494 TEXT 00-(nu-100
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\dreen_7.img:
+DREEN.7
+------------------------  ------ ---------------
+7THEODORE.TEXT      	      72 TEXT 00-(nu-100
+------------------------  ------ ---------------
+       1 File(s)              72 bytes
+                           19976 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fboot_1feb84.img:
+FBOOT
+------------------------  ------ ---------------
+CC.KERNEL           	      54  DATA 01-FEB-84
+CC.FILMGR           	      52  DATA 01-FEB-84
+CC.EXEC             	      16  DATA 01-FEB-84
+CC.DISPAT           	      29  DATA 01-FEB-84
+CC.SETDCP           	      52  DATA 01-FEB-84
+CC.SETUP            	      37  DATA 01-FEB-84
+CC.WNDMGR           	      36  DATA 01-FEB-84
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSK.DEFAULT         	       2  DATA 01-FEB-84
+ASSIGN              	      13  DATA 01-FEB-84
+DRV.ADISK           	       6  DATA 01-FEB-84
+DRV.DISPVT          	      11  DATA 01-FEB-84
+DRV.FDISK1          	       4  DATA 01-FEB-84
+DRV.FDISK2          	       5  DATA 01-FEB-84
+DRV.DISPHZ          	      11  DATA 01-FEB-84
+DRV.KYBD            	       5  DATA 01-FEB-84
+DRV.OMNINET         	       3  DATA 01-FEB-84
+DRV.SYSTRM          	       7  DATA 01-FEB-84
+DRV.TIMER           	       4  DATA 01-FEB-84
+KEYS.ISYS           	      33  DATA 01-FEB-84
+CCDRAW              	      66  DATA 11-MAR-84
+------------------------  ------ ---------------
+      21 File(s)             448 bytes
+                            4692 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fdemo2.img:
+FDEMO2
+------------------------  ------ ---------------
+CS.8BY13            	       7  DATA 22-MAY-83
+DRV.KYBD            	       5  DATA 04-FEB-83
+DRV.SYSTRM          	       7  DATA 18-APR-83
+ED.DEMO.M           	      24  DATA 23-JUN-83
+ED.DEMO.S           	      17  DATA 23-JUN-83
+EX.PRNT1.TEXT       	      18  TEXT 08-JUN-83
+GERUNDS             	       7  DATA 13-JUL-89
+GERUNDS.OBJ         	       5  DATA 13-JUL-89
+GERUNDS.TEXT        	      14  TEXT 13-JUL-89
+GERUNDS2            	       8  DATA 13-JUL-89
+GERUNDS2.OBJ        	       7  DATA 13-JUL-89
+GERUNDS2.TEXT       	      16  TEXT 13-JUL-89
+KEYS.ED.TEXT        	      14  TEXT 17-JAN-88
+SYSMSG              	      28  DATA 09-JUN-83
+W                   	     200  DATA 13-JUL-89
+------------------------  ------ ---------------
+      15 File(s)             377 bytes
+                            4175 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fdocs1.img:
+FDOCS1
+------------------------  ------ ---------------
+ONEFIVESIX.TEXT     	     156  TEXT 17-JAN-84
+MANUAL1.TEXT        	     136  TEXT 05-NOV-84
+MANUAL2.TEXT        	     110  TEXT 05-NOV-84
+C2IMPL2.TEXT        	      90  TEXT 10-JUN-83
+------------------------  ------ ---------------
+       4 File(s)             492 bytes
+                            1619 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fdocs2.img:
+FDOCS2
+------------------------  ------ ---------------
+MSDOS_TN.TEXT       	      66  TEXT 07-APR-83
+MANUAL3.TEXT        	      42  TEXT 05-NOV-84
+C2OVER.TEXT         	      34  TEXT 29-JUN-82
+CPMSTUFF.TEXT       	      34  TEXT 09-MAY-83
+FDOCS.HPIC          	      30  DATA 02-OCT-84
+IBM.UCSD.INTERP     	      26  DATA 30-MAR-83
+IV.ZAP.TEXT         	      26  TEXT 20-JUL-83
+IVMAKEFLOP.TEXT     	      26  TEXT 26-JUL-83
+C2MASTER.TEXT       	      26  TEXT 03-FEB-82
+SECBOOT.TEXT        	      22  TEXT 01-APR-82
+IVCRCLIST.TEXT      	      20  TEXT 02-AUG-83
+IBMBCI.TEXT         	      18  TEXT 08-JUL-83
+IV.MN.TEXT          	      16  TEXT 05-AUG-83
+SYSTEM.LIBRARY      	      14  DATA 16-JUN-82
+C2MOUNT.TEXT        	       8  TEXT 03-FEB-82
+C2USERMGR.TEXT      	       8  TEXT 03-FEB-82
+IBM.MSDOS.BIOS      	       7 DIRHDR 03-AUG-83
+C2INTER.TEXT        	       6  TEXT 03-FEB-82
+DOCS.TEXT           	       6  TEXT 09-MAY-83
+C2NETTYPES.TEXT     	       4  TEXT 02-DEC-82
+USERLIB.TEXT        	       4  TEXT 04-AUG-83
+C2OSTYPES.TEXT      	       4  TEXT 02-DEC-82
+C2STATUS.TEXT       	       4  TEXT 22-JUN-82
+IBM.UCSD.BTPARM     	       2  DATA 27-APR-83
+IBM.UCSD.DRIVER     	       1  DATA 30-MAR-83
+------------------------  ------ ---------------
+      25 File(s)             454 bytes
+                            1619 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fpsys1.img:
+FPSYS1
+------------------------  ------ ---------------
+SYSTEM.PASCAL       	     129  DATA 01-FEB-84
+IV.LIB              	     183  DATA 10-FEB-84
+SYSTEM.COMPILER     	     108  CODE 07-APR-82
+SPOOL               	      73  DATA 01-FEB-84
+------------------------  ------ ---------------
+       4 File(s)             493 bytes
+                            7251 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fsrc23.img:
+FSRC23
+------------------------  ------ ---------------
+P.C2UTIL2.TEXT      	      36  TEXT 21-FEB-83
+P.N.C2U2.TEXT       	      34  TEXT 04-MAR-83
+P.N.TBLRTN.TEXT     	      80  TEXT 03-MAR-83
+OLD.NIUTIL.TEXT     	      48  TEXT 04-NOV-82
+P.SEMA4.TEXT        	      14  TEXT 17-JAN-83
+OLD.DRVIO.TEXT      	      52  TEXT 23-SEP-82
+CVTNET.TEXT         	      36  TEXT 24-JAN-83
+NASTUFF.TEXT        	      26  TEXT 24-JAN-83
+CCDATES.TEXT        	       6  TEXT 27-OCT-82
+P.DRVIO.TEXT        	      62  TEXT 22-MAR-83
+P.CVTUTLS.TEXT      	      54  TEXT 21-FEB-83
+P.DEFN.TEXT         	      34  TEXT 04-APR-83
+------------------------  ------ ---------------
+      12 File(s)             482 bytes
+                            1586 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\fsuper.img:
+FSUPER
+------------------------  ------ ---------------
+CSD.08.13           	       6  DATA 14-DEC-83
+PRINTER             	       1  DATA 02-APR-91
+------------------------  ------ ---------------
+       2 File(s)               7 bytes
+                            4933 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\lc.img:
+FLOPPY
+------------------------  ------ ---------------
+TESTSAVE.LC         	       1  DATA 20-NOV-90
+TEST2.LC            	       1  DATA 20-NOV-90
+IPC.TEXT            	       4  TEXT 20-NOV-90
+FILEAZ.TEXT         	       4  TEXT 20-NOV-90
+CONSOLE.TEXT        	       6  TEXT 20-NOV-90
+HELLO.TEXT          	       4  TEXT 22-NOV-90
+HEAD.LC             	      22  DATA 22-NOV-90
+NEW.LC              	       1  DATA 23-NOV-90
+NEW1.LC             	      10  DATA 23-NOV-90
+NEW2.LC             	       1  DATA 23-NOV-90
+NEW3.LC             	       1  DATA 23-NOV-90
+SEGA.TEXT           	       4  TEXT 23-NOV-90
+SEGB.TEXT           	       4  TEXT 23-NOV-90
+SEGC.TEXT           	       4  TEXT 23-NOV-90
+SEGD.TEXT           	       4  TEXT 23-NOV-90
+LINE10.LC           	      15  DATA 22-NOV-90
+A10.LC              	      10  DATA 22-NOV-90
+VFW.LC              	     181  DATA 20-NOV-90
+VFW.LC              	     181  DATA 20-NOV-90
+------------------------  ------ ---------------
+      19 File(s)             458 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\mirrorCode.img:
+FLOPPY
+------------------------  ------ ---------------
+AMIRROR.CODE        	      43  CODE 07-JUN-82
+AMIRROR.TEXT        	      12  TEXT 07-JUN-82
+DISKCHK.DATA        	      40  DATA 07-OCT-81
+FILE22.TEXT         	      22  TEXT 17-JAN-88
+FILE48.TEXT         	      48  DATA 17-JAN-88
+MBACKUP.CODE        	      15  CODE 07-JUN-82
+MBACKUP.TEXT        	      36  TEXT 07-JUN-82
+MIRR0.TEXT          	      24  TEXT 26-OCT-81
+MIRR1.TEXT          	      22  TEXT 12-APR-82
+MIRR2.TEXT          	      28  TEXT 06-OCT-81
+MIRRB.TEXT          	       8  TEXT 23-SEP-81
+MIRRP.TEXT          	      14  TEXT 23-SEP-81
+MONITORS            	     116  DATA 27-JUN-88
+------------------------  ------ ---------------
+      13 File(s)             428 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\flipCase\roach.img:
+FLOPPY
+------------------------  ------ ---------------
+ROACH               	      79  DATA 17-MAY-83
+------------------------  ------ ---------------
+       1 File(s)              79 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\1spice.img:
+BACKUP1
+------------------------  ------ ---------------
+1SPICE              	     494  DATA 17-JAN-84
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                            3669 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\2spice.img:
+BACKUP2
+------------------------  ------ ---------------
+2SPICE              	     402  DATA 18-JAN-84
+READ_ME.TEXT        	       6  TEXT 18-JAN-84
+SPICE_IN1.TEXT      	       4  TEXT 19-JAN-84
+SPICE_IN2.TEXT      	       4  TEXT 19-JAN-84
+SPICE_OUT1.TEXT     	      22  TEXT 19-JAN-84
+SPICE_OUT2.TEXT     	      56  TEXT 19-JAN-84
+------------------------  ------ ---------------
+       6 File(s)             494 bytes
+                        4294756992 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\3spice.img:
+FLOPPY
+------------------------  ------ ---------------
+BAD_BLOCKS          	       7  DATA 19-JAN-84
+BIAS                	      16  DATA 04-JUN-83
+BLT                 	     206  DATA 23-SEP-83
+BLTINIT.TEXT        	      15  TEXT 25-NOV-83
+SPLOT               	     136  DATA 20-SEP-83
+EX_IN_1.TEXT        	       6  TEXT 18-JAN-84
+EX_IN_2.TEXT        	       4  TEXT 18-JAN-84
+READ_ME.TEXT        	       6  TEXT 19-JAN-84
+LAYOUT              	      83  DATA 16-SEP-83
+------------------------  ------ ---------------
+       9 File(s)             479 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\4spice.img:
+FLOPPY
+------------------------  ------ ---------------
+EX_OUT_1.TEXT       	      26  TEXT 18-JAN-84
+EX_OUT_2.TEXT       	      24  TEXT 18-JAN-84
+SPLICE              	     309  DATA 17-JAN-84
+SPLICERUN.TEXT      	       4  TEXT 18-JAN-84
+------------------------  ------ ---------------
+       4 File(s)             363 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\5spice.img:
+FLOPPY
+------------------------  ------ ---------------
+SPICE_MAN.TEXT      	     198  TEXT 19-JAN-84
+SPLICE_MAN.TEXT     	     294  TEXT 18-JAN-84
+------------------------  ------ ---------------
+       2 File(s)             492 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\debugger.img:
+FLOPPY
+------------------------  ------ ---------------
+DEBUGGER.OBJ        	       7  DATA 12-DEC-83
+HELLO.TEXT          	       8  TEXT 14-MAY-84
+------------------------  ------ ---------------
+       2 File(s)              15 bytes
+                        4294920109 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fccgen.img:
+FCCGEN
+------------------------  ------ ---------------
+CC.KERNEL           	      55  DATA 21-JUL-82
+CC.SETUP            	      41  DATA 21-JUL-82
+CC.DISPAT           	      17  DATA 21-JUL-82
+CC.FILMGR           	      42  DATA 21-JUL-82
+CC.WNDMGR           	      28  DATA 21-JUL-82
+DRV.DISPHZ          	       8  DATA 21-JUL-82
+DRV.DISPVT          	       8  DATA 21-JUL-82
+DRV.KYBD            	       5  DATA 21-JUL-82
+DRV.SYSTRM          	       6  DATA 21-JUL-82
+DRV.TIMER           	       3  DATA 21-JUL-82
+DRV.FDISK           	       4  DATA 21-JUL-82
+CSH.DEFAULT         	       9  DATA 21-JUL-82
+CSV.DEFAULT         	       3  DATA 21-JUL-82
+CSK.DEFAULT         	       2  DATA 21-JUL-82
+ASSIGN              	      10  DATA 21-JUL-82
+DIAG.DATA           	       1  DATA 21-JUL-82
+BOOTL.CONCEPT       	       9  DATA 21-JUL-82
+BOOTO.CONCEPT       	       9  DATA 21-JUL-82
+CF17.3CD.DATA       	      60  DATA 21-JUL-82
+DDIAG               	      77  DATA 21-JUL-82
+SYSGEN              	      84  DATA 21-JUL-82
+------------------------  ------ ---------------
+      21 File(s)             481 bytes
+                            2629 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fccsys.img:
+FCCSYS
+------------------------  ------ ---------------
+CC.C2MGR            	      40  DATA 21-JUL-82
+CC.EDCHAR           	      34  DATA 21-JUL-82
+CC.EXEC             	      14  DATA 21-JUL-82
+CC.HELP             	       8  DATA 21-JUL-82
+CC.MNTMGR           	     104  DATA 21-JUL-82
+CC.SETPRT           	      19  DATA 21-JUL-82
+CC.SYSMGR           	      21  DATA 21-JUL-82
+DEBUG               	      12  DATA 21-JUL-82
+SPOOL               	      58  DATA 21-JUL-82
+HELP.TEXT           	      34  TEXT 21-JUL-82
+DRV.PRNTR           	       3  DATA 21-JUL-82
+------------------------  ------ ---------------
+      11 File(s)             347 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fccutl1.img:
+FCCUTL1
+------------------------  ------ ---------------
+ACCMGR              	     117  DATA 21-JUL-82
+BOOTMGR             	      75  DATA 21-JUL-82
+DRIVEMGR            	     121  DATA 21-JUL-82
+PARMGR              	     110  DATA 21-JUL-82
+------------------------  ------ ---------------
+       4 File(s)             423 bytes
+                            6228 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fccutl2.img:
+FCCUTL2
+------------------------  ------ ---------------
+USERMGR             	     113  DATA 21-JUL-82
+MIRROR              	     127  DATA 21-JUL-82
+MBACKUP             	      69  DATA 21-JUL-82
+FDIAG               	      20  DATA 21-JUL-82
+FFRMT               	      12  DATA 21-JUL-82
+OTEST               	      41  DATA 21-JUL-82
+WRITEBOOT           	       5  DATA 21-JUL-82
+CC.BOOTF            	       2  DATA 21-JUL-82
+CSH.ALTCHARSET      	      13  DATA 21-JUL-82
+------------------------  ------ ---------------
+       9 File(s)             402 bytes
+                            6228 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fdemo.img:
+FDEMO
+------------------------  ------ ---------------
+CHIPS               	      13  DATA 03-OCT-82
+DOLLAR              	      13  DATA 03-OCT-82
+EDW1.1              	       1  DATA 03-OCT-82
+EDW1.2              	       3  DATA 03-OCT-82
+EDW2.1              	       2  DATA 03-OCT-82
+EDW2.2              	       3  DATA 03-OCT-82
+EDW2.3              	       1  DATA 03-OCT-82
+EDW2.4              	      15  DATA 03-OCT-82
+EDW2.5              	       3  DATA 03-OCT-82
+EDW2.6              	       3  DATA 03-OCT-82
+EDW2.7              	       4  DATA 03-OCT-82
+EDW2.8              	       6  DATA 03-OCT-82
+GLI3.1              	       6  DATA 03-OCT-82
+GR1.1               	       3  DATA 03-OCT-82
+GR3.1               	       2  DATA 03-OCT-82
+GR3.2               	       1  DATA 03-OCT-82
+GT1.1               	       2  DATA 03-OCT-82
+GT1.2               	       6  DATA 03-OCT-82
+GT1.3               	       7  DATA 03-OCT-82
+GT1.4               	       6  DATA 03-OCT-82
+GT1.5               	      15  DATA 03-OCT-82
+GT1.6               	       7  DATA 03-OCT-82
+GT1.7               	       6  DATA 03-OCT-82
+GT1.8               	      14  DATA 03-OCT-82
+GT1.9               	       6  DATA 03-OCT-82
+GT2.1               	       2  DATA 03-OCT-82
+GT2.10              	       6  DATA 03-OCT-82
+GT2.11              	       4  DATA 03-OCT-82
+GT2.12              	       5  DATA 03-OCT-82
+GT2.3               	       7  DATA 03-OCT-82
+GT2.4               	       7  DATA 03-OCT-82
+GT2.5               	       6  DATA 03-OCT-82
+GT2.6               	       5  DATA 03-OCT-82
+GT2.7               	       5  DATA 03-OCT-82
+GT2.8               	       6  DATA 03-OCT-82
+GT2.9               	       7  DATA 03-OCT-82
+LGI1                	      10  DATA 03-OCT-82
+LGI1.1              	       2  DATA 03-OCT-82
+LGI1.2              	       3  DATA 03-OCT-82
+LGI1.3              	       8  DATA 03-OCT-82
+LGI2                	      15  DATA 03-OCT-82
+LGI2.1              	       6  DATA 03-OCT-82
+LGI3                	      21  DATA 03-OCT-82
+LGI3.1              	       6  DATA 03-OCT-82
+LGI4.1              	       6  DATA 03-OCT-82
+LGI4.A              	      27  DATA 03-OCT-82
+LGI4.B              	      33  DATA 03-OCT-82
+LGI5.1              	       6  DATA 03-OCT-82
+LGI5.2              	       6  DATA 03-OCT-82
+MSCR1.1             	       2  DATA 03-OCT-82
+MSCR1.2             	       1  DATA 03-OCT-82
+MSCR1.3             	       2  DATA 03-OCT-82
+MSCR1.4             	       2  DATA 03-OCT-82
+PLAY                	       7  DATA 03-OCT-82
+POP.TEXT            	      10  TEXT 03-OCT-82
+SINX                	      28  DATA 03-OCT-82
+USA                 	      13  DATA 03-OCT-82
+WATCH               	      13  DATA 03-OCT-82
+WINDOW              	      48  DATA 03-OCT-82
+------------------------  ------ ---------------
+      59 File(s)             483 bytes
+                            4175 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fedword.img:
+FEDWORD
+------------------------  ------ ---------------
+ED                  	     212  DATA 21-JUL-82
+EDINIT.TEXT         	      14  TEXT 21-JUL-82
+------------------------  ------ ---------------
+       2 File(s)             226 bytes
+                            6735 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\ffrmt_libsrc1of2.img:
+FLOPPY
+------------------------  ------ ---------------
+FFRMT               	      12  DATA 08-JUL-82
+AUXIO.TEXT          	      42  TEXT 22-APR-82
+CAI.TEXT            	       6  TEXT 29-DEC-81
+CMPLXF.TEXT         	      14  TEXT 28-JAN-82
+D1NEW.TEXT          	      12  TEXT 02-DEC-81
+DADD.TEXT           	      14  TEXT 18-NOV-81
+DBL.ASM.TEXT        	      14  TEXT 19-OCT-81
+DCMP.TEXT           	      12  TEXT 28-DEC-81
+DF.TEXT             	      22  TEXT 02-DEC-81
+DFPU.TEXT           	       6  TEXT 02-DEC-81
+DHLL.TEXT           	       4  TEXT 11-DEC-81
+DMUL.TEXT           	      14  TEXT 18-NOV-81
+DNEG.TEXT           	       4  TEXT 19-OCT-81
+DP.TEXT             	      26  TEXT 02-DEC-81
+DPK.TEXT            	      30  TEXT 28-DEC-81
+DPOW.TEXT           	       6  TEXT 02-DEC-81
+DVMD.TEXT           	      24  TEXT 18-NOV-81
+F77RTS.TEXT         	      42  TEXT 22-APR-82
+FARRAY.TEXT         	      14  TEXT 22-APR-82
+FRDWR.TEXT          	      58  TEXT 22-APR-82
+FTN.MISC.TEXT       	       8  TEXT 26-JAN-82
+FTNCHAR.TEXT        	      24  TEXT 02-DEC-81
+FTNLIB.TEXT         	       4  TEXT 22-APR-82
+FTNRTERRS.TEXT      	      14  TEXT 19-APR-82
+GFTN.TEXT           	      22  TEXT 26-OCT-81
+GUC.TEXT            	       6  TEXT 11-DEC-81
+IUPI.TEXT           	       4  TEXT 03-DEC-81
+LIST.TEXT           	      18  TEXT 22-APR-82
+MERCALL.TEXT        	       4  TEXT 25-SEP-81
+MERGOTOXY.TEXT      	       4  TEXT 25-SEP-81
+MERMEM.TEXT         	       6  TEXT 26-APR-81
+OPASLIB.TEXT        	       4  TEXT 07-DEC-81
+------------------------  ------ ---------------
+      32 File(s)             494 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\fpascl2.img:
+FPASCL2
+------------------------  ------ ---------------
+PASCTERRS.TEXT      	      14  TEXT 21-JUL-82
+CCLIB.OBJ           	     116  DATA 21-JUL-82
+C2LIB.OBJ           	      57  DATA 21-JUL-82
+------------------------  ------ ---------------
+       3 File(s)             187 bytes
+                            5699 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\graph.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.GR.FONTS         	      20  DATA 10-JAN-84
+CC.GR.IPC.TEXT      	      12  TEXT 10-JAN-84
+CC.GR.TMPLTS        	     203  DATA 10-JAN-84
+CC.GRAPH            	     247  DATA 10-JAN-84
+------------------------  ------ ---------------
+       4 File(s)             482 bytes
+                        4294848351 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\macsbug.img:
+FLOPPY
+------------------------  ------ ---------------
+PASINIT.TEXT        	       6  TEXT 15-MAY-81
+PASMATH.TEXT        	      10  TEXT 15-DEC-80
+PASMOVE.TEXT        	      10  TEXT 15-DEC-80
+PASPWR10.TEXT       	       8  TEXT 07-DEC-81
+DUMPSCR             	       5  DATA 29-DEC-82
+DUMPSCR.TEXT        	      10  TEXT 30-DEC-82
+DUMPSCR.OBJ         	       4  DATA 30-DEC-82
+PASRIO.TEXT         	      16  TEXT 07-DEC-81
+PASSCOMP.TEXT       	      10  TEXT 15-DEC-80
+PASSET.TEXT         	      30  TEXT 07-DEC-81
+PASTRING.TEXT       	      16  TEXT 08-APR-81
+REAL8.TEXT          	      10  TEXT 22-APR-82
+SCANFMT.TEXT        	      24  TEXT 22-APR-82
+SUBRS.TEXT          	      24  TEXT 22-APR-82
+URDWR.TEXT          	      18  TEXT 22-APR-82
+BUILDIMAGE.TEXT     	      24  TEXT 19-JUL-82
+CCDRVHDR.TEXT       	      12  TEXT 02-SEP-82
+MBUG.CCPT.TEXT      	     224  TEXT 17-AUG-82
+MBUG.NEW.PROM       	      16  DATA 21-AUG-82
+RANDOM.TEXT         	       4  TEXT 15-MAR-82
+------------------------  ------ ---------------
+      20 File(s)             481 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\mikeUtils.img:
+FLOPPY
+------------------------  ------ ---------------
+C2LIB.OBJ           	      54  DATA 03-NOV-82
+CCLIB.OBJ           	     142  DATA 18-NOV-82
+CFLIB.OBJ           	      46  DATA 03-NOV-82
+CLOCK               	      23  DATA 07-NOV-82
+PIC                 	      10  DATA 19-OCT-82
+PRTWND              	       8  DATA 20-NOV-82
+ZAP                 	      40  DATA 02-SEP-82
+USERKEYS.TEXT       	       6  TEXT 22-NOV-82
+WINDOW.TEXT         	      24  TEXT 15-DEC-82
+GETSTAG.TEXT        	       4  TEXT 11-DEC-82
+------------------------  ------ ---------------
+      10 File(s)             357 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\simNetlistSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+NETLIST.TEXT        	       4  TEXT 13-DEC-83
+NETXREF.TEXT        	      28  TEXT 21-NOV-84
+NX.TEXT             	       4  TEXT 16-FEB-84
+SIM.TEXT            	      48  TEXT 16-FEB-84
+TIME.TEXT           	       4  TEXT 03-JAN-84
+NETXREF             	      34  DATA 21-NOV-84
+TIME.OBJ            	       1  DATA 06-JUL-84
+TIME                	       8  DATA 06-JUL-84
+------------------------  ------ ---------------
+       8 File(s)             131 bytes
+                            4944 bytes free
+
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\terminalSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+TERMINAL            	      35  DATA 08-APR-83
+TERMINAL.TEXT       	      26  TEXT 08-APR-83
+TRMNL.DOC.TEXT      	      12  TEXT 11-MAY-83
+VSIXRF              	      49  DATA 25-MAY-83
+SIM                 	      36  DATA 25-FEB-84
+SIM.TEXT            	      48  TEXT 25-FEB-84
+------------------------  ------ ---------------
+       6 File(s)             206 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\test.img:
+FPASCL1
+------------------------  ------ ---------------
+PASCAL              	     190  DATA 21-JUL-82
+ASM68K              	      73  DATA 21-JUL-82
+LINKER              	      51  DATA 21-JUL-82
+LIBRARY             	      25  DATA 21-JUL-82
+LOADER.IMAGE        	       1  DATA 21-JUL-82
+CODE                	      88  DATA 21-JUL-82
+PASLIB.OBJ          	      53  DATA 21-JUL-82
+------------------------  ------ ---------------
+       7 File(s)             481 bytes
+                            5699 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox1\unitIOsrc.img:
+FLOPPY
+------------------------  ------ ---------------
+OS.UNITIO.TEXT      	      40  TEXT 21-JAN-83
+OS.GBL.ASM.TEXT     	      26  TEXT 11-MAY-83
+CCDRAW              	      66  DATA 11-MAR-84
+ASSY.MIRR.HPIC      	      31  DATA 29-JAN-84
+BLANK.14.HPIC       	       3  DATA 03-MAR-84
+BLANK.16.HPIC       	       3  DATA 03-MAR-84
+BLANK.18.HPIC       	       3  DATA 03-MAR-84
+BLANK.20.HPIC       	       3  DATA 03-MAR-84
+BLANK.24.HPIC       	       4  DATA 03-MAR-84
+BLANK.28.HPIC       	       4  DATA 03-MAR-84
+C.74LS244.HPIC      	      15  DATA 03-MAR-84
+CHESSBRD.HPIC       	       6  DATA 12-JAN-84
+CMAN.HPIC           	       1  DATA 03-MAR-84
+ELLIPSE.1.HPIC      	      36  DATA 23-JAN-84
+OPAMP.741.HPIC      	       9  DATA 29-JAN-84
+PIC1.HPIC           	      18  DATA 11-MAR-84
+PIC10.HPIC          	      15  DATA 11-MAR-84
+PIC11.HPIC          	      16  DATA 11-MAR-84
+PIC2.HPIC           	      20  DATA 11-MAR-84
+PIC3.HPIC           	      27  DATA 11-MAR-84
+PIC4.HPIC           	      23  DATA 11-MAR-84
+PIC6.HPIC           	      26  DATA 11-MAR-84
+PIC8.HPIC           	      27  DATA 11-MAR-84
+PIC9.HPIC           	      20  DATA 11-MAR-84
+PICM.HPIC           	       8  DATA 11-MAR-84
+SOLARSYS.HPIC       	      37  DATA 23-JAN-84
+------------------------  ------ ---------------
+      26 File(s)             487 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\bandsawPromSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.PROM.AD.TEXT     	      88  TEXT 03-SEP-82
+CC.PROM.DS.TEXT     	      50  TEXT 20-OCT-82
+CC.PROM.EQ.TEXT     	      22  TEXT 06-JAN-83
+CC.PROM.FD.TEXT     	      82  TEXT 19-JUN-82
+CC.PROM.LD.TEXT     	      26  TEXT 29-JUN-82
+CC.PROM.MB.TEXT     	      22  TEXT 26-JUN-82
+CC.PROM.OD.TEXT     	      44  TEXT 29-JUN-82
+PC.PROM.KB.TEXT     	      30  TEXT 02-FEB-83
+PC.PROM.TEXT        	      66  TEXT 06-JAN-83
+PC.PROM             	      16  DATA 06-JAN-83
+IOSLOTS.TEXT        	      34  TEXT 06-JAN-83
+IONOTES.TEXT        	      14  TEXT 06-JAN-83
+------------------------  ------ ---------------
+      12 File(s)             494 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\calcSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+DRV.DISPHZ          	      11  DATA 02-FEB-83
+DRV.DISPVT          	      11  DATA 02-FEB-83
+DRV.KYBD            	       5  DATA 04-FEB-83
+DRV.SYSTRM          	       7  DATA 18-APR-83
+ED                  	     327  DATA 22-MAY-83
+KEYS.ED.TEXT        	      14  TEXT 22-MAY-83
+ASSIGN              	      11  DATA 04-APR-83
+CSD.06.10           	       2  DATA 23-MAY-83
+CSD.07.11           	       3  DATA 23-MAY-83
+CS.8BY13            	       7  DATA 22-MAY-83
+CSK.DVORAK          	       2  DATA 15-MAR-83
+CALC                	      53  DATA 18-MAY-83
+CALC.TEXT           	      24  TEXT 18-MAY-83
+------------------------  ------ ---------------
+      13 File(s)             477 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\ccBootPromSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.PROM.AD.TEXT     	      88  TEXT 03-SEP-82
+CC.PROM.DS.TEXT     	      48  TEXT 15-JUN-82
+CC.PROM.EQ.TEXT     	      22  TEXT 26-AUG-82
+CC.PROM.FD.TEXT     	      82  TEXT 19-JUN-82
+CC.PROM.KB.TEXT     	      30  TEXT 15-JUN-82
+CC.PROM.LD.TEXT     	      26  TEXT 29-JUN-82
+CC.PROM.MB.TEXT     	      22  TEXT 26-JUN-82
+CC.PROM.OD.TEXT     	      44  TEXT 29-JUN-82
+CC.PROM.TEXT        	      66  TEXT 26-AUG-82
+RAMTEST.TEXT        	      16  TEXT 27-JUL-82
+NDRAWT.TEXT         	      22  TEXT 17-JUL-83
+NXT.TEXT            	       6  TEXT 17-JUL-83
+VRFUZ.TEXT          	      10  TEXT 24-AUG-83
+------------------------  ------ ---------------
+      13 File(s)             482 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\drvHrct.img:
+FLOPPY
+------------------------  ------ ---------------
+DRV.HCRT.G.TEXT     	      54  TEXT 21-APR-83
+DRV.HCRT.I.TEXT     	       6  TEXT 12-JUL-82
+DRV.HCRT.TEXT       	      86  TEXT 27-APR-83
+DRV.VCRT.G.TEXT     	      54  TEXT 21-APR-83
+DRV.VCRT.I.TEXT     	      10  TEXT 30-NOV-82
+DRV.VCRT.TEXT       	      92  TEXT 12-MAY-83
+DRV.XCRT.T.TEXT     	      16  TEXT 03-JAN-82
+------------------------  ------ ---------------
+       7 File(s)             318 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\edword.img:
+FLOPPY
+------------------------  ------ ---------------
+ED                  	     296  DATA 07-FEB-83
+TUT.M               	       4  DATA 06-APR-83
+TUT.S               	       3  DATA 06-APR-83
+EDLBLS.TEXT         	      12  TEXT 21-MAR-83
+------------------------  ------ ---------------
+       4 File(s)             315 bytes
+                        4294845523 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fboot.img:
+FBOOT
+------------------------  ------ ---------------
+CC.KERNEL           	      51  DATA 08-FEB-83
+CC.SETUP            	      49  DATA 04-FEB-83
+CC.DISPAT           	      27  DATA 04-FEB-83
+CC.EXEC             	      15  DATA 04-FEB-83
+CC.FILMGR           	      50  DATA 04-FEB-83
+CC.SYSMGR           	      22  DATA 04-FEB-83
+CC.WNDMGR           	      35  DATA 04-FEB-83
+DRV.DISPHZ          	       9  DATA 04-FEB-83
+DRV.DISPVT          	      10  DATA 04-FEB-83
+DRV.DTACOM          	       8  DATA 08-FEB-83
+DRV.EPRNT           	       5  DATA 04-FEB-83
+DRV.KYBD            	       5  DATA 04-FEB-83
+DRV.SYSTRM          	       7  DATA 04-FEB-83
+DRV.TIMER           	       4  DATA 04-FEB-83
+DRV.ADISK           	       6  DATA 04-FEB-83
+DRV.FDISK           	       4  DATA 04-FEB-83
+CSD.DEFAULT         	       2  DATA 04-FEB-83
+CSK.DEFAULT         	       2  DATA 04-FEB-83
+ASSIGN              	      10  DATA 04-FEB-83
+DDIAG               	      90  DATA 04-FEB-83
+DIAG.DATA           	       1  DATA 04-FEB-83
+CF18.4AP.DATA       	      40  DATA 04-FEB-83
+PURGE.1.0C.TEXT     	       6  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+      24 File(s)             462 bytes
+                            4692 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fccsys1.img:
+FCCSYS1
+------------------------  ------ ---------------
+CC.C2MGR            	      78  DATA 04-FEB-83
+CC.MNTMGR           	     114  DATA 04-FEB-83
+ACCMGR              	     108  DATA 04-FEB-83
+BOOTMGR             	      71  DATA 04-FEB-83
+DRIVEMGR            	     112  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       6 File(s)             487 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fccsys2.img:
+FCCSYS2
+------------------------  ------ ---------------
+PARMGR              	     102  DATA 04-FEB-83
+USERMGR             	     104  DATA 04-FEB-83
+MIRROR              	     124  DATA 04-FEB-83
+MBACKUP             	      82  DATA 04-FEB-83
+MOVE                	      31  DATA 04-FEB-83
+ZAP                 	      43  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       7 File(s)             490 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fccsys3.img:
+FCCSYS3
+------------------------  ------ ---------------
+ASM68K              	      74  DATA 04-FEB-83
+LINKER              	      51  DATA 04-FEB-83
+LIBRARY             	      25  DATA 04-FEB-83
+LOADER.IMAGE        	       1  DATA 04-FEB-83
+CC.EDCHAR           	      49  DATA 04-FEB-83
+CC.HELP             	       9  DATA 04-FEB-83
+CC.SETDCP           	      52  DATA 04-FEB-83
+CS.CONVERT          	       8  DATA 04-FEB-83
+SPOOL               	      76  DATA 04-FEB-83
+HELP.TEXT           	      22  TEXT 04-FEB-83
+FDIAG               	      20  DATA 04-FEB-83
+FFRMT               	      12  DATA 04-FEB-83
+OTEST               	      46  DATA 04-FEB-83
+PRTWND              	       9  DATA 04-FEB-83
+WRITEBOOT           	       5  DATA 04-FEB-83
+FLPY.BOOT           	       2  DATA 04-FEB-83
+USERKEYS.TEXT       	       4  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+      18 File(s)             469 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\ffortrn_feb83.img:
+FFORTRN
+------------------------  ------ ---------------
+FORTRAN             	     190  DATA 04-FEB-83
+FTNLIB.OBJ          	     199  DATA 04-FEB-83
+FTNCTERRS.TEXT      	      28  TEXT 04-FEB-83
+FTNRTERRS.TEXT      	      14  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+BLUESKY.TEXT        	      12  TEXT 06-JAN-83
+------------------------  ------ ---------------
+       6 File(s)             447 bytes
+                            5460 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fpascal.img:
+FPASCAL
+------------------------  ------ ---------------
+PASCAL              	     197  DATA 04-FEB-83
+PASCTERRS.TEXT      	      14  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+LC                  	     168  DATA 22-MAR-83
+LCUKEYS.TEXT        	      10  TEXT 22-MAR-83
+CSK.DVORAK          	       2  DATA 15-MAR-83
+VOLUTIL             	      95  DATA 23-JAN-83
+------------------------  ------ ---------------
+       7 File(s)             490 bytes
+                            5699 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fpsys.img:
+FPSYS
+------------------------  ------ ---------------
+CC.PSYSTEM          	      23  DATA 04-FEB-83
+SYSTEM.INTERP       	      24  DATA 04-FEB-83
+SYSTEM.PASCAL       	     122  DATA 04-FEB-83
+SYSTEM.MISCINFO     	       1  DATA 04-FEB-83
+SYSTEM.LIBRARY      	       7  DATA 04-FEB-83
+CPLIB               	      64  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       7 File(s)             245 bytes
+                        4294872444 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\fsysgen.img:
+FSYSGEN
+------------------------  ------ ---------------
+DEBUG               	      12  DATA 04-FEB-83
+SYSGEN              	      88  DATA 04-FEB-83
+BOOT.CONCEPT        	      10  DATA 04-FEB-83
+VOLUTIL             	      70  DATA 04-FEB-83
+TERMINAL            	      35  DATA 04-FEB-83
+BLDACT              	      35  DATA 04-FEB-83
+BLDALT              	      37  DATA 04-FEB-83
+CSD.06.10           	       2  DATA 04-FEB-83
+CSD.06.10.ALT       	       5  DATA 04-FEB-83
+CSD.07.11           	       3  DATA 04-FEB-83
+CSD.07.11.ALT       	       5  DATA 04-FEB-83
+CSD.09.14.ALT       	      13  DATA 04-FEB-83
+CSK.REV3            	       2  DATA 04-FEB-83
+CSK.REV4            	       2  DATA 04-FEB-83
+PAT.CITOH           	       1  DATA 04-FEB-83
+PAT.DIABLO630       	       1  DATA 04-FEB-83
+PAT.NOENHANCE       	       1  DATA 04-FEB-83
+CITOH.TEXT          	       4  TEXT 04-FEB-83
+DIABLO.TEXT         	       4  TEXT 04-FEB-83
+FIXIT               	      29  DATA 04-FEB-83
+OS.1.1A.TEXT        	      22  TEXT 04-FEB-83
+MAKEDIST.TEXT       	      44  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+      23 File(s)             429 bytes
+                            5703 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\lgicalc.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.LGICLC           	     163  DATA 08-FEB-83
+HELP.LC.TEXT        	      22  TEXT 08-FEB-83
+LC.CONVERT          	      15  DATA 08-FEB-83
+TERMINAL.TEXT       	      54  TEXT 19-JUL-83
+HC4.TEXT            	       6  TEXT 19-JUL-83
+HCTR4.TEXT          	       6  TEXT 19-JUL-83
+------------------------  ------ ---------------
+       6 File(s)             266 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\test.img:
+FCCSYS4
+------------------------  ------ ---------------
+CODE                	      87  DATA 04-FEB-83
+PASLIB.OBJ          	      95  DATA 04-FEB-83
+CCLIB.OBJ           	     183  DATA 04-FEB-83
+CFLIB.OBJ           	      41  DATA 04-FEB-83
+C2LIB.OBJ           	      48  DATA 04-FEB-83
+OS.GBL.ASM.TEXT     	      22  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       7 File(s)             480 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\mikeBox2\vsixrfSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.VSILIB.OBJ       	     194  DATA 04-JUN-83
+CC.VSIXRF.TEXT      	      40  TEXT 06-JUN-83
+------------------------  ------ ---------------
+       2 File(s)             234 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\blt.img:
+FLOPPY
+------------------------  ------ ---------------
+BLT                 	     206  DATA 23-SEP-83
+SPLOT               	     136  DATA 20-SEP-83
+BLTINIT.TEXT        	      14  TEXT 28-SEP-83
+INV_EX.TEXT         	       4  TEXT 11-JUL-83
+LCH_EX.TEXT         	       6  TEXT 22-JUL-83
+MC14518.TEXT        	       6  TEXT 27-SEP-83
+------------------------  ------ ---------------
+       6 File(s)             372 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\csd.img:
+FLOPPY
+------------------------  ------ ---------------
+CSD.SET1            	       2  DATA 11-JAN-84
+CSD.SET10           	       7  DATA 12-JAN-84
+CSD.SET11           	       6  DATA 11-JAN-84
+CSD.SET12           	       7  DATA 12-JAN-84
+CSD.SET13           	       7  DATA 12-JAN-84
+CSD.SET14           	       2  DATA 11-JAN-84
+CSD.SET2            	       2  DATA 12-JAN-84
+CSD.SET3            	       2  DATA 11-JAN-84
+CSD.SET4            	       2  DATA 12-JAN-84
+CSD.SET5            	       3  DATA 12-JAN-84
+CSD.SET6            	       4  DATA 12-JAN-84
+CSD.SET7            	       3  DATA 12-JAN-84
+CSD.SET8            	       4  DATA 12-JAN-84
+CSD.SET9            	       6  DATA 12-JAN-84
+DEMO.HP.TEXT        	       4  TEXT 11-MAR-84
+PIC1.HP.TEXT        	       4  TEXT 17-FEB-84
+REVIEW.TEXT         	      16  TEXT 05-JUL-84
+------------------------  ------ ---------------
+      17 File(s)              81 bytes
+                        4294567640 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\dbi.img:
+FLOPPY
+------------------------  ------ ---------------
+REV.E3.DOC.TEXT     	       4  TEXT 05-DEC-82
+OBDATA.TEXT         	      10  TEXT 05-DEC-82
+OBFRMT.TEXT         	       8  TEXT 24-NOV-82
+OBINT.TEXT          	      36  TEXT 05-DEC-82
+OBMSTR.TEXT         	      44  TEXT 05-DEC-82
+DBI.C               	      64  DATA 15-DEC-82
+BI.DATA             	       5  DATA 26-OCT-82
+CF18.4.DATA         	      40  DATA 09-DEC-81
+DDIAG3.0B           	      89  DATA 16-NOV-82
+DIAG.DATA           	       1  DATA 04-NOV-82
+EXTRACT             	      27  DATA 15-DEC-82
+KUNZAN.TEXT         	       4  TEXT 05-NOV-82
+OB.DOC.TEXT         	      30  TEXT 30-NOV-82
+OMNIBURN.CODE       	       5  DATA 14-NOV-82
+PRT.TEXT            	       4  TEXT 12-NOV-82
+REV.E6.DOC.TEXT     	       4  TEXT 14-DEC-82
+SCHERZO.TEXT        	       4  TEXT 01-AUG-82
+SETSRL              	      24  DATA 29-OCT-82
+TAP.TEXT            	       4  TEXT 05-NOV-82
+TEST.TEXT           	       4  TEXT 22-NOV-82
+REV.E7.DOC.TEXT     	       6  TEXT 15-DEC-82
+BIRPT.TEXT          	      12  TEXT 08-DEC-82
+------------------------  ------ ---------------
+      22 File(s)             429 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\fftrn1.img:
+FFRTRN1
+------------------------  ------ ---------------
+FORTRAN             	     190  DATA 21-JUL-82
+ASM68K              	      73  DATA 21-JUL-82
+LINKER              	      51  DATA 21-JUL-82
+LIBRARY             	      25  DATA 21-JUL-82
+LOADER.IMAGE        	       1  DATA 21-JUL-82
+CODE                	      88  DATA 21-JUL-82
+------------------------  ------ ---------------
+       6 File(s)             428 bytes
+                            5970 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\fftrn1_copy2.img:
+FFRTRN1
+------------------------  ------ ---------------
+FORTRAN             	     190  DATA 21-JUL-82
+ASM68K              	      73  DATA 21-JUL-82
+LINKER              	      51  DATA 21-JUL-82
+LIBRARY             	      25  DATA 21-JUL-82
+LOADER.IMAGE        	       1  DATA 21-JUL-82
+CODE                	      88  DATA 21-JUL-82
+------------------------  ------ ---------------
+       6 File(s)             428 bytes
+                            5970 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\flgiclc.img:
+FLGICLC
+------------------------  ------ ---------------
+CC.LGICLC           	     142  DATA 21-JUL-82
+LCDUMP              	      32  DATA 21-JUL-82
+------------------------  ------ ---------------
+       2 File(s)             174 bytes
+                            3139 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\flgiclc_copy2.img:
+FLGICLC
+------------------------  ------ ---------------
+CC.LGICLC           	     142  DATA 21-JUL-82
+LCDUMP              	      32  DATA 21-JUL-82
+------------------------  ------ ---------------
+       2 File(s)             174 bytes
+                            3139 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\mdiag.img:
+FLOPPY
+------------------------  ------ ---------------
+TEMP.TEXT           	      50  TEXT 04-APR-83
+TRAMS.TEXT          	      54  TEXT 29-SEP-83
+TABLE.TEXT          	      18  TEXT 24-AUG-83
+VOLUTIL             	      70  DATA 04-FEB-83
+TERMINAL            	      35  DATA 04-FEB-83
+BLDACT              	      35  DATA 04-FEB-83
+BLDALT              	      37  DATA 04-FEB-83
+CSD.06.10           	       2  DATA 04-FEB-83
+CSD.06.10.ALT       	       5  DATA 04-FEB-83
+CSD.07.11           	       3  DATA 04-FEB-83
+CSD.07.11.ALT       	       5  DATA 04-FEB-83
+CSD.09.14.ALT       	      13  DATA 04-FEB-83
+CSK.REV3            	       2  DATA 04-FEB-83
+CSK.REV4            	       2  DATA 04-FEB-83
+PAT.CITOH           	       1  DATA 04-FEB-83
+PAT.DIABLO630       	       1  DATA 04-FEB-83
+PAT.NOENHANCE       	       1  DATA 04-FEB-83
+CITOH.TEXT          	       4  TEXT 04-FEB-83
+DIABLO.TEXT         	       4  TEXT 04-FEB-83
+FIXIT               	      29  DATA 04-FEB-83
+OS.1.1A.TEXT        	      22  TEXT 04-FEB-83
+MAKEDIST.TEXT       	      44  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+TEMP.TEXT           	      50  TEXT 04-APR-83
+------------------------  ------ ---------------
+      24 File(s)             491 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\sim.img:
+FLOPPY
+------------------------  ------ ---------------
+NETLIST.TEXT        	       4  TEXT 13-DEC-83
+NETXREF             	      34  DATA 01-JAN-84
+NETXREF.TEXT        	      30  TEXT 01-JAN-84
+PROCNET.TEXT        	       4  TEXT 13-DEC-83
+SIM.TEXT            	      38  TEXT 02-JAN-84
+TIME.TEXT           	       4  TEXT 02-JAN-84
+------------------------  ------ ---------------
+       6 File(s)             114 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\splice.img:
+FLOPPY
+------------------------  ------ ---------------
+SPLICE              	     301  DATA 20-SEP-83
+------------------------  ------ ---------------
+       1 File(s)             301 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\te1000.img:
+FLOPPY
+------------------------  ------ ---------------
+SEE.TEXT            	       4  TEXT 04-OCT-84
+PASLIB.OBJ          	     105  DATA 01-FEB-84
+CLIB.OBJ            	      42  DATA 23-JAN-84
+STDIO.M.TEXT        	       6  TEXT 23-JAN-84
+C                   	     137  DATA 23-JAN-84
+NSEE.TEXT           	       4  TEXT 06-JUL-84
+LINKER              	      53  DATA 01-FEB-84
+NSEE.OBJ            	       2  DATA 31-OCT-84
+NSEE                	      23  DATA 31-OCT-84
+NSEE                	      23  DATA 31-OCT-84
+OLDLSI.RES.TEXT     	      36  TEXT 22-OCT-81
+PLINK.TEXT          	       4  TEXT 26-JUL-82
+PSCLS.TEXT          	      26  TEXT 20-NOV-81
+PSEQUATES.TEXT      	      10  TEXT 19-SEP-81
+PSMAIN.TEXT         	      30  TEXT 14-SEP-82
+PSOPEN.TEXT         	      28  TEXT 05-DEC-81
+PSUTIL.TEXT         	      24  TEXT 20-SEP-82
+------------------------  ------ ---------------
+      17 File(s)             557 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\te1000_1-4-83.img:
+TE1000
+------------------------  ------ ---------------
+ASSIGN              	      10  DATA 04-NOV-82
+BOOT2               	       2  DATA 07-MAY-82
+BOOT4               	       2  DATA 07-MAY-82
+BOOT5               	       2  DATA 07-MAY-82
+CBI                 	       9  DATA 19-JUL-82
+CC.DISPAT           	      18  DATA 04-NOV-82
+CC.EXEC             	      14  DATA 04-NOV-82
+CC.FILMGR           	      44  DATA 04-NOV-82
+CC.KERNEL           	      50  DATA 04-NOV-82
+CC.SETPRT           	      19  DATA 04-NOV-82
+CC.SETUP            	      45  DATA 04-NOV-82
+CC.SYSMGR           	      21  DATA 04-NOV-82
+CC.WNDMGR           	      29  DATA 04-NOV-82
+CSH.DEFAULT         	       9  DATA 04-NOV-82
+CSK.DEFAULT         	       2  DATA 06-JUL-82
+CSK.REV0            	       2  DATA 06-JUL-82
+CSV.DEFAULT         	       3  DATA 04-NOV-82
+DRV.ADISK           	       6  DATA 04-NOV-82
+DRV.DISPHZ          	       8  DATA 04-NOV-82
+DRV.DISPVT          	       8  DATA 04-NOV-82
+DRV.FDISK           	       4  DATA 04-NOV-82
+DRV.KYBD            	       5  DATA 04-NOV-82
+DRV.PRNTR           	       3  DATA 04-NOV-82
+DRV.SYSTRM          	       6  DATA 04-NOV-82
+DRV.TIMER           	       4  DATA 04-NOV-82
+OLDCSK.DEFAULT      	       2  DATA 04-NOV-82
+DDIAG               	      89  DATA 22-DEC-82
+DIAG.DATA           	       1  DATA 14-SEP-82
+CF18.4AP.DATA       	      40  DATA 14-DEC-82
+------------------------  ------ ---------------
+      29 File(s)             457 bytes
+                        4294964016 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\te1000_diffVer.img:
+TE1000
+------------------------  ------ ---------------
+ASSIGN              	      10  DATA 04-NOV-82
+BOOT2               	       2  DATA 07-MAY-82
+BOOT4               	       2  DATA 07-MAY-82
+BOOT5               	       2  DATA 07-MAY-82
+CBI                 	       9  DATA 19-JUL-82
+CC.DISPAT           	      18  DATA 04-NOV-82
+CC.EXEC             	      14  DATA 04-NOV-82
+CC.FILMGR           	      44  DATA 04-NOV-82
+CC.KERNEL           	      50  DATA 04-NOV-82
+CC.SETUP            	      45  DATA 04-NOV-82
+CC.SYSMGR           	      21  DATA 04-NOV-82
+CC.WNDMGR           	      29  DATA 04-NOV-82
+CF18.4.DATA         	      40  DATA 09-DEC-81
+CSH.DEFAULT         	       9  DATA 04-NOV-82
+CSK.DEFAULT         	       2  DATA 06-JUL-82
+CSK.REV0            	       2  DATA 06-JUL-82
+CSV.DEFAULT         	       3  DATA 04-NOV-82
+DDIAG               	      89  DATA 22-DEC-82
+DIAG.DATA           	       1  DATA 14-SEP-82
+DRV.ADISK           	       6  DATA 04-NOV-82
+DRV.DISPHZ          	       8  DATA 04-NOV-82
+DRV.DISPVT          	       8  DATA 04-NOV-82
+DRV.FDISK           	       4  DATA 04-NOV-82
+DRV.KYBD            	       5  DATA 04-NOV-82
+DRV.PRNTR           	       3  DATA 04-NOV-82
+DRV.SYSTRM          	       6  DATA 04-NOV-82
+DRV.TIMER           	       4  DATA 04-NOV-82
+OLDCSK.DEFAULT      	       2  DATA 04-NOV-82
+CF18.4AP.DATA       	      40  DATA 14-DEC-82
+------------------------  ------ ---------------
+      29 File(s)             478 bytes
+                        4294964016 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus3\paperBag\unlab_crtdrvsrc.img:
+FLOPPY
+------------------------  ------ ---------------
+OS.GBL.ASM.TEXT     	      28  TEXT 05-AUG-83
+FIND                	      14  DATA 07-MAR-83
+DRV.HCRT            	      11  DATA 27-APR-83
+DRV.HCRT.G.TEXT     	      54  TEXT 21-APR-83
+DRV.HCRT.I.TEXT     	       6  TEXT 12-JUL-82
+DRV.HCRT.TEXT       	      86  TEXT 27-APR-83
+DRV.VCRT            	      11  DATA 15-JUN-83
+DRV.VCRT.G.TEXT     	      54  TEXT 21-APR-83
+DRV.VCRT.I.TEXT     	      10  TEXT 15-JUN-83
+DRV.VCRT.TEXT       	      92  TEXT 15-JUN-83
+DRV.XCRT.T.TEXT     	      16  TEXT 03-JAN-82
+------------------------  ------ ---------------
+      11 File(s)             382 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\68000asm.img:
+FLOPPY
+------------------------  ------ ---------------
+ASM68K              	      73  DATA 04-NOV-82
+CC.PSYSTEM          	      23  DATA 04-FEB-83
+SYSTEM.PASCAL       	     122  DATA 04-FEB-83
+SYSTEM.MISCINFO     	       1  DATA 04-FEB-83
+SYSTEM.LIBRARY      	       7  DATA 04-FEB-83
+SYSTEM.INTERP       	      24  DATA 04-FEB-83
+C1984.LC            	       3  DATA 18-JUL-83
+C1985.LC            	       3  DATA 18-JUL-83
+NEW.CODE            	      87  DATA 18-JUN-83
+NEW.ASM68K          	      75  DATA 18-JUN-83
+FFRMT               	      12  DATA 04-NOV-82
+MOVE                	      25  DATA 04-NOV-82
+FFRMT               	      12  DATA 04-NOV-82
+DIR.TEXT            	       6  TEXT 21-JAN-83
+DIR.TEXT            	      62 TEXT 00-(nu-100
+------------------------  ------ ---------------
+      15 File(s)             535 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\conceptGames.img:
+FLOPPY
+------------------------  ------ ---------------
+ROACH               	      79  DATA 03-FEB-83
+GRCH                	       3  DATA 27-JAN-83
+MUSIC               	       9  DATA 19-MAY-82
+NOTES.TEXT          	       6  TEXT 21-MAR-83
+RAG.TEXT            	       6  TEXT 19-MAY-82
+CHILD.TEXT          	       4  TEXT 19-MAY-82
+------------------------  ------ ---------------
+       6 File(s)             107 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\cpmdist.img:
+CPMDIST
+------------------------  ------ ---------------
+CC.CPM              	      28  DATA 31-MAR-83
+CC.CPMUTIL          	      51  DATA 01-APR-83
+CPMD.DEFAULT        	       1  DATA 20-MAR-83
+CPMD.ADM3           	       1  DATA 21-MAR-83
+CPMD.SOROC          	       1  DATA 21-MAR-83
+SYSTEM.UPDATE       	       4  TEXT 28-MAR-83
+------------------------  ------ ---------------
+       6 File(s)              86 bytes
+                            1865 bytes free
+
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\gps.img:
+GPS
+------------------------  ------ ---------------
+SYSTEM.INTERP       	      24  DATA 04-FEB-83
+SYSTEM.LIBRARY      	     100  DATA 17-MAR-83
+SYSTEM.MISCINFO     	       1  DATA 20-MAY-83
+SYSTEM.PASCAL       	     125  DATA 13-MAY-83
+USRMNT.CODE         	      48  CODE 25-JAN-83
+INITPTR.CODE        	      31  CODE 10-JAN-83
+UPDATE.CODE         	      19  CODE 18-MAY-83
+MENU.CODE           	      25  CODE 22-APR-83
+BACKUP.CODE         	      11  CODE 23-AUG-82
+RESTORE.CODE        	       7  CODE 23-AUG-82
+GRTPLN.DATA         	       3  DATA 22-MAY-83
+SYSTEM.STARTUP      	      26  CODE 24-JAN-83
+BLANKDIR.DATA       	       6 DIRHDR 22-MAY-83
+------------------------  ------ ---------------
+      13 File(s)             426 bytes
+                        4294903743 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\phonelist.img:
+FLOPPY
+------------------------  ------ ---------------
+PHONE1.TEXT         	      24  TEXT 25-DEC-82
+PHONE2.TEXT         	      12  TEXT 25-DEC-82
+COMPUTERS.TEXT      	      30  TEXT 02-APR-83
+NAMELIST.TEXT       	      14  TEXT 21-AUG-83
+ANI.C.LC            	      24  DATA 18-MAY-84
+------------------------  ------ ---------------
+       5 File(s)             104 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\phonelist2.img:
+FLOPPY
+------------------------  ------ ---------------
+LINEAR.LC           	       3  DATA 26-MAY-83
+TEST1.TEXT          	       6  TEXT 18-JUL-83
+TYPESET.TEXT        	       6  TEXT 15-JUL-83
+SETUP.TEXT          	       4  TEXT 26-JUL-83
+SOFTWARE.TEXT       	       6  TEXT 18-DEC-83
+OCTPROJ.LC          	       1  DATA 21-AUG-83
+JUNK.TEXT           	      28  TEXT 23-OCT-83
+DLCHARGES.LC        	      17  DATA 20-JUN-83
+STAX1.LC            	      28  DATA 27-JUL-83
+PAPERSALE.LC        	      15  DATA 21-JUN-83
+NAMELIST.TEXT       	      14  TEXT 21-AUG-83
+LABELS.TEXT         	       6  TEXT 06-SEP-83
+PHONE.TEXT          	      62  TEXT 17-JUN-83
+TYPETEST.TEXT       	       6  TEXT 08-AUG-83
+TYPESET1.TEXT       	       6  TEXT 08-AUG-83
+P1.TEXT             	       4  TEXT 12-JUL-83
+STARTUP.TEXT        	       4  TEXT 09-AUG-83
+INTEREST.TEXT       	      12  TEXT 28-JUL-83
+BUDGET.LC           	       3  DATA 07-AUG-83
+STARTUP1.TEXT       	       4  TEXT 23-JUN-83
+------------------------  ------ ---------------
+      20 File(s)             235 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\alGrueneich\sysman1.img:
+SYSMAN1
+------------------------  ------ ---------------
+CCOS.1.2.TEXT       	      20  TEXT 10-JAN-84
+CCOS.1.2A.TEXT      	      16  TEXT 10-JAN-84
+CITOH.TEXT          	       4  TEXT 10-JAN-84
+CLEANUP             	       4  TEXT 25-JAN-84
+DEVUTIL             	      57  DATA 28-OCT-83
+DIABLO.TEXT         	       4  TEXT 10-JAN-84
+FIXIT               	      33  DATA 10-JAN-84
+LOCK                	      20  DATA 02-JUL-83
+MASTERLOCK          	      27  DATA 02-JUL-83
+MOVE                	      32  DATA 10-JAN-84
+NMOVE               	      53  DATA 13-OCT-83
+OS.GBL.ASM.TEXT     	      28  TEXT 10-JAN-84
+RATKO.DCOM.TEXT     	       4  TEXT 26-SEP-83
+UNCAT               	      12  DATA 10-JAN-84
+UNLOCK              	      20  DATA 02-JUL-83
+USERKEYS.TEXT       	       4  TEXT 12-JAN-84
+ZAP                 	      42  DATA 10-JAN-84
+------------------------  ------ ---------------
+      17 File(s)             380 bytes
+                            4161 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\apple1.img:
+APPLE1
+------------------------  ------ ---------------
+AP.DEFN.TEXT        	      14  TEXT 13-OCT-82
+AP.PIPES.TEXT       	      30  TEXT 13-OCT-82
+AP.SEMA4.TEXT       	      14  TEXT 13-OCT-82
+AP.DEFN.CODE        	       7  CODE 13-OCT-82
+AP.PIPES.CODE       	      12  CODE 13-OCT-82
+AP.SEMA4.CODE       	       9  CODE 13-OCT-82
+AP.ERRORS.TEXT      	      20  TEXT 13-OCT-82
+AP.ERRREPS.TEXT     	      30  TEXT 13-OCT-82
+AP.ERRORS.CODE      	      18  CODE 13-OCT-82
+AP.ERRREPS.CODE     	      19  CODE 13-OCT-82
+AP.LIB2             	      19  DATA 13-OCT-82
+DIAG.DATA           	       1  DATA 06-OCT-82
+RTSTND.LIBRARY      	      36  DATA 18-OCT-82
+AP.CRTIO.TEXT       	      46  TEXT 27-OCT-82
+AP.DRVIO.TEXT       	      52  TEXT 28-OCT-82
+AP.CRTIO.CODE       	      22  CODE 27-OCT-82
+AP.DRVIO.CODE       	      20  CODE 28-OCT-82
+AP.DRVU1.TEXT       	      10  TEXT 29-OCT-82
+AP.DRVU1.CODE       	       6  CODE 28-OCT-82
+AP.LIB              	      94  DATA 29-OCT-82
+COMP.CODE           	       9  CODE 29-OCT-82
+DIAG18.DATA         	       1  DATA 14-SEP-82
+------------------------  ------ ---------------
+      22 File(s)             489 bytes
+                           17679 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\apple2.img:
+APPLE2
+------------------------  ------ ---------------
+OMNIPASCA1.TEXT     	      12  TEXT 03-SEP-81
+CF18.4AP.DATA       	      40  DATA 14-DEC-82
+AP.OMNIPAS.TEXT     	      34  TEXT 14-DEC-82
+CF18.4.DATA         	      40  DATA 09-DEC-82
+AP.OMNIPAS.CODE     	       5  CODE 15-DEC-82
+RT.DDIAG.TEXT       	     110  TEXT 21-DEC-82
+AP.DDIAG.TEXT       	     110  TEXT 21-DEC-82
+CFX.DATA            	      40  DATA 20-DEC-82
+AP.DDIAG.CODE       	      65  CODE 21-DEC-82
+2RT.DDIAG.CODE      	      38  CODE 21-DEC-82
+------------------------  ------ ---------------
+      10 File(s)             494 bytes
+                           17679 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\apple3.img:
+APPLE3
+------------------------  ------ ---------------
+3RT.DDIAG.CODE      	      27  CODE 21-DEC-82
+CF18.3.DATA         	      40  DATA 14-SEP-82
+X                   	       3  DATA 18-MAR-83
+------------------------  ------ ---------------
+       3 File(s)              70 bytes
+                           17679 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\c2lib.img:
+C2LIB.1
+------------------------  ------ ---------------
+CONTYPES.TEXT       	      12  TEXT 21-MAY-82
+CVSYSTAB.TEXT       	      16  TEXT 28-MAY-82
+CVSYSTAB.OBJ        	      15  DATA 28-MAY-82
+UIUTILS.TEXT        	      52  TEXT 28-MAY-82
+UIUTILS.OBJ         	      16  DATA 28-MAY-82
+CVTABLES.TEXT       	      20  TEXT 11-JUN-82
+CVTABLES.OBJ        	      19  DATA 11-JUN-82
+CCTBLRTN.TEXT       	     100  TEXT 11-JUN-82
+CCTBLRTN.OBJ        	      26  DATA 11-JUN-82
+SYSDEFS.TEXT        	      30  TEXT 11-JUN-82
+SYSDEFS.OBJ         	      18  DATA 11-JUN-82
+UNITCOPY.TEXT       	       4  TEXT 20-JUN-82
+ERRORS.OBJ          	      19  DATA 25-JUN-82
+CVCRYPT.TEXT        	      32  TEXT 20-JUN-82
+CVCRYPT.OBJ         	       8  DATA 20-JUN-82
+NIUTIL.TEXT         	      36  TEXT 20-JUN-82
+NIUTIL.OBJ          	       7  DATA 20-JUN-82
+GNOSCOPY.TEXT       	      22  TEXT 20-JUN-82
+1CVTUTILS.TEXT      	      42  TEXT 20-JUN-82
+------------------------  ------ ---------------
+      19 File(s)             494 bytes
+                           16908 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_1of9.img:
+BACKUP1
+------------------------  ------ ---------------
+1CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_2of9.img:
+BACKUP2
+------------------------  ------ ---------------
+2CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_3of9.img:
+BACKUP3
+------------------------  ------ ---------------
+3CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_4of9.img:
+BACKUP4
+------------------------  ------ ---------------
+4CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_5of9.img:
+BACKUP5
+------------------------  ------ ---------------
+5CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_6of9.img:
+BACKUP6
+------------------------  ------ ---------------
+6CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_7of9.img:
+BACKUP7
+------------------------  ------ ---------------
+7CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_8of9.img:
+BACKUP8
+------------------------  ------ ---------------
+8CPM.VOLUME         	     494  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\cpm_9of9.img:
+BACKUP9
+------------------------  ------ ---------------
+9CPM.VOLUME         	     145  DATA 20-OCT-82
+------------------------  ------ ---------------
+       1 File(s)             145 bytes
+                           21774 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\ed_1feb84.img:
+FLOPPY
+------------------------  ------ ---------------
+ED                  	     326  DATA 01-FEB-84
+EDINIT.TEXT         	      12  TEXT 01-FEB-84
+W                   	      50  DATA 23-DEC-90
+------------------------  ------ ---------------
+       3 File(s)             388 bytes
+                        4294887212 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fboot_part1_1feb84.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.DISPAT           	      29  DATA 01-FEB-84
+CC.EXEC             	      16  DATA 01-FEB-84
+CC.FILMGR           	      52  DATA 01-FEB-84
+CC.KERNEL           	      54  DATA 01-FEB-84
+CC.SETUP            	      37  DATA 01-FEB-84
+CC.SYSMGR           	      23  DATA 01-FEB-84
+CC.WNDMGR           	      36  DATA 01-FEB-84
+CCOS.1.2.TEXT       	      20  TEXT 01-FEB-84
+CCOS.1.2A.TEXT      	      16  TEXT 01-FEB-84
+CF18.4AP.DATA       	      40  DATA 01-FEB-84
+CITOH.TEXT          	       4  TEXT 01-FEB-84
+CSD.06.10           	       2  DATA 01-FEB-84
+CSD.06.10.ALT       	       5  DATA 01-FEB-84
+CSD.07.11           	       3  DATA 01-FEB-84
+CSD.07.11.ALT       	       5  DATA 01-FEB-84
+CSD.07.14.ALT       	       7  DATA 01-FEB-84
+CSD.08.13.ALT       	       6  DATA 01-FEB-84
+CSD.09.14.ALT       	      13  DATA 01-FEB-84
+CSD.DEFAULT         	       2  DATA 01-FEB-84
+CSD.IBM             	       7  DATA 01-FEB-84
+CSK.DEFAULT         	       2  DATA 01-FEB-84
+------------------------  ------ ---------------
+      21 File(s)             379 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fccsys1.img:
+FCCSYS1
+------------------------  ------ ---------------
+CC.C2MGR            	      78  DATA 04-FEB-83
+CC.MNTMGR           	     114  DATA 04-FEB-83
+ACCMGR              	     108  DATA 04-FEB-83
+BOOTMGR             	      71  DATA 04-FEB-83
+DRIVEMGR            	     112  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       6 File(s)             487 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fccsys1_ccos1.2a_1-feb-84.img:
+FCCSYS1
+------------------------  ------ ---------------
+ACCMGR              	     124  DATA 01-FEB-84
+BOOTMGR             	      93  DATA 01-FEB-84
+C2.HELP.TEXT        	       4  TEXT 01-FEB-84
+C2.MENU.TEXT        	      10  TEXT 01-FEB-84
+C2.MISC.TEXT        	       4  TEXT 01-FEB-84
+CC.C2MGR            	      90  DATA 17-MAR-84
+DRIVEMGR            	     152  DATA 01-FEB-84
+SYSTEM.UPDATE       	       4  TEXT 01-FEB-84
+------------------------  ------ ---------------
+       8 File(s)             481 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fccsys2.img:
+FCCSYS2
+------------------------  ------ ---------------
+PARMGR              	     102  DATA 04-FEB-83
+USERMGR             	     104  DATA 04-FEB-83
+MIRROR              	     124  DATA 04-FEB-83
+MBACKUP             	      82  DATA 04-FEB-83
+MOVE                	      31  DATA 04-FEB-83
+ZAP                 	      43  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       7 File(s)             490 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fccsys3.img:
+FCCSYS3
+------------------------  ------ ---------------
+ASM68K              	      74  DATA 04-FEB-83
+LINKER              	      51  DATA 04-FEB-83
+LIBRARY             	      25  DATA 04-FEB-83
+LOADER.IMAGE        	       1  DATA 04-FEB-83
+CC.EDCHAR           	      49  DATA 04-FEB-83
+CC.HELP             	       9  DATA 04-FEB-83
+CC.SETDCP           	      52  DATA 04-FEB-83
+CS.CONVERT          	       8  DATA 04-FEB-83
+SPOOL               	      76  DATA 04-FEB-83
+HELP.TEXT           	      22  TEXT 04-FEB-83
+FDIAG               	      20  DATA 04-FEB-83
+FFRMT               	      12  DATA 04-FEB-83
+OTEST               	      46  DATA 04-FEB-83
+PRTWND              	       9  DATA 04-FEB-83
+WRITEBOOT           	       5  DATA 04-FEB-83
+FLPY.BOOT           	       2  DATA 04-FEB-83
+USERKEYS.TEXT       	       4  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+      18 File(s)             469 bytes
+                            5721 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fedword.img:
+FEDWORD
+------------------------  ------ ---------------
+ED                  	     315  DATA 04-FEB-83
+EDINIT.TEXT         	      12  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       3 File(s)             331 bytes
+                        4294889931 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fgraph_1feb84.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.GR.FONTS         	      20  DATA 01-FEB-84
+CC.GR.LST.TEXT      	      18  TEXT 01-FEB-84
+CC.GR.TMPLTS        	     203  DATA 01-FEB-84
+CC.GRAPH            	     247  DATA 01-FEB-84
+SYSTEM.UPDATE       	       4  TEXT 01-FEB-84
+------------------------  ------ ---------------
+       5 File(s)             492 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fisys2.img:
+FISYS2
+------------------------  ------ ---------------
+CC.WP               	     390  DATA 01-FEB-84
+KEYS.ISYS           	      33  DATA 01-FEB-84
+SYSMSG              	      33  DATA 01-FEB-84
+SYSTEM.UPDATE       	       4  TEXT 01-FEB-84
+------------------------  ------ ---------------
+       4 File(s)             460 bytes
+                           29281 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\flgiclc.img:
+FLGICLC
+------------------------  ------ ---------------
+CC.LGICLC           	     201  DATA 01-FEB-84
+KEYS.LC.TEXT        	      12  TEXT 01-FEB-84
+KEYS.LCI.TEXT       	      12  TEXT 01-FEB-84
+HELP.LC.TEXT        	      22  TEXT 01-FEB-84
+SYSTEM.UPDATE       	       4  TEXT 01-FEB-84
+------------------------  ------ ---------------
+       5 File(s)             251 bytes
+                        4294951596 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fpsys2.img:
+FPSYS2
+------------------------  ------ ---------------
+IV.LIB2             	      81  DATA 08-FEB-84
+MN                  	      77  DATA 04-NOV-83
+DISASM              	      60  DATA 02-APR-82
+SYSTEM.EDITOR       	      47  CODE 27-MAY-82
+PATCH.CODE          	      39  CODE 18-MAY-82
+SYSTEM.IV1          	      38  DATA 05-SEP-82
+IVMAKEFLOP.CODE     	      29  CODE 26-JUL-83
+SYSTEM.ASSMBLER     	      60  CODE 29-MAY-81
+8086.ASSMBLER       	      60  CODE 10-JAN-82
+------------------------  ------ ---------------
+       9 File(s)             491 bytes
+                            7251 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fpsys3.img:
+FPSYS3
+------------------------  ------ ---------------
+SYSTEM.FILER        	      38  CODE 27-MAY-82
+SETUP.CODE          	      36  CODE 14-APR-82
+FMUNITS.CODE        	      33  CODE 01-APR-82
+DECODE.CODE         	      28  CODE 01-APR-82
+XREF.CODE           	      28  CODE 07-DEC-81
+PCDOS.CODE          	      27  CODE 18-OCT-82
+SYSTEM.LINKER       	      27  CODE 01-APR-82
+SYSTEM.INTERP       	      24  DATA 01-FEB-84
+TURNKEY.CODE        	      24  CODE 29-MAR-83
+CC.PSYSTEM          	      23  DATA 01-FEB-84
+CONFIG.CODE         	      21  CODE 07-JAN-82
+SYSTEM.SYNTAX       	      14  DATA 04-DEC-80
+FORMATTER.CODE      	      14  CODE 07-JAN-82
+LIBRARY.CODE        	      13  CODE 01-APR-82
+SCREENTEST.CODE     	      13  CODE 07-DEC-81
+SCREENOPS.CODE      	      13  CODE 19-JUL-81
+LINKMAP.TEXT        	      12  TEXT 07-MAR-84
+IV.ZAP.CODE         	      12  CODE 19-JUL-83
+8086.ERRORS         	      11  DATA 08-MAY-81
+COMPRESS.CODE       	      10  CODE 24-MAY-82
+COMMANDIO.CODE      	      10  CODE 19-JUL-81
+FINDPARAMS.CODE     	       9  CODE 07-DEC-81
+IVCRCLIST.CODE      	       8  CODE 02-AUG-83
+RECOVER.G.CODE      	       8  CODE 07-APR-82
+SYSTEM.LIBRARY      	       7  DATA 01-FEB-84
+SETPRINTER.CODE     	       7  CODE 28-JAN-83
+8086.OPCODES        	       5  DATA 06-OCT-82
+COPYDUPDIR.CODE     	       3  CODE 07-APR-82
+MN.CODE             	       3  CODE 05-AUG-83
+SYSTEM.IBM          	       2  DATA 20-JUN-83
+SYSTEM.MISCINFO     	       1  DATA 02-OCT-84
+------------------------  ------ ---------------
+      31 File(s)             484 bytes
+                            7251 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\fsysgen.img:
+FSYSGEN
+------------------------  ------ ---------------
+DEBUG               	      12  DATA 04-FEB-83
+SYSGEN              	      88  DATA 04-FEB-83
+BOOT.CONCEPT        	      10  DATA 04-FEB-83
+VOLUTIL             	      70  DATA 04-FEB-83
+TERMINAL            	      35  DATA 04-FEB-83
+BLDACT              	      35  DATA 04-FEB-83
+BLDALT              	      37  DATA 04-FEB-83
+CSD.06.10           	       2  DATA 04-FEB-83
+CSD.06.10.ALT       	       5  DATA 04-FEB-83
+CSD.07.11           	       3  DATA 04-FEB-83
+CSD.07.11.ALT       	       5  DATA 04-FEB-83
+CSD.09.14.ALT       	      13  DATA 04-FEB-83
+CSK.REV3            	       2  DATA 04-FEB-83
+CSK.REV4            	       2  DATA 04-FEB-83
+PAT.CITOH           	       1  DATA 04-FEB-83
+PAT.DIABLO630       	       1  DATA 04-FEB-83
+PAT.NOENHANCE       	       1  DATA 04-FEB-83
+CITOH.TEXT          	       4  TEXT 04-FEB-83
+DIABLO.TEXT         	       4  TEXT 04-FEB-83
+FIXIT               	      29  DATA 04-FEB-83
+OS.1.1A.TEXT        	      22  TEXT 04-FEB-83
+MAKEDIST.TEXT       	      44  TEXT 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+      23 File(s)             429 bytes
+                            5703 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\isys_1feb84.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.ISYS             	      39  DATA 01-FEB-84
+CC.CALC             	      72  DATA 01-FEB-84
+CC.CALEN            	      51  DATA 01-FEB-84
+CC.CLOCK            	      58  DATA 01-FEB-84
+CC.DCOMM            	     129  DATA 01-FEB-84
+CC.LOOKUP           	      66  DATA 01-FEB-84
+KEYS.ISYS           	      33  DATA 01-FEB-84
+SYSMSG              	      33  DATA 01-FEB-84
+SYSTEM.UPDATE       	       4  TEXT 01-FEB-84
+IGEN.TEXT           	       4  TEXT 01-FEB-84
+------------------------  ------ ---------------
+      10 File(s)             489 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\logcal1.img:
+LOGCAL1
+------------------------  ------ ---------------
+W                   	     274  DATA 12-JUL-89
+LC.OBJ              	     149  DATA 19-JUL-82
+LC.TEXT             	      56  TEXT 19-JUL-82
+LCDUMP.TEXT         	      14  TEXT 27-JUL-82
+------------------------  ------ ---------------
+       4 File(s)             493 bytes
+                        4294840076 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\logcal1_copy2.img:
+LOGCAL1
+------------------------  ------ ---------------
+W                   	     274  DATA 12-JUL-89
+LC.TEXT             	      56  TEXT 19-JUL-82
+LC.OBJ              	     149  DATA 19-JUL-82
+LCDUMP.TEXT         	      14  TEXT 27-JUL-82
+------------------------  ------ ---------------
+       4 File(s)             493 bytes
+                        4294840076 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\logcal2.img:
+LOGCAL2
+------------------------  ------ ---------------
+LC                  	     142  DATA 19-JUL-82
+COMMANDS.1.TEXT     	      38  TEXT 10-JUL-89
+LC.ADJUST.TEXT      	       6  TEXT 22-JUN-82
+LC.AUTO.TEXT        	       4  TEXT 22-JUN-82
+LC.COMNDS.TEXT      	      28  TEXT 19-JUL-82
+LC.EDIT.TEXT        	      14  TEXT 22-JUN-82
+LC.EVAL.TEXT        	      34  TEXT 19-JUL-82
+LC.INIT.TEXT        	       6  TEXT 29-JUN-82
+LC.INTERP.TEXT      	      44  TEXT 13-JUL-82
+LC.REPORT.TEXT      	      16  TEXT 14-JUL-82
+LCU.LBL.TEXT        	       8  TEXT 22-JUN-82
+LCU.MATH.TEXT       	      36  TEXT 30-JUN-82
+LOGICALC.TEXT       	      80  TEXT 10-JUL-89
+------------------------  ------ ---------------
+      13 File(s)             456 bytes
+                            1601 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\logcal3.img:
+LOGCAL3
+------------------------  ------ ---------------
+LCDUMP              	      32  DATA 27-JUL-82
+LCU.LBL.OBJ         	       6  DATA 22-JUN-82
+LCU.MATH.OBJ        	      29  DATA 30-JUN-82
+------------------------  ------ ---------------
+       3 File(s)              67 bytes
+                            1601 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\logcal3_copy2.img:
+LOGCAL3
+------------------------  ------ ---------------
+LCDUMP              	      32  DATA 27-JUL-82
+LCU.LBL.OBJ         	       6  DATA 22-JUN-82
+LCU.MATH.OBJ        	      29  DATA 30-JUN-82
+------------------------  ------ ---------------
+       3 File(s)              67 bytes
+                            1601 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\logicCalcSrc.img:
+FLOPPY
+------------------------  ------ ---------------
+FLOGICALC.TEXT      	      92  TEXT 14-JUL-89
+LCU.LBL.TEXT        	       8  TEXT 22-JUN-82
+LC.AUTO.TEXT        	       4  TEXT 22-JUN-82
+LC.EDIT.TEXT        	      14  TEXT 22-JUN-82
+LC.ADJUST.TEXT      	       6  TEXT 22-JUN-82
+LC.INIT.TEXT        	       6  TEXT 29-JUN-82
+LCU.MATH.TEXT       	      36  TEXT 30-JUN-82
+LC.INTERP.TEXT      	      44  TEXT 13-JUL-82
+LC.REPORT.TEXT      	      16  TEXT 14-JUL-82
+LC.EVAL.TEXT        	      34  TEXT 19-JUL-82
+LC.COMNDS.TEXT      	      28  TEXT 19-JUL-82
+LC.TEXT             	      56  TEXT 19-JUL-82
+LCDUMP.TEXT         	      14  TEXT 27-JUL-82
+COMMANDS.1.TEXT     	      38  TEXT 10-JUL-89
+LOGICALC.TEXT       	      80  TEXT 10-JUL-89
+------------------------  ------ ---------------
+      15 File(s)             476 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\os_1.0D.img:
+FLOPPY
+------------------------  ------ ---------------
+...OS.1.0D...       	       1  DATA 22-AUG-82
+CCOS.1.0B           	       1  DATA 22-JUL-82
+LOGIN               	      38  DATA 03-MAR-83
+.TEXT               	       6  TEXT 10-SEP-84
+C2.MENU.TEXT        	       8  TEXT 01-AUG-83
+CC.MN.TEXT          	      14  TEXT 05-AUG-83
+CORVUS.LIBRARY      	      76  DATA 05-JAN-82
+IV.VMGR.CODE        	      29  CODE 29-MAR-83
+MAINT               	      22  DATA 08-FEB-83
+APP.TEXT            	       6  TEXT 02-OCT-84
+TOFC.TEXT           	       6  TEXT 02-OCT-84
+CH1.TEXT            	      14  TEXT 02-OCT-84
+CH2.TEXT            	      64  TEXT 02-OCT-84
+CH3.TEXT            	      18  TEXT 02-OCT-84
+CH4.TEXT            	      30  TEXT 02-OCT-84
+CH5.TEXT            	      10  TEXT 02-OCT-84
+CH6.TEXT            	      16  TEXT 02-OCT-84
+CH7.TEXT            	      84  TEXT 02-OCT-84
+------------------------  ------ ---------------
+      18 File(s)             443 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\paint.img:
+PAINT
+------------------------  ------ ---------------
+PAINT.MOUSE         	     306  DATA 20-SEP-83
+------------------------  ------ ---------------
+       1 File(s)             306 bytes
+                            4436 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\pdBills.img:
+FLOPPY
+------------------------  ------ ---------------
+J                   	     100  DATA 02-SEP-88
+MOST                	     200  DATA 02-JAN-84
+PDBLS               	      50  DATA 02-JAN-84
+------------------------  ------ ---------------
+       3 File(s)             350 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\releas1.img:
+RELEAS1
+------------------------  ------ ---------------
+CHECKSUMM.TEXT      	       8  TEXT 07-MAY-81
+CHECKSUMM.CODE      	       3  CODE 25-AUG-81
+CRCTEST.TEXT        	       2  TEXT 06-JAN-82
+OLDMFLOP.TEXT       	      24  TEXT 03-NOV-81
+CORVUS.LIBRARY      	      65  DATA 24-SEP-81
+CRCLIST.CODE        	      36  CODE 06-JAN-82
+CRCLIST.TEXT        	      30  TEXT 06-JAN-82
+CRCCHECK.CODE       	      31  CODE 06-JAN-82
+CRCCHECK.TEXT       	      26  TEXT 06-JAN-82
+RDMAKEFLOP.TEXT     	      24  TEXT 06-JAN-82
+RDMAKEFLOP.CODE     	      18  CODE 06-JAN-82
+CRCS.TEXT           	      32  TEXT 07-JAN-82
+DIFF.TEXT           	      10  TEXT 07-JAN-82
+T2PCO.TEXT          	      10  TEXT 23-JUN-82
+CRC2.TEXT           	      30  TEXT 21-JUL-82
+S100PCO.TEXT        	      28  TEXT 09-JUL-82
+XRPCO.TEXT          	      28  TEXT 09-JUL-82
+PROD.FLOP.TEXT      	      26  TEXT 25-MAY-82
+A3PCO.TEXT          	      16  TEXT 23-JUN-82
+T1PCO.TEXT          	      14  TEXT 29-JUL-82
+AVLPCO.TEXT         	      14  TEXT 24-AUG-82
+OMNITPCO.TEXT       	       6  TEXT 24-AUG-82
+ATARIPCO.TEXT       	      10  TEXT 24-AUG-82
+------------------------  ------ ---------------
+      23 File(s)             491 bytes
+                           16648 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\releas2.img:
+RELEAS2
+------------------------  ------ ---------------
+Z9PCO.TEXT          	      10  TEXT 24-AUG-82
+ROBINPCO.TEXT       	      10  TEXT 24-AUG-82
+ZNPCO.TEXT          	      14  TEXT 24-AUG-82
+SBPCO.TEXT          	      18  TEXT 24-AUG-82
+NECPCO.TEXT         	      10  TEXT 24-AUG-82
+REL8111.TEXT        	      18  TEXT 24-AUG-82
+ACPMPCO.TEXT        	       8  TEXT 24-AUG-82
+T3PCO.TEXT          	      12  TEXT 24-AUG-82
+IBPCO.TEXT          	      10  TEXT 24-AUG-82
+LSI-11PCO.TEXT      	       4  TEXT 23-JUN-82
+OASHRPCO.TEXT       	       8  TEXT 14-SEP-82
+W                   	     100  DATA 02-OCT-89
+2FLOP1.DATA         	     272  DATA 02-SEP-82
+------------------------  ------ ---------------
+      13 File(s)             494 bytes
+                           16648 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\releas3.img:
+RELEAS3
+------------------------  ------ ---------------
+3FLOP1.DATA         	     228  DATA 02-SEP-82
+CCMAKEFLOP.TEXT     	      26  TEXT 11-SEP-82
+CCMAKEFLOP.OBJ      	      23  DATA 11-SEP-82
+CCMAKEFLOP          	      28  DATA 11-SEP-82
+CCCRC.TEXT          	       8  TEXT 17-SEP-82
+CCCRC.OBJ           	       4  DATA 17-SEP-82
+CCCRC               	      11  DATA 17-SEP-82
+CONCEPTREL.TEXT     	      42  TEXT 31-AUG-82
+EDWORD.ENV          	       1  DATA 02-SEP-82
+------------------------  ------ ---------------
+       9 File(s)             371 bytes
+                           16648 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\contico\sort_1feb84.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.SORT             	      53  DATA 01-FEB-84
+CC.GR.IPC.TEXT      	      12  TEXT 01-FEB-84
+CC.WP               	     390  DATA 01-FEB-84
+------------------------  ------ ---------------
+       3 File(s)             455 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\demos\fdemo.img:
+FLOPPY
+------------------------  ------ ---------------
+PAT.EPSONMX         	       1  DATA 22-JAN-83
+------------------------  ------ ---------------
+       1 File(s)               1 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\demos\fdemo1.img:
+FDEMO1
+------------------------  ------ ---------------
+A1.HPIC             	       2  DATA 02-DEC-82
+A10.HPIC            	       8  DATA 02-DEC-82
+A12.HPIC            	       5  DATA 02-DEC-82
+A7.HPIC             	      13  DATA 02-DEC-82
+AP1.HPIC            	      13  DATA 05-NOV-82
+AP2.HPIC            	      13  DATA 05-NOV-82
+AP3.HPIC            	      13  DATA 05-NOV-82
+AP4.HPIC            	      13  DATA 05-NOV-82
+B10.HPIC            	       1  DATA 01-DEC-82
+B17.HPIC            	       1  DATA 01-DEC-82
+B19.HPIC            	      20  DATA 01-DEC-82
+B3.HPIC             	       1  DATA 01-DEC-82
+BIG.VPIC            	      46  DATA 09-NOV-83
+C10.HPIC            	       2  DATA 01-DEC-82
+C11.HPIC            	      45  DATA 23-NOV-82
+C14.HPIC            	       5  DATA 01-DEC-82
+C15.HPIC            	      41  DATA 01-DEC-82
+C2.HPIC             	       7  DATA 01-DEC-82
+C20.HPIC            	      28  DATA 01-DEC-82
+C4.HPIC             	       5  DATA 01-DEC-82
+C6.HPIC             	       7  DATA 01-DEC-82
+C8.HPIC             	      48  DATA 01-DEC-82
+CCFLIP.HPIC         	      75  DATA 26-NOV-82
+CCL.HPIC            	       4  DATA 23-NOV-82
+CCP.HPIC            	       4  DATA 23-NOV-82
+CCPTH8.HPIC         	       2  DATA 08-MAY-82
+CCPTMH.HPIC         	      25  DATA 07-MAY-82
+CCPTV8.HPIC         	       2  DATA 08-MAY-82
+CCS.HPIC            	       8  DATA 26-NOV-82
+CF1982.HPIC         	       3  DATA 26-NOV-82
+CHESS.HPIC          	      11  DATA 02-DEC-82
+DEMO                	       9  DATA 24-NOV-82
+DEMO.HP.TEXT        	       6  TEXT 06-MAR-83
+DICK.VPIC           	       2  DATA 09-NOV-83
+LOGO3.HPIC          	       2  DATA 02-DEC-82
+MARK.VPIC           	       2  DATA 09-NOV-83
+TEST.HPIC           	       2  DATA 01-FEB-83
+------------------------  ------ ---------------
+      37 File(s)             494 bytes
+                            4175 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\demos\fdemo2.img:
+FDEMO2
+------------------------  ------ ---------------
+DRIVE.HPIC          	       7  DATA 02-DEC-82
+ED1.16.HPIC         	      97  DATA 02-DEC-82
+ED2.16.HPIC         	      96  DATA 02-DEC-82
+ED3.16.HPIC         	      96  DATA 24-NOV-82
+FLYER.HPIC          	     101  DATA 26-NOV-82
+GRAPH.HPIC          	      53  DATA 23-NOV-82
+GRLOGO.HPIC         	      10  DATA 23-NOV-82
+LOGO2.HPIC          	      29  DATA 07-AUG-82
+------------------------  ------ ---------------
+       8 File(s)             489 bytes
+                            4175 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\demos\fdemo3.img:
+FDEMO3
+------------------------  ------ ---------------
+LANG1.HPIC          	      74  DATA 26-NOV-82
+LANG2.HPIC          	      77  DATA 26-NOV-82
+LOGI.HPIC           	      95  DATA 24-NOV-82
+LOGO1.HPIC          	      42  DATA 07-AUG-82
+NETWORK.HPIC        	      64  DATA 12-MAY-82
+PLUG.HPIC           	      17  DATA 23-NOV-82
+VEGAS.HPIC          	      51  DATA 12-MAY-82
+ZOOM2.HPIC          	      63  DATA 01-MAY-82
+------------------------  ------ ---------------
+       8 File(s)             483 bytes
+                            4175 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccsys#1.img:
+FLOPPY
+------------------------  ------ ---------------
+ASSIGN              	      13  DATA 20-SEP-83
+CC.CPM              	      28  DATA 12-MAY-83
+CC.DISPAT           	      29  DATA 20-SEP-83
+CC.EXEC             	      16  DATA 20-SEP-83
+ISYS                	      38  DATA 20-SEP-83
+CC.KERNEL           	      54  DATA 20-SEP-83
+CC.SETUP            	      38  DATA 20-SEP-83
+CC.WNDMGR           	      36  DATA 20-SEP-83
+CC.FILMGR           	      52  DATA 20-SEP-83
+CPMD.DEFAULT        	       1  DATA 27-APR-83
+CSD.DEFAULT         	       2  DATA 20-SEP-83
+CSK.DEFAULT         	       2  DATA 20-SEP-83
+DESPOOL.CODE        	      22  CODE 20-SEP-83
+DRV.CDISK1          	       4  DATA 20-SEP-83
+DRV.CDISK2          	       4  DATA 20-SEP-83
+DRV.DISPHZ          	      11  DATA 20-SEP-83
+DRV.DISPVT          	      11  DATA 20-SEP-83
+DRV.FDISK           	       4  DATA 04-FEB-83
+DRV.FDISK1          	       4  DATA 20-SEP-83
+DRV.FDISK2          	       5  DATA 20-SEP-83
+DRV.KYBD            	       5  DATA 20-SEP-83
+DRV.OMNINET         	       3  DATA 20-SEP-83
+DRV.SYSTRM          	       7  DATA 20-SEP-83
+DRV.TIMER           	       4  DATA 20-SEP-83
+CC.ISYS             	      38  DATA 20-SEP-83
+KEYS.ISYS           	      33  DATA 20-SEP-83
+CC.CPM1             	      11  DATA 05-NOV-83
+------------------------  ------ ---------------
+      27 File(s)             475 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccsys#2.img:
+FLOPPY
+------------------------  ------ ---------------
+HELP.LC.TEXT        	      22  TEXT 20-SEP-83
+KEYS.LC.TEXT        	      12  TEXT 20-SEP-83
+KEYS.LCI.TEXT       	      12  TEXT 20-SEP-83
+LC.CONVERT          	      15  DATA 03-FEB-83
+OS.GBL.ASM.TEXT     	      28  TEXT 20-SEP-83
+SGEN.TEXT           	       6  TEXT 20-SEP-83
+SPOOL.CODE          	      22  CODE 20-SEP-83
+START.CODE          	       4  TEXT 03-MAR-83
+WNDUTIL             	      56  DATA 20-SEP-83
+CC.SYSMGR           	      23  DATA 20-SEP-83
+DEBUG               	      12  DATA 20-SEP-83
+SYSMSG              	      33  DATA 20-SEP-83
+LOADER.IMAGE        	       1  DATA 20-SEP-83
+DRV.ADISK           	       6  DATA 20-SEP-83
+DRV.DTACOM          	       8  DATA 20-SEP-83
+DRV.EPRNT           	       5  DATA 20-SEP-83
+DIAG.DATA           	       1  DATA 20-SEP-83
+CC.LGICLC           	     201  DATA 13-OCT-83
+------------------------  ------ ---------------
+      18 File(s)             467 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccsys#3.img:
+FLOPPY
+------------------------  ------ ---------------
+ED                  	     326  DATA 20-SEP-83
+KEYS.ED.TEXT        	      14  TEXT 20-SEP-83
+EDINIT.TEXT         	      12  TEXT 20-SEP-83
+CC.EDCHAR           	      51  DATA 20-SEP-83
+CC.HELP             	       9  DATA 20-SEP-83
+HELP.TEXT           	      22  TEXT 20-SEP-83
+CC.SETDCP           	      52  DATA 20-SEP-83
+------------------------  ------ ---------------
+       7 File(s)             486 bytes
+                        4294718362 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccsys#4.img:
+FLOPPY
+------------------------  ------ ---------------
+FORTRAN             	     204  DATA 20-SEP-83
+FTNLIB.OBJ          	     181  DATA 20-SEP-83
+FTNCTERRS.TEXT      	      28  TEXT 20-SEP-83
+SPOOL               	      73  DATA 20-SEP-83
+------------------------  ------ ---------------
+       4 File(s)             486 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccsys#5.img:
+FLOPPY
+------------------------  ------ ---------------
+PASCAL              	     197  DATA 20-SEP-83
+PASCTERRS.TEXT      	      14  TEXT 20-SEP-83
+CODE                	      87  DATA 20-SEP-83
+PASLIB.OBJ          	     105  DATA 20-SEP-83
+CC.PSYSTEM          	      23  DATA 20-SEP-83
+SYSTEM.INTERP       	      24  DATA 20-SEP-83
+------------------------  ------ ---------------
+       6 File(s)             450 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccsys#6.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.C2MGR            	      77  DATA 01-NOV-83
+ASM68K              	      75  DATA 20-SEP-83
+LINKER              	      53  DATA 20-SEP-83
+LIBRARY             	      25  DATA 20-SEP-83
+CC.MNTMGR           	     121  DATA 20-SEP-83
+DESPOOL             	      76  DATA 20-SEP-83
+------------------------  ------ ---------------
+       6 File(s)             427 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccutil#1.img:
+FLOPPY
+------------------------  ------ ---------------
+BLIB.R2.CODE        	      39  CODE 20-SEP-83
+BLIB.R4.CODE        	      39  CODE 20-SEP-83
+C2.HELP.TEXT        	       4  TEXT 30-JUN-83
+C2.MENU.TEXT        	       8  TEXT 01-AUG-83
+CF18.9.DATA         	      40  DATA 05-JUN-83
+CCOS.1.2.TEXT       	      20  TEXT 20-SEP-83
+CITOH.TEXT          	       4  TEXT 20-SEP-83
+CORVUS.14.16        	       7  DATA 19-FEB-83
+CS.CONVERT          	       8  DATA 04-FEB-83
+CSD.09.13.ALT       	      12  DATA 26-APR-83
+CSD.HALFTONE        	       7  DATA 10-FEB-83
+CSK.REV3            	       2  DATA 04-FEB-83
+CSK.REV4            	       2  DATA 04-FEB-83
+DESPOOL.CODE        	      22  CODE 20-SEP-83
+DIABLO.TEXT         	       4  TEXT 20-SEP-83
+GOTHIC.14.16        	       7  DATA 19-FEB-83
+LOGO.TEXT           	       4  TEXT 22-JUN-83
+LOOKUP              	      16  DATA 04-FEB-83
+PAT.CITOH           	       1  DATA 20-SEP-83
+PAT.DIABLO630       	       1  DATA 20-SEP-83
+PAT.EPSONMX         	       1  DATA 20-SEP-83
+PAT.NEC             	       1  DATA 20-SEP-83
+PAT.NOENHANCE       	       1  DATA 20-SEP-83
+PAT.OKIDATA         	       1  DATA 20-SEP-83
+PAT.TOSHIBA         	       1  DATA 20-SEP-83
+RTLIB2.CODE         	      28  CODE 20-SEP-83
+RTLIB4.CODE         	      28  CODE 20-SEP-83
+SPOOL.CODE          	      22  CODE 20-SEP-83
+PURG.1.2.TEXT       	       8  TEXT 20-SEP-83
+DDIAG               	      93  DATA 20-SEP-83
+CF18.4AP.DATA       	      40  DATA 20-SEP-83
+------------------------  ------ ---------------
+      31 File(s)             471 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccutil#2.img:
+FLOPPY
+------------------------  ------ ---------------
+SYSGEN              	     128  DATA 20-SEP-83
+BOOT.CONCEPT        	      10  DATA 20-SEP-83
+VOLUTIL             	      94  DATA 20-SEP-83
+TERMINAL            	      43  DATA 20-SEP-83
+OTEST               	      37  DATA 20-SEP-83
+BLDACT              	      35  DATA 20-SEP-83
+BLDALT              	      38  DATA 20-SEP-83
+CSD.06.10           	       2  DATA 20-SEP-83
+CSD.06.10.ALT       	       5  DATA 20-SEP-83
+CSD.07.11           	       3  DATA 20-SEP-83
+CSD.07.11.ALT       	       5  DATA 20-SEP-83
+CSD.08.13.ALT       	       6  DATA 20-SEP-83
+CSD.09.14.ALT       	      13  DATA 20-SEP-83
+CSD.IBM             	       7  DATA 20-SEP-83
+C2.MISC.TEXT        	       4  TEXT 20-JUL-83
+PRTWND              	       2  DATA 20-SEP-83
+BOOT.FLOPPY         	       2  DATA 20-SEP-83
+WRITEBOOT           	       5  DATA 20-SEP-83
+USERKEYS.TEXT       	       6  TEXT 20-SEP-83
+FFRMT               	      13  DATA 20-SEP-83
+DELPIPE             	      20  DATA 19-NOV-83
+------------------------  ------ ---------------
+      21 File(s)             478 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccutil#3.img:
+FLOPPY
+------------------------  ------ ---------------
+SYSTEM.PASCAL       	     122  DATA 20-SEP-83
+SYSTEM.MISCINFO     	       1  DATA 05-NOV-83
+SYSTEM.LIBRARY      	       7  DATA 20-SEP-83
+CPLIB               	      64  DATA 20-SEP-83
+CFLIB.OBJ           	      43  DATA 20-SEP-83
+CC.CPMUTIL          	      52  DATA 12-MAY-83
+CPMD.ADM3           	       1  DATA 21-MAR-83
+CPMD.DEFAULT        	       1  DATA 27-APR-83
+CPMD.SOROC          	       1  DATA 21-MAR-83
+CPMD.TELEV          	       1  DATA 20-MAR-83
+BOOTMGR             	      87  DATA 01-AUG-83
+C2LIB.OBJ           	      48  DATA 20-SEP-83
+CS.VSIUTXT.OBJ      	      47  DATA 09-NOV-83
+------------------------  ------ ---------------
+      13 File(s)             475 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccutil#4.img:
+FLOPPY
+------------------------  ------ ---------------
+ACCMGR              	     117  DATA 20-SEP-83
+DRIVEMGR            	     133  DATA 20-SEP-83
+PARMGR              	     102  DATA 20-SEP-83
+USERMGR             	     127  DATA 20-SEP-83
+UKEYS.TEXT          	       6  TEXT 11-MAR-83
+CSD.06.10.ALT       	       5  DATA 20-SEP-83
+USERKEYS.TEXT       	       6  TEXT 17-NOV-83
+UKS.TEXT            	       4  TEXT 16-OCT-83
+CCSYS               	       7  DATA 21-NOV-83
+CORVUS              	       2  DATA 21-NOV-83
+SYS                 	       1  DATA 21-NOV-83
+CCUTIL              	       5  DATA 21-NOV-83
+DOS                 	       1  DATA 21-NOV-83
+SYS2                	       1  DATA 21-NOV-83
+PSERVER             	       2  DATA 21-NOV-83
+ISYS                	       2  DATA 21-NOV-83
+CC1                 	       6  DATA 21-NOV-83
+CC2                 	       3  DATA 21-NOV-83
+CC3                 	       3  DATA 21-NOV-83
+CC4                 	       3  DATA 21-NOV-83
+OFFICE              	       4  DATA 21-NOV-83
+CHARSET             	       2  DATA 21-NOV-83
+EDDEMO              	       2  DATA 21-NOV-83
+LCDEMO              	       3  DATA 21-NOV-83
+PSYS                	       1  DATA 21-NOV-83
+CCOS1               	       1  DATA 21-NOV-83
+CCOS2               	       1  DATA 21-NOV-83
+A3SOS1              	       1  DATA 21-NOV-83
+APPLE3              	       1  DATA 21-NOV-83
+------------------------  ------ ---------------
+      29 File(s)             552 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccutil#5.img:
+FLOPPY
+------------------------  ------ ---------------
+MIRROR              	     124  DATA 20-SEP-83
+MBACKUP             	      82  DATA 20-SEP-83
+FUTIL               	      83  DATA 20-SEP-83
+------------------------  ------ ---------------
+       3 File(s)             289 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\ccutil#6.img:
+FLOPPY
+------------------------  ------ ---------------
+CCLIB.OBJ           	     216  DATA 20-SEP-83
+------------------------  ------ ---------------
+       1 File(s)             216 bytes
+                            5201 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\conceptCharSets.img:
+FLOPPY
+------------------------  ------ ---------------
+CS.5BY5             	       3  DATA 27-JAN-83
+CS.8BY13            	       6  DATA 27-JAN-83
+CS.9BY14            	      13  DATA 29-MAR-83
+CS.CORVUS           	      15  DATA 27-JAN-83
+DIRECTORY.TEXT      	       4  TEXT 29-MAR-83
+CS.46               	      15  DATA 15-NOV-82
+CS.72               	      13  DATA 15-NOV-82
+------------------------  ------ ---------------
+       7 File(s)              69 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\conceptUtilPgms.img:
+FLOPPY
+------------------------  ------ ---------------
+TYPEWRITE           	       5  DATA 17-APR-82
+ETCHER              	       4  DATA 08-OCT-82
+SAVEWINCH           	      10  DATA 10-JAN-83
+CALC                	      30  DATA 08-OCT-82
+STARTUP.TEXT        	       4  TEXT 23-FEB-83
+COMPRESS            	      17  DATA 08-OCT-82
+DECOMP              	      10  DATA 08-OCT-82
+DIFF                	      22  DATA 17-AUG-82
+VOLUTIL             	      95  DATA 23-JAN-83
+USERKEYS.TEXT       	       4  TEXT 11-MAR-83
+LOGOFF.TEXT         	       4  TEXT 28-FEB-83
+LC.CONVERT          	      15  DATA 10-JAN-83
+DIRECTORY.TEXT      	       6  TEXT 29-MAR-83
+SPOOL               	      66  DATA 04-NOV-82
+MOVE                	      25  DATA 04-NOV-82
+ZAP                 	      40  DATA 04-NOV-82
+MEMO                	      69  DATA 10-JAN-83
+FFRMT               	      12  DATA 04-NOV-82
+FDIAG               	      20  DATA 04-NOV-82
+------------------------  ------ ---------------
+      19 File(s)             458 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\fsysdev.img:
+FSYSDEV
+------------------------  ------ ---------------
+CODE                	      88  DATA 04-NOV-82
+PASLIB.OBJ          	      54  DATA 04-NOV-82
+CCLIB.OBJ           	     142  DATA 04-NOV-82
+CFLIB.OBJ           	      46  DATA 04-NOV-82
+C2LIB.OBJ           	      54  DATA 04-NOV-82
+SYSTEM.UPDATE       	       4  TEXT 04-NOV-82
+------------------------  ------ ---------------
+       6 File(s)             388 bytes
+                            5700 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\graph.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.GRAPH            	     247  DATA 20-SEP-83
+TEST                	       3  DATA 09-AUG-83
+TEMPLATES           	     204  DATA 30-AUG-83
+CC.GR.FONTS         	      20  DATA 20-SEP-83
+CC.GR.LST.TEXT      	      18  TEXT 20-SEP-83
+------------------------  ------ ---------------
+       5 File(s)             492 bytes
+                            5201 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\isys#1.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.DCOMM            	     128  DATA 20-SEP-83
+DCOMM.OPTIONS       	       1  DATA 19-SEP-83
+CC.CALC             	      72  DATA 20-SEP-83
+CC.CALEN            	      51  DATA 20-SEP-83
+CC.CLOCK            	      58  DATA 20-SEP-83
+CC.SORT             	      53  DATA 20-SEP-83
+CC.LOOKUP           	      66  DATA 20-SEP-83
+WNDEDIT             	      27  DATA 30-AUG-83
+WNDPLAY             	      25  DATA 30-AUG-83
+------------------------  ------ ---------------
+       9 File(s)             481 bytes
+                        4294800935 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\isys#2.img:
+FLOPPY
+------------------------  ------ ---------------
+WNDSAVE             	      26  DATA 30-AUG-83
+ISYS                	     387  DATA 31-AUG-83
+IGEN.TEXT           	       4  TEXT 20-SEP-83
+CALENDAR            	      61  DATA 14-OCT-83
+------------------------  ------ ---------------
+       4 File(s)             478 bytes
+                        4294830434 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\opsyssw\isys#3.img:
+FLOPPY
+------------------------  ------ ---------------
+CC.WP               	     391  DATA 20-SEP-83
+RAG.TEXT            	       6  TEXT 19-MAY-82
+MUSIC               	       9  DATA 19-MAY-82
+BOOTMGR             	      71  DATA 04-FEB-83
+DRIVEMGR            	     112  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       6 File(s)             593 bytes
+                        4294762265 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\pascal\concept_p-system.img:
+FLOPPY
+------------------------  ------ ---------------
+SYSTEM.INTERP       	      24  CODE 26-APR-83
+SYSTEM.MISCINFO     	       2  DATA 19-APR-83
+SYSTEM.PASCAL       	     122  CODE 26-APR-83
+SYSTEM.STARTUP      	      73  CODE 13-MAY-83
+SYSTEM.LIBRARY      	      67  DATA 13-MAY-83
+------------------------  ------ ---------------
+       5 File(s)             288 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\pascal\fpsys.img:
+FPSYS
+------------------------  ------ ---------------
+CC.PSYSTEM          	      23  DATA 04-FEB-83
+SYSTEM.INTERP       	      24  DATA 04-FEB-83
+SYSTEM.PASCAL       	     122  DATA 04-FEB-83
+SYSTEM.MISCINFO     	       1  DATA 04-FEB-83
+SYSTEM.LIBRARY      	       7  DATA 04-FEB-83
+CPLIB               	      64  DATA 04-FEB-83
+SYSTEM.UPDATE       	       4  TEXT 04-FEB-83
+------------------------  ------ ---------------
+       7 File(s)             245 bytes
+                        4294872444 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\pascal\int_4527-00.img:
+INT
+------------------------  ------ ---------------
+0WORD.INTERP        	      18  DATA 09-FEB-83
+2WORD.INTERP        	      22  DATA 09-FEB-83
+4WORD.INTERP        	      24  DATA 09-FEB-83
+REAL2.CODE          	      10  CODE 02-NOV-82
+REAL4.CODE          	      12  CODE 02-NOV-82
+68000.OPCODES       	       4  DATA 18-JAN-82
+68000.ERRORS        	       9  DATA 18-JAN-82
+SYSTEM.ASSMBLER     	      56  CODE 18-MAY-82
+------------------------  ------ ---------------
+       8 File(s)             155 bytes
+                        4294967235 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\pascal\pascal_lxp4b9.img:
+LXP4B9
+------------------------  ------ ---------------
+SYSTEM.COMPILER     	     108  CODE 07-APR-82
+SYSTEM.SYNTAX       	      14  TEXT 18-MAY-82
+------------------------  ------ ---------------
+       2 File(s)             122 bytes
+                           16887 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\pascal\system1_4554-08.img:
+SYSTEM1
+------------------------  ------ ---------------
+SYSTEM.PASCAL       	     122  DATA 15-NOV-82
+SYSTEM.MISCINFO     	       1  DATA 06-JAN-83
+SYSTEM.INTERP       	      24  DATA 09-FEB-83
+SYSTEM.LIBRARY      	       7  DATA 07-JAN-83
+SYSTEM.EDITOR       	      47  CODE 07-JUN-82
+SYSTEM.FILER        	      38  CODE 07-JUN-82
+SYSTEM.LINKER       	      27  CODE 01-APR-82
+LIBRARY.CODE        	      13  CODE 01-APR-82
+SAMPLEGOTO.TEXT     	       6  TEXT 22-JUN-82
+PATCH.CODE          	      39  CODE 18-MAY-82
+DISKSIZE.CODE       	       3  CODE 18-MAY-82
+SCREENTEST.CODE     	      13  CODE 07-JUN-82
+ERRORHANDL.CODE     	       3  CODE 07-JUN-82
+------------------------  ------ ---------------
+      13 File(s)             343 bytes
+                        4294466017 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\pascal\utils_4200-45.img:
+UTILS
+------------------------  ------ ---------------
+WILD.CODE           	       6  CODE 01-APR-82
+SYS.INFO.CODE       	       5  CODE 01-APR-82
+FILE.INFO.CODE      	       7  CODE 01-APR-82
+DIR.INFO.CODE       	      18  CODE 18-JUN-82
+SCREENOPS.CODE      	      14  CODE 27-MAY-82
+COMMANDIO.CODE      	       6  CODE 26-APR-82
+PDBG.SEED.CODE      	       4  CODE 01-APR-82
+REALCONV.CODE       	       4  CODE 25-MAR-82
+DECODE.CODE         	      34  CODE 10-JUN-82
+DEBUGGER.CODE       	      29  CODE 24-MAY-82
+YALOE.CODE          	      12  CODE 22-APR-82
+COMPRESS.CODE       	      10  CODE 24-MAY-82
+COPYDUPDIR.CODE     	       3  CODE 07-APR-82
+MARKDUPDIR.CODE     	       4  CODE 07-APR-82
+ABSWRITE.CODE       	       4  CODE 18-MAY-82
+RECOVER.CODE        	       8  CODE 21-JUN-82
+KERNEL.CODE         	      66  CODE 07-JUN-82
+SETUP.CODE          	      36  CODE 07-JUN-82
+XREF.CODE           	      28  CODE 01-APR-82
+REMTALK.CODE        	       6  CODE 18-MAY-82
+READ.ME.TEXT        	       4  TEXT 18-MAY-82
+REMTALK.TEXT        	      18  TEXT 24-JAN-83
+------------------------  ------ ---------------
+      22 File(s)             326 bytes
+                        4294100716 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\personalSoftware\resumes.img:
+FLOPPY
+------------------------  ------ ---------------
+NOLAN.TEXT          	      10  TEXT 22-AUG-83
+CUDIR.TEXT          	      12  TEXT 01-AUG-83
+KEYS.LC.TEXT        	      12  TEXT 01-AUG-83
+L2.TEXT             	      24  TEXT 01-AUG-83
+L3.TEXT             	      20  TEXT 01-AUG-83
+NEWLC.TEXT          	      32  TEXT 02-AUG-83
+SOFTWARE.TEXT       	       6  TEXT 18-DEC-83
+HELP.LC.TEXT        	      22  TEXT 30-AUG-83
+IPC.TEXT            	      14  TEXT 03-AUG-83
+SSLABELS.TEXT       	      58  TEXT 04-AUG-83
+------------------------  ------ ---------------
+      10 File(s)             210 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\personalSoftware\softwareDirectory.img:
+FLOPPY
+------------------------  ------ ---------------
+SOFTWARE.TEXT       	       6  TEXT 18-DEC-83
+------------------------  ------ ---------------
+       1 File(s)               6 bytes
+                            4944 bytes free
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\blank.img:
+FLOPPY
+------------------------  ------ ---------------
+------------------------  ------ ---------------
+       0 File(s)               0 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_1.img:
+FADDRES
+------------------------  ------ ---------------
+CONCEPT             	     494  DATA 15-OCT-90
+------------------------  ------ ---------------
+       1 File(s)             494 bytes
+                            1874 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_2.img:
+FLOPPY
+------------------------  ------ ---------------
+W                   	     494  DATA 02-OCT-84
+DRIVE.HPIC          	      18  DATA 06-AUG-88
+------------------------  ------ ---------------
+       2 File(s)             512 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_3.img:
+FLOPPY
+------------------------  ------ ---------------
+W                   	     300  DATA 21-JAN-91
+SHEET1.TEXT         	      14  TEXT 29-JAN-91
+FIRSTSHEET.TEXT     	       8  TEXT 29-JAN-91
+SHEET2.TEXT         	       8  TEXT 29-JAN-91
+SHEET3.TEXT         	       8  TEXT 29-JAN-91
+VFW.INIT.LC         	      90  DATA 29-JAN-91
+VFW.HEAD.LC         	      14  DATA 29-JAN-91
+TMPSV.LC            	      52 DATA 00-(nu-100
+------------------------  ------ ---------------
+       8 File(s)             494 bytes
+                        4294645875 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_4.img:
+FLOPPY
+------------------------  ------ ---------------
+W                   	     200  DATA 18-JAN-91
+B48                 	      48  DATA 24-NOV-90
+B4                  	       4  DATA 24-NOV-90
+HELLO.TEXT          	       4  TEXT 05-DEC-90
+REPORT.TEXT         	       4  TEXT 05-DEC-90
+CIRCLE.TEXT         	       6  TEXT 16-JAN-91
+CIRCLE.OBJ          	       3  DATA 16-JAN-91
+CIRCLE              	      19  DATA 16-JAN-91
+CIRCLE              	      19  DATA 16-JAN-91
+CIRCLE.OBJ          	      53 DATA 00-(nu-100
+------------------------  ------ ---------------
+      10 File(s)             360 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_5.img:
+FLOPPY
+------------------------  ------ ---------------
+GARBOSPEAK          	       3  DATA 11-OCT-90
+GARBOSPEAK.OBJ      	       1  DATA 11-OCT-90
+GARBOSPEAK.TEXT     	       4  TEXT 11-OCT-90
+------------------------  ------ ---------------
+       3 File(s)               8 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_6.img:
+FLOPPY
+------------------------  ------ ---------------
+VFW.LC              	     300  DATA 13-NOV-90
+W                   	     150  DATA 14-NOV-90
+TMPSV.LC            	      44 DATA 00-(nu-100
+------------------------  ------ ---------------
+       3 File(s)             494 bytes
+                        4294880650 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_7.img:
+FLOPPY
+------------------------  ------ ---------------
+WORKSPACE.ABCDE     	      50  DATA 07-SEP-90
+------------------------  ------ ---------------
+       1 File(s)              50 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_8.img:
+FLOPPY
+------------------------  ------ ---------------
+Z                   	      50  DATA 29-SEP-90
+BALL                	     200  DATA 27-SEP-90
+W                   	     200  DATA 29-SEP-90
+TESTY.TEXT          	       4  TEXT 28-SEP-90
+------------------------  ------ ---------------
+       4 File(s)             454 bytes
+                            4944 bytes free
+
+Contents of C:\Corvus Stuff\Floppies\corvus4\unknown\unknown_9.img:
+FLOPPY
+------------------------  ------ ---------------
+W                   	     200  DATA 02-JUL-90
+A.TEXT              	       6  TEXT 07-JUL-88
+B.TEXT              	       4  TEXT 02-JUL-90
+K.TEXT              	       4  TEXT 02-JUL-90
+PHONE.TEXT          	       4  TEXT 02-JUL-90
+LOGIN               	      38  DATA 03-MAR-83
+LOGOFF              	      19  DATA 19-JUN-84
+CALENDAR            	      61  DATA 14-OCT-83
+TIPASY.LC           	       2  DATA 20-AUG-89
+TIPSYASSY.LC        	      45  DATA 20-AUG-89
+TMPSV.LC            	      45  DATA 20-AUG-89
+TIPSYASSY.TEXT      	      10  TEXT 20-AUG-89
+COUNT               	      22  DATA 05-SEP-85
+DIFF                	      22  DATA 17-AUG-82
+------------------------  ------ ---------------
+      14 File(s)             482 bytes
+                            4944 bytes free

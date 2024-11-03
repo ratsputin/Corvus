@@ -1,0 +1,18 @@
+
+Directory of UCSD disk image file 'isys_1feb84.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 10 files,  0 to 6 (6), eov 500, size 5, free 10
+
+ 1: CC.ISYS         Data  1-Feb-84    6-  45(  39), 19968+512= 20480 bytes
+ 2: CC.CALC         Data  1-Feb-84   45- 117(  72), 36864+512= 37376 bytes
+ 3: CC.CALEN        Data  1-Feb-84  117- 168(  51), 26112+512= 26624 bytes
+ 4: CC.CLOCK        Data  1-Feb-84  168- 226(  58), 29696+512= 30208 bytes
+ 5: CC.DCOMM        Data  1-Feb-84  226- 355( 129), 66048+512= 66560 bytes
+ 6: CC.LOOKUP       Data  1-Feb-84  355- 421(  66), 33792+512= 34304 bytes
+ 7: KEYS.ISYS       Data  1-Feb-84  421- 454(  33), 16896+512= 17408 bytes
+ 8: SYSMSG          Data  1-Feb-84  454- 487(  33), 16896+512= 17408 bytes
+ 9: SYSTEM.UPDATE   Text  1-Feb-84  487- 491(   4),  2048+512=  2560 bytes
+10: IGEN.TEXT       Text  1-Feb-84  491- 495(   4),  2048+512=  2560 bytes

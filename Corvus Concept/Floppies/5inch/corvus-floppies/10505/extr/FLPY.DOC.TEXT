@@ -1,0 +1,72 @@
+
+
+       file: /dsgn/flpy.doc.text
+       date: 10-May-1983
+       Keith Ball
+
+       Floppy controller software development
+
+
+       1) CCOS driver
+               a) implemented by Keith Ball
+               b) NOT interrupt driven, however, driver doesn't turn
+                  off the interrupts.
+               c) Unitstatus functions
+                       1) change logical sector interleave
+                       2) change logical skew
+                       3) change starting track
+                       4) change step rate
+                       5) change number of sectors per track
+                       6) change number of tracks per side
+                       7) get driver state all changeable attributes
+                          and driver determined diskette states.
+                          Use get drive info to find out don't just
+                          read dev table.
+               d) uses slot static ram for driver's static local
+                  tables
+               e) local temporary data area allocated on the stack
+               f) does single/double density and single/double
+                  sided
+
+       2) Boot prom driver
+               a) implemented by Keith Ball
+               b) NOT interrupt driven, however, driver doesn' turn
+                  off the interrupts.
+               c) initialize
+                       1) NO logical interleave, skew or
+                          starting track.
+               d) Read block
+               e) does single/double density and single/double
+                  sided
+               f) works for all drives (0..3)
+               g) Uses only interleave of 1, skew of 0, and starting
+                  track of 0.
+
+       3) Utility program
+               a) implemented by Mary Boetcher, except diagnostic
+                  section.
+               b) prefer all of utility written in Pascal.
+               c) Accessed in SysUtils as FlpyUtil.  Consist of 3
+                  sections which can be called via a main menu.   Menu
+                  is function key driven.  Use BLD.CRT or VOLUTIL as
+                  examples.
+               d) All sections can be driven from command line
+                       1) keyword parameters
+               e) Formatter section
+                       1) single and double density
+                       2) single and double sided
+                       3) write empty directory
+               f) Configure driver section
+                       1) change logical sector interleave
+                       2) change logical skew
+                       3) change starting track
+                       4) change step rate
+                       5) change last sector on track
+                       6) change last track on side
+               g) Diagnostic section
+                       1) NOT delivered by Concept group.  It
+                          should be devleloped by Greg Schroeder
+                          in Test Engineering.
+                       2) Utility makes CALL to diagnostic program.
+                          It must have a fixed file name, e.g.
+                          /CCUTIL/CC.FLPYDIAG.

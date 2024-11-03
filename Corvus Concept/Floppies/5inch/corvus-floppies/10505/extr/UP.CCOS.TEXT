@@ -1,0 +1,25 @@
+
+
+         file :  up.ccos.text
+         date :  27-Jan-84
+
+
+
+         Installing boot for CCOS Uniplex
+
+
+         1) put new boot proms (version 1.?) in Uniplex processor
+            board.
+
+         2) copy new C2.MISC.TEXT and BOOTMGR from /FLOPPY to /CCUTIL
+            on a Concept.
+
+         3) run BOOTMGR from Const II and Add /FLOPPY/BOOT.CONCEPT2
+            Type is CONCEPT2.
+
+         4) create user for Uniplex.  For gateway create device user
+            and specify the Uniplex's omninet host number.
+
+         5) give the Uniplex user access to /CCSYS, /CCUTIL and any
+            other volume Uniplex user needs.  For NAS, give access to
+            volume /NAS as unit 5.

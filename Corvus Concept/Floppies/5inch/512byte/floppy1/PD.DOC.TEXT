@@ -1,0 +1,128 @@
+
+
+    file : pd.doc.text
+    date : 08-August-1983  kb
+
+
+    Interface and function of protocol dispatcher
+
+    -- supports only socket $80 and $90 currently.
+
+    a) There are 2 user interfaces to the protocol dispatcher, direct user
+       calls and receive interrupt routine interface.
+
+    b) Direct call has form :
+
+       function PDuser(Socket, FncCode, PID, MaxBufSz,
+                       Address, UserData) : Integer;
+
+       The function entry address will be in entry xxx of the system call
+       vector.  Socket specifies which socket protocol manager uses.  It
+       is a variable of type TCsockets, which is an enumerated type of
+       Sckt80, Sckt90, ScktA0, and ScktB0.  FncCode is of type integer.
+       It is the function code specifying which operation proto mgr wants
+       of PD.  PID is the protocol ID for the proto mgr.  It must always
+       be the first 2 bytes of the data buffer.  Address is a longint
+       which is either the entry point of the protocol managers receive
+       interrupt routine or the buffer address the receive interrupt
+       routine is returning to the protocol dispatcher.  UserData is a
+       long word which is passed to the protocol mgr's interrupt routine.
+       It can be used for any thing pmgr determines.  The call returns the
+       IOresult code.
+
+    c) 3 functions :  activate entry, deactivate entry, restore buffer.
+
+       Say which parameters each of the functions uses.
+
+       1) Activate.  Function code = 0.  Creates an entry for the protocol
+          manager in the PD's dispatch table.  For this function, the
+          Address parameter is the entry pointer to the protocol manager's
+          receive interrupt procedure.
+
+       2) Deactivate.  Function code = 1.  Deletes the protocol manager's
+          current entry in the dispatch table.  Protocol manager's receive
+          interrupt procedure must be able to receive an interrupt call
+          until after the PD returns from the deactivate call.
+
+       3) Restore buffer.  Function code = 2.  Protocol manager's receive
+          interrupt procedure must move data out of the dispatcher's
+          buffer and into it's own or a user's buffer.  When it is done
+          with the buffer it MUST call this function to inform the PD it
+          is finished with the buffer.  For this function, the Address
+          parameter is the PD's buffer's address.
+
+    d) Protocol manager's receive interrupt procedure has the following
+       interface :
+
+       procedure PMGRrcvInt(UserData: longint; var BufCtlBlk: BCentry);
+
+
+       UserData is whatever the protocol manager defines it to be.
+       BufCtlBlk is a buffer control block entry of the form :
+
+               BCentry = record
+                             BufAttached,
+                             InUse :   Boolean;
+                             BufferAdr : pBuffer; {pointer to data buffer}
+                             Result : PDresult;   {transporter result}
+                             end;                 {    record        }
+
+       The Protocol manager can redefine the data type of BufferAdr to suit
+       it's needs.
+
+       Transporter result record has the form :
+
+               PDresult = record
+                             ResultCode : Byte;
+                             SourceHost : Byte;
+                             DataLength : Integer;
+                             end;
+
+       This result record is the same as the result record defined in the
+       Omninet Technical Reference Manual except for the 0 to 255 bytes of
+       User Control data.  This field is omitted because it must always be
+       0 bytes for data transmitted to sockets $80 and $90.
+
+    e) The protocol manager's receive interrupt routine must copy the data
+       from the PD's buffer into its own or a user's buffer.  It then must
+       mark the InUse flag to FALSE.  Finally, it calls the Restore buffer
+       function to inform the PD that it has released it's buffer.  Once
+       the protocol manager marks InUse FALSE it cannot use the PD's
+       buffer for any purpose because the PD may pick up buffers not inuse
+       during an interrupt and reuse it.
+
+       The interrupt routine must be able to accept a call while the PD is
+       processing a Deactivate call.  This is required because Deactivate
+       is not indivisible.
+
+    f) The protocol manager does its own sends and immediate commands.
+       However, it does no receives.  The PD handles all receives and the
+       protocol manager must use the PD as its receive socket manager.
+
+    g) Error codes returned by the PD.  Do not include error codes from
+       Transporter driver.
+
+
+
+    -----------------------------------------------------------------------
+
+    PD internals.
+
+    1) Assumes transporter drive is attached to system at unit 33.
+
+    2) Because no buffer and queue functions exist in system the PD has a
+       finite number of buffers (currently 3).  These are allocated on the
+       stack with the other OS global variables.  Because the PD cannot
+       periodically verify a receive is setup on a socket, it is necessary
+       for the protocol manager to call restore buffer function to allow
+       the PD to check for no receive setup on a socket.  The no receive
+       setup condition will occurr when no buffer is available when the PD
+       tries to setup a receive in its receive interrupt routine
+
+    3) The PD control table is also allocated on the stack with the OS
+       globals.  A pointer to the PD control table is kept in the SysCom.
+
+    4) The PD is linked to the OS system.  Maybe an include file.  The OS
+       must call the PD's initialization procedure from within the OS
+       initialization procedure after the Transporter driver is loaded
+       into the system and initialized.

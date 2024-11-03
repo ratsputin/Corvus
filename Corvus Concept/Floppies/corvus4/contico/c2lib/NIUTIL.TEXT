@@ -1,0 +1,445 @@
+UNIT Niutil;
+
+INTERFACE
+
+USES
+   {$U /CCLIB/CCLIB.OBJ       }  CCdefn,
+   {$U /CCDECLS/ERRORS.OBJ    }  ERRORS,
+   {$U /CCDECLS/CCdrvIO.OBJ   }  CCdrvIO,
+   {$U /CCDECLS/CCdrvU1.OBJ   }  CCdrvU1,
+   {$U /CCDECLS/CVtables.OBJ  }  CVtables,
+   {$U /CCDECLS/CVSYSTAB.OBJ  }  CVsystab,
+   {$U /CCDECLS/CVcrypt.OBJ   }  CVcrypt;
+
+FUNCTION NiDrvOK      (VAR Loc:CDaddr): BOOLEAN;
+FUNCTION NiGetStation (Slot:INTEGER; Stattype: host_types; VAR Count:INTEGER; VAR NA:NAarray): INTEGER;
+FUNCTION NiGetDrive   (Loc: CDaddr; VAR Count: INTEGER; VAR Drv: DRarray): INTEGER;
+FUNCTION NiGetDirBlk  (VAR Loc:CDaddr; Blknum:INTEGER; VAR CVdirblk:Dirblk): INTEGER;
+FUNCTION NiPutDirBlk  (VAR Loc:CDaddr; Blknum: INTEGER; CVdirblk:Dirblk):INTEGER;
+FUNCTION NiGetAddr    (VAR Loc:CDaddr; Fname:Tid; VAR Addr:AbsDiskaddr; VAR Len:INTEGER):INTEGER;
+
+IMPLEMENTATION
+
+CONST
+
+   BlkOffset            =   00;
+   DIoffset             =   8;
+(**NAoffset             =   2;        not currently used **)
+(**CVoffset             =   8;        not currently used **)
+   DirKludge            =   2;
+(**MaxDirBlk            =   5;        not currently used **)
+
+(**CorvusUnit           =   13;       not currently used **)
+
+ {$P}
+ {--------------------------------------------------------------------}
+ { Procedure:     NIDrvOk                                             }
+ {                                                                    }
+ { Description:   Read the drive user table to determine if the       }
+ {                corvus volume has been initialized....              }
+ {--------------------------------------------------------------------}
+
+ FUNCTION  NIDrvOK   { ( VAR Loc:CDaddr ): BOOLEAN};
+
+ VAR
+    Dibuf:     CVsystbl;
+    Len:       INTEGER;
+    IoErr:     INTEGER;
+
+    BEGIN
+    {                                       }
+    { Read the drive information table to   }
+    { get address of cold boot table....    }
+    {                                       }
+    Len := 512;
+    Loc.Blkno := DiOffset;
+
+    IoErr := CdRead (Loc, Dibuf.CV2blk, Len );
+
+    {                                       }
+    { Executing this utility on a non Con-  }
+    { stellation II drive cause unpredic-   }
+    { result. Therefore, check the drive    }
+    { info block before preceeding by       }
+    { validating the Drive init, online,    }
+    { drive number and the 'SPECIAL' flag.  }
+    {                                       }
+    { *** A simple, yet effective kludge ** }
+    {                                       }
+
+    IF (Dibuf.DI.DriveInit = TRUE ) AND
+       (Dibuf.DI.Driveno IN [1,2,3,4] ) AND
+       (Dibuf.DI.Online = TRUE ) AND
+       (Dibuf.DI.Special = 1982) AND
+       (IOerr = 0) THEN
+       NiDrvOK := TRUE
+    ELSE
+       NiDrvOK := FALSE;
+    END;  { NiDrvOK }
+
+
+
+
+ {-----------------------------------------------------------------------}
+ { Procedure:     NiGetStation                                           }
+ {                                                                       }
+ { Description:   This procedure returns a structure which identifies    }
+ {                each network station on the network specified by the   }
+ {                slot parameter in the LOC parameter. The number        }
+ {                stations found is returned in the COUNT field.         }
+ {                                                                       }
+ {                                                                       }
+ {-----------------------------------------------------------------------}
+
+ FUNCTION NiGetStation {(Slot: INTEGER;            < Input  >
+                         Stattype: host_types      < Input  >
+                         VAR Count: INTEGER;       < Output >
+                         VAR NA: NAarray)          < Output >
+                         : INTEGER};
+
+
+ VAR
+    IoErr:     INTEGER;            { IO error result for CDREAD }
+    Len:       INTEGER;
+    Buf:       CVSystbl;           { IO buffer for CDREAD       }
+    Loc:       CDaddr;
+
+
+    BEGIN
+
+    Loc.Kind := CDslotInfo ( Slot );
+    Loc.Slotno := Slot;
+    IF Loc.Kind <> OmninetDisk THEN
+       BEGIN
+       {                                            }
+       { Network stations not supported...          }
+       {                                            }
+       NiGetStation := 0;
+       Count := 0;
+       END
+    ELSE
+       BEGIN
+       {                                            }
+       { Use network user table and network active  }
+       { table to resolve names and station no.     }
+       {                                            }
+       Count := 1;
+       Loc.Stationno := 0;    { Default disc server address is zero }
+       Loc.Driveno := 1;
+       Loc.Blkno := DIOffset;
+       Len := 512;
+       IoErr := CDread ( Loc, Buf.CV2blk, Len );
+
+       IF IoErr = 0 THEN
+          BEGIN
+          NA [Count].Host := Buf.DI.Server;
+          NA [Count].Hostno := 0;
+          NA [Count].Hosttype := File_Server;
+          END;
+
+       NiGetStation := Ioerr;
+       END;
+    END;   { NiGetStation }
+
+
+
+
+{$P}
+
+ {-----------------------------------------------------------------------}
+ { Procedure:     NiGetDrive                                             }
+ {                                                                       }
+ { Description:   This procedure returns a structure which identifies    }
+ {                each drive on a specified slot and if applicable on    }
+ {                a specified server. The location of the drive is       }
+ {                indicated by the LOC parameter. COUNT returns the      }
+ {                number of drives found. The function returns a nega-   }
+ {                value if no drives are found or some disk IO error     }
+ {                occured, otherwise the routine returns the no. of      }
+ {                drives found. A zero can be returned if no drives are  }
+ {                drives are found at the connection.                    }
+ {                                                                       }
+ {-----------------------------------------------------------------------}
+
+ FUNCTION NiGetDrive { ( Loc: CDaddr;            < Input  >
+                         VAR Count: INTEGER;     < Output >
+                         VAR Drv: DRarray)       < Output >
+                         : INTEGER };
+
+
+ VAR
+    DriveCnt:  INTEGER;            { No. of physical drives     }
+    SlotNum:   INTEGER;            { Slot number                }
+    DriveStat: PDRarray;           { Drive information table    }
+    IoErr:     INTEGER;            { IO error result for CDREAD }
+    Len:       INTEGER;
+    Slotkind:  SlotTypes;         { Interface media            }
+    Buf:       CVSystbl;           { IO buffer for CDREAD       }
+    I:         INTEGER;            { Index for loop             }
+    ENcrypt:   CVprivate;       { used to pass encrypted Name/Psw }
+    DEcrypt:   CVprivate;       { used to pass decrypted Name/Psw }
+
+    BEGIN
+    CVcryptInit{*};
+    SlotNum := Loc.Slotno;
+    NiGetDrive := -1;
+    Count := 0;
+    IF CDSlotInfo ( SlotNum) IN [OmninetDisk, LocalDisk] THEN
+       BEGIN
+       {                                         }
+       { This type of connection media supports  }
+       { Corvus drive devices....                }
+       {                                         }
+       DrvInit ( Loc, DriveCnt, DriveStat );
+       FOR I := 1 TO DriveCnt DO
+          BEGIN
+          IF DriveStat[I].PhysDr THEN
+             BEGIN
+             Count := Count + 1;
+             Drv[I].DrvStat := DriveStat[I];
+             Loc.Blkno := DIoffset;
+             Loc.Driveno := I;
+             Len := 512;
+             IoErr := CDread ( Loc, Buf.CV2blk, Len );
+
+             IF IoErr = 0 THEN
+                IF Buf.DI.DriveInit THEN
+                   BEGIN
+                   ENcrypt.CNameFld := Buf.DI.Drive;
+                   CVnameDECR(ENcrypt,
+                              DEcrypt);
+                   Drv[I].DrvName := DEcrypt.CNameFld;
+                   END
+                ELSE
+                   Drv[I].DrvName := '          '
+             ELSE
+                BEGIN
+                NiGetDrive := -I;
+                EXIT ( NiGetDrive );
+                END;
+             END;
+          END;   { For }
+       NiGetDrive := I - 1;
+       END;
+
+    END;   { NiGetDrive   }
+
+
+
+
+ {-----------------------------------------------------------------------}
+ { Procedure:     NiGetDirBlk                                            }
+ {                                                                       }
+ { Description:   This procedure reads a block from the corvus volume    }
+ {                directory specified. The location of the block on      }
+ {                the drive is returned in the LOC parameter. This       }
+ {                vector identifies the slot no., server no. or mux      }
+ {                indicator, and drive number....                        }
+ {                                                                       }
+ {-----------------------------------------------------------------------}
+
+ FUNCTION NiGetDirBlk { (VAR Loc: CDaddr;
+                             Blknum: INTEGER;
+                             VAR CVdirblk: Dirblk)
+                             : INTEGER};
+
+
+ VAR
+    Tblk:           CVsystbl;
+    IoErr:          INTEGER;
+    Len:            INTEGER;
+    DirBlkNo:       LONGINT;
+
+
+    BEGIN
+    IF (Blknum <  0) OR (Blknum > 5) THEN
+       BEGIN
+       NiGetDirBlk := BadDirBlkNo;
+       END
+    ELSE
+       BEGIN
+       {                                               }
+       { Read DRIVE.INFO block from specified drive to }
+       { get location of Corvus volume on this drive.. }
+       {                                               }
+       {                                               }
+       { NOTE: First two blocks of the Corvus volume   }
+       {       directory are unused....                }
+       {                                               }
+       Loc.Blkno := DiOffset;
+       Len := 512;
+       IoErr := CDRead (Loc, Tblk.CV2blk, Len);
+       IF IoErr = 0 THEN
+          BEGIN
+
+          {                                               }
+          { Read specified block from the directory....   }
+          { Return the address of the block to caller...  }
+          {                                               }
+          Len := 512;
+          Loc.Blkno:= Tblk.DI.Crvsaddr + Blknum ;
+          IoErr := CDread  ( Loc, CVdirblk.D2blk, Len );
+          END;
+       NiGetDirBlk := IoErr;
+       END;   { Else }
+   END;   { NiGetDirBlk }
+
+
+
+
+ {-----------------------------------------------------------------------}
+ { Procedure:     NiPutDirBlk                                            }
+ {                                                                       }
+ { Description:   This procedure writes a block to the  corvus volume    }
+ {                directory specified. The location of the volume on     }
+ {                the network is identified in the LOC parameter. This   }
+ {                vector identifies the slot no., server no. or mux      }
+ {                indicator, and drive number....                        }
+ {                                                                       }
+ {-----------------------------------------------------------------------}
+
+ FUNCTION NiPutDirBlk { (VAR Loc: CDaddr;             < Input   >
+                             Blknum: INTEGER;         < Input   >
+                             CVdirblk: Dirblk)        < Input   >
+                             :INTEGER};
+
+ VAR
+    IoErr:          INTEGER;
+    Len:            INTEGER;
+    Tblk:           CVsystbl;
+
+    BEGIN
+    NiPutDirBlk := 0;
+    IF (Blknum <  0) OR (Blknum > 5) THEN
+       BEGIN
+       NiPutDirBlk := BadDirBlkNo;
+       END
+    ELSE
+       BEGIN
+       {                                               }
+       { Read DRIVE.INFO block from specified drive to }
+       { get location of Corvus volume on this drive.. }
+       {                                               }
+       { NOTE: First two blocks of the Corvus volume   }
+       {       directory are unused....                }
+       {                                               }
+       Len := 512;
+       Loc.Blkno := DIoffset;
+       IoErr := CDread (Loc, Tblk.CV2blk, Len);
+       IF IoErr =  0 THEN
+          BEGIN
+          {                                               }
+          { Write specified block from the directory....  }
+          { Return the address of the block to caller...  }
+          {                                               }
+          Len := 512;
+          Loc.Blkno := Tblk.DI.Crvsaddr + Blknum;
+          IoErr := CDwrite( Loc,  CVdirblk.D2blk, Len);
+          END;
+       NiPutDirBlk := IoErr;
+       END;   { Else }
+   END;   { NiPutDirBlk }
+
+
+
+
+
+ {-----------------------------------------------------------------------}
+ { Procedure:     NiGetAddr                                              }
+ {                                                                       }
+ { Description:   This procedure returns the absolute disk address of a  }
+ {                file residing in the corvus volume area. The caller    }
+ {                must supply enough information to select the proper    }
+ {                drive on the network in the LOC parameter. Returned    }
+ {                is the start address in ADDR parameter. The block addr }
+ {                of the directory entry describing the file is returned }
+ {                in the LOC parameter. The length of the file is re-    }
+ {                turned in the LEN parameter. The directory block entry }
+ {                number is returned in the function call. If the file   }
+ {                does not exist the ADDR is set to zero....             }
+ {                                                                       }
+ {-----------------------------------------------------------------------}
+
+ FUNCTION NiGetAddr { (VAR Loc: CDaddr;              < Output   >
+                           Fname: Tid;               < Input    >
+                           VAR Addr: AbsDiskaddr;    < Output   >
+                           VAR Len: INTEGER)         < Output   >
+                           : INTEGER };
+
+
+ VAR
+    Tblk:           CVsystbl;
+    Ln:             INTEGER;
+    IoErr:          INTEGER;
+    Curblkno:       LONGINT;
+    Endblkno:       LONGINT;
+    Entryno:        INTEGER;
+    EntryFound:     BOOLEAN;
+    Dloc:           CDaddr;
+
+    BEGIN
+    {                                               }
+    { Read DRIVE.INFO block from specified drive to }
+    { get location of Corvus volume on this drive.. }
+    {                                               }
+    Addr := 0;
+    NiGetAddr := 0;
+    Loc.Blkno := DIoffset;
+    Ln := 512;
+    IoErr := CdRead (Loc, Tblk.CV2blk, Ln);
+
+    IF IoErr = 0 THEN
+       BEGIN
+       CurBlkno := Tblk.DI.Crvsaddr + DirKludge;   { Ptr to first block of volume directory  }
+       Dloc := Loc;
+       Dloc.Blkno := Tblk.DI.CrvsAddr;
+       Endblkno := Curblkno + 3;                   { Ptr to last block of volume directory   }
+       Entryfound := FALSE;                        { Setup entry found pointer....           }
+
+       REPEAT
+          Entryno := 1;                            { Start at first entry in in block....    }
+
+          {                                                }
+          { Read one block of the directory...             }
+          {                                                }
+          Loc.Blkno := CurBlkno;
+          Ln := 512;
+          IoErr := CdRead (Loc, Tblk.CV2blk, Ln);
+          IF IoErr = 0 THEN
+             BEGIN
+             REPEAT
+                IF Fname = Tblk.DE[Entryno].Dtid THEN
+                   BEGIN
+                   {                                          }
+                   { Entry found. Return block address, length}
+                   { of file, and entry no. of directory entry}
+                   {                                          }
+                   { NOTE:                                    }
+                   {                                          }
+                   { The IOERR is used to relay the entry no. }
+                   {                                          }
+                   Entryfound := TRUE;
+                   Addr:= Dloc.Blkno + Tblk.DE [ Entryno ].Firstblock;
+                   Len := Tblk.DE [Entryno ].Nextblock - Tblk.DE [Entryno ].Firstblock + 1;
+                   Loc.Blkno := CurBlkno;
+                   IoErr := Entryno;
+                   END
+                ELSE
+                   Entryno := Entryno + 1;
+                UNTIL ( (Entryno > MaxDirEnt) OR ( EntryFound) );
+             END;
+          Curblkno := Curblkno + 1;
+          UNTIL ((Curblkno > Endblkno) OR (EntryFound));
+       END;
+    NiGetAddr := IoErr;
+    END;   { NiGetAddr    }
+
+
+END.
+
+
+
+
+
+
+

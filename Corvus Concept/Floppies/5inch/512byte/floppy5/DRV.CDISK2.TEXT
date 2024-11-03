@@ -1,0 +1,1300 @@
+
+; File: drv.cdisk2.text
+; Date: 13-February-84
+
+        IDENT   DRVCDISK
+        GLOBAL  DRVCDISK
+
+; DRVCDISK - The Corvus OMNINET and LOCAL disk driver
+;
+; v 2.0  07-14-83   KB  driver for both local and omninet disk.
+;                       Based on drivers DRV.ODISK and DRV.LDISK
+;                       written by LEF.  CDISK2 uses the Transporter
+;                       driver.
+;
+;        09-15-83   KB  Added reset, format, and verify drive cmds
+;                       to no timeout list.
+;
+;        09-28-83   KB  forgot to move param blk address into A3
+;                       in DskST.
+;
+;        10-26-83   KB  retry on sends to disk server for NAKed msgs.
+;                       result codes : TooLong,NoSockt,HdrErr.
+;
+;        02-13-84  MEB  Add busy flag, return IOEtbliu when driver is
+;                       called and flag is set.
+;
+; PROBLEMS :
+;        1) Need to define timeouts for Local and Omninet disks.
+;           Are these drive command dependent?  Are they adaptive?
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.L - Count
+;               D3.L - Block Number
+;               D4.W - Command
+;               D5.W - Access Mode
+;
+;                   Input Parameters:              Result values:
+;     Command       Unit  Addr  Count Block Mode   IORESULT  Busy
+;
+;    0 - Install    D0.W                            D7.W
+;    1 - Read       D0.W  D1.L  D2.L  D3.L  D5.W    D7.W
+;    2 - Write      D0.W  D1.L  D2.L  D3.L  D5.W    D7.W
+;    3 - Clear      D0.W                            D7.W
+;    4 - Busy       D0.W                            D7.W     D0.B
+;    5 - Status     D0.W  D1.L  D2.L                D7.W
+;    6 - Unmount    D0.W                            D7.W
+
+; ----  include '/ccos/os.gbl.asm.text'    (not listed)
+        list 0
+        include '/ccos/os.gbl.asm.text'
+        list 1
+  page
+; Disk Driver Definitions - Local and OmniNet
+;
+; Commands
+;
+UNMCMD   EQU       6         ;unitunmount command
+UStat    EQU       5         ;unitstatus command
+
+; Transporter unit
+;
+OmniUnit EQU       3         ;MaxDev - OmniUnit = Unit # of Transporter driver
+FCEndCnst EQU      $84       ;function code = clear entry for socket $B0
+FCconst  EQU       4         ;function code = setup rcv on socket $B0
+
+; Corvus Disk commands
+;
+DskRead  equ    $32             ;disk read command
+DskWrit  equ    $33             ;disk write command
+
+; Arbitrary Corvus disk command send parameter block
+;
+DCmdBuff EQU       0                   ;lint - pointer to drive command
+DrvCLen  EQU       DCmdBuff+4          ;word - length of drive command
+SndBuff  EQU       DrvCLen+2           ;lint - Pointer to send buffer
+SndBLen  EQU       SndBuff+4           ;word - send buffer length
+RcvBuff  EQU       SndBLen+2           ;lint - Pointer to receive buffer
+RcvBLen  EQU       RcvBuff+4           ;word - receive buffer length
+SlotNmbr EQU       RcvBLen+2           ;word - slot number
+SrvrHost EQU       SlotNmbr+2          ;word - server host number
+TrueRcvd EQU       SrvrHost+2          ;word - actual number of bytes received
+DskRslt  EQU       TrueRcvd+2          ;word - disk return code
+CRWpbLen EQU       DskRslt+2           ;Length of parameter block
+
+; I/O address for slots
+;
+DskPort  EQU       $30000              ;Address of Apple slot 0 (non-existant)
+
+; Local Disk interface card register indices (off base register)
+;
+CrvsData EQU       1         ; Corvus controller data register
+CrvsStat EQU       3         ; Corvus controller status register
+
+; Local Disk interface card status register bit definitions
+;
+CRVScrdy EQU       7         ;controller ready, off - ready, on - not ready
+CRVSbdir EQU       6         ;bus direction ---
+                             ;off - host to controller, on - controller to host
+  page
+; OmniNet definitions
+;
+TOintvl equ     $FFFE   ;internal transporter function timeout interval
+
+; Transporter Return Codes
+;
+Waiting equ     $FF     ;driver puts in to show command NOT complete
+CmdAcpt equ     $FE     ;Socket setup successful
+Echoed  equ     $C0     ;echo command was successful
+
+GaveUp  equ     $80     ;aborted a send command after MaxRetries tries
+TooLong equ     $81     ;last message sent was too long for the receiver
+NoSockt equ     $82     ;sent to an uninitialized socket
+HdrErr  equ     $83     ;sender's header length did not match receiver's
+BadSock equ     $84     ;illegal socket number
+Inuse   equ     $85     ;tried to set up a receive on an active socket
+BadDest equ     $86     ;sent to an illegal host number
+
+; Transporter Opcodes
+;
+RecvOp  equ     $F0     ;SETUPRECV opcode
+SendOp  equ     $40     ;SENDMSG opcode
+InitOp  equ     $20     ;INIT opcode
+EndOp   equ     $10     ;ENDRECV opcode
+DebOp   equ     $08     ;PEEK/POKE opcode
+EchoOp  equ     $02     ;ECHOCMD opcode
+WhoOp   equ     $01     ;WHOAMI opcode
+
+RestSkt equ     $A0     ;dest. socket for REST packet
+CnstSkt equ     $B0     ;socket for Constellation protocol
+        page
+; OMNINET disk driver data area equates
+;
+SendData equ    0            ;byte - flag for int rtn for CurCmd
+RcvData equ     1+SendData   ;byte - flag for int rtn for Rcv complete
+
+; Drive command area
+;
+DCmd    equ     1+RcvData    ;byte - disk command offset
+DCdrv   equ     1+DCmd       ;byte - offset for drive number
+DCblklo equ     1+DCdrv      ;byte - LSB of block number to read or write
+DCblkhi equ     1+DCblklo    ;byte - MSB      "     "
+DClen   equ     (1+DCblkhi)-DCmd ;Length of drive command
+
+; result vector and header used for all setuprecv commands
+;
+RHdr    equ     4+DCmd       ;follows Drive command record
+RHpktRC equ     0+RHdr       ;byte - return code from transporter
+RHsor   equ     1+RHpktRC    ;byte - the source of the message
+RHpktLN equ     1+RHsor      ;word - total length of data portion of packet
+RHdskLN equ     2+RHpktLN    ;word - length of info returned from drive
+RHdskRC equ     2+RHdskLN    ;byte - return code from drive
+
+; result vector and header for all sendmsg commands
+;
+SHdr    equ     8+RHdr       ;follows Result record, force to even boundary
+SHpktRC equ     0+SHdr       ;byte - return code from transporter
+SHunu1  equ     1+SHpktRC    ;byte - unused
+SHunu2  equ     1+SHunu1     ;word - unused
+SHtoLN  equ     2+SHunu2     ;word - number of bytes to send to drive
+SHfmLN  equ     2+SHtoLN     ;word - number of bytes expected from drive
+
+GData   equ     8+SHdr       ;word - area to receive "GO" into
+
+; area used for constructing Transporter commands
+;
+TCmd    equ     2+GData      ;follows GO data space
+TCop    equ     0+TCmd       ;byte - op code
+TCrADhi equ     1+TCop       ;byte - result address HI
+TCrADlo equ     1+TCrADhi    ;word - result address MED, LO
+TCsock  equ     2+TCrADlo    ;byte - socket number
+TCdADhi equ     1+TCsock     ;byte - data buffer address HI
+TCdADlo equ     1+TCdADhi    ;word - data buffer address MED, LO
+TCdtaLN equ     2+TCdADlo    ;word - data length
+TChdrLN equ     2+TCdtaLN    ;byte - header length
+TCdest  equ     1+TChdrLN    ;byte - destination host number
+
+; Internal data areas
+;
+ODdw    equ     12+TCmd      ;lint - temporary buffer (for 3 byte nmbrs)
+ODdwhi  equ     1+ODdw       ;byte - temporary HI
+ODdwlo  equ     1+ODdwhi     ;word - temporary MID, LO
+ODwrAD  equ     2+ODdwlo     ;lint - save send data buffer address
+ODFlags equ     4+ODwrAD     ;word - bit flags
+ODerror equ     2+ODFlags    ;word - interrupt routine IOresult code
+
+;  Internal Flag word bit definitions
+;
+ODFdeq  equ     0            ;bit 0: 1 = wait for dequeue
+ODFsdone equ    1            ;bit 1: 1 = wait for send operation complete
+ODFrdone equ    2            ;bit 2: 1 = wait for rcv operation complete
+
+; parameter block for Transporter driver
+;
+PBlock  equ     2+ODerror    ;parameter block follows Cmd block
+PBcmd   equ     0+PBlock     ;lint - pointer to Tcmd
+PBproc  equ     4+PBcmd      ;lint - pointer to interrupt procedure
+PBuser  equ     4+PBproc     ;lint - save of A1 (user data field)
+
+ODdataLN equ    4+PBuser     ;length of entire data area
+  page
+;
+; Entry to disk driver
+;
+DRVCDISK bra.s     cDisk                         ;start of code
+         data.b    1                             ;device blocked
+         data.b    31                            ;valid commands - ALL
+         data.b    84,02,13,0                    ;date
+         data.b    hmlen                         ;header message length
+hm       data.b    'Corvus disk driver 2 (v 2.0f)'
+hmlen    equ       %-hm
+
+BusyFlag DATA.B    0,0         ; meb first byte=1: driver interrupted,
+                               ;                0: not busy
+
+cDisk    MOVEQ     #IOEioreq,D7                  ;assume invalid command
+         CMPI.W    #UNMCMD,D4                    ;VALID COMMAND
+         BHI.S     cDskERR                       ;no, exit
+         CLR.L     D7                            ;clear IOresult
+         MOVEM.L   D1-D6/A0-A6,-(SP)             ;SAVE REGISTERS
+         MOVE.W    SR,D6                         ; meb save Status Register
+         MOVE.W    #$2700,SR                     ; meb turn off interrupts
+         LEA       BUSYFLAG,A0                   ; meb
+         BSET      #0,(A0)                       ; meb if BusyFlag=1
+         BOFF.S    FlagOff                       ; meb
+         MOVEQ     #IOEtbliu,D7                  ; meb    then driver is busy:
+         MOVE.W    D6,SR                         ; meb         restore Status Reg,
+         BRA.S     cDskRet                       ; meb         exit
+                                                 ; meb else
+FlagOff  MOVE.W    D6,SR                         ; meb      turn interrupts back on
+         LEA       DskTabl,A0                    ;TURN THE COMMAND INTO A
+         LSL.W     #1,D4                         ;INDEX TO THE FUNCTION
+         MOVE.W    0(A0,D4.W),D4
+         JSR       0(A0,D4.W)                    ;DO FUNCTION
+         LEA       BUSYFLAG,A0                   ; meb common exit
+         CLR.B     (A0)                          ; meb BusyFlag = 0
+cDskRet  MOVEM.L   (SP)+,D1-D6/A0-A6             ;RESTORE registers
+cDskERR  RTS
+
+DskTabl  data.w    DskINST-DskTabl
+         data.w    DskRD-DskTabl
+         data.w    DskWR-DskTabl
+         data.w    DskCLR-DskTabl
+         data.w    DskBSY-DskTabl
+         data.w    DskST-DskTabl
+         data.w    DskUNMT-DskTabl
+  page
+;
+; DskBSY
+;
+; Returns: D0.B - Result
+;
+DskBSY   CLR.L     D0
+
+; DskCLR, DskINST, DskUNMT
+;
+DskUNMT
+DskINST
+DskCLR
+         RTS
+;
+;DevTblEntry - Fetches the beginning of the entry of the device table
+;              for this unit and the associated slot address.
+;
+;CANNOT USE A0
+;        Entry: D0 = unit number (destroyed)
+;        Exit : A4 = device table entry pointer
+;               (NE) = error and D7 = IOresult code
+;               (EQ) = good, A4 and A5 valid
+;
+; check unit number in range
+;
+DevTblEntry
+         TST.W     D0                            ;See if the volume is negative
+         BMI.S     DESerror                      ;NEGATIVE, bad unit number
+         MOVE.L    pSysCom.W, A4                 ;see if to large
+         MOVE.L    SCdevtab(A4), A4              ;PTR TO DEV TBL --> A4
+         CMP.W     (A4)+, D0                     ;Compare Vol num to MAXDEV
+         BLS.S     DESgood                       ;good unit number
+;
+DESerror MOVEQ     #IOEinvdev, D7                ;To large, bad unit number
+         BRA.S     DESexit
+
+;  Get the beginning of the device entry for this vol
+;
+DESgood  MULU      #UTlen, D0
+         ADDA.L    D0, A4
+
+DESexit  TST.W     D7
+         RTS
+  page
+;
+; DskRD/DskWR
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.L - Count
+;               D3.L - Block Number
+;               D5.W - Mode
+;
+; Returns:      D7.W = IOresult
+;
+DskRD    MOVEQ     #DskRead,D6         ;Set function to read
+         BRA.S     DskRdWr             ;Process disk read request
+
+DskWR    MOVEQ     #DskWrit,D6         ;Set function to write
+DskRdWr  EXG       D5, D6              ;save mode in D6 and function in D5
+         MOVE.L    D1,A0               ;A0 = buffer address
+
+; 1. Get pointer to Unit Table entry and I/O port address
+;
+         BSR.S     DevTblEntry         ;get device table address
+         BNE.S     Derr2               ;invalid unit number, exit
+
+         LEA       DskPort.L,A1        ; Get slot 0 address (non-existant)
+         MOVE.B    UTslt(A4),D4        ; Get slot number (1-4)
+         EXT.W     D4                  ; *
+         LSL.W     #5,D4               ; Compute disk port address for slot
+         ADDA.W    D4,A1               ; *
+
+; 1a. Check for unblocked I/O (Corvus disk controller commands)
+;
+         TST.W     D6                  ;Is this a Corvus disk command?
+         BNE.S     Derr2               ;Yes, set error return code
+
+; 2. Check for read only volume
+;
+         CMPI.B    #DskWrit,D5         ;Is this a "write"?
+         BNE.S     BlkIO               ;No, go on
+         TST.B     UTro(A4)            ;Is volume "read only"?
+         BNE.S     Derr16              ;Yes, set error return code
+
+; 3. Make sure block number is valid.
+;
+BlkIO    TST.L     D3                  ;Is block number negative?
+         BLT.S     Derr3               ;Yes. Error.
+         MOVE.L    D2,D4               ;Find final block
+         SUBQ.L    #1,D4               ;final = (cnt-1)
+         LSR.L     #8,D4               ;        div BlockSz
+         LSR.L     #1,D4               ;        + start block
+         ADD.L     D3,D4               ;D4 = final block number
+         CMP.L     UTsiz(A4),D4        ;Is final block nmbr > volume length?
+         BLE.S     DunitOK             ;No, go on
+  page
+Derr3    MOVEQ     #IOEioreq,D7        ;Set IORESULT to "invalid I/O request"  1.1
+         BRA.S     DskExit             ;Return
+Derr2    MOVEQ     #IOEinvdev,D7       ;Set IORESULT to "invalid device nmbr"  1.1
+         BRA.S     DskExit             ;Return
+Derr16   MOVEQ     #IOEwrprot,D7       ;Set IORESULT to "write protected"      1.1
+DskExit  BRA.S     DskRtrn             ;Return
+
+; 4. Compute absolute starting block number.
+;
+DunitOK  MOVE.L    UTblk(A4),D0        ;Get base block nmbr of volume
+         ADD.L     D3,D0               ;Add user block number
+         MOVE.B    UTdrv(A4),D1        ;D1 = drive number
+
+         MOVE.B    UTsrv(A4),D6        ;Get disk server number
+
+; 5. Process all whole blocks.
+;
+Dblcks   SUBI.L    #BlockSz,D2         ;Are there more whole blocks?
+         BLT.S     DRWbyte             ;No. See if any partial blocks
+         BSR.S     DRWsect             ;Read/write this block (D0-D2,D5-D6,A0-A1)
+         BNE.S     DskRtrn             ;IORESULT error, return
+         ADDQ.L    #1,D0               ;Bump block number
+         BRA.S     Dblcks              ;Process next block, if any
+  page
+; 6. Process any partial blocks
+;
+DRWbyte  ADDI.L    #BlockSz, D2        ;add in block size
+         BEQ.S     DskDone             ;if = 0 then no more left
+
+; 6a. Read in whole block
+;
+         MOVE.L    A0,A2               ;Save buffer pointer
+         SUBA.W    #BlockSz,SP         ;Get temp buffer
+         MOVE.L    SP,A0               ;  on the stack
+         MOVE.W    D5, -(SP)           ;Save r/w command
+         MOVEQ     #Dskread,D5         ;Make it Read to get in block
+         BSR.S     DRWsect             ;Read a whole block
+         MOVE.W    (SP)+, D5           ;Get disk command (straighten stack)
+         TST.W     D7                  ;got I/O error?
+         BNE.S     DRrmvbuf            ;if I/O error then remove buff and exit
+         MOVE.L    SP,A0               ;Reset pointer to temp buffer
+
+; 6b. Move partial data to true destination
+;
+         CMPI.W    #Dskread,D5         ;See if read or write
+         BEQ.S     DRWpread            ;it is read, move data to user buffer
+         EXG       A0,A2               ;move data to temp for Write
+
+DRWpread SUBQ.W    #1,D2               ;Do for (number of bytes)-1 to 0
+DRWmovp  MOVE.B    (A0)+,(A2)+         ;Copy byte to real dest
+         DBRA      D2,DRWmovp          ;  and loop
+
+; 6a. Write partial block.
+;
+         CMPI.W    #Dskread,D5         ;If Write then write back out temp
+         BEQ.S     DRrmvbuf            ;it is read, so done
+         MOVE.L    SP,A0               ;Reset pointer to temp buffer
+         BSR.S     DRWsect             ;Write temp buffer to block
+
+DRrmvbuf ADDA.W    #BlockSz,SP         ;Remove temp buffer
+
+DskDone
+DskRtrn  RTS                           ;Return
+  page
+;
+; DRWsect - call the correct disk support to get 1 block
+;        local or omninet, use slot number
+;
+; Parameters: A0.L - Buffer address
+;             A1.L - I/O port address
+;             A4.L - Device table entry address
+;             D0.L - Block number
+;             D1.W - Drive number
+;             D5.W - Read ($32) or Write ($33) command
+;             D6.B - Server number
+;
+; Returns:    A0.L - Next free location in buffer
+;             D7.W - IORESULT
+;
+; All other registers are preserved.
+;
+DRWsect  MOVEM.L   D0-D6/A1-A6,-(SP)             ; Save registers
+
+         LEA       LDRWsect, A3                  ; assume Local disk
+         MOVE.B    UTslt(A4), D4                 ;get slot number
+         CMPI.B    #5, D4                        ;is it omninet?
+         BNE.S     DRWlocal                      ;no, it is local
+         LEA       ODRWsect, A3                  ;use omninet disk rtn
+
+DRWlocal
+         JSR       (A3)                          ;call disk read/write rtn
+
+         MOVEM.L   (SP)+,D0-D6/A1-A6             ; Restore registers
+         TST.W     D7
+         RTS
+  page
+;********** BEGIN of LOCAL DISK CODE *****************************
+;
+; LDRWsect - Read or Write a disk block on a Local disk
+;
+; Parameters: A0.L - Buffer address
+;             A1.L - I/O port address
+;             D0.L - Block number
+;             D1.W - Drive number
+;             D5.W - Read ($32) or Write ($33) command
+;
+; Returns:    A0.L - Next free location in buffer
+;             D7.W - IORESULT
+;
+;        CrvsData = Corvus controller data register
+;        CrvsStat = Corvus controller status register
+;        Status bits...
+;          CRVScrdy = controller ready, off - ready, on - not ready
+;          CRVSbdir = bus direction ---
+;                     off - host to controller, on - controller to host
+;
+LDRWsect MOVE.W    D5,D2               ; Send a read ($32) or
+         BSR.S     LSndDsk1            ;   write ($33) block command
+         MOVE.L    D0,D2               ; Compute drive nmbr/MSN block nmbr
+         SWAP      D2                  ; Block # = 20 bits.  Put hi order 4 bits
+         LSL.W     #4,D2               ;   of block # in hi order nibble of drive
+         OR.B      D1,D2               ;   number byte.
+         BSR.S     LSndDsk             ; Send drive number and hi nibble block #
+         MOVE.W    D0,D2
+         BSR.S     LSndDsk             ; Send LSB of block number
+         LSR.W     #8,D2
+         BSR.S     LSndDsk             ; Send MSB of block number
+         CMPI.W    #DskWrit,D5         ; Are we reading or writing?
+         BNE.S     LDRread0            ; Reading
+
+; Write block processing
+;
+         MOVE.W    #BlockSz-1,D2       ; Block size - 1          1.1
+LDWloop  BTST      #CRVScrdy,CrvsStat(A1) ; Test controller status
+         BON.S     LDWloop             ; Wait until controller ready
+         MOVE.B    (A0)+,CrvsData(A1)  ; Send a byte
+         DBRA      D2,LDWloop          ; Loop until done
+         BSR.S     LWLine              ; Wait for line to turn
+         MOVE.B    CrvsData(A1),D7     ; Fetch result code
+         BRA.S     LDRWdone            ; Return
+  page
+;
+; Read block processing
+;
+LDRread0 BSR.S     LWLine              ; Wait for the line to turn
+         MOVE.B    CrvsData(A1),D7     ; Fetch result code
+
+LDRrdlop BTST      #CRVScrdy,CrvsStat(A1) ; Test controller status
+         BON.S     LDRrdlop            ; Wait until controller ready
+         BTST      #CRVSbdir,CrvsStat(A1) ; Test bus direction
+         BOFF.S    LDRWdone            ; Finished if "host to controller"
+         MOVE.B    CrvsData(a1),(a0)+  ; Store next byte
+         BRA.S     LDRrdlop            ; Go get any more
+
+LDRWdone BSR.S     LDErrChk            ; Check return code for error
+         RTS                           ; Return
+  page
+; NEED timeouts for talking to disk ????
+;
+; LSndDsk - Send a byte to the local disk port
+;
+;       Enter:  A1.L - I/O port address
+;               D2.B - Byte to send
+;
+;       All registers are preserved.
+;
+LSndDsk  BTST      #CRVScrdy,CrvsStat(A1) ; Test controller status
+         BON.S     LSndDsk             ;Wait until controller ready
+         MOVE.B    D2,CrvsData(A1)     ;Send the byte
+         RTS
+;
+; LSndDsk1 -- Send first byte to the local disk port
+;
+;       Enter:  A1.L - I/O port address
+;               D2.B - Byte to send
+;
+;       All registers are preserved.
+;
+LSndDsk0 MOVE.W    (SP)+,SR            ;enable interrupts
+         NOP                           ;leave some time for interrupt
+         NOP                           ;processing
+LSndDsk1 MOVE.W    SR,-(SP)            ;save interrupt level
+         ORI.W     #$0700,SR           ;disable interrupts
+         BTST      #CRVScrdy,CrvsStat(A1) ; Test controller status
+         BON.S     LSndDsk0            ;wait until controller ready
+         MOVE.B    D2,CrvsData(A1)     ;send first byte
+         MOVE.W    (SP)+,SR            ;enable interrupts
+         RTS                           ;return
+;
+; LWLine - Wait for the line to turn On Local
+;
+;       Enter:  A1.L - I/O port address
+;
+LWLine   MOVE.L    D0,-(SP)            ;save register
+         MOVEQ     #20,D0
+LDwait1  DBRA      D0,LDwait1          ;wait a little bit
+         BSR.S     LDwait2             ;check two times in case of glitch
+         MOVE.L    (SP)+,D0            ;restore register
+
+LDwait2  BTST      #CRVScrdy,CrvsStat(A1) ;Test controller status
+         BON.S     LDwait2             ;wait until controller ready
+         BTST      #CRVSbdir,CrvsStat(A1) ;Test bus direction
+         BOFF.S    LDwait2             ;wait until "controller to host"
+         RTS
+  page
+;
+; LDErrChk - Convert Corvus disk return code to IOresult code
+;
+;       Enter:  D7.B - Corvus Disk return code
+;       Exit :  D7.W - IOresult code for disk return code
+;               D0.L - CLOBBERED
+;
+LDErrChk CLR.L     D0                  ;assume no errors
+         TST.B     D7                  ;Error reported by controller?
+         BPL.S     LDErr90             ;No
+
+; Determine error type
+;
+         MOVEQ     #IOEnebhrd, D0      ;Set IORESULT to "hardware error"
+         ANDI.B    #$1F, D7            ;Remove upper bits
+         CMPI.B    #$1D, D7            ;beyond known error codes?
+         BHI.S     LDErr90             ;yes, give "hardware error"
+
+; Get IOresult code from table
+;
+         LEA       LDErrCodes, A6      ;address of Disk error/IOresult table
+         MOVE.B    0(A6,D7), D0        ;get IOresult code (hi byte already clear)
+
+LDErr90  MOVE.W    D0, D7              ;Set D7 with IOresult
+         RTS
+
+; Disk Error Code to IOresult code table
+;
+LDErrCodes
+         DATA.B    IOEseek,IOEseek,IOEseek,IOEseek         ;1st 4 seek errors
+         DATA.B    IOEcrcer                                ;header crc error
+         DATA.B    IOEnoT0,IOEnoT0                         ;restore errors
+         DATA.B    IOEoffln                                ;drive off-line
+         DATA.B    IOEnebhrd,IOEnebhrd,IOEnebhrd           ;data faults
+         DATA.B    IOEcrcer                                ;data crc error
+         DATA.B    IOEnfmtd                                ;sector locate error
+         DATA.B    IOEwrprot                               ;write protected
+         DATA.B    IOEinvblk                               ;illegal sector address
+         DATA.B    IOEbadcmd                               ;illegal disk command
+         DATA.B    IOEoffln,IOEoffln                       ;Acknowledge problems
+         DATA.B    IOEdrvTO                                ;drive timeout
+         DATA.B    IOEnebhrd                               ;faults
+         DATA.B    IOEcrcer                                ;crc error
+         DATA.B    IOEseek                                 ;seek error
+         DATA.B    IOEnebhrd                               ;verification
+         DATA.B    IOEsvrdrv,IOEsvrdrv,IOEsvrdrv           ;last 7 severe drive errors
+         DATA.B    IOEsvrdrv,IOEsvrdrv,IOEsvrdrv,IOEsvrdrv
+
+;********** END of LOCAL DISK CODE *****************************
+  page
+;********** Rest of the driver is *****************************
+;********** the OMNINET DISK CODE *****************************
+;
+; ODRWsect - Read or Write a disk block on a Omninet disk
+;
+; Parameters: A0.L - Buffer address
+;             D0.L - Block number
+;             D1.W - Drive number
+;             D5.W - Read ($32) or Write ($33) command
+;             D6.B - Server number
+;
+; Returns:    A0.L - Next free location in buffer
+;             D7.W - IORESULT
+;
+ODRWsect SUBA.W    #ODdataLN, SP       ;allocate temporary data space
+         MOVE.L    SP, A1              ;save data space address
+         CLR.W     ODFlags(A1)         ;clear all flags
+         MOVE.B    D5,DCmd(A1)         ;set disk command - read or write
+         MOVE.B    D0,DCBlkLo(A1)      ;set low order byte of block number
+         LSR.L     #8,D0               ;set high order byte of block number
+         MOVE.B    D0,DCBlkHi(A1)      ;block number = 20 bits
+         CLR.B     D0                  ;put high order nibble of block number
+         LSR.W     #4,D0               ;   with drive number in the hi order
+         OR.B      D1,D0               ;   nibble
+         MOVE.B    D0,DCDrv(A1)        ;set drive number and hi nibble block #
+         MOVEQ     #-1, D3             ;show check disk result code
+         MOVE.B    #SendOp, SendData(A1) ;set send and rcv interrupt
+         MOVE.B    #RecvOp, RcvData(A1) ;    flags
+         MOVE.L    A0,ODwrAD(A1)       ;save address of the buffer
+
+         CMPI.W    #DskWrit,D5         ;Are we reading or writing?
+         BNE.S     ODRsect             ;Reading
+
+ODWsect  MOVE.W    #BlockSz+DClen,SHtoLN(A1) ;number of bytes to send to drive
+         CLR.W     SHfmLN(A1)          ;number of bytes expected back
+         LEA       GData(A1), A0       ;pointing to area to receive data
+         BSR       LongCmds            ;Writing
+         BRA.S     ODRWdone            ;return
+
+ODRsect  MOVE.W    #DClen,SHtoLN(A1)   ;number of bytes to send to drive
+         MOVE.W    #BlockSz,SHfmLN(A1) ;number of bytes expected back
+         BSR       ShortCmds
+
+ODRWdone MOVE.L    ODwrAD(A1), A0      ;restore user's buffer address
+         ADDA.W    #BlockSz, A0        ;Update buffer pointer
+         CLR.W     (A1)                ;clear the send/recv flags
+         ADDA.W    #ODdataLN, SP       ;remove temporary data space
+         RTS
+  page
+;
+; IntrptRtn -- Interrupt routine for interrupt call from Transporter
+;              driver.
+;
+; Transporter driver interrupt routine saves all registers before calling.
+;
+;       Enter:  on stack starting at TOS after Return Address
+;                  UserData  - lint    {ptr to OD data area}
+;                  BufferPtr - lint    {ptr to buffer send/rcv}
+;                  ResultPtr - lint    {ptr to transporter result vector}
+;                  ErrorCode - word    {IOresult code from dequeue}
+;                  DequeueFg - word    {Dequeue flag, 1=dequeue call}
+;
+IntrptRtn
+         MOVE.L    (SP)+, A0           ;get return address
+         MOVE.L    (SP)+, A1           ;pointer to driver data area
+         MOVE.L    (SP)+, A2           ;buffer pointer
+         MOVE.L    (SP)+, A3           ;result vector pointer
+         MOVE.W    (SP)+, D2           ;IOresult code
+         MOVE.W    (SP)+, D0           ;get dequeue flag
+
+; make sure valid data area - timeout may lose data on stack
+;
+         MOVE.B    (A1), D1            ;get interrupt flag
+         CMPI.B    #SendOp, D1         ;is it send type operation?
+         BEQ.S     INTsend             ;yes
+         CMPI.B    #RecvOp, D1         ;is it receive type operation?
+         BNE.S     INTexit             ;no, then exit right away
+         SUBQ.L    #1, A1              ;Recv, move pointer to begin of data area
+
+INTsend  TST.W     D0                  ;if dequeue = 0 then command completed
+         BEQ.S     INTdone             ;operation completed
+
+; dequeue operation - inform driver
+;
+INTdeq   MOVE.W    D2, ODerror(A1)     ;save IOresult code
+         BCLR      #ODFdeq, ODFlags(A1) ;tell driver "dequeue completed"
+         BRA.S     INTexit
+
+; command has completed inform the driver
+;
+INTdone  CMPI.B    #SendOp, D1         ;is it send type operation?
+         BEQ.S     INTsdone            ;yes
+         BCLR      #ODFrdone, ODFlags(A1) ;tell driver recieve "done"
+         BRA.S     INTexit
+INTsdone BCLR      #ODFsdone, ODFlags(A1) ;tell driver send "done"
+INTexit  JMP       (A0)                ;exit back to Transporter driver
+  page
+; CallDrvr -- Build the Transporter driver parameter block and send
+;             it to the driver.
+;
+;       Enter:  A1 = pointer to data area with initialized
+;                    Transporter command block.
+;               D0 = function code (0 for curcmd, 1..4 rcv)
+;
+;       Exit:   D7 = IOresult
+;               EQ = successful
+;               NE = I/O error
+;       All other registers are preserved  (D0 clobbered)
+;
+CallDrvr MOVEM.L   D1-D2/A0, -(SP)     ;save temp regs
+
+; setup parameter block
+;
+         MOVEA.L   A1, A0              ;Address of data area
+         TST.B     D0                  ;if send set send flag
+         BLE.S     CDRsend             ;is a send or end receive
+         ADDQ.L    #1, A0              ;receive, point at receive flag
+         BSET      #ODFrdone, ODFlags(A1) ;wait for operation to complete
+         BRA.S     CDRparm
+CDRsend  BSET      #ODFsdone, ODFlags(A1) ;wait for operation to complete
+
+CDRparm  MOVE.L    A0, PBuser(A1)      ;ptr to flag and data area
+         PEA       IntrptRtn
+         MOVE.L    (SP)+, PBproc(A1)   ;put in int rtn address
+         PEA       TCmd(A1)
+         MOVE.L    (SP)+, PBcmd(A1)    ;put in Transporter cmd block address
+
+         BSET      #ODFdeq, ODFlags(A1)  ;wait if must dequeue
+
+; call driver unitstatus function
+;
+         PEA       PBlock(A1)          ;parameter block goes
+         MOVE.L    (SP)+, D1           ;  in D1
+         MOVE.W    D0, D2              ;function code
+         MOVEQ     #UStat, D4          ;command = unitstatus
+
+         MOVEA.L   pSysCom.W, A0       ;A0 = pointer to syscom
+         MOVEA.L   SCdevtab(A0), A0    ;A0 = ptr to device tabe
+         MOVE.W    (A0)+, D0           ;Transporter driver unit number =
+         SUBQ.W    #OmniUnit, D0       ;    MaxDev - 3
+         MULU      #UTlen, D0          ;get index to dev tab entry
+         MOVEA.L   UTiodrv(A0,D0), A0  ;A0 = driver entry point
+         JSR       (A0)                ;call Transporter driver (saves all regs)
+
+; check IOresult for queued command
+;
+         CMPI.W    #IOEquereq, D7      ;queued?
+         BNE.S     CDRexit             ;no, clear dequeue wait flag
+CDRwait  BTST      #ODFdeq, ODFlags(A1) ;make sure not waiting for dequeue
+         BOFF.S    CDRwait             ;wait until dequeued ??? timeout ?????
+         MOVE.W    ODerror(A1), D7     ;get IOresult code
+
+CDRexit  BCLR      #ODFdeq, ODFlags(A1) ;make sure not waiting for dequeue
+         MOVEM.L   (SP)+, D1-D2/A0     ;restore temp regs
+         TST.W     D7                  ;show NE if error
+         RTS
+  page
+; ODcomnd -- send simple command to Transporter
+;
+;   Valid commands for routine :  End Receive, Initialize,
+;                                 Who Am I, Echo.
+;
+;   Invalid commands :  Peek/Poke, Setup Receive, Send.
+;
+;       Enter:  D0.B - Transporter command
+;               D1.B - Socket number, if End Receive
+;                      Destination Host, if Echo
+;               D4.B - Transporter driver function code
+;
+;       Exit:   D7.B - IORESULT
+;
+ODcomnd  MOVEM.L   A1-A2/D0,-(SP)      ;save registers
+         SUBA.W    #ODdataLN, SP       ;allocate temporary data space
+         MOVE.L    SP, A1              ;save data space address
+         CLR.W     ODFlags(A1)         ;clear all flags
+         MOVE.B    #SendOp, SendData(A1) ;set send and rcv interrupt
+         MOVE.B    #RecvOp, RcvData(A1) ;    flags
+         PEA       RHdr(A1)            ;get pointer to result record
+         MOVE.L    (SP)+,TCop(A1)      ;set result record pointer
+         MOVE.B    D0,TCop(A1)         ;set Transporter command
+         MOVE.B    D1,TCsock(A1)       ;set socket number (if ENDRECV)
+         MOVE.B    #Waiting,RHpktRC(A1) ;set Transporter waiting flag
+         MOVE.W    D4, D0              ;pass the function code
+         BSR       CallDrvr            ;send command to Transporter
+         BNE.S     ODcmd9              ;I/O error, exit
+
+; wait for response
+;
+         MOVE.W    #TOintvl,D0         ;get timeout interval
+ODcmd1   BTST      #ODFsdone, ODFlags(A1) ;is it done?
+         BOFF.S    ODcmd9              ;yes, ready to return
+         DBRA      D0,ODcmd1           ;timeout yet?
+         MOVEQ     #IOEnotrn, D7       ;yes, set timeout error and return
+
+ODcmd9   CLR.W     (A1)                ;clear the send/recv flags
+         ADDA.W    #ODdataLN, SP       ;remove temporary data space
+         MOVEM.L   (SP)+,A1-A2/D0      ;restore registers
+         RTS
+;
+; EndRecv -- end receive on disk server socket
+;  If get INUSE error from driver then curcmd entry is in use, should retry???
+;
+EndRecv  MOVEM.L   D0-D1,-(SP)         ;save registers
+         MOVE.W    #EndOp,D0           ;set command to ENDRECV
+         MOVE.W    #CnstSkt,D1         ;set socket number
+         MOVE.W    #FCEndCnst, D4      ;function code to clear socket
+         BSR.S     ODcomnd             ;do ENDRECV on disk server socket
+         MOVEM.L   (SP)+,D0-D1         ;restore registers
+         MOVEQ     #0,D7               ;set no error IOresult
+         RTS                           ;return
+  page
+;
+; SetGo -- set up a receive for the 'GO' packet
+;
+SetGo    MOVE.W    SHtoLN(A1), -(SP)       ;save to length (used in SCexit)
+         MOVE.W    #2,TCdtaLN(A1)          ;2 bytes of data, "GO"
+         CLR.B     TChdrLN(A1)             ;no header (user control data)
+         PEA       GData(A1)               ;put address of "GO" data area
+         MOVE.L    (SP)+,ODdw(A1)          ;  into the data buffer address
+         MOVE.B    ODdwhi(A1),TCdADhi(A1)  ;  field in the command block
+         MOVE.W    ODdwlo(A1),TCdADlo(A1)
+         BRA.S     SetGo1
+;
+; SetRecv -- set up a receive for the disk results and read data
+;            returns result in D0
+;
+SetRecv  MOVE.W    SHtoLN(A1), -(SP)       ;save to length (used in SCexit)
+         MOVE.L    A0,ODdw(A1)             ;put data buffer address
+         MOVE.B    ODdwhi(A1),TCdADhi(A1)  ;  into the data buffer address
+         MOVE.W    ODdwlo(A1),TCdADlo(A1)  ;  field in the command block
+         MOVE.W    SHfmLN(A1),TCdtaLN(A1)
+         MOVE.B    #3,TChdrLN(A1)          ;disk results have a hdr len of 3
+
+SetGo1   MOVE.B    #Waiting,RHpktRC(A1)    ;set result to FF to see it change
+         PEA       RHdr(A1)                ;load result vector address
+         MOVE.L    (SP)+,ODdw(A1)          ;   into command block
+         MOVE.B    ODdwhi(A1),TCrADhi(A1)
+         MOVE.W    ODdwlo(A1),TCrADlo(A1)
+         MOVE.B    #RecvOp,TCop(A1)        ;set up a receive
+         MOVE.B    #CnstSkt,TCsock(A1)     ;  on socket $B0
+
+         MOVEQ     #FCconst, D0            ;setup receive on socket $B0 function code
+         BSR       CallDrvr                ;send command to Transporter
+         MOVE.W    D7, D0                  ;put IOresult in D0
+
+; Just exit, Transporter driver waits for Receive setup completed
+;
+         BRA       SCexit                  ;Exit, convert to IOresult code
+  page
+; SndRest -- send the rest of the data (from long command) to the disk server
+;            result of call is in D0, 0 = success
+;
+SndRest  MOVE.W    SHtoLN(A1), -(SP)       ;save to length  (used in SCexit)
+         MOVEQ     #2, D1                  ;retry on NAKs and give ups  *kb 10/26/83*
+         MOVE.B    ODwrAD+1(A1),TCdADhi(A1) ;put data buffer address in cmd block
+         MOVE.W    ODwrAD+2(A1),TCdADlo(A1) ;Setup by ODRWsect or other caller of Longcmds
+         MOVE.B    #RestSkt,TCSock(A1)     ;send rest of data to socket $A0
+         SUBQ.W    #4,SHtoLN(A1)           ;send data, already sent 4 byte cmd
+         BGE.S     SC20                    ;if don't branch error ????
+         CLR.W     SHtoLN(A1)              ;result was negative, make it zero
+SC20     MOVE.W    SHtoLN(A1),TCdtaLN(A1)  ;put length sending in cmd block
+         CLR.B     TChdrLN(A1)             ;no user header for sending the
+         BRA.S     SendIt                  ;    rest packets
+;
+; SndCmds -- send a disk command to the disk server
+;            result of call is in D0, 0 = success
+;
+SndCmds  MOVE.W    SHtoLN(A1), -(SP)       ;save to length  (used in SCexit)
+         MOVEQ     #2, D1                  ;retry on NAKs and give ups  *kb 10/26/83*
+         PEA       DCmd(A1)                ;data is the Disk command
+         MOVE.L    (SP)+,ODdw(A1)          ;put data buffer address
+         MOVE.B    ODdwhi(A1),TCdADhi(A1)  ;  in command block
+         MOVE.W    ODdwlo(A1),TCdADlo(A1)
+         MOVE.B    #CnstSkt,TCsock(A1)     ;send command to socket $B0
+         MOVE.W    SHtoLN(A1),TCdtaLN(A1)  ;assume to length is <= 4
+         CMPI.W    #4,SHtoLN(A1)           ;are we sending less than 4 bytes
+         BLS.S     SCshort                 ;yes
+         MOVE.W    #4,TCdtaLN(A1)          ;disk command is 4 bytes long
+SCshort  MOVE.B    #4,TChdrLN(A1)          ;send header is 4 bytes
+
+SendIt   MOVE.B    D6,TCdest(A1)           ;dest host number is disk server host #
+         MOVE.B    #Waiting,SHpktRC(A1)    ;set result to FF to see it change
+         PEA       SHdr(A1)                ;put send result vector address
+         MOVE.L    (SP)+,ODdw(A1)          ;into the command block
+         MOVE.B    ODdwhi(A1),TCrADhi(A1)
+         MOVE.W    ODdwlo(A1),TCrADlo(A1)
+         MOVE.B    #SendOp,TCop(A1)        ;sendmsg opcode
+         CLR.L     D0                      ;CurCmd socker function code
+         BSR       CallDrvr                ;send command to Transporter
+         MOVE.W    D7, D0                  ;save IOresult code
+         BNE.S     SCexit                  ;Error exit
+
+         MOVE.L    #$F0000, D0             ;time out counter while waiting for
+SCwait   BTST      #ODFsdone, ODFlags(A1)  ;   internal transporter function
+         BOFF.S    SCdone                  ;done
+         SUBQ.L    #1, D0                  ;see if timed out
+         BNE.S     SCwait                  ;no try again
+
+SCdone   MOVE.B    SHpktRC(A1), D0         ;get transporter error code
+         CMPI.B    #TooLong, D0            ;get NAK because of bad msg? *kb 10/26/83*
+         BEQ.S     SCrtry                  ;yes, try again              *kb 10/26/83*
+         CMPI.B    #NoSockt, D0            ;get NAK because of bad msg? *kb 10/26/83*
+         BEQ.S     SCrtry                  ;yes, try again              *kb 10/26/83*
+         CMPI.B    #HdrErr, D0             ;get NAK because of bad msg? *kb 10/26/83*
+         BEQ.S     SCrtry                  ;yes, try again              *kb 10/26/83*
+         CMPI.B    #GaveUp, D0             ;did disk srvr accept message?
+SCrtry   DBNE      D1, SendIt              ;no, Retry again if can      *kb 10/26/83*
+
+SCerr1   BSR.S     ODtrnChk                ;convert transporter error code
+SCexit   MOVE.W    (SP)+, SHtoLN(A1)       ;restore length in case of restart
+         TST.W     D0
+         RTS
+  page
+;
+; ODtrnChk - convert Transporter result code to IOresult code
+;
+;        Enter: D0.B = Transporter Error code
+;        Exit : D0.W = IOresult code
+;
+ODtrnChk MOVE.L    A0, -(SP)           ;save A0 for internal use
+         TST.B     D0                  ;if not negative
+         BPL.S     ODTCgood            ;then no error
+         LEA       TPErrCodes, A0      ;address of IOresult codes
+         CMPI.B    #Waiting,D0         ;timeout while waiting for Transporter?
+         BEQ.S     ODTCto              ;yes
+
+         ANDI.W    #$FF, D0            ;clear hi byte of word
+         CMPI.W    #GaveUp, D0         ;is code in range of error codes
+         BLT.S     ODTCgood            ;returned by the Transporter?
+         CMPI.W    #BadDest, D0
+         BLS.S     ODTCbad             ;yes
+
+ODTCgood CLR.L     D0                  ;no, then show success
+         BRA.S     ODTCexit
+
+ODTCbad  ANDI.W    #7, D0              ;turn code into index into table
+         MOVE.B    0(A0,D0), D0        ;get code from table
+         BRA.S     ODTCexit            ;exit
+
+ODTCto   MOVEQ     #IOEtimot,D0        ;time out code
+
+ODTCexit MOVE.L    (SP)+, A0
+         EXT.W     D0
+         RTS
+
+; Transporter error code to IOresult code table
+;
+TPErrCodes
+         DATA.B    IOEtimot  ;GaveUp  aborted a send command after MaxRetries
+         DATA.B    IOEtrnpdt ;TooLong last message sent was too long for the receiver
+         DATA.B    IOEnobuf  ;NoSockt sent to an uninitialized socket
+         DATA.B    IOEtrnpdt ;HdrErr  sender's header length did not match receiver's
+         DATA.B    IOEtblid  ;BadSock illegal socket number
+         DATA.B    IOEtbliu  ;Inuse   tried to set up a receive on an active socket
+         DATA.B    IOEtrnpdt ;BadDest sent to an illegal host number
+
+         DATA.B    0         ;fill, put it on even boundary
+  page
+;
+; DskSrvTO -- Disk server timeout subroutine
+; ---- get timeout from dev table or parm block -> unitstatus  ????
+;
+DskSrvTO
+         MOVEM.L   D1/A2,-(SP)         ;save registers
+Dsto0    MOVE.L    #$400000,D1         ;set timeout counter              1.1
+                                       ;   ($100000 = approx 14 seconds) 1.1
+                                       ;   ($400000 = approx 56 seconds) 1.1
+Dsto1    BTST      #ODFrdone, ODFlags(A1) ;did Rcv operation complete?
+         BOFF.S    Dsto3               ;yes, check Transporter return code
+         SUBQ.L    #1,D1               ;decrement timeout counter
+         BNE.S     Dsto1               ;no timeout, check again
+
+; Only time out if not doing mirror type commands
+;
+         LEA       DstoCmd,A2          ;list of mirror type commands
+         MOVE.B    (A2)+,D1            ;number of commands - 1
+         MOVE.B    DCmd(A1),D0         ;get disk command
+                                       ;
+Dsto2    CMP.B     (A2)+,D0            ;is mirror type command
+         BEQ.S     Dsto0               ;yes, wait some more
+         DBRA      D1,Dsto2            ;
+                                       ;not mirror type,error exit
+         MOVEQ     #IOEtimot,D0        ;set timeout result
+         BRA.S     Dsto9
+
+Dsto3    MOVE.B    RHpktRC(A1),D0      ;get Transporter return code
+         BSR.S     ODtrnChk            ;convert Transporter error code to IOresult
+Dsto9    MOVEM.L   (SP)+,D1/A2         ;restore registers
+         TST.W     D0                  ;set return condition code
+         RTS
+
+DstoCmd  DATA.B  DstoNbr-1             ;nmbr of commands - 1
+         DATA.B  $8,9,$A,$C,$D         ;MIRROR type commands
+         DATA.B  0,1,7                 ;FORMAT type commands  *kb 9/15/83*
+DstoNbr  EQU     (%-DstoCmd)-1         ;number of commands
+         DATA.B  0                     ;FILL                  *kb 9/15/83*
+  page
+; LongCmds
+;
+;        Enter :  A0 = pointer to receive data buffer
+;                 DCmd(A1) = user control data
+;                 ODwrAD(A1) = pointer to send data buffer
+;        Exit  :  D7 = IOresult code
+;
+; 1. set up a receive for the GO message
+;
+LongCmds
+Lcmd1    BSR       SetGo
+         BNE       LcmdErr             ;if NE then fatal Transporter error
+
+; 2. send disk command
+;
+         BSR       SndCmds
+         BNE       LcmdErr             ;if NE then fatal Transporter error
+
+; 3. wait to receive GO
+;
+Lcmd2    BSR.S     DskSrvTO            ;wait for data from disk server
+         BEQ.S     Lcmd3               ;no error, go on
+         CMPI.W    #IOEtimot,D0        ;timeout error?
+         BNE.S     LcmdErr             ;no, set error return
+         BSR       DskSrvFl            ;flush disk server request
+         BRA.S     Lcmd1               ;start disk server request over
+
+; 4. validate GO packet
+;
+Lcmd3    MOVE.B    TCdest(A1),D0       ;get host number of sender
+         CMP.B     RHsor(A1),D0        ;did response come from the right place?
+         BNE.S     Lcmd4               ;no, wait for right response
+         BTST      #7,Gdata(A1)        ;disk server restart?
+         BON.S     LongCmds            ;yes, start request over
+         CMPI.W    #'GO',Gdata(A1)     ;get the correct response?
+         BEQ.S     Lcmd5               ;got the "GO"
+
+Lcmd4    BSR       SetGo               ;set up for GO receive again
+         BNE.S     LcmdErr             ;error
+         BRA.S     Lcmd2               ;wait for GO
+
+; 5. set up receive for results
+;
+Lcmd5    BSR       SetRecv
+         BNE.S     LcmdErr             ;if NE then fatal Transporter error
+
+; 6. send REST
+;
+         BSR       SndRest
+         BEQ.S     Lcmd6               ;sent, wait for results
+         CMPI.W    #IOEnobuf, D0       ;was socket uninitialezed
+         BEQ.S     Lcmd1               ;yes, then restart command
+         BRA.S     LcmdErr             ;no, then fatal error
+  page
+; 7. wait for results
+;
+Lcmd6    BSR       DskSrvTO            ;wait for data from disk server
+         BEQ.S     Lcmd7               ;no error, go on
+         CMPI.W    #IOEtimot,D0        ;timeout error?
+         BNE.S     LcmdErr             ;no, set error return
+         BSR       DskSrvFl            ;flush disk server request
+         BRA.S     Lcmd1               ;start disk server request over
+
+; 8. validate results
+;
+Lcmd7    MOVE.B    TCdest(A1),D0       ;get host number of sender
+         CMP.B     RHsor(A1),D0        ;did response come from the right place?
+         BEQ.S     Lcmd8               ;yes, then check for restart
+         BSR       SetRecv             ;no, set up receive again....
+         BNE.S     LcmdErr             ;if NE then fatal Transporter error
+         BRA.S     Lcmd6               ;go back and wait again...
+
+Lcmd8    BTST      #7,RHdskLN(A1)      ;disk server restart?
+         BON       Lcmd1               ;yes, start request over
+
+; 9. done, check disk result code
+;
+LcmdOK   CLR.L     D0                  ;assume shouldn't check disk return code
+         TST.L     D3                  ;should?
+         BEQ.S     LcmdErr             ;no, show no IOresult error
+         MOVE.B    RHdskRC(A1), D7     ;get disk return code then
+         BSR       LDErrChk            ; convert to IOresult code
+         MOVE.W    D7, D0              ;save IOresult
+
+LcmdErr  BSR       EndRecv             ;end receive on disk server socket
+         MOVE.W    D0, D7              ;get error return code
+         RTS                           ;return for ShortCmds and LongCmds
+  page
+; ShortCmds
+;
+;        Enter :  A0 = pointer to receive data buffer
+;                 DCmd(A1) = user control data
+;                 ODwrAD(A1) = pointer to send data buffer
+;        Exit  :  D7 = IOresult code
+;
+; retry counts for number of flushes ?????
+
+; 1. set up a receive for the results
+;
+ShortCmds
+Scmd1    BSR       SetRecv
+         BNE.S     LcmdErr             ;if NE then fatal Transporter error
+
+; 2. send disk command to disk server
+;
+         BSR       SndCmds
+         BNE.S     LcmdErr             ;if NE then fatal Transporter error
+
+; 3. wait to receive results
+;
+Scmd2    BSR       DskSrvTO            ;wait for data from disk server
+         BEQ.S     Scmd3               ;no error, go on
+         CMPI.W    #IOEtimot,D0        ;timeout error?
+         BNE.S     LcmdErr             ;no, set error return
+         BSR       DskSrvFl            ;flush disk server request
+         BRA.S     Scmd1               ;restart disk server request
+
+; 4. validate results
+;
+Scmd3    MOVE.B    TCDest(A1),D0       ;get host number of sender
+         CMP.B     RHsor(A1),D0        ;did response come from the right place?
+         BNE.S     Scmd4               ;no
+         BTST      #7,RHdskLN(A1)      ;disk server restart?
+         BON.S     Scmd1               ;yes, start request over
+         BRA.S     LcmdOK              ;no, done with request
+
+Scmd4    BSR       SetRecv             ;set up receive again....
+         BNE.S     LcmdErr             ;if NE then fatal Transporter error
+         BRA.S     Scmd2               ;go back and wait again...
+  page
+;
+; DskSrvFL -- Disk server flush subroutine
+;
+DskSrvFL BSR       EndRecv             ;end receive on disk server socket
+         MOVE.W    SHtoLN(A1),-(SP)    ;save original to and
+         MOVE.W    SHfmLN(A1),-(SP)    ;*    from length
+         CLR.W     SHtoLN(A1)          ;set to and from length
+         CLR.W     SHfmLN(A1)          ;*    to zero (0)
+         BSR       SndCmds             ;flush disk server
+         MOVE.W    (SP)+,SHfmLN(A1)    ;restore original to and
+         MOVE.W    (SP)+,SHtoLN(A1)    ;*    from length
+         MOVE.L    #$060000, D0        ;set timeout counter
+                                       ;   ($060000 = approx 5 seconds)
+Dsfl1    NOP                           ;use some instruction and
+         NOP                           ;  fetch time
+         NOP
+         SUBQ.L    #1, D0              ;decrement timeout counter
+         BNE.S     Dsfl1               ;no timeout, wait some more
+         RTS                           ;return
+  page
+;
+; DskST - unitstatus
+;
+;        Enter: D1 = pointer to parameter block
+;               D2 = function code
+;
+;        Only 1 function supported :
+;
+;        Send arbitrary disk command to disk.
+;        Function code = 0
+;        Parameter Block :
+;            record
+;              DskCmdPtr : pointer;    {pointer to drive command}
+;              DskCmdLen : word;       {length of drive command}
+;              SendBufPtr: pointer;    {pointer to block to send}
+;              SendBufLen: word;       {length to send}
+;              RecvBufPtr: pointer;    {pointer to receive buffer}
+;              RecvBufLen: word;       {max. length to receive}
+;              SlotNumber: word;       {slot number of drive}
+;              ServerHost: word;       {server host number}
+;              ActualRcvd: word;       {actual number of bytes received}
+;              DiskResult: word;       {Corvus disk return code}
+;              end;
+;
+DskST    MOVEQ     #IOEfnccd, D7       ;assume invalid function code
+         TST.W     D2                  ;is this valid function code?
+         BNE.S     DskSTex             ;no, error exit
+         CLR.L     D7                  ;clear IOresult code
+         MOVE.L    D1, A3              ;get parametr block addr *kb 9/28/83*
+         MOVEA.L   DCmdBuff(A3), A2    ;address of drive command (4 bytes)
+         MOVE.W    DrvCLen(A3), D3     ;command length
+         MOVE.W    SndBLen(A3), D2     ;get to length
+         MOVEA.L   SndBuff(A3), A0     ;get send buffer pointer
+         MOVE.W    SlotNmbr(A3), D6    ;get slot number from param block
+         CLR.W     DskRslt(A3)         ;clear hi byte of result
+         CMPI.W    #5, D6              ;is it Local or OmniNet disk?
+         BEQ.S     OCRWdisk            ;OmniNet disk
+         BCS.S     LCRWdisk            ;Local disk
+         MOVEQ     #IOEuiopm, D7       ;invalid slot number, exit
+DskSTex  RTS
+  page
+;
+; OCRWdisk - Send arbitrary Corvus disk command to OmniNet disk
+;
+; Parameters: A0.L - pointer to send buffer
+;             A2.L - pointer to drive command
+;             A3.L - parameter block address
+;             D2.W - send buffer length
+;             D3.W - drive command length
+;
+; Returns:    D7.W - IOresult code
+;
+OCRWdisk SUBA.W    #ODdataLN, SP                 ;allocate temporary data space
+         MOVE.L    SP, A1                        ;save data space address
+         CLR.W     ODFlags(A1)                   ;clear all flags
+         MOVE.B    #SendOp, SendData(A1)         ;set send and rcv interrupt
+         MOVE.B    #RecvOp, RcvData(A1)          ;    flags
+
+         ADD.W     D3, D2                        ;send length includes command
+         MOVE.W    D2, SHtoLN(A1)                ;To length is send buffer length
+         MOVE.B    (A2)+,DCmd+0(A1)              ;put command in user control data
+         MOVE.B    (A2)+,DCmd+1(A1)              ;    area of Transporter command
+         MOVE.B    (A2)+,DCmd+2(A1)              ;    block.   May be less than 4
+         MOVE.B    (A2)+,DCmd+3(A1)              ;    bytes.
+         MOVE.L    A0,ODwrAD(A1)                 ;send buffer = REST of data
+
+         MOVE.W    RcvBLen(A3), SHfmLN(A1)       ;From length is rcv buffer length
+         MOVEA.L   RcvBuff(A3), A0               ;Get pointer to Rcv buffer
+         MOVE.W    SrvrHost(A3), D6              ;Get disk server net host number
+         CLR.L     D3                            ;show not check disk return code
+
+         CMPI.W    #4, D2                        ;if sending more then the command
+         BHI.S     OCRWlc                        ;  do longcmds
+         BSR       ShortCmds                     ;if len <= 4 do ShortCmd
+         BRA.S     OCRWdec                       ;  only sending drive command
+OCRWlc   BSR       LongCmds
+
+; the return code must be loaded explicitly since it comes from
+; the header portion of the results packet....
+;
+OCRWdec  MOVE.W    RHpktLN(A1), TrueRcvd(A3)     ;give user actual # of bytes received
+         MOVE.B    RHdskRC(A1), DskRslt+1(A3)    ;get return code
+         BPL.S     OCRWdone                      ;fatal disk error?
+         TST.W     D7                            ;did Transporter level fail
+         BNE.S     OCRWdone                      ;yes, then tell user
+         MOVEQ     #IOEnebhrd, D7                ;no, tell user fatal disk eror
+
+OCRWdone CLR.W     (A1)                          ;clear the send/recv flags
+         ADDA.W    #ODdataLN, SP                 ;remove temporary data space
+         RTS
+  page
+; LCRWdisk - Send arbitrary Corvus disk command to Local disk
+;
+; Parameters: A0.L - send buffer address
+;             A2.L - drive command pointer
+;             A3.L - parameter block address
+;             D2.W - send buffer length
+;             D3.W - drive command length
+;             D6.W - slot number
+;
+; Returns:    D7.W - IORESULT
+;
+LCRWdisk LEA       DskPort.L,A1        ;Get slot 0 address (non-existant)
+         LSL.W     #5,D6               ;Compute disk port address for slot
+         ADDA.W    D6,A1               ;slot base adr = offset + slot 0 addr
+         MOVE.W    D2, D4              ;Save send count
+
+; Send drive command to Local Corvus disk
+;PROBLEM: timeout AND user sending to much data or Not enough
+;        must watch line if turns around or timeout if never turns around.
+;
+         SUBQ.W    #1, D3              ;set up loop counter
+         MOVE.B    (A2)+, D2           ;get first byte
+         BSR       LSndDsk1            ;send first byte
+         BRA.S     LCWsc10             ;send rest of bytes
+
+LCWscmd  MOVE.B    (A2)+, D2           ;get next byte
+         BSR       LSndDsk             ;send next byte
+LCWsc10  DBRA      D3, LCWscmd         ;loop until done
+
+; Send data to Local Corvus disk
+;
+         SUBQ.W    #1,D4               ;Loop counter for send
+         BLT.S     LCRdata             ;if not sending data then receive
+LCWdata  MOVE.B    (A0)+, D2           ;get next byte
+         BSR       LSndDsk             ;send next byte
+         DBRA      D4, LCWdata         ;loop until done
+
+; Read Corvus disk processing
+; Problem :  need timeouts on line turn around & wait for ready
+;
+LCRdata  MOVEA.L   RcvBuff(A3), A0     ;Get receive buffer address
+         MOVE.W    RcvBLen(A3), D3     ;Get max rcv length
+         CLR.W     TrueRcvd(A3)        ;no actual bytes received yet
+         BSR       LWLine              ;Wait for the line to turn
+         MOVE.B    CrvsData(A1),DskRslt+1(A3)  ;Fetch result code
+         BPL.S     LCRloop2            ;if fatal disk error
+         MOVEQ     #IOEnebhrd, D7      ;   then tell user
+
+LCRloop2 BTST      #CRVScrdy,CrvsStat(A1) ;Test controller status
+         BON.S     LCRloop2            ;Wait until controller ready
+         BTST      #CRVSbdir,CrvsStat(A1) ;Test bus direction
+         BOFF.S    LCRWdone            ;Finished if "host to controller"
+         MOVE.B    CrvsData(A1), D2    ;get next byte
+         TST.W     D3                  ;user's rcv buffer full?
+         BEQ.S     LCRloop2            ;yes, don't put byte in
+         SUBQ.W    #1, D3              ;have one byte less space
+         MOVE.B    D2, (A0)+           ;no, give user byte and
+         ADDQ.W    #1, TrueRcvd(A3)    ;count actual bytes received
+         BRA.S     LCRloop2            ;Go get any more
+
+LCRWdone RTS
+
+         END       DRVCDISK            ;entry point to driver

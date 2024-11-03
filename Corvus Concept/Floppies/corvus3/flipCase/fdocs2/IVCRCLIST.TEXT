@@ -1,0 +1,333 @@
+{$S+}
+PROGRAM VolList;
+{$U IVSRc2:IV.LIB }
+USES UCDefn, UCCrtio,UCDrvio,UCPipes;
+{1.5}
+
+
+{*******************************************************************}
+{ This program is used to dump the current directory of the Net.    }
+{ It can list all files in all volumes, all files on a specified    }
+{ drive, or all files in a specified volume.  It can optionally     }
+{ print the first block of any TEXT files.                          }
+{*******************************************************************}
+
+CONST
+     Revnumber = '1.5';
+     DirLen = 2048;  { 4 blocks }
+     
+TYPE
+     { declarations for UCSD volumes }
+     DateRecord = PACKED RECORD
+        Month:  0..12;
+        Day:    0..31;
+        Year:   0..100;
+        END;
+        
+     DirSize = 0..77;
+     VolID = STRING[7];
+     FileID = STRING[15];
+     FileType = (Untyped, Xdisk, Code, Text, Info, Data, Graf, Foto, Securedir);
+     DirRecord = RECORD
+        FirstBlock: INTEGER;
+        LastBlock: INTEGER;
+        CASE DirFileKind: FileType OF
+           SecureDir,UnTyped:
+              (DirVolName: VolID;
+               ZeroBlock,NumofFiles,TotalBlocks: INTEGER;
+               LastBoot: DateRecord);
+           Xdisk,Code,Text,Info,Data,Graf,Foto:
+              (DirFileName: FileID;
+               LastByte: 0..512;
+               DirFileDate: DateRecord);
+        END;
+        
+     Directory = ARRAY [DirSize] OF DirRecord;
+     Databuf = PACKED ARRAY [0..5119] OF byte;
+        
+     RX = 1..3;
+     CDxBuf = RECORD
+        CASE RX  OF
+          1: (dir: Directory);
+          2: (dbuf: Databuf);
+          3: (cbuf: CDBuf);
+        END;
+  
+VAR
+     NetAddr:  CDAddr;
+
+     Tbuf: CDxBuf;  { general purpose iobuffer for talking to drive }
+     NumDrives: INTEGER;  { number of drives online }
+                                     
+     i: INTEGER;
+     ErrCode: INTEGER;
+     PDebug:  BOOLEAN;    { program debug flag }
+     CurDate: STRING;                                   {1.5}
+     DoSort:  BOOLEAN;
+     CRCheck: BOOLEAN;
+     fname: STRING;
+     Spooling: BOOLEAN;
+     Pipename: STRING;
+     Pnum: INTEGER;
+     Pbuf: drvblk;
+     Echo: FILE of CHAR;
+     fvol: FILE;
+     
+
+PROCEDURE checksumm( var checksum: integer; buf: databuf; length: integer );
+VAR i: INTEGER;
+BEGIN
+FOR i := 0 to length-1 DO checksum := checksum + buf[i];
+Checksum := checksum MOD 256;
+END;
+
+{$P}
+{*******************************************************************}
+{ PROCEDURE Initialize gets the number of drives online, and their  }
+{ sizes.                                                            }
+{*******************************************************************}
+
+PROCEDURE Initialize;
+
+BEGIN
+
+Fname := 'CONSOLE:'; rewrite(Echo, Fname);
+Spooling := FALSE;
+ClkDate1( CurDate );
+END; { PROCEDURE Initialize }
+
+{$P}
+
+PROCEDURE DrvRd( var Buf: CDxBuf; Len, Drv, Sec: INTEGER);
+
+BEGIN
+IF PDebug THEN WRITELN('Reading drive ',Drv,', Sector ',Sec);
+i := BLOCKREAD( fvol, Buf.dbuf, Len div 512, Sec div 2 );
+END; { PROCEDURE DrvRd }
+
+{$P}
+{*********************************************************************}
+{  Spooling routines                                                  }
+{*********************************************************************}
+
+PROCEDURE Errr( Enum: INTEGER);
+BEGIN
+WRITELN('Pipe error:  ',Enum);
+EXIT(program);
+END;
+
+PROCEDURE InitSpool;
+VAR
+     k: INTEGER;
+     Tstring: STRING;
+BEGIN
+CrtsDef := TRUE; PipeDebug := FALSE;
+WRITELN; WRITE('Enter Pipe name: ');  Pipename:='PRINTER';  
+IF Getstring(Pipename) <> normal THEN EXIT(Program);
+WRITE('Enter Scratch file name: ');  Fname:='SCRATCH';  
+IF Getstring(Fname) <> normal THEN EXIT(Program);
+close(Echo);  rewrite(Echo,Fname);
+Pnum := PipeOpWr(pipename);
+IF Pnum<0 THEN Errr(Pnum);
+Pbuf.c[0] := CHR(1);  { This is a pascal file }
+Pbuf.c[1] := CHR(8);  TString := 'PRINTOUT'; MOVELEFT(Tstring,Pbuf.c[2],8);
+Pbuf.c[82] := CHR(26);  Tstring:='Output of PRINTOUT program';
+MOVELEFT(Tstring,Pbuf.c[83],26);
+Pbuf.c[163]:='0';
+k := PipeWrite(Pnum,DrvBlkSize,Pbuf);
+IF k<0 THEN Errr(k);
+Spooling := TRUE;
+END;
+
+PROCEDURE CloseSpool;
+VAR
+     k: INTEGER;
+BEGIN
+k := PipeClWr(Pnum);
+IF k<0 THEN Errr(k);
+END;
+
+PROCEDURE DoSpool;
+VAR
+     n,k: INTEGER;
+     LEcho: file;
+BEGIN
+close(Echo,lock);
+reset(LEcho,fname);
+n := BLOCKREAD(LEcho,Pbuf.c,1);
+WHILE N=1 DO
+   BEGIN
+   k:=PipeWrite(Pnum,DrvBlkSize,Pbuf);
+   IF k<0 THEN Errr(k);
+   n := BLOCKREAD(LEcho,Pbuf.c,1);
+   END;
+close(LEcho);
+rewrite(Echo,fname);
+END;  { DoSpool }
+
+{$P}
+{*******************************************************************}
+{ Procedure PrintDir processes the specified volume.                }
+{*******************************************************************}
+  
+PROCEDURE PrintDir( Drive, Vol: INTEGER );
+VAR
+    VolDir: CDxBuf;
+    i,j,k: INTEGER;
+    M,T: INTEGER;
+    DelChar: BOOLEAN;
+    ftype: STRING[10];
+    Sorted: ARRAY [1..77] OF INTEGER;
+    Months: ARRAY [0..12] OF STRING[3];
+
+PROCEDURE SORT( Dir: Directory; N: INTEGER );
+VAR
+     i,j,t: INTEGER;
+BEGIN
+FOR i:=1 TO N-1 DO BEGIN
+  IF Pdebug THEN WRITELN(' found file ', Dir[i].DirFileName );
+  FOR j:= i+1 TO N DO
+    IF Dir[Sorted[i]].DirFileName > Dir[Sorted[j]].DirFileName THEN
+       BEGIN
+       t := Sorted[i];
+       Sorted[i] := Sorted[j];
+       Sorted[j] := t;
+       END;
+   END;
+END; { SORT }
+
+FUNCTION CRC( Start,Len: INTEGER ): INTEGER;
+var i,j,k,c: integer;
+    b: CDxbuf;
+begin
+c := 0; CRC := 0; i := 0;
+WHILE i< Len DO
+  BEGIN
+  DrvRd(b,5120,Drive,Start+i*2);  { read 10 blocks at a time }
+  IF i+9 < LEN THEN checksumm( c, b.dbuf, 5120 )
+               ELSE checksumm( c, b.dbuf, (Len-i)*512 );
+  i := i+10;
+  end;
+CRC := c;
+end; {function CRC}
+
+BEGIN
+t := Vol;
+DrvRd( VolDir, DirLen, Drive, T+4 );
+WITH VolDir.Dir[0] DO
+   IF (LENGTH(DirVolName)<1) OR (LENGTH(DirVolName)>7) THEN
+      BEGIN DirVolName := 'ILLEGAL'; NumofFiles := 0; END;
+WRITELN ('Reading drive ',Drive,' volume ',VolDir.Dir[0].DirVolName);
+WRITELN (Echo);  WRITELN(Echo);
+WRITELN (Echo, 'Output of CRCLIST program     ',CurDate);
+WRITELN (Echo,'Drive ',Drive,' volume ',VolDir.Dir[0].DirVolName,
+         ' contains ',VolDir.Dir[0].NumofFiles, ' files.');
+Months[0] := '???'; Months[1] := 'Jan'; Months[2] := 'Feb'; Months[3] := 'Mar';
+Months[4] := 'Apr'; Months[5] := 'May'; Months[6] := 'Jun'; Months[7] := 'Jul';
+Months[8] := 'Aug'; Months[9] := 'Sep'; Months[10] := 'Oct';Months[11]:= 'Nov';
+Months[12] := 'Dec';
+FOR i:=1 to VolDir.Dir[0].NumofFiles DO Sorted[i] := i;
+IF DoSort  THEN SORT (VolDir.Dir,VolDir.Dir[0].NumofFiles);
+FOR i:=1 TO VolDir.Dir[0].NumofFiles DO
+   WITH VolDir.Dir[Sorted[i]] DO BEGIN
+       M:=DirFileDate.Month;
+       IF (M<1) OR (M>12) THEN M:=0;
+       ftype := 'Unknown ';
+       CASE DirFileKind OF
+           Code: ftype := 'Codefile';
+           Text: ftype := 'Textfile';
+           Data: ftype := 'Datafile';
+           END;
+       IF DirFileDate.Year = 100 THEN DirFileDate.Year := 99;
+       WRITE (Echo,' ':3,DirFileName,' ':20-LENGTH(DirFileName),
+           LastBlock-FirstBlock:8,'     ',
+           DirFileDate.Day:2,'-',Months[m],'-',DirFileDate.Year,
+           FirstBlock:8,'   ',ftype);  
+       IF CRCheck THEN 
+          WRITE(Echo,'   ',CRC(T+Firstblock*2,Lastblock-Firstblock):3);
+       WRITELN(Echo);
+   END;
+WRITELN(Echo); WRITELN(Echo);
+END; { PROCEDURE PrintDir }
+
+PROCEDURE Main;
+VAR
+    Drive: INTEGER;
+    ch: CHAR;
+    vname: STRING[7];
+    index: INTEGER;
+
+   FUNCTION SetParams: BOOLEAN;
+   BEGIN
+   WRITE('Do you want files sorted? N'); crt(cursorleft);
+   IF getbyte='Y' THEN DoSort := TRUE ELSE DoSort := FALSE;
+   WRITELN;
+   WRITE('Do you want CRC checking on? N'); crt(cursorleft);
+   IF getbyte='Y' THEN CRCheck := TRUE ELSE CRCheck := FALSE;
+   WRITELN;
+   END; { SetParams }
+
+BEGIN
+WHILE TRUE DO
+   BEGIN
+   GOTOXY(0,1); CRT(Eraseol );
+   WRITE('Output device is ');
+   IF Spooling THEN writeln('Spooler') ELSE writeln(fname);
+
+   GOTOXY(0,0); CRT(Eraseol );
+   write ('VolList [',RevNumber,']: V(olume to a F(ile ',
+          'S(pooler Q: ');
+   ch := getbyte;
+   CRT(Eraseos);
+   case ch of 
+      'F':  BEGIN
+            IF Spooling THEN CloseSpool;
+            writeln; write('Enter file name:  '); readln(fname);
+            close(Echo,lock);
+            rewrite(Echo,fname);
+            END;
+      'S':  BEGIN
+            InitSpool;
+            END;
+      'T':  IF PDebug THEN PDebug := FALSE ELSE PDebug := TRUE;
+      'V':  BEGIN
+            writeln; write('Which volume? '); readln(vname);
+            IF Vname[length(vname)] <> ':'
+               THEN Vname := CONCAT(Vname,':');
+            reset(fvol,vname);
+            IF ioresult = 0 THEN
+               BEGIN
+               IF SetParams THEN ;
+               PrintDir(0,0);
+               IF Spooling THEN DoSpool;
+               close(fvol);
+               END
+            ELSE
+               WRITELN( 'Volume ',vname,' not found.');
+            END;
+      'Q':  BEGIN
+            IF Spooling THEN CloseSpool;
+            close(Echo,lock);
+            EXIT(Program);
+            END;
+      END;
+   END;
+END; {PROCEDURE MAIN}
+
+{$P}
+{*******************************************************************}
+{ Start of main program...                                          }
+{                                                                   }
+{*******************************************************************}
+  
+BEGIN
+PDebug := FALSE;
+CCCrtIoinit; CCDrvioinit; InitSlot(Netaddr); CCPipeInit(Netaddr);
+Initialize;
+Main;
+END.
+
+
+
+
+

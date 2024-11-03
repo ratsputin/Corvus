@@ -1,0 +1,89 @@
+{  file  MirrB.text   }
+        
+
+{*****************************************************************}
+{                                                                 }
+{               set various compile flags                         }
+{                                                                 }
+{*****************************************************************}
+
+
+        segment procedure initflags;
+        begin
+        ThisSyst:= 'XXAP  (BASICS)  ';
+        end;
+  
+{*****************************************************************}
+{                                                                 }
+{       system dependent warning routine for extracts             }
+{                                                                 }
+{*****************************************************************}
+
+      segment procedure warn;
+      begin
+      end;
+
+
+{$P*************************************************************}
+  {                                                             }
+  {     Find a volume (Pascal), volume # range (Basics)         }
+  {                                                             }
+  {*************************************************************}
+  
+      segment procedure GetVT;
+      begin
+      end;
+  
+      
+      segment procedure Find(comment:STRING;
+                    var Drive,IStart,DStart,Size:INTEGER);
+      
+      const  vsize = 280;
+             vstart = 104;
+             maxV = 67;
+             
+      var mult,first,last,
+          i:integer;
+          Name:string;
+          c:char;
+      
+      begin
+      size:=0;
+      writeln; writeln; write('  ',comment,' which Volume(s)? ');
+      if getstring(name)=normal then
+        if length(Name)>0 then
+          begin
+          first:=0;
+          i:=0;
+          repeat
+            i:=i+1;
+            c:=Name[i];
+            if (c>='0') and (c<='9') then first:=first*10 + ord(c)-48;
+           until ((c<>' ') and ((c<'0') or (c>'9'))) or (i=length(Name));
+          last:=0;
+          i:=length(Name);
+          mult:=1;
+          repeat
+            c:=Name[i];
+            if (c>='0') and (c<='9') then
+              begin
+              last:=last + (ord(c)-48)*mult;
+              mult:=mult*10;
+              end;
+            i:=i-1;
+           until ((c<>' ') and ((c<'0') or (c>'9'))) or (i=0);
+          
+          if debug then writeln(first,' to ',last);
+          DStart:= vstart + (first-1)*vsize;
+          Size:= (last-first+1)*vsize;
+          if (first<1) or (first>MaxV) then Size:=0;
+          if (last<1) or (last>MaxV) then Size:=0;
+          if first>last then Size:=0;
+          
+          write('  Of which Drive? ');
+          Drive:=1;
+          if getnum(Drive)<>normal then Size:=0;
+          if (drive<1) or (drive>NumDrives) then Size:=0;
+          end;
+      end;
+    

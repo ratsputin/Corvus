@@ -1,0 +1,10 @@
+program Vec6;
+{assign $A0000 to 68000 interrupt vector number 6}
+  const Vec6Loc = $78;
+        Address = $A0000;
+  type ptr = ^longint;
+  var addr : ptr;
+  BEGIN
+    addr :=  pointer(Vec6Loc);
+    addr^ := ord4(Address);
+  END.

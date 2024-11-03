@@ -1,0 +1,387 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                             File: SCANFMT.TEXT                            *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               01-Dec-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+procedure putch(fch: char);
+begin {putch}
+if recbufp < MAXRECLEN { Must leave room for final <cr> }
+then begin
+  lastwritten := recbufp;
+  recbuf[recbufp] := ord(fch); recbufp := recbufp + 1;
+  end
+else error(82);
+end; {putch}
+
+procedure getch(var fch: char);
+begin {getch}
+if recbufp <= recbuflen then fch := chr(recbuf[recbufp]) else fch := ' ';
+recbufp := recbufp + 1; col := col + 1;
+end; {getch}
+
+procedure nextrec;
+  var i: integer; inline: string[120];
+begin {nextrec}
+if InternalIO
+then 
+  if Reading
+  then begin { Reading from internal file }
+    moveleft(intfile^[intbufp],recbuf,intreclen);
+    intbufp := intbufp + intreclen; recbuflen := intreclen;
+    end
+  else begin { Writing to internal file }
+    if lastwritten > maxlastwritten then maxlastwritten := lastwritten;
+    while maxlastwritten < intreclen do begin
+      maxlastwritten := maxlastwritten + 1;
+      recbuf[maxlastwritten] := 32; { blank }
+      end;
+    if maxlastwritten > intreclen then error(83);
+    moveleft(recbuf,intfile^[intbufp],intreclen);
+    intbufp := intbufp + intreclen;
+    lastwritten := 0; maxlastwritten := 0;
+    end
+else
+  if Reading
+  then 
+    if curunit = consoleunit
+    then begin { Reading the console }
+      readln(inline); recbuflen := length(inline);
+      for i := 1 to recbuflen do
+        recbuf[i] := ord(inline[i]);
+      if (recbuflen = 0) and eof then EofFlag := TRUE;
+      end
+    else begin { Reading external, other than consoleunit }
+      finputrecbuf;
+      if curunit <> nil
+      then
+        if (not curunit^.Seqen) and ((recbuflen + 1) <> curunit^.reclen)
+        then error(84);
+      end
+  else begin { Writing external }
+    if lastwritten > maxlastwritten then maxlastwritten := lastwritten;
+    maxlastwritten := maxlastwritten + 1;
+    if curunit <> nil
+    then
+      if not curunit^.Seqen
+      then begin
+        while maxlastwritten < curunit^.reclen do begin
+          recbuf[maxlastwritten] := 32; { blank }
+          maxlastwritten := maxlastwritten + 1;
+          end;
+        if maxlastwritten > curunit^.reclen
+        then begin error(85); maxlastwritten := curunit^.reclen; end;
+        end;
+    recbuf[maxlastwritten] := ord(EOLCH);
+    foutputrecbuf;
+    lastwritten := 0; maxlastwritten := 0;
+    end;
+recbufp := 1;
+end; {nextrec}
+
+
+{ Sets fmttok and, if appropriate fmtintval }
+
+procedure scanfmt;
+  var lfmtp: integer; fmtch: char;
+  
+  { Sets fmtch to next char out of the format character string, skips blnks }
+  
+  procedure getfmtnonblank;
+  begin {getfmtnonblank}
+  repeat
+    fmtch := curfmt^[fmtp];
+    fmtp := fmtp + 1;
+  until fmtch <> ' ';
+  if (fmtch >= 'a') and (fmtch <= 'z') then fmtch := chr(ord(fmtch) - 32);
+  end; {getfmtnonblank}
+  
+begin {scanfmt}
+getfmtnonblank;
+if fmtch in ['I','F','E','D','G','L','A','H','X','P',
+                     '(',')',',','.','''',':','/','\\','$','+','-']
+then fmttok := fmtch
+else
+  if fmtch = 'B'
+  then begin
+    getfmtnonblank;
+    if (fmtch = 'N') or (fmtch = 'Z') then fmttok := fmtch else error(4);
+    end
+  else
+    if fmtch = 'T'
+    then begin
+      lfmtp := fmtp; getfmtnonblank;
+      if (fmtch = 'L') or (fmtch = 'R')
+      then fmttok := chr(ord(fmtch) - 1) { Translate L => K and R => Q }
+      else begin fmttok := 'T'; fmtp := lfmtp; end;
+      end
+    else
+      if fmtch = 'S'
+      then begin
+        lfmtp := fmtp; getfmtnonblank;
+        if (fmtch = 'P') or (fmtch = 'S')
+        then fmttok := chr(ord(fmtch) - 1) { Translate P => O and S => R }
+        else begin fmttok := 'S'; fmtp := lfmtp; end;
+        end
+      else
+        if fmtch in ['0'..'9']
+        then begin
+          fmttok := '0';  { Stands for integer }
+          fmtintval := 0;
+          repeat
+            fmtintval := fmtintval * 10 + ord(fmtch) - ord('0');
+            lfmtp := fmtp; getfmtnonblank;
+          until not (fmtch in ['0'..'9']);
+          fmtp := lfmtp;
+          end
+        else begin 
+          { Prevent from looping if previous fmttok was nonrepeatable }
+          error(5); fmttok := 'I';
+          end;
+end; {scanfmt}
+
+
+{ Processes all nonrepeatable format edit descriptors up to the first }
+{ repeatable format edit descriptor, leabing it in the global ed...   }
+{ Wraps around if fieldfound, prevents infinite loops and gives clean }
+{ termination when called under termxxx.                              }
+
+procedure getfmt;
+label 1;
+  var i, lint, lfmtp: integer; Repeated, Done: Boolean; lch: char;
+
+  function getfmtch: char;
+  begin {getfmtch}
+  getfmtch := curfmt^[fmtp]; fmtp := fmtp + 1;
+  end; {getfmtch}
+
+begin {getfmt}
+if edcnt > 1
+then edcnt := edcnt - 1
+else 
+  1: begin
+  lint := 1; scanfmt;
+  if fmttok = '0'
+  then begin
+    lint := fmtintval;
+    Repeated := TRUE; scanfmt;
+    end
+  else Repeated := FALSE;
+  edlet := fmttok;
+  if (lint <= 0) and (edlet <> 'P') then error(6);
+  case fmttok of
+    'I','F','E','D','G','L': 
+         begin { All take manditory W field }
+         scanfmt; if fmttok <> '0' then error(7);
+         edcnt := lint; edw := fmtintval;
+         if edw <= 0 then error(8);
+         FieldFound := TRUE; GP2FieldFound := TRUE;
+         if edlet in ['D'..'G']
+         then begin { Manditory . D fields }
+           scanfmt; if fmttok <> '.' then error(9);
+           scanfmt; if fmttok <> '0' then error(10);
+           edd := fmtintval; EdePresent := FALSE;
+           if (edlet = 'E') or (edlet = 'G') then begin { Optional E e field }
+             lfmtp := fmtp; scanfmt;
+             if fmttok = 'E' 
+             then begin
+               scanfmt; if fmttok <> '0' then error(11);
+               ede := fmtintval; EdePresent := TRUE;
+               if ede <= 0 then error(12);
+               end
+             else fmtp := lfmtp;
+             end;
+           end
+         else { 'I', or 'L' }
+           if edlet = 'I' then begin { Optional . m field }
+             lfmtp := fmtp; scanfmt; edm := 1; { default }
+             if fmttok = '.' 
+             then begin
+               scanfmt; if fmttok <> '0' then error(11); edm := fmtintval;
+               end
+             else fmtp := lfmtp;
+             end;
+         end;
+    
+    'A': begin
+         edcnt := lint; lfmtp := fmtp; scanfmt;
+         FieldFound := TRUE; GP2FieldFound := TRUE;
+         if fmttok = '0' then begin
+           EdwPresent := TRUE; edw := fmtintval;
+           if edw <= 0 then error(13);
+           end
+         else begin Edwpresent := FALSE; fmtp := lfmtp; end;
+         end;
+    
+    '''':begin
+         if Reading then error(25);
+         if Repeated then error(26);
+         Done := FALSE;
+         repeat
+           lch := getfmtch; { Note: don't skip blanks }
+           while lch <> '''' do begin
+             putch(lch);
+             { INLINE lch := getfmtch; }
+             lch := curfmt^[fmtp]; fmtp := fmtp + 1;
+             end;
+           lch := getfmtch;
+           if lch = ''''
+           then putch('''') { Double ' }
+           else begin fmtp := fmtp - 1; Done := TRUE; end;
+         until Done;
+         goto 1;
+         end;
+    
+    'H': begin
+         if Reading then error(14);
+         if not Repeated then error(15);
+         for i := 1 to lint do
+           putch(getfmtch);
+         goto 1;
+         end;
+    
+    'T','K' {'K' is really 'L'},'Q' {'Q' is really 'R'}: 
+         begin
+         if Repeated then error(52); 
+         scanfmt; if fmttok <> '0' then error(53);
+         if fmtintval <= 0 
+         then error(53)
+         else begin
+           if edlet = 'T'
+           then recbufp := fmtintval
+           else
+             if edlet = 'K'
+             then begin
+               recbufp := recbufp - fmtintval;
+               if recbufp < 1 then recbufp := 1;
+               end
+             else {'Q'} recbufp := recbufp + fmtintval;
+           if not Reading
+           then begin
+             if lastwritten > maxlastwritten then maxlastwritten := lastwritten;
+             for i := maxlastwritten + 1 to recbufp - 1 do
+               if i <= MAXRECLEN then recbuf[i] := 32 {' '};
+             end;
+           end;
+         goto 1;
+         end;
+ 
+    'X': begin
+         if not Repeated then error(16);
+         recbufp := recbufp + lint;
+         if not Reading
+         then begin
+           if lastwritten > maxlastwritten then maxlastwritten := lastwritten;
+           for i := maxlastwritten + 1 to recbufp - 1 do
+             if i <= MAXRECLEN then recbuf[i] := 32 {' '};
+           end;
+         goto 1;
+         end;
+    
+    '/': begin 
+         if Repeated then error(27); nextrec; goto 1;
+         end;
+    
+    '\\','$': begin 
+         if Repeated then error(28); InhibitFinalCR := TRUE; goto 1;
+         end;
+    
+    ':': begin 
+         if Repeated then error(28); 
+         if not OKToExit then goto 1;
+         end;
+    
+    'S','O' {'O' is really 'P'},'R' {'R' is really 'S'}: 
+         begin
+         if Repeated then error(28); 
+         PrintOptionalPlus := edlet = 'O'; { SP format }
+         goto 1;
+         end;
+ 
+    'P': begin
+         if not Repeated then error(17); pval := lint; goto 1;
+         end;
+    
+    '-',
+    '+': begin
+         if Repeated then error(18);
+         scanfmt; if fmttok <> '0' then error(19);
+         if edlet = '+' then pval := fmtintval else pval := - fmtintval;
+         scanfmt; if fmttok <> 'P' then error(20);
+         goto 1;
+         end;
+         
+    'N',
+    'Z': begin { BN, BZ }
+         if Repeated then error(29); BZFlag := edlet = 'Z'; goto 1;
+         end;
+    
+    '(': begin
+         if gplevel >= 11 then error(21);
+         if gplevel = 1 then GP2FieldFound := FALSE;
+         gplevel := gplevel + 1; 
+         gpcount[gplevel] := lint; gpbegin[gplevel] := fmtp;
+         goto 1;
+         end;
+    
+    ')': begin
+         if Repeated then error(22);
+         if (gplevel = 2) and GP2FieldFound
+         then 
+           if lastgppos <> gpbegin[2]
+           then begin
+             lastgppos := gpbegin[2]; lastgprep := gpcount[2]; 
+             lastgplevel := 2;
+             end;
+         if gpcount[gplevel] > 1
+         then begin
+           gpcount[gplevel] := gpcount[gplevel] - 1; 
+           fmtp := gpbegin[gplevel];
+           goto 1;
+           end;
+         if gplevel > 1 then begin gplevel := gplevel - 1; goto 1; end;
+         if not OKToExit
+         then
+           if FieldFound
+           then begin { Format reversion (wrap around) }
+             nextrec; gplevel := lastgplevel; fmtp := lastgppos;
+             gpcount[gplevel] := lastgprep; gpbegin[gplevel] := lastgppos;
+             goto 1;
+             end
+           else error(86); { Can't wrap around an empty format and can't exit }
+         end;
+    
+    ',': begin 
+         if Repeated then error(23); goto 1;
+         end;
+ 
+    '.',
+    '0': error(24);
+  end; {case}
+  end;
+end; {getfmt}
+
+procedure fillfield(fch: char);
+  var i: integer;
+begin {fillfield}
+for i := 1 to edw do
+  putch(fch);
+end; {fillfield}
+
+procedure putstars;
+begin {putstars}
+fillfield('*');
+end; {putstars}
+
+procedure putblanks(count: integer);
+  var i: integer;
+begin {putblanks}
+for i := 1 to count do
+  putch(' ');
+end; {putblanks}
+

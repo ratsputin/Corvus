@@ -1,0 +1,20 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY has 13 files,  0 to 6 (6), eov 1440, size 1019, free 13
+
+ 1: ...SVS.FTNLIB   Data 15-Jun-83    6-   7(   1),   512+512=  1024 bytes
+ 2: .BLD.FLIB.TEXT  Text 16-Jun-83    7-  11(   4),  2048+512=  2560 bytes
+ 3: AUXIO.TEXT      Text 11-Jan-83   11-  53(  42), 21504+512= 22016 bytes
+ 4: F77RTS.OBJ      Data 16-Jun-83   53- 181( 128), 65536+512= 66048 bytes
+ 5: F77RTS.TEXT     Text 11-Jan-83  181- 229(  48), 24576+512= 25088 bytes
+ 6: FARRAY.TEXT     Text  1-Dec-82  229- 243(  14),  7168+512=  7680 bytes
+ 7: FRDWR.TEXT      Text  9-Nov-82  243- 301(  58), 29696+512= 30208 bytes
+ 8: FTNLIB.TEXT     Text 11-Oct-82  301- 305(   4),  2048+512=  2560 bytes
+ 9: LIST.TEXT       Text  5-Oct-82  305- 323(  18),  9216+512=  9728 bytes
+10: LRDWR.TEXT      Text 15-Nov-82  323- 351(  28), 14336+512= 14848 bytes
+11: SCANFMT.TEXT    Text  1-Dec-82  351- 375(  24), 12288+512= 12800 bytes
+12: SUBRS.TEXT      Text  1-Dec-82  375- 403(  28), 14336+512= 14848 bytes
+13: URDWR.TEXT      Text  1-Dec-82  403- 421(  18),  9216+512=  9728 bytes

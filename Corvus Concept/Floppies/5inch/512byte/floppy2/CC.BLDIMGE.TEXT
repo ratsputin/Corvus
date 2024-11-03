@@ -1,0 +1,545 @@
+program BuildImage;
+  uses {$U /ccos/os.globals} GLOBALS;
+  Const
+    ESCAPE = '\1B'; {escape character}
+    BLKLEN = 512; {block length}
+    dirblock = 2; {first block of directory}
+    floppy = 9; {floppy unit number}
+    NUMBLKS = 500; {# of blocks on 8" floppy}
+    FRSTIMGBLK = 1; {block to write image control block to}
+    SYSVOLNAME = 'CCSYS';
+  Type
+    str80 = string[80];
+    blk = packed array[1..BLKLEN] of byte;
+    ctblk = record
+              case integer of
+                0 : (cdate : packed array[1..6] of char;
+                     cosvr : packed array[1..4] of char;
+                     cflops : integer;
+                     ccfn : integer;
+                     cblks : integer;
+                     ccopy : string[39]);
+                1 : (filler : blk);
+              end;
+
+    dirhere = record
+                  d : array[0..MAXDIR] of direntry;
+                  fill : array[0..9] of integer;
+              end;
+
+
+  Var
+    Stop, Good : boolean;
+    NumBlocks, NumFlops : integer;
+    Date, OSVers,tmpstr : str80;
+    CBlk : ctblk;
+    Dir : dirhere;
+    sysvol : file;
+    volname : string[10];
+
+  FUNCTION CmprDir(dir1,dir2 : dirhere; dlen : integer ) : boolean;
+   {Returns: TRUE if directories are equal.}
+   EXTERNAL;
+
+  PROCEDURE header;
+   Const
+      VERSNUM = '1.1a';
+      VERDATE = '19 July 1982';
+   Begin
+     write(ESCAPE,'J');  {clear screen on Concept CRT}
+     writeln('BUILDIMAGE  -- VERSION ',VERSNUM,'    ',VERDATE);
+   End; {header}
+
+  PROCEDURE IOerror( r : integer );
+    Begin
+      writeln('Error --> IORESULT = ',r:1);
+    End;{IOerror}
+
+  FUNCTION getstr(prompt,example : str80; NewPage : boolean;
+                  var retstr : str80) : boolean;
+   {returns true when not escape from user}
+    Var
+      i : integer;
+      Continue : boolean;
+      ch : char;
+    Begin
+      getstr := FALSE;{assume Not getting an ESCAPE}
+      Continue := TRUE;
+      i := 0;
+      if NewPage then header;
+      repeat
+        write(prompt,' :  '); readln(retstr); writeln;
+        if LENGTH(retstr)<>0 then begin
+          ch := retstr[1];
+          if ch='?' then begin
+             i := (i+1) mod 5;
+             if i=0 then header;
+             writeln('For example: ',example)  {show user example}
+          end else Continue := FALSE;  {got input so stop}
+          if ch=ESCAPE then getstr := TRUE;  {stop pgm}
+        end else begin
+          i := (i+1) mod 5;
+          if i=0 then header;
+        end;
+      until( Not Continue );
+    End;{getstr}
+
+  FUNCTION Verify( kind,data : str80 ) : boolean;
+   {asks user if data is ok, if says yes then returns true.}
+   Var
+     a : char;
+   Begin
+     write(kind,': ',data,'   Is this corect? (Y/N) ');
+     readln(a);
+     Verify := (a='y') or (a='Y');
+   End;{Verify}
+
+  PROCEDURE getvers( var osv : str80 );
+  {make the control block form of os version number from the input}
+    Var
+      a1 : string[4];
+      dot,i,l,leftlen,ritelen : integer;
+    Begin
+      a1 := '0000'; l := LENGTH(osv);
+      dot := POS('.',osv);
+      if dot=0 then begin
+        if l>2 then l:=2;
+        if l=1 then a1[2] := osv[1]
+               else for i:=1 to l do a1[i] := osv[i];
+      end else begin
+        leftlen := dot-1;
+        ritelen := l-dot;
+        if leftlen>2 then leftlen:=2;
+        if ritelen>2 then ritelen:=2 else if ritelen<0 then ritelen:=0;
+        if leftlen=1 then a1[2] := osv[dot-1]
+                     else for i := 1 to leftlen do a1[i] := osv[dot-(3-i)];
+        for i := 1 to ritelen do a1[2+i] := osv[dot+i];
+      end;
+      osv := a1;
+    {   for i:=1 to LENGTH(osv) do writeln('ord(osv[',i:1,'] = ',ord(osv[i]):1,'  ');
+        writeln('dot = ',dot:1);   }
+    End;{getvers}
+
+  FUNCTION ReadDir( var Dir : dirhere ) : boolean;
+    {Returns true if reads directory successfully}
+    {volname - GLOBAL variable}
+    Var
+      ior,x,Ndirblks : integer;
+    Begin
+      ReadDir := FALSE;  {assume fails}
+      header;
+      write('Enter volume name of volume to make image floppies from :  ');
+      readln(volname);
+      writeln; write('Opening volume: ',volname,'...');
+      {$I-} reset(sysvol,volname); {$I+} ior := IORESULT;
+      if ior<>0 then IOerror(ior)
+      else begin
+        writeln; write('Reading directory..... ');
+        Ndirblks := sizeof(Dir) div BLKLEN;
+        {$I-}x := blockread(sysvol,Dir,Ndirblks,dirblock);{$I+} ior := IORESULT;
+        if ior=0 then ReadDir := TRUE  {got it}
+                 else IOerror(ior);
+      end;
+      if ior=0 then writeln;
+    End;{ReadDir}
+
+  FUNCTION CalcBlks( Dir : dirhere ) : integer;
+    {passed a directory it returns the number of used    }
+    {blocks in the volume, including boot and dir blocks.}
+    Var
+      i,NumFiles,tb,fb : integer;
+    Begin
+      with Dir do begin
+        NumFiles := d[0].dnumfiles;
+        tb := d[0].nextblock-d[0].firstblock; {# of blocks in boot and dir areas}
+        for i:=1 to NumFiles do begin
+          fb := (d[i].nextblock-d[i].firstblock);
+          tb := tb+fb;
+        { writeln('file[',i:1,'] has ',fb:1,' blocks.'); }
+        end;
+      end;
+      CalcBlks := tb;
+    End;{CalcBlks}
+
+  FUNCTION ChkNumFlops( Number : integer ) : boolean;
+    {tells the user number of floppies needed and asks}
+    {if the user has enough.  Returns true if enough. }
+    Var
+      a : char;
+    Begin
+      writeln('Need ',Number:1,' floppy disks.');
+      write('Do you have enough formatted floppies? (Y/N) ');
+      readln(a);
+      ChkNumFlops := (a='y') or (a='Y');
+    End;{ChkNumFlops}
+
+  PROCEDURE BuildCtrlBlk( Date,OSvers : str80; NumFlp : integer;
+                          var CBlk : ctblk );
+    {Build control block.}
+    Var
+      i : integer;
+    Begin
+      writeln; writeln('Building Control Block....');
+      with CBlk do begin
+        for i:=1 to BLKLEN do filler[i] := 0;{zero fill block}
+        for i:=1 to 6 do cdate[i] := Date[i];
+        for i:=1 to 4 do cosvr[i] := OSVers[i];
+        cflops := NumFlp;
+        ccfn := 1; {start with first floppy}
+        cblks := (NUMBLKS-2); {force to max}
+        ccopy := '(c) Copyright 1982 Corvus Systems, Inc.';
+   { write('cdate = ');for i:=1 to 6 do write(cdate[i]);writeln;
+     for i:=1 to 4 do write(cosvr[i]);writeln;
+     writeln('cflops = ',cflops);writeln('cblks = ',cblks);
+     writeln('ccopy = ',ccopy);  }
+      end;
+    End;{BuildCtrlBlk}
+
+  FUNCTION InsertFloppy( flpy : integer ) : boolean;
+    {returns true if user wants to continue.}
+    Var
+      a : char;
+    Begin
+      if (flpy mod 3)=0 then header;
+      if flpy=1 then writeln('Insert first floppy diskette into drive.')
+                else writeln('Insert floppy diskette number ',flpy:1,
+                               ' into drive.');
+      write('Press RETURN when ready.  To abort press ESC and then RETURN.');
+      readln(a);
+      InsertFloppy := NOT (a=ESCAPE);
+    End;{InsertFloppy}
+
+  FUNCTION WriteFlops( Dir : dirhere; CBlk : ctblk;
+                        NumBlocks,NumFlops : integer ) : boolean;
+    Var
+      flop,fblk,sysblk,blockcnt : integer;
+      Continue : boolean;
+
+    FUNCTION WriteControlBlk( CBlk : ctblk; zblk : integer;
+                              var flpy : integer) : boolean;
+      Var
+        ior : integer;
+      Begin
+        WriteControlBlk := TRUE; {assume works}
+        CBlk.ccfn := flpy;
+        {$I-}unitwrite(floppy,CBlk,BLKLEN,zblk);{$I+}  ior := IORESULT;
+        if ior=0 then flpy := flpy+1
+        else begin
+          WriteControlBlk := FALSE;
+          write('Failed to write to floppy - ');
+          IOerror(ior);
+          writeln('Make sure a floppy is attached to system as Unit #',floppy:1,'.');
+        end;
+      End;{WriteControlBlk}
+
+    FUNCTION RdWrBlock( srcblk,destblk : integer) : boolean;
+      {volname - GLOBAL variable}
+      Var
+        ior,x : integer;
+        ablock : blk;
+      Begin
+        RdWrBlock := FALSE; {assume false}
+        {$I-}x := blockread(sysvol,ablock,1,srcblk);{$I+} ior := IORESULT;
+        if ior<>0 then begin
+          writeln; write('Volume ',volname,' at block ',srcblk:1,' Read ');
+          IOerror(ior);
+        end else begin
+          {$I-}unitwrite(floppy,ablock,sizeof(ablock),destblk);{$I+} ior := IORESULT;
+          if ior<>0 then begin
+            writeln; write('Floppy Unit #',floppy:1,' at block ',destblk:1,' Write ');
+            IOerror(ior);
+          end else RdWrBlock := TRUE;
+        end;
+      End;{RdWrBlock}
+
+    FUNCTION WriteBootBlks : boolean;
+      {write boot blocks 0 and 1 from sys volume to floppy}
+      Var
+        bb,fbb : integer;
+        Go : boolean;
+      Begin
+        bb := 0; fbb := FRSTIMGBLK+1; {image always starts at block 2}
+        repeat
+          Go := RdWrBlock(bb,fbb);
+          bb := bb+1; fbb := fbb+1;
+        until(bb>1) or (NOT Go);
+        WriteBootBlks := Go;
+      End;{WriteBootBlks}
+
+    FUNCTION WriteDir( Dir : dirhere ) : boolean;
+      Var
+        i,ior : integer;
+      Begin
+        WriteDir := TRUE;   {assume it works}
+        Dir.d[0].dvid := SYSVOLNAME;
+        {$I-}unitwrite(floppy,Dir,sizeof(Dir),dirblock+2); {$I+}
+        ior := IORESULT;
+        if ior<>0 then begin
+          writeln('directory write '); IOerror(ior);
+          WriteDir := FALSE;
+        end;
+      End;{WriteDir}
+
+    Begin{WriteFlops}
+      header;
+      writeln('Writing image floppies.');
+      flop := 1; {current floppy}
+      fblk := FRSTIMGBLK;
+      if InsertFloppy(flop) then
+       if WriteControlBlk(CBlk,fblk,flop) then     {adds 1 to flop}
+        if WriteBootBlks then
+         if WriteDir(Dir) then begin
+           writeln;
+           with Dir.d[0] do begin
+             fblk := nextblock+2; {1st block after dir on floppy}
+             sysblk := nextblock; {1st block after dir on sys volume}
+             blockcnt := nextblock-firstblock;{number of valid blocks on floppy so far}
+           end;
+           Continue := TRUE;
+           while( (sysblk<NumBlocks) and (Continue) ) do begin
+             if fblk=FRSTIMGBLK then begin
+               writeln;
+               Continue := InsertFloppy(flop);
+               if Continue then begin
+                 Continue := WriteControlBlk(CBlk,fblk,flop);
+                 fblk := fblk+1;
+                 blockcnt := 0;
+               end;
+             end;
+             if Continue then begin
+               Continue := RdWrBlock(sysblk,fblk);
+               if Continue then begin
+                 write('.');
+                 blockcnt := blockcnt+1;
+                 sysblk := sysblk+1;
+                 if fblk=(NUMBLKS-1) then fblk := FRSTIMGBLK
+                                     else fblk := fblk+1;
+               end;
+             end;
+           end;
+         end;
+      if Continue and (blockcnt<>(NUMBLKS-2)) then begin
+         CBlk.cblks := blockcnt;
+         flop := flop-1;
+         Continue := WriteControlBlk(CBlk,FRSTIMGBLK,flop);
+      end;
+      writeln;
+      WriteFlops := Continue;
+    End;{WriteFlops}
+
+  FUNCTION CmprFlops( Dir : dirhere; CBlk : ctblk;
+                       NumBlocks,NumFlops : integer ) : boolean;
+  {RETURNS TRUE IF FLOPPIES OK.}
+   Var
+     flpy,sysblk,flopblk : integer;
+     Error : boolean;
+
+   FUNCTION Rd2Blocks( var sblock,fblock : blk; sysblk,fblk : integer) : boolean;
+     {Returns: TRUE if successfully read both.}
+     {volname - GLOBAL variable}
+     Var
+       ior,x : integer;
+
+     BEGIN
+       Rd2Block := FALSE; {assume fails}
+       {$I-} x := blockread(sysvol,sblock,1,sysblk); {$I+} ior := IORESULT;
+       if ior<>0 then begin
+         writeln; write('Volume ',volname,' at block ',sysblk:1,' Read ');
+         IOerror(ior);
+       end else begin
+         {$I-} unitread(floppy,fblock,sizeof(fblock),fblk);{$I+} ior := IORESULT;
+         if ior<>0 then begin
+           writeln; write('Floppy Unit #',floppy:1,' at block ',fblk:1,' Read ');
+           IOerror(ior);
+         end else Rd2Blocks := TRUE;
+       end;
+     END;{Rd2Blocks}
+
+   PROCEDURE CmprError( sysblk,fblk : integer );
+     {volname - GLOBAL variable}
+     BEGIN
+       writeln;
+       writeln('Compare Error.  Volume ',volname,' block: ',sysblk:1,
+                        ' Floppy block: ',fblk:1,'.');
+     END; {CmprError}
+
+   FUNCTION VrfyCtrlBlk( var CBlk : ctblk; flop,NumBlcks,NumFlops, fblk : integer ) : boolean;
+    {Returns :  TRUE  if control block is good.}
+    Var
+      ior : integer;
+      CBflop : ctblk;
+
+    BEGIN
+      with CBlk do begin
+        ccfn := flop;
+        if flop=NumFlops then cblks := NumBlcks - ( (NUMBLKS-2) * (NumFlops-1) )
+                         else cblks := NUMBLKS-2;
+        {$I-} unitread(floppy,CBflop,sizeof(Cbflop),fblk); {$I+} ior := IORESUlT;
+        if ior=0 then begin
+          {compare fields of CBlk to CBflop}
+          VrfyCtrlBlk :=  ( (cdate=CBflop.cdate) and (cosvr=CBflop.cosvr)
+                           and (cflops=CBflop.cflops) and (ccfn=CBflop.ccfn)
+                           and (cblks=CBflop.cblks) and (ccopy=CBflop.ccopy) );
+        end else begin
+          write('Read of Floppy '); IOerror(ior);
+          VrfyCtrlBlk := FALSE;
+        end;
+      end;
+    END; {VrfyCtrlBlk}
+
+   FUNCTION VrfyBoot( flop : integer; var sysblk,fblk : integer ) : boolean;
+    {Returns :  TRUE  if boot blocks are good.}
+    Var
+      i,j : integer;
+      Error : boolean;
+      sblock,fblock : blk;
+
+    BEGIN
+      writeln('Verifying boot blocks.');
+      i := 1;
+      repeat
+        if Rd2Blocks( sblock,fblock,sysblk,fblk) then begin
+          {compare the two for error}
+          j := 1;
+          repeat
+            Error := sblock[j]<>fblock[j];
+            j := j+1;
+          until( (Error) or (j>BLKLEN) );
+          if NOT Error then begin
+            fblk := fblk+1;
+            sysblk := sysblk+1;
+            i := i+1;
+          end else CmprError(sysblk,fblk);
+
+        end else Error := TRUE;
+      until( (Error) or (i>2) );   {2 boot blocks}
+
+      VrfyBoot := NOT Error;
+    END; {VrfyBoot}
+
+   FUNCTION VrfyDir( flop : integer; var sysblk,fblk : integer; Dir : dirhere ) : boolean;
+    {Returns :  TRUE  if Directory is good.}
+    {remember floppies have different directory name}
+    Const
+      NdirBlocks = 4;  {number of blocks in a directory}
+    Var
+      ior : integer;
+      fDir : dirhere;
+
+
+    BEGIN
+      writeln('Verifying Directory.');
+      VrfyDir := FALSE;  {assume fails}
+      {read dir from floppy, at fblk..fblk+3}
+      {$I-} unitread(floppy,fDir,sizeof(fDir),fblk); {$I+} ior := IORESULT;
+      if ior=0 then begin
+        {change the pased dir name to sysvolname}
+        Dir.d[0].dvid := SYSVOLNAME;
+        {compare the two dirs}
+        if CmprDir(Dir,fDir,sizeof(Dir)) then begin
+          writeln('Directory is correct.');
+          VrfyDir := TRUE;  {ok}
+          fblk := fblk+NdirBlocks;
+          sysblk := sysblk+NdirBlocks;
+        end else writeln('Directories did not compare.')
+
+      end else writeln('Cannot read Directory on floppy.');
+    END; {VrfyDir}
+
+   FUNCTION VrfyRest( var flop,sysblk : integer; fblk,NumGood : integer ) : boolean;
+    {Returns :  TRUE  if Rest of floppy compares to sys vol}
+    {looks at one floppy}
+    Var
+      j : integer;
+      Error : boolean;
+      sblock,fblock : blk;
+
+    BEGIN
+
+      repeat
+        write('.');
+        if Rd2Blocks( sblock,fblock,sysblk,fblk) then begin
+          {compare the two for error}
+          j := 1;
+          repeat
+            Error := sblock[j]<>fblock[j];
+            j := j+1;
+          until( (Error) or (j>BLKLEN) );
+          if NOT Error then begin
+            fblk := fblk+1;
+            sysblk := sysblk+1;
+          end else CmprError(sysblk,fblk);
+        end else Error := TRUE;
+      until( (Error) or (fblk>(NumGood+FRSTIMGBLK)) );
+
+      VrfyRest := NOT Error;
+      flop := flop+1;
+      writeln;
+    END; {VrfyRest}
+
+   BEGIN {CmprFlops}
+     header;
+     writeln('Verifying Correct Build of Image Floppies.');
+     flpy := 1; sysblk := 0;
+     repeat
+       Error := TRUE;  {assume failed}
+       flopblk := FRSTIMGBLK;
+       if InsertFlop(flpy) then
+         if VrfyCtrlBlk(CBlk,flpy,NumBlocks,NumFlops,flopblk) then begin {updates CBlk}
+           Error := FALSE;
+           flopblk := flopblk+1;
+           if flpy=1 then begin
+           { writeln('sysblk = ',sysblk:1,'  flopblk = ',flopblk:1);    }
+             if NOT (VrfyBoot(flpy,sysblk,flopblk)) then Error := TRUE
+             else Error := NOT (VrfyDir(flpy,sysblk,flopblk,Dir)); {both Boot and Dir update}
+           end;                                                    { flopblk and sysblk}
+           if NOT Error then Error := NOT (VrfyRest(flpy,sysblk,flopblk,CBlk.cblks));{updates flpy}
+         end else writeln('Invalid control on Image floppy #',flpy:1,'.')
+       else writeln('User termination of verification.');
+     until(flpy>NumFlops) or (Error);
+     CmprFlops := NOT Error;
+   END;{CmprFlops}
+
+  BEGIN {BuildImage}
+    repeat
+       Good := TRUE; {assume get good input}
+       Stop := getstr('Enter Date (form: mmddyy)',
+                         'June 9, 1982 is 060982.',TRUE,Date);
+       if NOT Stop then if LENGTH(Date)<6 then Good := FALSE
+       else if (Verify('the date',Date)) then Date := COPY(Date,1,6)
+                                         else Good := FALSE;
+    until(Stop) or (Good);
+
+    if NOT Stop then begin
+      repeat
+         Good := TRUE; {assume get good input}
+         Stop := getstr('Enter OS version number(form: NN.xx)',
+                           '10.37 or 0.2a.',TRUE,OSVers);
+         if NOT Stop then
+           if (LENGTH(OSVers)=1) and (OSVers[1]='.') then
+             Good := FALSE
+           else begin
+             getvers(OSVers);
+             tmpstr := OSVers;
+             INSERT('.',tmpstr,3);
+             if NOT(Verify('the OS version',tmpstr)) then Good := FALSE;
+           end;
+      until(Stop) or (Good);
+
+      if NOT Stop then if ReadDir(Dir) then begin
+        writeln('Using Date: ',Date,' and OS version number: ',
+           OSVers[1],OSVers[2],'.',OSVers[3],OSVers[4],'.');
+        NumBlocks := CalcBlks(Dir);
+        NumFlops := NumBlocks div (NUMBLKS-2);
+        if (NumFlops*(NUMBLKS-2)) <> NumBlocks then NumFlops := NumFlops+1;
+        if ChkNumFlops(NumFlops) then begin
+          BuildCtrlBlk(Date,OSVers,NumFlops,CBlk);
+          if WriteFlops(Dir,CBlk,NumBlocks,NumFlops) then
+            if CmprFlops(Dir,CBlk,NumBlocks,NumFlops) then writeln('Correctly Completed.')
+            else writeln('Verification failed run program again.')
+          else writeln('Stopped --> did not complete write of floppies.');
+        end else writeln('Stopped --> not enough floppies.');
+      end else writeln('Stopped --> failed to read directory.');
+    end;
+    if Stop then writeln('Stopped --> user abort with ESC key.');
+  END.{BuildImage}

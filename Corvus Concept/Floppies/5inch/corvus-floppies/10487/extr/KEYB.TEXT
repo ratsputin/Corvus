@@ -1,0 +1,20 @@
+Program Keyb;
+
+Const
+  KBUnit = 35;
+
+Type
+  byte = -128..127;
+
+Var
+  b : byte;
+  Counter : Integer;
+
+Begin
+  For COunter := 1 to 20 do begin
+    Repeat Until UnitBusy(KBUnit);
+    UnitRead(KBUnit,b,1);
+    WriteLn('Key value received: ',b:0)
+    End
+End.
+

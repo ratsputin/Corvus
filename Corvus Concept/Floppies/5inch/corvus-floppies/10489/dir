@@ -1,0 +1,29 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY has 22 files,  0 to 6 (6), eov 1440, size 620, free 22
+
+ 1: ACLOCK.TEXT     Ux3c3 19-Jul-84    6-  34(  28), 14336+512= 14848 bytes
+ 2: ANIMATE.TEXT    Ux453  5-Jan-85   34-  40(   6),  3072+512=  3584 bytes
+ 3: CALENDAR.TEXT   Ux453 28-Jul-83   40-  60(  20), 10240+512= 10752 bytes
+ 4: CC.PPP.TEXT     Ux453 17-Jul-84   60- 222( 162), 82944+512= 83456 bytes
+ 5: FINDSTR.TEXT    Ux453 27-Nov-83  222- 230(   8),  4096+512=  4608 bytes
+ 6: FMA.3.2.TEXT    Ux453 28-Mar-84  230- 372( 142), 72704+512= 73216 bytes
+ 7: FMA.TEXT        Ux453 16-Apr-84  372- 492( 120), 61440+512= 61952 bytes
+ 8: HELP.FMA.TEXT   Ux453  9-Feb-84  492- 546(  54), 27648+512= 28160 bytes
+ 9: KEYB.TEXT       Ux453 31-May-84  546- 550(   4),  2048+512=  2560 bytes
+10: KEYS.ISYS.TEXT  Ux453 21-Aug-84  550- 572(  22), 11264+512= 11776 bytes
+11: KEYS.PED.TEXT   Ux453 18-Aug-84  572- 584(  12),  6144+512=  6656 bytes
+12: LOOKUP.TEXT     Ux453 16-Jun-83  584- 606(  22), 11264+512= 11776 bytes
+13: MDTEST.TEXT     Ux453 14-Jan-84  606- 614(   8),  4096+512=  4608 bytes
+14: ML.TEXT         Ux453 19-Jul-84  614- 618(   4),  2048+221=  2269 bytes
+15: MOUSE.TEXT      Ux453 25-Nov-83  618- 632(  14),  7168+512=  7680 bytes
+16: MY.SETDCP.TEXT  Ux453 13-Dec-83  632- 706(  74), 37888+512= 38400 bytes
+17: NBLDMSG.TEXT    Ux453 16-Aug-84  706- 718(  12),  6144+512=  6656 bytes
+18: NML.TEXT        Ux453  1-Aug-84  718- 730(  12),  6144+512=  6656 bytes
+19: OLDLOOK.TEXT    Ux453 26-Feb-84  730- 756(  26), 13312+512= 13824 bytes
+20: P.SPL.TEXT      Ux453 22-Oct-84  756- 778(  22), 11264+512= 11776 bytes
+21: PRETTY.TEXT     Ux453 21-Nov-83  778- 782(   4),  2048+512=  2560 bytes
+22: WPSYSMSG.TEXT   Ux453 28-Aug-84  782- 820(  38), 19456+512= 19968 bytes

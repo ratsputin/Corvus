@@ -1,0 +1,58 @@
+
+    file   : newdrvint.text
+    date   : 15-March-1983
+    author : Keith Ball
+
+
+    The problem :
+
+    Make the spool option built into the system and transparent to
+    applications.  This allows programs to send data to the printer
+    and have the system send it to a pipe to be remotely printed.
+    Currently, a driver cannot be built to perform spool because no
+    open and close calls are passed through to the driver. Therefore,
+    the driver cannot open and close the pipe.
+
+    Ideally, the solution should be a mechanism which allows any other
+    unblocked device to be emulated transparently by a blocked device.
+
+    A solution :
+
+    Add a unitopen and unitclose call to the driver interface.
+
+    When the file system does an open it calls the drivers unitopen
+    procedure.  It passes the file name without the volume name to the
+    driver as the only parameter.  For the spool driver, the file name
+    is the pipe name to open.  When the file system does a close it
+    calls the driver unitclose procedure.  This allows the spool
+    driver to close the pipe.  Pipe writes occur when the unitwrite
+    call is made.
+
+    This mechanism allows a driver to manage a resource which needs
+    preparation before and after each use.
+
+    Unfortunately, this solution does not allow multiple pipes to be
+    open and managed by the driver.  Since no space is available in
+    the FIB to save an integer returned by the driver and no parameter
+    in the other unit commands is available for sending back that
+    integer the driver cannot distinguish between unit operations to
+    different resources, i.e. multiple pipes.
+
+    Sytem changes :
+
+    1) unitopen call in file system
+
+    2) unitclose call in file system
+
+    3) unitopen and unitclose added to OS unit interface code
+
+    4) unitopen and unitclose entry in the system vector table
+
+    5) Addition of unitopen and unitclose to the driver configuration
+       byte in the driver header
+
+    6) Addition of unitopen and unitclose handling in all drivers.
+       These for all current drivers are stubs with an RTS.
+
+    7) Addition of unitopen and unitclose to compilers.  This is not
+       necessary.

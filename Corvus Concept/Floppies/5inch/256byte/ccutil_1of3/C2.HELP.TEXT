@@ -1,0 +1,16 @@
+ Drive Manager    - Manage users, volumes, and access.
+
+ Backup           - Standard or Archival MIRROR, Network Mirror Server.
+
+ Maint            - Constellation parameters, update utilities, mass
+                    storage diagnostic, Omninet test.
+
+ Configure        - Configure a printer, make a boot floppy, etc.
+
+ Utility server   - Control printer service and time service functions.
+
+ Transfer Manager - Manage drive/volume copy functions.
+
+ Init Drive       - Initialize a new drive with Corvus tables and host
+                    operating system.
+

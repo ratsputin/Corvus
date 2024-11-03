@@ -1,0 +1,149 @@
+PROGRAM CopyMaster;
+{$I-}
+{$R-}
+ { Copy Master onto hard disk and verify copy is correct.}
+ {  Used to make Master copy source for DupMaster program.}
+
+ CONST
+        NUMBERBLOCKS = 500;
+        BLOCKSIZE    = 512;
+        floppy       =   9;
+        ESCAPE       = '\1B';
+
+ TYPE
+        dskblk  =  packed array[1..BLOCKSIZE] of char;
+        IOmedium = (INFILE, OUTFILE, MASTERCPY, FLOPMSTR);
+
+ VAR
+        x,i,iores : integer;
+        block1,block2 : dskblk;
+        CmprError,Again : boolean;
+        Direction : IOmedium;
+        ch : char;
+        f : file;
+
+ PROCEDURE OpenMaster( new : boolean );
+ {Open Master file to rewrite or reset depending on new parameter.}
+  VAR
+        iores : integer;
+
+  BEGIN
+    IF new THEN REWRITE(f,'/COPY/MASTER')
+           ELSE RESET(f,'/COPY/MASTER');
+    iores := IORESULT;
+    IF iores<>0 THEN BEGIN
+        IF new THEN WRITELN('Cannot make Master copy.  Is volume /COPY available?')
+               ELSE WRITELN('Cannot find file /COPY/MASTER.');
+        EXIT(CopyMaster);                  {    <===== EXIT IF CAN'T OPEN FILE }
+    END;
+  END;{OpenMaster}
+
+ FUNCTION Wait : boolean;
+  {Wait for user to insert floppy in drive.}
+  {if user presses ESC then return TRUE}
+  VAR
+        a : char;
+
+  BEGIN
+    WRITELN('To stop press [ESC], then press [RETURN].');
+    WRITE('To continue, insert MASTER diskette into drive then press [RETURN].');
+    READLN(a);
+    Wait := (a=ESCAPE);
+    UnitClear(2);    {remove typeahead}
+  END; {Wait}
+
+ FUNCTION CompareBlock( block1,block2 : dskblk ) : boolean;
+  {Compare block1 to block2, if mismatch stop and return TRUE.}
+  VAR
+        MisMatch : boolean;
+        k : integer;
+
+  BEGIN
+    k := 1; MisMatch := FALSE;
+    WHILE( (k<=BLOCKSIZE) AND (NOT MisMatch) ) DO BEGIN
+      MisMatch := (block1[k]<>block2[k]);
+      k := k+1;
+    END;
+    CompareBlock := MisMatch;
+  END;{CompareBlock}
+
+ BEGIN  {DupMaster - MAIN}
+
+   Again := FALSE;
+   CmprError := FALSE;
+
+   {assume floppy is unit 9.  }
+
+   REPEAT
+       OpenMaster(TRUE); {open master copy file as NEW file}
+       {read floppy Master source and write to hard disk volume.}
+        {do 1 block at a time???}
+
+       IF Wait THEN BEGIN
+         WRITELN('Program stopped because [ESC] pressed.');
+         CLOSE(f);
+         EXIT(CopyMaster);            { <===== exit if user presses ESCAPE }
+       END;
+
+       i := 0; iores := 0;
+       WHILE( (iores=0) AND (i<NUMBERBLOCKS) ) DO BEGIN
+           WRITE('.');
+           Direction := INFILE;
+           UnitRead(floppy,block1,BLOCKSIZE,i);
+           iores := IORESULT;
+           IF iores=0 THEN BEGIN
+               Direction := OUTFILE;
+               x := BLOCKWRITE(f,block1,1,i);
+               iores := IORESULT;
+               IF iores=0 THEN i := i+1;
+           END;
+       END;
+
+       WRITELN;
+       IF iores<>0 THEN BEGIN
+           CLOSE(f);
+           IF Direction=INFILE THEN WRITE('Input ') ELSE WRITE('Output ');
+           WRITELN('Error while duplicating: block = ',i:1,'; Error = ',iores:1);
+       END ELSE BEGIN
+           {compare Master copy to floppy source, each block.}
+           {if error report and stop.}
+           CLOSE(f,lock);
+           OpenMaster(FALSE); {open master copy to read}
+           WRITELN('Verifying Copy.');
+           i := 0; iores := 0;
+           WHILE( (iores=0) AND (i<NUMBERBLOCKS) AND (NOT CmprError) ) DO BEGIN
+               WRITE('.');
+               Direction := MASTERCPY;
+               x := BLOCKREAD(f,block1,1,i);
+               iores := IORESULT;
+               IF iores=0 THEN BEGIN
+                   Direction := FLOPMSTR;
+                   UnitRead(floppy,block2,BLOCKSIZE,i);
+                   iores := IORESULT;
+                   IF iores=0 THEN BEGIN
+                       CmprError := CompareBlock(block1,block2);
+                       IF NOT CmprError THEN i := i+1;
+                   END;
+               END;
+           END;
+
+           CLOSE(f);
+           WRITELN;
+           IF iores<>0 THEN BEGIN
+               WRITE('Error while reading ');
+               IF Direction=MASTERCPY THEN WRITE('Master Copy') ELSE WRITE('Floppy Master');
+               WRITELN(': block = ',i:1,'; Error = ',iores:1);
+           END ELSE
+               {check if compare error stopped loop.}
+               IF CmprError THEN WRITELN('Compare Error: block = ',i:1);
+       END;
+
+       IF (iores=0) AND (NOT CmprError) THEN WRITELN('Copy of Master floppy complete.')
+       ELSE BEGIN
+         WRITE('Do you want to run program again? [Y/N] ');
+         READLN(ch);
+         Again := (ch='y') or (ch='Y');
+       END;
+
+   UNTIL ( NOT Again);
+ END.{CopyMaster}

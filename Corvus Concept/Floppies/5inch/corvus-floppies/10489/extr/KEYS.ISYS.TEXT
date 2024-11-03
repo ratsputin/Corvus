@@ -1,0 +1,449 @@
+; ISYS Function Keys
+; File format:
+;   <frame> <key> 'label' 'return string'
+;
+; Change label field ONLY!!!
+
+
+;Main function keys
+
+#1 0  'Main    '
+1  1  'PrevWord' '\1B#00'
+1  2  'NextWord' '\1B#01'
+1  3  'Undo    ' '\1B#02'
+1  4  'Mark    ' '\1B#03'
+1  5  'Ins Char' '\1B#04'
+1  6  'Del Char' '\1B#05'
+1  7  'Del Word' '\1B#06'
+1  8  'Erase   ' '\1B#07'
+1  9  'JoinLine' '\1B#08'
+
+1 11  'Cut Line' '\1B#0A'
+1 12  'PasteLin' '\1B#0B'
+1 13  'Redo    ' '\1B#0C'
+1 14  'Bound   ' '\1B*\0C'
+1 15  'Ins Line' '\1B#0E'
+1 16  'Del Line' '\1B#0F'
+1 18  'Erase+LF' '\1B#11'
+1 19  'WrdXpose' '\1B#12'
+1 20  'PrevMenu' '\1B#09'
+
+; BOUND keys function
+
+#2 0  'Bound   '
+2  1  'CutText ' '\1B#00'
+2  2  'Flush L ' '\1B#01'
+2  3  'Center  ' '\1B#02'
+2  4  'Flush R ' '\1B#03'
+2  5  'Indent  ' '\1B#04'
+2  6  'Del Col ' '\1B#05'
+2  7  'Erase   ' '\1B#06'
+2  8  'Search  ' '\1B#07'
+2  9  'Print   ' '\1B#08'
+2 10  'Main    ' '\1B*\01'
+
+2 11  'CopyText' '\1B#0A'
+2 13  'Sort    ' '\1B#0C'
+2 14  'SpellChk' '\1B#0D'
+2 15  'Save    ' '\1B#0E'
+2 16  'Del Line' '\1B#0F'
+2 20  'PrevMenu' '\1B#09'
+
+; ENHANCE function keys
+
+#3 0  'Enhance '
+3  1  'ULine   ' '\1B#00'
+3  2  'Sub     ' '\1B#01'
+3  3  'Bold    ' '\1B#02'
+3  4  'OverStrk' '\1B#03'
+3  5  'Insert  ' '\1B#04'
+3  6  'Enh On  ' '\1B#05'
+3  7  'Enh Off ' '\1B#06'
+3 10  'Main    ' '\1B*\01'
+
+3 12  'Super   ' '\1B#0B'
+3 13  'StrkOut ' '\1B#0C'
+3 14  'Logo    ' '\1B#0D'
+3 15  'TradeMrk' '\1B#0E'
+3 20  'PrevMenu' '\1B#09'
+
+;SEARCH function keys
+
+#4 0  'Search  '
+4  1  'Pattern1' '\1B#00'
+4  2  'Pattern2' '\1B#01'
+4  3  'CursrPat' '\1B#02'
+4  4  'Prev    ' '\1B#03'
+4  5  'Next    ' '\1B#04'
+4  6  'WordSrch' '\1B#05'
+4  7  'Replace ' '\1B#06'
+4  8  'Show All' '\1B#07'
+4 10  'Main    ' '\1B*\01'
+4 20  'PrevMenu' '\1B#09'
+
+4 11  'Pattern3' '\1B#0A'
+4 12  'Pattern4' '\1B#0B'
+4 14  'First   ' '\1B#0D'
+4 15  'Last    ' '\1B#0E'
+4 18  'Look Fwd' '\1B#11'
+
+; DOCUMENT function keys
+
+#5 0  'Document'
+5  1  'LoadFile' '\1B#00'
+5  3  'ClearPad' '\1B#02'
+5  5  'SaveFile' '\1B#04'
+5  6  'Make Pad' '\1B#05'
+5  7  'Ins File' '\1B#06'
+5  8  'View Dir' '\1B#07'
+5  9  'View Pad' '\1B#08'
+5 10  'Main    ' '\1B*\01'
+5 11  'Fix Dir ' '\1B#0A'
+5 20  'PrevMenu' '\1B#09'
+
+5 13  'Del Pad ' '\1B#0C'
+5 16  'Make Dir' '\1B#0F'
+5 17  'Clean   ' '\1B#10'
+5 18  'List Vol' '\1B#11'
+
+; USER function keys
+
+#6 0  'UserKeys'
+6  9  'Use Name' '\1B#08'
+6 10  'Main    ' '\1B*\01'
+
+6 19  'LoadDefn' '\1B#12'
+6 20  'Define  ' '\1B#13'
+
+; PrtFrmat function keys
+
+#7 0  'PrintFmt'
+7  1  'Footer  ' '\1B#00'
+7  2  'LinSpcng' '\1B#01'
+7  3  'Fill    ' '\1B#02'
+7  4  'Margins ' '\1B#03'
+7  5  'Page Brk' '\1B#04'
+7  6  'SkipLine' '\1B#05'
+7  7  'Center  ' '\1B#06'
+7  8  'Page Off' '\1B#07'
+7  9  'Comment ' '\1B#08'
+7 10  'Main    ' '\1B*\01'
+7 20  'PrevMenu' '\1B#09'
+
+7 11  'Header  ' '\1B#0A'
+7 13  'Justify ' '\1B#0C'
+7 15  'NeedLins' '\1B#0E'
+7 16  'FigSpace' '\1B#0F'
+7 18  'Page Len' '\1B#11'
+7 19  'Ascii   ' '\1B#12'
+
+; FORM function keys
+
+#8 0  'Forms   '
+8  1  'Prev Rec' '\1B#00'
+8  2  'Next Rec' '\1B#01'
+8  3  'Search  ' '\1B#02'
+8  5  'Ins Rec ' '\1B#04'
+8  6  'Del Rec ' '\1B#05'
+8  7  'Sort    ' '\1B#06'
+8  8  'Print   ' '\1B#07'
+8  9  'Word Cap' '\1B#08'
+8 10  'Main    ' '\1B*\01'
+
+8 11  'FirstRec' '\1B#0A'
+8 12  'Last Rec' '\1B#0B'
+8 20  'PrevMenu' '\1B#09'
+
+; GOTO function keys
+
+#9 0  'Go To   '
+9  1  'GotoLine' '\1B#00'
+9  2  'GotoMark' '\1B#01'
+9  4  'PrevPage' '\1B#03'
+9  5  'NextPage' '\1B#04'
+9  6  'PrevScrn' '\1B#05'
+9  7  'NextScrn' '\1B#06'
+9  8  'FrstLine' '\1B#07'
+9  9  'LastLine' '\1B#08'
+9 10  'Main    ' '\1B*\01'
+
+9 19  'Cancel  ' '\1B#12'
+9 20  'PrevMenu' '\1B#09'
+
+; PRINT function keys
+
+#10 0  'Print   '
+10  1  'Pause   ' '\1B#00'
+10  2  'Continue' '\1B#01'
+10  3  'Enhance ' '\1B#02'
+10  4  'SglSheet' '\1B#03'
+10  5  'PageRng ' '\1B#04'
+10  6  'Display ' '\1B#05'
+10  7  'Printer ' '\1B#06'
+10  8  'File    ' '\1B#07'
+10  9  'LayOut  ' '\1B#08'
+10 10  'Main    ' '\1B*\01'
+
+10 15  'Index   ' '\1B#0E'
+10 16  'Spooler ' '\1B#0F'
+10 19  ' ABORT  ' '\1B#12'
+10 20  'PrevMenu' '\1B#09'
+
+; SET function keys
+
+#11 0  'Settings'
+11  1  'Set Scrl' '\1B#00'
+11  2  'BaseFont' '\1B#01'
+11  3  'CommFlg ' '\1B#02'
+11  4  'Left Mar' '\1B#03'
+11  5  'RightMar' '\1B#04'
+11  6  'Tab Set ' '\1B#05'
+11  7  'Tab Clr ' '\1B#06'
+11  8  'LoadTabs' '\1B#07'
+11  9  'ProgMode' '\1B#08'
+11 10  'Main    ' '\1B*\01'
+
+11 15  'Clr Mar ' '\1B#0E'
+11 16  'Set Tabs' '\1B#0F'
+11 17  'Clr Tabs' '\1B#10'
+11 18  'SaveTabs' '\1B#11'
+11 20  'PrevMenu' '\1B#09'
+
+; REPLACE function Keys
+
+#12 0  'Replace '
+12  4  'Prev    ' '\1B#03'
+12  5  'Next    ' '\1B#04'
+12  6  'Change  ' '\1B#05'
+12  7  'Replace ' '\1B#06'
+12 10  'Main    ' '\1B#09'
+
+; SHOW function keys
+
+#13 0  'ShowAll '
+13  4  'Prev    ' '\1BA'
+13  5  'Next    ' '\1BB'
+13  6  'Cancel  ' '\1B#04'
+13 10  'Exit    ' '\1B#09'
+
+
+; ADJUST function keys
+
+#14 0  'Adjust  '
+14  1  'Left    ' '\1BD'
+14  2  'Right   ' '\1BC'
+14  3  'Hyphen  ' '\1B#02'
+14  4  'Break   ' '\1B#03'
+14  5  'No Break' '\0D'
+14  6  'Mar Rel ' '\1B#05'
+14 10  'Main    ' '\1B*\01'
+14 20  'PrevMenu' '\1B#09'
+
+; SET MARGINS and TABS
+
+#15 0  'SetMarTb'
+15  1  ' <--    ' '\1B#00'
+15  2  ' -->    ' '\1B#01'
+15  4  ' <--8   ' '\1B#03'
+15  5  ' 8-->   ' '\1B#04'
+15 10  'Put Here' '\1B#09'
+
+; SORT function keys
+
+#16 0  'Sort  '
+16  1  'Sort Key' '\1B#00'
+16  3  '        ' '\1B#02'
+16  5  'Order   ' '\1B#01'
+16  6  'Start   ' '\1B#05'
+16 10  'Main    ' '\1B*\01'
+16 20  'PrevMenu' '\1B#09'
+
+
+; MoveText function keys
+
+#17 0  'MoveText   '
+
+17  1  'Cut Line' '\1B#00'
+17  2  'CopyLine' '\1B#01'
+17  3  'ClearBuf' '\1B#02'
+17  4  'PasteLin' '\1B#03'
+17  5  'PasteChr' '\1B#04'
+17  6  'Shift L ' '\1B#05'
+17  7  'Shift R ' '\1B#06'
+17  8  'Flush L ' '\1B#07'
+17  9  'Flush R ' '\1B#08'
+17 10  'Main    ' '\1B*\01'
+
+17 11  'Cut Sent' '\1B#0A'
+17 14  'PasteOvr' '\1B#0D'
+17 15  'PasteCol' '\1B#0E'
+17 16  'ShiftLen' '\1B#0F'
+17 18  'Center  ' '\1B#11'
+17 20  'PrevMenu' '\1B#09'
+
+; SELFTEST function keys
+
+#18 0  'SelfTest'
+18  1  'TestWkSp' '\1B#00'
+18  2  'TestWkPd' '\1B#01'
+18  6  '(Corvus)' '\1B#05'
+18 10  'Main    ' '\1B*\01'
+18 20  'PrevMenu' '\1B#09'
+
+; COMMAND function keys
+
+#19 1  'Main      '
+
+19  1  'Adjust  ' '\1B*\17'
+19  2  'Settings' '\1B*\06'
+19  3  'DeskTool' '\1B!\1A'
+19  4  'PrintFmt' '\1B*\07'
+19  5  'Search  ' '\1B*\02'
+19  6  'MoveText' '\1B*\0E'
+19  7  'Enhance ' '\1B*\05'
+19  8  'Goto    ' '\1B*\0B'
+19  9  'Document' '\1B*\09'
+19 10  'Suspend ' '\1B*\08'
+
+19 11  'SpellChk' '\1B*\1B'
+19 12  '  <EX>  ' '\1B*\21'
+19 15  'Lists   ' '\1B!\1B'
+19 16  'Print   ' '\1B*\03'
+19 18  'New Wksp' '\1B*\20'
+19 19  'SelfTest' '\1B*\0A'
+19 20  'EXIT    ' '\1B*\0F'
+
+; 20 EX keys
+
+#20 0 'EX Task  '
+
+20  1  'Externs ' '\1B#00'
+20  5  '  GO    ' '\1B#04'
+20 10  'Main    ' '\1B*\01'
+
+; CALCULATOR KEYS
+
+#22 0  'Calc    '
+22  1  'Sin     ' '\1B#00'
+22  2  'Cos     ' '\1B#01'
+22  3  'Tan     ' '\1B#02'
+22  4  'Ln      ' '\1B#03'
+22  5  'Sqrt    ' '\1B#04'
+22  6  'Mem +   ' '\1B#05'
+22  7  'Mem -   ' '\1B#06'
+22  8  'Fix     ' '\1B#07'
+22  9  '   =    ' '='
+22 10  'Main    ' '\1B*\01'
+22 20  'PrevMenu' '\1B#09'
+
+22 13  'ATan    ' '\1B#0C'
+22 14  'Exp     ' '\1B#0D'
+
+; FINANCE KEYS
+
+#23 0  'Finance '
+23  1  'Interest' '\1B*\18'
+23 10  'Main    ' '\1B*\01'
+23 20  'PrevMenu' '\1B#09'
+
+
+; NON-EDITING MAIN KEYS
+
+#24 0  'Main    '
+24  1  'PrevWord' '\1B#00'
+24  2  'NextWord' '\1B#01'
+24  3  'Undo    ' '\1B#02'
+24 13  'Redo    ' '\1B#0C'
+24 20  'PrevMenu' '\1B#09'
+
+; ADJUST KEYS
+
+#25 0  'Adjust  '
+25  1  'Standard' '\1B#00'
+25  2  'Block   ' '\1B#01'
+25  3  'Indented' '\1B#02'
+25  4  'Quote   ' '\1B#03'
+25  5  'Item    ' '\1B#04'
+25  6  'ParaFrmt' '\1B#05'
+25  7  'Justify ' '\1B#06'
+25  8  'PrevPara' '\1B#07'
+25  9  'NextPara' '\1B#08'
+25 10  'Main    ' '\1B*\01'
+
+25 17  'Hyphenat' '\1B#10'
+25 20  'PrevMenu' '\1B#09'
+
+; DESKTOOL KEYS
+
+#26 0  'DeskTool'
+26  1  'Calendar' '\1B*\18'
+26  3  'Clock   ' '\1B*\1C'
+26  5  'Calc    ' '\1B*\12'
+26 10  'Main    ' '\1B*\01'
+26 20  'PrevMenu' '\1B#09'
+
+; LISTS  FRAME
+
+#27 0  'Lists   '
+27  1  'EditList' '\1B*\04'
+27  5  'New List' '\1B*\1F'
+27 10  'Main    ' '\1B*\01'
+27 20  'PrevMenu' '\1B#09'
+
+; SPELL KEYS
+
+#28 0  'Spell   '
+28  1  'Word    ' '\1B#00'
+28  3  'Document' '\1B#02'
+28  5  'EditDict' '\1B#04'
+28 10  'Main    ' '\1B*\01'
+28 20  'PrevMenu' '\1B#09'
+
+; WORD DISPOSITION KEYS
+
+#29 0  'WrdDisp'
+29  1  'AddWord'  '\1B#00'
+29  3  'KeepWord' '\1B#02'
+29  5  'SkipWord' '\1B#04'
+29  6  'Replace ' '\1B#05'
+29 10  'Abort   ' '\1B#09'
+
+; CALENDAR KEYS
+
+#30 0  'Calendar'
+30  1  'Month   ' '\1B#00'
+30  2  'Year    ' '\1B#01'
+30  4  'PrevMnth' '\1B#03'
+30  5  'NextMnth' '\1B#04'
+30  6  'PrevYear' '\1B#05'
+30  7  'NextYear' '\1B#06'
+30 10  'Main    ' '\1B*\01'
+30 20  'PrevMenu' '\1B#09'
+
+; CLOCK KEYS
+
+#31 0  'Clock   '
+31  1  'TimeZone' '\1B#00'
+31  4  'Lap     ' '\1B#03'
+31  5  'StopWtch' '\1B#04'
+31  8  'Set Time' '\1B#07'
+31 10  'Main    ' '\1B*\01'
+31 20  'PrevMenu' '\1B#09'
+
+; LOOKUP KEYS
+
+#32 0  'Lookup  '
+32  1  'Select  ' '\1B#00'
+32  2  'Showall ' '\1B#01'
+32  6  'LoadFile' '\1B#05'
+32  7  'SaveFile' '\1B#06'
+32 10  'Main    ' '\1B#09'
+
+; Dictionary edit keys
+
+#33 0  'EditDict'
+33  1  'PrevWord' '\1B#00'
+33  2  'NextWord' '\1B#01'
+33  5  'Add Word' '\1B#04'
+33  6  'Del Word' '\1B#05'
+33 10  'Quit    ' '\1B#09'

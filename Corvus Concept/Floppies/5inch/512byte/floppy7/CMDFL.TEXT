@@ -1,0 +1,5 @@
+!assign /kb/drv.systrm systerm 2 <% >/null
+y
+!assign =2 console 1 <% >/null
+y
+

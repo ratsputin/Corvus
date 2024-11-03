@@ -1,0 +1,316 @@
+; File: CC.PROM.EQ.TEXT
+; Date: 18-Jan-84
+;
+
+PROMvers equ    1               ;Current PROM version number
+PROMlevl equ    15        ;{!CV};Current PROM version number (interim)
+PROMlevl equ    0         ;{!UP};Current PROM level number
+                                ;
+RAMbase  equ    $00000          ;Base address of low RAM
+RAMlen   equ    $1000           ;Length of low RAM (4k bytes)
+RAMkbbuf equ    RAMbase+$300    ;Start of keyboard buffer
+RAMkblen equ    $100            ;Length of keyboard buffer
+RAMmxbug equ    RAMbase+$400    ;Start of MACSBUG RAM
+RAMwksta equ    RAMbase+$700    ;Start of workstation RAM
+RAMend   equ    RAMbase+RAMLen  ;End address + 1 of low RAM
+                                ;
+ROMbase  equ    $10000          ;Base address of workstation PROM
+ROMlen   equ    $2000           ;Length of workstation PROM
+ROMend   equ    ROMbase+ROMlen  ;End address + 1 of workstation PROM
+                                ;
+MXBbase  equ    $20000          ;Base address of MACSBUG (if present)
+MXBlen   equ    $2000           ;Length of MACSBUG
+MXBend   equ    MXBbase+MXBlen  ;End address + 1 of MACSBUG
+MXBinit  equ    MXBbase+4       ;Address of MacsBug init vector         0.5
+MXBentry equ    MXBbase+8       ;Address of MacsBug entry vector        0.5
+                                ;
+IOPbase  equ    $30000          ;Base address of I/O pg
+IOPprom  equ    IOPbase+$0200   ;Base address of slot PROMs             0.7
+VIAbase  equ    IOPbase+$0F00   ;Base address of VIA registers
+                                ;
+DSPbase  equ    $80000          ;{!CC}Base address of display buffer    0.8
+DSPlen   equ    $0E000          ;{!CC}Length of display buffer          0.8
+DSPend   equ    DSPbase+DSPlen  ;{!CC}End address + 1 of display buffer 0.8
+USRbase  equ    DSPend          ;{!CC}Base address of user RAM          0.8
+                                ;
+DSPbase  equ    $880000         ;{!UC}Base address of display buffer    0.8
+DSPlen   equ    $00E000         ;{!UC}Length of display buffer          0.8
+DSPend   equ    DSPbase+DSPlen  ;{!UC}End address + 1 of display buffer 0.8
+USRbase  equ    $080030         ;{!UC}Base address of user RAM          0.8
+                                ;
+DSPbase  equ    $80000          ;{!VN}Base address of display buffer    0.8
+DSPlen   equ    $0E000          ;{!VN}Length of display buffer          0.8
+DSPend   equ    DSPbase+DSPlen  ;{!VN}End address + 1 of display buffer 0.8
+USRbase  equ    DSPend          ;{!VN}Base address of user RAM          0.8
+                                ;
+MEMprom  equ    $90000          ;memory limit if not in PROM            0.7
+MEM256k  equ    $BFFFC          ;memory limit for 256k system           0.7
+
+MEM512k  equ    $FFFFC          ;{!CV};memory limit for 512k system     0.7
+MEM512k  equ    $FF7FC          ;{!UC};memory limit for 512k system     0.8
+
+        page
+;
+; Corvus CONCEPT Workstation interrupt vector definition
+;
+IVlvl1   equ    $64             ;level 1 interrupt vector (SLOTS)
+IVlvl2   equ    $68             ;level 2 interrupt vector (DC1)
+IVlvl3   equ    $6C             ;level 3 interrupt vector (OMNINET)
+IVlvl4   equ    $70             ;level 4 interrupt vector (DC0)
+IVlvl5   equ    $74             ;level 5 interrupt vector (TIMER)
+IVlvl6   equ    $78             ;level 6 interrupt vector (KYDB)
+IVlvl7   equ    $7C             ;level 7 interrupt vector
+
+;
+; Corvus CONCEPT Workstation static RAM address definition
+;
+CPbtslot equ    RAMwksta+$000   ;(700-700) boot slot number
+CPbtsrvr equ    RAMwksta+$001   ;(701-701) boot server number
+                                ;(702-705)
+CPosslot equ    RAMwksta+$006   ;(706-706) OS volume slot number
+CPossrvr equ    RAMwksta+$007   ;(707-707) OS volume server number
+CPosdrv  equ    RAMwksta+$008   ;(708-708) OS volume drive number
+CPosblk  equ    RAMwksta+$009   ;(709-70B) OS volume block number
+CPtrnvrs equ    RAMwksta+$00C   ;(70C-70C) OMNINET transporter version
+CPtprnbr equ    RAMwksta+$00D   ;(70D-70D) OMNINET transporter number
+CPdiskRC equ    RAMwksta+$00E   ;(70E-70E) disk controller return code
+CPomniRC equ    RAMwksta+$00F   ;(70F-70F) OMNINET return code
+                                ;
+CPtimout equ    RAMwksta+$010   ;(710-713) boot disk timeout value      0.7
+CPblkio  equ    RAMwksta+$014   ;(714-717) boot disk blk i/o subr pointer
+CPdskio  equ    RAMwksta+$018   ;(718-71B) boot disk i/o subr pointer
+                                ;
+CPuserID equ    RAMwksta+$01C   ;(71C-725) user name (decrypted)
+CPusernm equ    RAMwksta+$026   ;(726-72F) user name (encrypted)
+                                ;
+CPfinlv  equ    RAMwksta+$030   ;(730-733) floppy interleave table pointer
+CPfdvsz  equ    RAMwksta+$034   ;(734-735) floppy device size (blocks)
+CPfbps   equ    RAMwksta+$036   ;(736-737) floppy bytes per sector
+CPfspt   equ    RAMwksta+$038   ;(738-738) floppy sectors per track
+CPftps   equ    RAMwksta+$039   ;(739-739) floppy tracks per side
+CPfspd   equ    RAMwksta+$03A   ;(73A-73A) floppy sides per disk
+CPfofst  equ    RAMwksta+$03B   ;(73B-73B) floppy first track offset
+CPftyp   equ    RAMwksta+$03C   ;(73C-73C) floppy type
+                                ;
+CPwndrcd equ    RAMwksta+$040   ;(740-763) system window record (36 bytes)
+CPscnofs equ    RAMwksta+$064   ;(764-765) bytes per display scan line
+CPdspflg equ    RAMwksta+$066   ;(766-766) display flags
+CPbblen  equ    RAMwksta+$067   ;(767-767) blind boot user name length  0.8
+CPbbname equ    RAMwksta+$068   ;(768-76F) blind boot user name         0.8
+
+        page
+CPsl1typ equ    RAMwksta+$071   ;(771-771) slot device type for slot 1
+CPsl2typ equ    RAMwksta+$072   ;(772-772) slot device type for slot 2
+CPsl3typ equ    RAMwksta+$073   ;(773-773) slot device type for slot 3
+CPsl4typ equ    RAMwksta+$074   ;(774-774) slot device type for slot 4
+CPsl5typ equ    RAMwksta+$075   ;(775-775) slot device type for slot 5
+                                ;
+CPuserpw equ    RAMwksta+$080   ;(780-787) user password (encrypted)    0.7
+CPomnidv equ    RAMwksta+$090   ;(790-7CF) network devices (64 bytes)   0.7
+                                ;          (indexed by transporter nbr) 0.7
+CPsrvnam equ    RAMwksta+$0D0   ;(7D0-7D9) disk server name (10 bytes)  0.8
+CPticks  equ    RAMwksta+$0DA   ;(7DA-7DD) 50 ms. ticks from timer drvr 0.8
+                                ;
+CPomnram equ    RAMwksta+$180   ;(880-88F) static RAM for OMNINET
+CPsl1ram equ    RAMwksta+$200   ;(900-9FF) static RAM for slot 1 device
+CPsl2ram equ    RAMwksta+$300   ;(A00-AFF) static RAM for slot 2 device
+CPsl3ram equ    RAMwksta+$400   ;(B00-BFF) static RAM for slot 3 device
+CPsl4ram equ    RAMwksta+$500   ;(C00-CFF) static RAM for slot 4 device
+                                ;
+CPiobuf  equ    RAMwksta+$600   ;(D00-EFF) I/O buffer (512 bytes)
+CPstack  equ    RAMwksta+$800   ;(F00-FFF) initial system stack
+CPextcrt equ    RAMwksta+$800   ;(F00-F00) external CRT flag
+CPsysst  equ    RAMwksta+$801   ;(F01-F01) system initialization status
+CPistack equ    RAMwksta+$8FC   ;(FFC-FFC) initial system stack pointer
+                                ;
+CPomnibf equ    USRbase-$30     ;OMNINET driver buffer (48 bytes)       0.8
+                                ;   (OMNINET can't access below $80000)
+        page
+;
+; Corvus CONCEPT Workstation PROM address vector definitions
+;
+CPsysrst equ    ROMbase+$004    ;(10004) system restart pointer
+CPuniqid equ    ROMbase+$008    ;(10008) unique workstation ID
+CPromvrs equ    ROMbase+$00C    ;(1000C) PROM version number
+CPromlvl equ    ROMbase+$00D    ;(1000D) PROM level number
+CPcksum  equ    ROMbase+$00E    ;(1000E) PROM checksum
+                                ;
+CPobootj equ    ROMbase+$010    ;(10010) jump to OMNINET disk boot subr
+CPoboot  equ    ROMbase+$012    ;(10012) OMNINET disk boot subr pointer
+CPoblkio equ    ROMbase+$016    ;(10016) OMNINET disk blk i/o subr pointer
+CPodskio equ    ROMbase+$01A    ;(1001A) OMNINET disk i/o subr pointer
+                                ;
+CPlbootj equ    ROMbase+$020    ;(10020) jump to local disk boot subr
+CPlboot  equ    ROMbase+$022    ;(10022) local disk boot subr pointer
+CPlblkio equ    ROMbase+$026    ;(10026) local disk blk i/o subr pointer
+CPldskio equ    ROMbase+$02A    ;(1002A) local disk i/o subr pointer
+                                ;
+CPfbootj equ    ROMbase+$030    ;(10030) jump to floppy disk boot subr
+CPfboot  equ    ROMbase+$032    ;(10032) floppy boot subr pointer
+CPfblkio equ    ROMbase+$036    ;(10036) SSSD floppy blk i/o subr pointer
+CPfsctio equ    ROMbase+$03A    ;(1003A) SSSD floppy sector i/o subr pointer
+CPfinit  equ    ROMbase+$03E    ;(1003E) SSSD floppy initialization
+;Pablkio equ    ROMbase+$042    ;(10042) Apple floppy blk i/o subr pointer
+;Pasctio equ    ROMbase+$046    ;(10046) Apple floppy sector i/o subr pointer
+;Painit  equ    ROMbase+$04A    ;(1004A) Apple floppy initialization
+CPxblkio equ    ROMbase+$042    ;(10042) DDDS floppy blk i/o subr ptr   0.7
+CPxsctio equ    ROMbase+$046    ;(10046) DDDS floppy sctr i/o subr ptr  0.7
+CPxinit  equ    ROMbase+$04A    ;(1004A) DDDS floppy initialization     0.7
+                                ;
+CPkbinit equ    ROMbase+$050    ;(10050) initialize (reset) keyboard driver
+CPkbgetc equ    ROMbase+$054    ;(10054) get a keyboard character
+                                ;
+CPdsinit equ    ROMbase+$060    ;(10060) initialize display driver
+CPdsputc equ    ROMbase+$064    ;(10064) display a character
+CPdsputs equ    ROMbase+$068    ;(10068) display a string
+CPdscvuc equ    ROMbase+$06C    ;(1006C) convert character to upper case
+                                ;
+CPivec1  equ    ROMbase+$070    ;(10070) level 1 interrupt vector (SLOTS)
+CPivec2  equ    ROMbase+$074    ;(10074) level 2 interrupt vector (DC1)
+CPivec3  equ    ROMbase+$078    ;(10078) level 3 interrupt vector (OMNINET)
+CPivec4  equ    ROMbase+$07C    ;(1007C) level 4 interrupt vector (DC0)
+CPivec5  equ    ROMbase+$080    ;(10080) level 5 interrupt vector (TIMER)
+CPivec6  equ    ROMbase+$084    ;(10084) level 6 interrupt vector (KYDB)
+CPivec7  equ    ROMbase+$088    ;(10088) level 7 interrupt vector
+
+        page
+;
+; Corvus CONCEPT Workstation I/O pg definitions
+;
+IOkybd   equ    VIAbase+$05     ;(30F05) level 6 - keyboard             0.7
+IOdc0    equ    VIAbase+$25     ;(30F25) level 4 - data comm 0          0.7
+IOdc1    equ    VIAbase+$45     ;(30F45) level 2 - data comm 1          0.7
+IObootsw equ    VIAbase+$61     ;(30F61) boot selection switches
+IObeepfq equ    VIAbase+$71     ;(30F71) beep frequency
+IOtimr   equ    VIAbase+$7D     ;(30F7D) level 5 - timer                0.7
+IOslot   equ    VIAbase+$7F     ;(30F7F) level 1 - slots (port A ORA)   0.7
+IOomni   equ    VIAbase+$C1     ;(30FC1) level 3 - OMNINET              0.7
+
+;
+; Slot device types  (set in CPsl1typ..CPsl5typ)
+;
+DTndev   equ    0               ;no device
+DTlocl   equ    1               ;local disk
+DTomni   equ    2               ;OMNINET disk
+DTc8     equ    3               ;Corvus 8" SSSD floppy disk
+DTc5     equ    4               ;Corvus 5" SSSD floppy disk (unused)
+DTa5     equ    5               ;Apple 5" floppy disk
+                                ;
+DTbank   equ    6               ;Corvus BANK
+                                ;
+DTf8     equ    7               ;Corvus 8" DSDD floppy disk
+DTf5     equ    8               ;Corvus 5" DSDD floppy disk
+DTf3     equ    9               ;Corvus 3" DSDD floppy disk
+
+; Miscellaneous equates
+;
+off      equ    0               ;
+on       equ    1               ;
+false    equ    0               ;Pascal FALSE boolean
+true     equ    1               ;Pascal TRUE boolean
+
+jumpto   equ    $4EF9           ;"jmp" op code
+
+DskRead  equ    $32             ;disk read command
+DskWrit  equ    $33             ;disk write command
+
+NTO1     equ    $00040000       ;{!CC};network timeout - broadcast
+NTO2     equ    $07FFFFFF       ;{!CC};network timeout - normal traffic
+                                ;{!CC}; (25 minutes)
+NTO1     equ    $000C0000       ;{!MM};network timeout - broadcast
+NTO2     equ    $0FFFFFFF       ;{!MM};network timeout - normal traffic
+                                ;{!MM}; (25 minutes)
+    page   ;driver address equates
+;
+; CC.PROM.KB -- Keyboard driver equates
+;
+;
+; ADDRESSES OF KEYBOARD UART'S I/O REGISTERS
+;
+KBRdata  EQU    VIAbase+$01     ;DATA INPUT PORT
+KBRstat  EQU    VIAbase+$03     ;STATUS REGISTER
+KBRcmnd  EQU    VIAbase+$05     ;COMMAND REGISTER
+KBRcntl  EQU    VIAbase+$07     ;CONTROL REGISTER
+;
+; External CRT equates
+;
+KBcPort equ     $30f21          ;data comm 0 UART pointer
+KBuDa   equ     0               ;UART data port offset
+KBuSt   equ     2               ;UART status port offset
+KBrdBit equ     3               ;busy bit for input
+
+
+;
+; CC.PROM.DS -- Display driver equates
+;
+DShomeH  equ    $8D55E          ;{!CC}horizontal home location          0.8
+DShomeV  equ    $8D506          ;{!CC}vertical home location            0.8
+DShomeH  equ    $88D55E         ;{!UC}horizontal home location          0.8
+DShomeV  equ    $88D506         ;{!UC}vertical home location            0.8
+DShomeH  equ    $8D55E          ;{!VN}horizontal home location          0.8
+DShomeV  equ    $8D506          ;{!VN}vertical home location            0.8
+DSdefOf  equ    96              ;default bytes per scan line
+DScellW  equ    6               ;character cell width
+DScellY  equ    10              ;character cell height
+DSmaxXH  equ    719             ;120*DScellW-1
+DSmaxYH  equ    559             ;56*DScellY-1
+DSmaxXV  equ    557             ;93*DScellW-1
+DSmaxYV  equ    719             ;72*DScellY-1
+;
+; External CRT equates
+;
+DScPort equ     $30f21          ;data comm 0 UART pointer
+DSuDa   equ     0               ;UART data port offset
+DSuSt   equ     2               ;UART status port offset
+DSwrBit equ     4               ;busy bit for output
+
+
+
+;
+; CC.PROM.LD -- Local disk driver equates
+;
+
+
+;
+; CC.PROM.OD -- Omninet disk driver equates
+;
+StrAdr  EQU     $30FA1  ;address of Transporter register
+RdyAdr  EQU     $30F7F  ;address of VIA register A, used for Omninet ready
+
+        page   ;driver address equates (continued)
+;
+; CC.PROM.FD -- Corvus 8" SSSD floppy disk driver equates
+;
+; FLOPPY MAIN EQUATES USED BY THE DRIVERS AND FORMAT CODE GROUPS.
+; indices to code in static ram - ram is slot dependent $900 for
+; $A00 for slot 2, $B00 for slot 3, and $C00 for slot 4.
+;
+BASERAM  equ    CPsl1ram        ;ADDRESS OF FIRST RAM FOR SLOTS
+BLKSZ    equ    512             ;OS BLOCK SIZE
+;
+; SLOT BASE ADDRESSES
+;
+; The floppy controller is inserted into one of the slots.
+; Each slot has two address select decodes coming to it.
+; One is called NDEVSEL and the other is called SLOTSEL.
+;
+NDEV1AD   equ   $30001          ;ADRS OF NDEV0 (does not exist)
+DEVADOFST equ   $20             ;OFFSET OF OTHER NDEVS ADRS
+                                ;
+SLOT1AD   equ   $30001          ;ADRS OF slot 0 (does not exist)
+SLTADOFST equ   $200            ;ADRS OFST FOR OTHER SLOTS
+                                ;
+SLTSTAD   equ   $30A01          ;SLOT STATUS ADRS
+
+
+;
+; CC.PROM.FB -- Corvus 8" DDDS floppy disk driver equates
+;
+; I/O slot base address
+;
+IOSbase  EQU    $30001          ;as if a slot 0 existed
+IOSoffst EQU    $20             ;offset to next slot
+                                ;
+DBPoffst EQU    $100            ;offset to next pg of static ram
+MAXdrive EQU    4               ;maximum number of drives
+

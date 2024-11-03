@@ -1,0 +1,67 @@
+program ReadKbrd;
+ const kbrd = 35; {keyboard unit number}
+       ControlZ = $1A;
+       ControlA = $01;
+       ok = false;
+ var ch : -128..127;
+     keypress : boolean;
+     fourbytes : longint;
+     i,SendRaw : integer;
+
+ procedure display;
+  const bs = $08; {back space}
+        lf = $0A; {line feed}
+        cr = $0D; {carriage return}
+        tab = $09; {tab}
+        esc = $1B; {escape}
+        bell = $07; {bell}
+  var ch1 : -128..127;
+
+  Begin
+    if (ch>=0) and (ch<=$1F) and (NOT(ch in [bell,bs,lf,cr])) then {control character}
+      if ch=esc then write('|Esc|')
+      else if ch=tab then write('           ')  {tab=10 spaces}
+           else write('^',chr(ch+$40))
+    else if ch<0 then begin
+            ch1 := ch+128;
+            if (ch1>=0) and (ch1<=$1F) then write('|alt-^',chr(ch1+$40),'|')
+                                     else write('|alt-',chr(ch1),'|');
+         end else write(chr(ch));
+  End; {display}
+
+BEGIN
+ SendRaw := 0;
+ writeln;
+ writeln('Echo character input from key board.');
+ writeln('Press CONTROL-Z to stop.  Do this by pressing the "CTRL" ');
+ writeln('   and  "Z" keys together.');
+ writeln;
+
+ repeat
+   if ok then write('- DOING UNITBUSY -');
+   keypress := unitbusy(kbrd);
+   if keypress then begin
+      if ok then begin
+         for i:= 1 to 1000 do;
+         write('- DOING 2ND UNITBUSY -');
+         keypress := unitbusy(kbrd) (*  TRUE *);
+         if keypress then begin
+            write('- DOING UNITREAD -');
+            unitread(kbrd,ch,1);
+            display;
+         end else ch := 0;
+      end else begin
+         unitread(kbrd,ch,1);
+         display;
+      end;
+
+      if ch=ControlA then begin
+          SendRaw := 1-SendRaw; {invert}
+          unitstatus(kbrd,SendRaw,0); {change send raw}
+      end;
+
+   end else ch := 0;
+
+ until(ch=ControlZ);
+ writeln;
+END.

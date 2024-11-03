@@ -1,0 +1,373 @@
+; File: nmertexti.text
+; Date: 17-Sep-82
+
+        IDENT   MERTEXTI
+        
+        GLOBAL  %R_C,%R_I,%R_STR,%R_PAOC,%R_LN
+        EXTERN  %_EOLN
+        
+;
+; System EQU's
+;
+
+PSYSCOM EQU     $180            ; Address of pointer to SYSCOM
+
+;
+; ASCII Character EQUs
+;
+
+RUBOUT  EQU     127
+BACKSP  EQU     8
+
+;
+; JSVECT - jump to routine in system vector
+;
+; Parameters: D0.W - routine offset (n*4)
+;
+
+JSVECT
+        MOVE.L  PSYSCOM.W,A0    ; (A0) = syscom
+        MOVE.L  8(A0),A0        ; (A0) = sysvect
+        MOVE.L  0(A0,D0.W),A0   ; (A0) = desired entry point
+        JMP     (A0)            ; Call routine
+
+;
+; FIB record offsets and scalar definitions
+;
+
+F_TVALID EQU    0               ; ISO file, F^ defined
+F_IEMPTY EQU    1               ; Interactive, F^ undefined
+F_IVALID EQU    2               ; Interactive, F^ defined
+F_TEMPTY EQU    3               ; ISO file, F^ undefined
+
+FIBEOL  EQU     4
+FIBEOF  EQU     5
+FIBTEXT EQU     6
+FIBSTAT EQU     7
+FIBRSIZ EQU     8
+FIBUNIT EQU     12
+FIBUPAR EQU     576
+
+;
+; LGET - Perform a get on a file
+;
+; Parameters: A0.L - FIB address
+;
+; All registers preserved
+;
+
+LGET    MOVEM.L D0-D7/A0-A6,-(SP)
+        MOVE.L  A0,-(SP)        ; Push file address
+        MOVEQ   #20,D0          ; FGET = routine #20
+        BSR.S   JSVECT
+        MOVEM.L (SP)+,D0-D7/A0-A6
+        RTS
+        
+;
+; MKVALID - Fetch a character if needed
+;
+; Paratemers: A0.L - File address
+;
+; All registers are preserved.
+;
+
+MKVALID CMPI.B  #F_IVALID,FIBSTAT(A0)
+        BEQ.S   MV_DONE         ; If state <> IVALID or ...
+        CMPI.B  #F_TVALID,FIBSTAT(A0)
+        BEQ.S   MV_DONE         ; ... state <> TVALID then
+        BSR.S   LGET            ; Do a get(f)
+MV_DONE RTS
+
+;
+; MKEMPTY - Set fstate to TEMPTY or IEMPTY
+;
+; Parameters: A0.L - FIB Address
+;
+; All registers are preserved
+;
+
+MKEMPTY CMPI.B  #F_TVALID,FIBSTAT(A0)
+        BNE.S   ME_NISO                 ; If state = TVALID
+        MOVE.B  #F_TEMPTY,FIBSTAT(A0)   ; then state := TEMPTY
+ME_NISO CMPI.B  #F_IVALID,FIBSTAT(A0)
+        BNE.S   ME_DONE                 ; If state = IVALID
+        MOVE.B  #F_IEMPTY,FIBSTAT(A0)   ; then state := IEMPTY
+ME_DONE RTS
+
+;
+; %R_C - Read a character
+;
+; Parameters: ST.L - File Address
+;
+; Returns:    ST.W - The character read
+;
+
+%R_C
+        MOVE.L  A0,-(SP)
+        MOVE.L  8(SP),A0       ; A0 = file address
+        BSR.S   MKVALID
+        CLR.B   10(SP)
+        MOVE.B  FIBUPAR(A0),11(SP)
+        BSR.S   MKEMPTY
+        MOVE.L  (SP)+,A0
+        MOVE.L  (SP),2(SP)
+        ADDQ.L  #2,SP
+        RTS
+
+;
+; %R_LN - READLN
+;
+; Parameters:  ST.L - Address of input file
+;
+
+%R_LN
+        MOVE.L  (SP)+,A2        ; Pop return address
+        MOVE.L  (SP)+,A0        ; A0 = fib address
+        CMPI.B  #F_TEMPTY,FIBSTAT(A0) ; ISO files must ...
+        BNE.S   LN_TEST         ; ... have a valid window
+LN_LOOP BSR     LGET            ; Get a character.
+LN_TEST TST.B   FIBEOL(A0)      ; Was it an EOL?
+        BEQ.S   LN_LOOP         ; No. Get another.
+        CMPI.B  #F_TVALID,FIBSTAT(A0) ; Yes. IOS FILE?
+        BEQ.S   LN_ISO          ; Yes.
+        CLR.B   FIBEOL(A0)      ; No. Clear EOL flag
+        MOVE.B  #F_IEMPTY,FIBSTAT(A0) ; Set state to IEMPTY
+        JMP     (A2)            ; and return.
+LN_ISO  MOVE.B  #F_TEMPTY,FIBSTAT(A0) ; Set state to TEMPTY
+        JMP     (A2)            ; and return.
+
+;
+; %R_PAOC - Read Packed Array of Character
+;
+; Parameters: ST.L - File Address
+;             ST.L - Array Address
+;             ST.W - Size of array in bytes
+;
+
+%R_PAOC
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D2        ; Size of array
+        MOVE.W  D2,D3           ; Save size for RUBOUT and BACK-SPACE
+        MOVE.L  (SP)+,A1        ; Address of PAOC
+        MOVE.L  (SP)+,A0        ; Address of File
+        MOVE.L  A0,-(SP)        ;
+        JSR     %_EOLN          ;
+        TST.B   (SP)+           ; Check for EOL
+        BNE.S   RP_FILL         ; PAOCs never eat an EOL
+        BSR     MKVALID         ; Make sure there's a character
+        BRA.S   RP_BEG          ; Start reading
+RP_LOOP BSR     LGET            ; Do a GET(F)
+RP_BEG  MOVE.L  A0,-(SP)        ; Check for EOL
+        JSR     %_EOLN          ;
+        TST.B   (SP)+           ;
+        BNE.S   RP_FILL         ;
+        MOVE.B  FIBUPAR(A0),D0  ; Fetch the character
+        TST.B   FIBEOF(A0)      ; Check for EOF
+        BNE.S   RP_FILL         ;
+        CMPI.W  #1,FIBUNIT(A0)  ; Is this unit 1?
+        BNE.S   RP_NOT1         ;
+        CMP.B   #RUBOUT,D0      ; Was it a RUBOUT?
+        BEQ.S   RP_RUB
+        CMP.B   #BACKSP,D0      ; Was it a BACK-SPACE?
+        BEQ.S   RP_BAC
+RP_NOT1 MOVE.B  D0,(A1)+
+        SUBQ.W  #1,D2
+        BGT.S   RP_LOOP
+        BSR     MKEMPTY         ; Set state to EMPTY
+        JMP     (A2)
+RP_RUB  MOVE.W  D3,D4
+        SUB.W   D2,D4           ; How many to erase?
+        BEQ.S   RP_LOOP         ; Exit if none
+        SUBA.W  D4,A1           ; Reset pointer
+        MOVE.W  D3,D2           ; Reset counter
+        BSR.S   ERASED4
+        BRA.S   RP_LOOP
+RP_BAC  CMP.W   D2,D3           ; See if anything to erase
+        BEQ.S   RP_LOOP
+        ADDQ.W  #1,D2           ; Yes. Bump counter
+        SUBQ.W  #1,A1           ; Bump character pointer
+        MOVEQ   #1,D4
+        BSR.S   ERASED4
+        BRA.S   RP_LOOP
+RP_LOP2 MOVE.B  #' ',(A1)+
+RP_FILL SUBQ.W  #1,D2
+        BGE.S   RP_LOP2
+        JMP     (A2)
+
+;
+; OUTCH - Display a character on the CRT
+;
+; Parameters:  D0.B - Character to be output
+;              A0.L - Address of output file
+;
+; Saves all registers.
+;
+
+OUTCH   MOVEM.L D0-D7/A0-A6,-(SP)
+        MOVE.L  A0,-(SP)        ; Push file address
+        MOVE.B  D0,-(SP)        ; Push character
+        MOVE.W  #1,-(SP)        ; Push count
+        MOVEQ   #36,D0          ; Fwritechar = routine #36
+        BSR     JSVECT
+        MOVEM.L (SP)+,D0-D7/A0-A6
+        RTS
+        
+;
+; ERASED4 - Type BS,SP,BS (D4) times
+;
+
+ED4LOOP MOVEQ   #BACKSP,D0
+        BSR.S   OUTCH
+        MOVEQ   #' ',D0
+        BSR.S   OUTCH
+        MOVEQ   #BACKSP,D0
+        BSR.S   OUTCH
+ERASED4 SUBQ.W  #1,D4
+        BPL.S   ED4LOOP
+        RTS
+
+;
+; %R_STR - Read String
+;
+; Parameters: ST.L - File Address
+;             ST.L - String Address
+;             ST.W - Max size of string
+;
+
+%R_STR
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D2        ; Size of array
+        MOVE.L  (SP)+,A1        ; Address of String
+        MOVE.L  (SP)+,A0        ; Address of File
+        MOVE.L  A2,-(SP)        ; Push return address
+        MOVE.L  A1,A2           ; Save pointer to length byte
+        CLR.B   (A1)+
+        MOVE.L  A0,-(SP)        ; Check for EOL
+        JSR     %_EOLN          ;
+        TST.B   (SP)+           ; Check for EOL
+        BNE.S   RS_DONE         ; Strings never eat an EOL
+        BSR     MKVALID         ; Make sure there's a character
+        BRA.S   RS_BEG          ; Start reading
+RS_LOOP BSR     LGET            ; Do a get(f)
+RS_BEG  MOVE.L  A0,-(SP)        ; Check for EOL
+        JSR     %_EOLN          ;
+        TST.B   (SP)+           ;
+        BNE.S   RS_DONE         ; Strings never eat an EOL
+        TST.B   FIBEOF(A0)      ; Check for EOF
+        BNE.S   RS_DONE         ; Strings never eat an EOF
+        MOVE.B  FIBUPAR(A0),D0  ; Fetch the character
+        CMPI.W  #1,FIBUNIT(A0)  ; Is this unit 1?
+        BNE.S   RS_NOT1         ; No. Don't erase stuff
+        CMP.B   #RUBOUT,D0      ; Was it a RUBOUT?
+        BEQ.S   RS_RUB
+        CMP.B   #BACKSP,D0      ; Was it a BACK-SPACE?
+        BEQ.S   RS_BAC
+RS_NOT1 MOVE.B  D0,(A1)+
+        ADDQ.B  #1,(A2)
+        SUBQ.W  #1,D2
+        BGT.S   RS_LOOP
+        BSR     MKEMPTY         ; Set to TEMPTY or IEMPTY
+RS_DONE RTS
+RS_RUB  CLR.W   D4
+        MOVE.B  (A2),D4
+        BEQ.S   RS_LOOP         ; Anything to erase?
+        CLR.B   (A2)
+        ADD.W   D4,D2
+        SUBA.W  D4,A1
+        BSR.S   ERASED4
+        BRA.S   RS_LOOP
+RS_BAC  TST.B   (A2)            ; Anything to erase?
+        BEQ.S   RS_LOOP
+        SUBQ.B  #1,(A2)
+        ADDQ.W  #1,D2
+        SUBQ.L  #1,A1
+        MOVEQ   #1,D4
+        BSR.S   ERASED4
+        BRA.S   RS_LOOP
+
+;
+; %R_I - Read Integer
+;
+; Parameters: ST.L - File Address
+;
+; Returns:    ST.L - The integer read
+;
+
+%R_I
+        MOVEM.L D0-D7/A0-A6,-(SP)
+        MOVE.L  64(SP),A0       ; File Address
+        CLR.L   D2              ; Value
+        CLR.W   D6              ; D6 = #chars
+        CLR.B   D7              ; Sign
+        BSR     MKVALID         ; Make sure there is a character
+        BRA.S   RI_BEG          ;
+RI_LOPB JSR     LGET            ; Do a GET(F)
+RI_BEG  TST.B   FIBEOF(A0)      ; Is EOF set?
+        BNE.S   RI_DONE         ; Yes. Don't loop forever.
+        MOVE.B  FIBUPAR(A0),D0  ; Fetch the character
+        CMPI.B  #' ',D0         ; Is this a blank?
+        BEQ.S   RI_LOPB         ; Yes. Keep skipping.
+        CMPI.B  #'+',D0         ; No. Is it a sign?
+        BEQ.S   RI_PLUS
+        CMPI.B  #'-',D0
+        BNE.S   RI_NUM          ; Not signed.
+        SUBQ.B  #1,D7
+RI_PLUS ADDQ.W  #1,D6
+RI_LOOP JSR     LGET
+        TST.B   FIBEOF(A0)      ; Is EOF set?
+        BNE.S   RI_DONE         ; Yes. Don't loop forever.
+        MOVE.B  FIBUPAR(A0),D0  ; Get the character
+RI_NUM  CMPI.W  #1,FIBUNIT(A0)  ; Is this unit 1?
+        BNE.S   RI_NOT1         ; No. Don't do erases
+        CMP.B   #RUBOUT,D0      ; Was it a RUBOUT?
+        BEQ.S   RI_RUB
+        CMP.B   #BACKSP,D0      ; Was it a BACK-SPACE?
+        BEQ.S   RI_BAC
+RI_NOT1 ADDQ.W  #1,D6
+        SUBI.B  #'0',D0
+        BLT.S   RI_TEST
+        CMPI.B  #9,D0
+        BGT.S   RI_TEST
+        EXT.W   D0
+        EXT.L   D0
+        MOVE.L  D2,D3
+        MULU    #10,D2
+        SWAP    D3
+        MULU    #10,D3
+        ASL.L   #8,D3
+        ASL.L   #8,D3
+        ADD.L   D3,D2
+        ADD.L   D0,D2
+        BRA.S   RI_LOOP
+RI_TEST TST.B   D7
+        BEQ.S   RI_DONE
+        NEG.L   D2
+RI_DONE MOVE.L  D2,64(SP)
+        MOVEM.L (SP)+,D0-D7/A0-A6
+        RTS
+RI_RUB  MOVE.W  D6,D4
+        JSR     ERASED4
+RI_RUB2 CLR.W   D6
+        CLR.W   D7
+        CLR.L   D2
+        BRA     RI_LOPB
+RI_BAC  TST.W   D6
+        BEQ     RI_LOPB
+        MOVEQ   #1,D4
+        JSR     ERASED4
+        SUBQ.W  #1,D6
+        BEQ.S   RI_RUB2
+        MOVE.L  D2,D3
+        SWAP    D2              ; D3 = MSHS LSHV   D2 = LSHV MSHV
+        EXT.L   D2              ; D3 = MSHV LSHV   D2 = 0000 MSHV
+        DIVU    #10,D2          ; D3 = MSHV LSHV   D2 = MSHR MSHQ
+        SWAP    D3              ; D3 = LSHV MSHV   D2 = MSHR MSHQ
+        SWAP    D2              ; D3 = LSHV MSHV   D2 = MSHQ MSHR
+        MOVE.W  D2,D3           ; D3 = LSHV MSHR   D2 = MSHQ MSHR
+        SWAP    D3              ; D3 = MSHR LSHV   D2 = MSHQ MSHR
+        DIVU    #10,D3          ; D3 = LSHR LSHQ   D2 = MSHQ MSHR
+        MOVE.W  D3,D2           ; D3 = LSHR LSHQ   D2 = MSHQ LSHQ
+        BRA     RI_LOOP
+        
+        END
+

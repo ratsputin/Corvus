@@ -1,0 +1,9 @@
+/home/fmc/rfloppy300 version $Revision: 1.11 $
+Copyright 2002 Eric Smith <eric@brouhaha.com>
+Attempting automatic disk characteristics discovery.
+neither FM nor MFM data on cylinder 0 head 0
+neither FM nor MFM data on cylinder 0 head 1
+neither FM nor MFM data on cylinder 1 head 0
+neither FM nor MFM data on cylinder 1 head 1
+can't find data on cylinder 0, head 0
+auto detect failed

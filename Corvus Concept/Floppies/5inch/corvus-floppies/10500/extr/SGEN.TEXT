@@ -1,0 +1,27 @@
+;
+; File ID: SGEN.TEXT
+;
+; SGEN.TEXT assumes volumes /CCSYS and /CCUTIL exist
+; and have read/write access
+;
+; The next step is to copy the system software from floppy
+; disks to the Corvus disk.
+;
+; Place floppy disk /FPSYS in the floppy disk drive.
+;
+pause Ready to continue
+;
+!cc.exec /fpsys/system.update
+;
+; Place floppy disk /FCCSYS1 in the floppy disk drive.
+;
+pause Ready to continue
+;
+!cc.exec /fccsys1/system.update
+;
+; Place floppy disk /FCCSYS2 in the floppy disk drive.
+;
+pause Ready to continue
+;
+!cc.exec /FCCSYS2/system.update
+;

@@ -1,0 +1,228 @@
+program eptst;
+{$I-}
+const printer = 6;
+      bell = 7;
+      bs = 8;
+      cr = $D;
+      lf = $A;
+      tab = 9;
+      esc = $1B;
+      CtlAT = 0;
+      CtlA  = 1;
+      CtlB  = 2;
+      CtlC  = 3;
+      CtlD  = 4;
+      CtlE  = 5;
+      CtlF  = 6;
+      CtlG  = 7;
+      CtlP  = $10;
+
+       BoldBit =  $01;
+       StrkBit =  $02;
+       UnLnBit =  $08;
+       SpScBit =  $10;
+       SbScBit =  $20;
+
+type byte = -128..127;
+
+var b : byte;
+    ior,i,eflags : integer;
+    BD, SP, SB, UL, SO : boolean;
+
+function cnv(i : integer) : byte;
+begin
+    if i >127 then cnv := i - 256
+              else cnv := i;
+end; {cnv}
+
+procedure display(ch : byte);
+var ch1 : byte;
+Begin
+  if (ch>=0) and (ch<=$1F) and (NOT(ch in [bell,bs,lf,cr])) then
+    {control char}
+    if ch = esc then write('|ESC|')
+    else if ch = tab then write('          ') {10 spaces}
+         else write('^',chr(ch+$40))
+  else if ch<0 then begin
+          ch1 := ch+128;
+          if (ch1>=0) and (ch1<=$1F) then
+               write('|alt-^',chr(ch1+$40),'|')
+          else write('|alt-',chr(ch1),'|');
+          end
+      else write(chr(ch));
+End;{display}
+
+procedure DoUnitStat;
+var fc,p : integer;
+Begin
+  write('Enter function code : '); readln(fc);
+  write('Enter parameter : ');readln(p);
+  unitstatus(printer, p, fc );
+End; {DoUnitStat}
+
+procedure overstrike;
+var ch : array [1..4] of byte;
+begin
+  ch[1] := esc;
+  ch[2] := ord('O');
+  write('Enter 1st char : '); unitread(1,ch[3],1); writeln;
+  write('Enter 2nd char : '); unitread(1,ch[4],1); writeln;
+  unitwrite(printer,ch,4);
+end;{overstrike}
+
+procedure propspace;
+var ch : array [1..4] of byte;
+    n : integer;
+begin
+  ch[1] := esc;
+  ch[2] := ord('P');
+  write('Enter # of chars: '); readln(n);
+  if n > 255 then
+    begin
+    writeln('to many chars');
+    exit(propspace);
+    end
+  else ch[3] := cnv(n);
+  write('Enter # of pads : '); readln(n);
+  if n > 255 then
+    begin
+    writeln('to many pads');
+    exit(propspace);
+    end
+  else ch[4] := cnv(n);
+  unitwrite(printer,ch,4);
+end;{propspace}
+
+procedure bold;
+var ch : array [1..3] of byte;
+Begin
+ ch[1] := esc;
+ ch[2] := ord('e');
+ BD := NOT BD;
+ if BD then {turn on}
+    begin
+    eflags := eflags + BoldBit;
+    ch[3] := cnv(eflags);
+    end
+ else  {turn off}
+    begin
+    eflags := eflags - BoldBit;
+    ch[3] := cnv(eflags);
+    end;
+ unitwrite(printer,ch,3);
+end;{bold}
+
+procedure under;
+var ch : array [1..3] of byte;
+Begin
+ ch[1] := esc;
+ ch[2] := ord('e');
+ UL := NOT UL;
+ if UL then {turn on}
+    begin
+    eflags := eflags + UnLnBit;
+    ch[3] := cnv(eflags);
+    end
+ else  {turn off}
+    begin
+    eflags := eflags - UnLnBit;
+    ch[3] := cnv(eflags);
+    end;
+ unitwrite(printer,ch,3);
+end;{under}
+
+procedure strkout;
+var ch : array [1..3] of byte;
+Begin
+ ch[1] := esc;
+ ch[2] := ord('e');
+ SO := NOT SO;
+ if SO then {turn on}
+    begin
+    eflags := eflags + StrkBit;
+    ch[3] := cnv(eflags);
+    end
+ else  {turn off}
+    begin
+    eflags := eflags - StrkBit;
+    ch[3] := cnv(eflags);
+    end;
+ unitwrite(printer,ch,3);
+end;{strkout}
+
+procedure super;
+var ch : array [1..3] of byte;
+Begin
+ ch[1] := esc;
+ ch[2] := ord('e');
+ SP := NOT SP;
+ if SP then {turn on}
+    begin
+    eflags := eflags + SpScBit;
+    ch[3] := cnv(eflags);
+    end
+ else  {turn off}
+    begin
+    eflags := eflags - SpScBit;
+    ch[3] := cnv(eflags);
+    end;
+ unitwrite(printer,ch,3);
+end;{super}
+
+procedure subsc;
+var ch : array [1..3] of byte;
+Begin
+ ch[1] := esc;
+ ch[2] := ord('e');
+ SB := NOT SB;
+ if SB then {turn on}
+    begin
+    eflags := eflags + SbScBit;
+    ch[3] := cnv(eflags);
+    end
+ else  {turn off}
+    begin
+    eflags := eflags - SbScBit;
+    ch[3] := cnv(eflags);
+    end;
+ unitwrite(printer,ch,3);
+end;{subsc}
+
+BEGIN
+writeln('Enter text to be sent to printer.');
+writeln('Ctl @ = unitstatus.');
+writeln('Ctl A = overstrike;');
+writeln('Ctl B = strkout;   ');
+writeln('Ctl C = bold;      ');
+writeln('Ctl D = under;     ');
+writeln('Ctl E = super;     ');
+writeln('Ctl F = subsc;     ');
+writeln('Ctl P = propspace; ');
+
+b := 0; eflags := $40;  {bit 6 is always on}
+
+BD := FALSE;   {BOLD}
+SP := FALSE;   {SUPERSCRIPT}
+SB := FALSE;   {SUBSCRIPT}
+UL := FALSE;   {UNDERLINE}
+SO := FALSE;   {STRIKEOUT}
+
+repeat
+   unitread(2,b,1);
+   display(b);
+   for i := 1 to 20000 do;
+   case b of
+      CtlAT : DoUnitStat;
+      CtlA  : overstrike;
+      CtlB  : strkout;
+      CtlC  : bold;
+      CtlD  : under;
+      CtlE  : super;
+      CtlF  : subsc;
+      CtlP  : propspace;
+      Otherwise : unitwrite(printer, b, 1);
+      end;
+   ior := IORESULT;
+   if ior <> 0 then writeln('I/O error = ',ior:1);
+   until(b=CtlG);
+END.

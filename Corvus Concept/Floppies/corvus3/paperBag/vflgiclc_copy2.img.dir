@@ -1,0 +1,10 @@
+
+Directory of UCSD disk image file 'flgiclc_copy2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLGICLC has 2 files,  0 to 6 (6), eov 500, size 320, free 2
+
+ 1: CC.LGICLC       Data 21-Jul-82    6- 148( 142), 72704+512= 73216 bytes
+ 2: LCDUMP          Data 21-Jul-82  148- 180(  32), 16384+512= 16896 bytes

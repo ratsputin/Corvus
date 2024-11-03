@@ -1,0 +1,23 @@
+;
+; test code to try out prom code
+
+START    trap      #15
+         data.w    0
+
+         bsr       fbboot
+         rts
+
+;prom equates
+;
+         INCLUDE   '/ccprom/cc.prom.eq.text'
+
+;driver equates
+;
+         INCLUDE   'cc.prom.fe.text'
+
+;driver code
+;
+         INCLUDE   'cc.prom.fb.text'
+
+         end       start
+

@@ -1,0 +1,109 @@
+
+Appleshare
+----------
+
+This PCO releases the software for Appleshare.
+
+There are two floppies for Appleshare.  One is a Pascal-format
+floppy which contains the controlling Apple software, and the
+other contains the DOS utilities.  The contents of these floppies
+are listed below.
+
+The packaging for the floppies must include, in a conspicuous place, the
+following warranty disclaimer:
+
+"THE REGENTS OF THE UNIVERSITY OF CALIFORNIA AND APPLE COMPUTER, INC.
+MAKE NO WARRANTIES, EITHER EXPRESS OR IMPLIED, REGARDING THE ENCLOSED
+COMPUTER SOFTWARE PACKAGE, ITS MERCHANTABILITY OR ITS FITNESS FOR ANY
+PARTICULAR PURPOSE."
+
+OASHARE:
+   BOOTAREA.DATA                 -     14-Aug-80        197
+   RTSTND.APPLE                  1.0   3-Jan-81         199
+   SYSTEM.LIBRARY                -     3-Jan-81         118
+   SYSTEM.MISCINFO               -     4-May-79         102
+   SYSTEM.PASCAL                 1.1   17-Dec-80        189
+   SYSTEM.STARTUP                1.4   9-Nov-81         245
+   
+Basics floppy:
+   CORVUS APPLESHARE UTILITIES   1.2   9-Sep-82
+   COPY3                         4.2   13-Mar-81
+   COPY3.OBJ                     -     -
+   FILE MOVER                    -     -
+   MAY I                         1.0   -
+   OMNIBCI.OBJ                   -     -
+   PRINT                         2.4   21-Dec-81
+   PRINT PREP                    -     -
+   RELEASE                       1.0   -
+   
+
+Discrepancy report:
+-------------------
+
+19-Jan-82. DOS Utilities diskette comes up with "File not found" error
+           when booting.
+
+ 9-Sep-82. Rework release, DOS Utilities.  Fixes 19-Jan-82 "File not found" error.
+
+
+$P
+
+These are the current floppy labels:
+
+  +-----------------------------------------+
+  |                                         |
+  |               AppleShare                |
+  |         Network Server Software*        |  CRC= 65 
+  |          Rel. date:  19-Jan-82          |
+  |                                         |
+  |*Includes PASCAL 48K Runtime System      |<- make this print as small as
+  |Copyright (C) Apple Computer, Inc. 1981  |   possible
+  |Parts of this software are Copyright (C) |
+  |by the Regents of the University of      |
+  |California 1981.)                        |
+  +-----------------------------------------+
+
+
+
+  +----------------------------------+
+  |                                  |
+  |           AppleShare             |  CRC= 36
+  |         DOS Utilities            |
+  |     Rel. date:  9-Sep-82         |
+  |                                  |
+  +----------------------------------+
+
+$P
+
+
+
+Previous release:
+
+
+
+
+19-Jan-82.  Appleshare DOS Utilities
+
+
+Label format for previous release:
+
+
++--------------------------------+
+|                                |
+|          AppleShare            |  CRC= 172
+|        DOS Utilities           |
+|     Rel. date: 19-Jan-82       |
+|                                |
++--------------------------------+
+
+
+$P
+
+
+
+
+
+
+
+
+

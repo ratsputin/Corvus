@@ -1,0 +1,30 @@
+
+Directory of UCSD disk image file 'dbi.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 22 files,  0 to 6 (6), eov 500, size 65, free 22
+
+ 1: REV.E3.DOC.TEXT Text  5-Dec-82    6-  10(   4),  2048+512=  2560 bytes
+ 2: OBDATA.TEXT     Text  5-Dec-82   10-  20(  10),  5120+512=  5632 bytes
+ 3: OBFRMT.TEXT     Text 24-Nov-82   20-  28(   8),  4096+512=  4608 bytes
+ 4: OBINT.TEXT      Text  5-Dec-82   28-  64(  36), 18432+512= 18944 bytes
+ 5: OBMSTR.TEXT     Text  5-Dec-82   64- 108(  44), 22528+512= 23040 bytes
+ 6: DBI.C           Data 15-Dec-82  108- 172(  64), 32768+512= 33280 bytes
+ 7: BI.DATA         Data 26-Oct-82  172- 177(   5),  2560+512=  3072 bytes
+ 8: CF18.4.DATA     Data  9-Dec-81  177- 217(  40), 20480+512= 20992 bytes
+ 9: DDIAG3.0B       Data 16-Nov-82  217- 306(  89), 45568+512= 46080 bytes
+10: DIAG.DATA       Data  4-Nov-82  306- 307(   1),   512+512=  1024 bytes
+11: EXTRACT         Data 15-Dec-82  307- 334(  27), 13824+512= 14336 bytes
+12: KUNZAN.TEXT     Text  5-Nov-82  334- 338(   4),  2048+512=  2560 bytes
+13: OB.DOC.TEXT     Text 30-Nov-82  338- 368(  30), 15360+512= 15872 bytes
+14: OMNIBURN.CODE   Data 14-Nov-82  368- 373(   5),  2560+512=  3072 bytes
+15: PRT.TEXT        Text 12-Nov-82  373- 377(   4),  2048+512=  2560 bytes
+16: REV.E6.DOC.TEXT Text 14-Dec-82  377- 381(   4),  2048+512=  2560 bytes
+17: SCHERZO.TEXT    Text  1-Aug-82  381- 385(   4),  2048+512=  2560 bytes
+18: SETSRL          Data 29-Oct-82  385- 409(  24), 12288+512= 12800 bytes
+19: TAP.TEXT        Text  5-Nov-82  409- 413(   4),  2048+512=  2560 bytes
+20: TEST.TEXT       Text 22-Nov-82  413- 417(   4),  2048+512=  2560 bytes
+21: REV.E7.DOC.TEXT Text 15-Dec-82  417- 423(   6),  3072+512=  3584 bytes
+22: BIRPT.TEXT      Text  8-Dec-82  423- 435(  12),  6144+249=  6393 bytes

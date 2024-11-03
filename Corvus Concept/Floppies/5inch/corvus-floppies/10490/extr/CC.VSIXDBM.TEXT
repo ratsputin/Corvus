@@ -1,0 +1,1297 @@
+{ P.VSIXDBM.TEXT ------------------------------------------------------}
+{
+{       VSIDBM -- Data Base Manager for UCSD Pascal
+{
+{       (c) Copyright 1981 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  06-01-81  LEF  Original unit
+{       v 1.1  04-22-83  LEF  Ported to Corvus Concept
+{       v 1.2  05-xx-84  jdr  Built into WordProc
+{
+{----------------------------------------------------------------------}
+      {$I-}
+      {$R-}
+      {$S Spell}
+UNIT vsiuDBM;
+
+INTERFACE
+
+USES
+{$U /CCUTIL/CCLIB } ccdefn, ccWndIO, ccGrfIO, ccLblIO,
+{$U userio}  UserIO;
+
+CONST
+      vsiDBMversion = '1.2';
+
+{$P}
+      {--- data base command codes ------------------}
+
+      dbcINT =  01; { vsiDBM initialization          }
+      dbcDBC =  02; { create data base               }
+      dbcOPN =  03; { open data base                 }
+      dbcCLO =  04; { close data base                }
+      dbcFLD =  05; { return data base definition    }
+      dbcPBR =  06; { set physical block mode        }
+
+      dbcGU  =  10; { get unique                     }
+      dbcGN  =  11; { get next                       }
+      dbcGP  =  12; { get previous                   }
+      dbcGF  =  13; { get first                      }
+      dbcGNK =  14; { get next within key            }
+      dbcGPK =  15; { get previous within key        }
+
+      dbcINS =  20; { insert                         }
+      dbcREP =  21; { replace                        }
+      dbcDEL =  22; { delete                         }
+
+      {--- data base request status codes -----------}
+
+      dbsDBC = -01; { data base created              }
+      dbsRAD = -02; { record added                   }
+      dbsRUP = -03; { record updated                 }
+      dbsRDL = -04; { record deleted                 }
+
+      dbsNMR = -05; { no matching record             }
+      dbsNAR = -06; { no additional matching records }
+      dbsDUP = -07; { duplicate record               }
+
+      dbsNFL = -10; { data base file not found       }
+      dbsNDB = -11; { data base does not exist       }
+      dbsIFN = -12; { invalid function               }
+      dbsDBE = -13; { data base already exists       }
+      dbsIBM = -14; { invalid block in memory        }
+      dbsNRM = -15; { unable to allocate blk buffers }
+
+{$P}
+TYPE
+      dbName   = packed array [1..2] of char;
+
+      pData    = ^dbData;
+{!CC} dbData   =        array [0..511] of -128..127;
+
+      DBFname  = packed array [1..8] of char;
+      DBFtype  = (fkey,fkeywd,fdta);
+
+      dbFLDdfn = record
+                 DBFnam : DBFname;   { field name                      }
+                 DBFtyp : DBFtype;   { field type                      }
+                 DBFlen : integer;   { field length                    }
+                 DBFofs : integer;   { offset into data base record    }
+                 end;
+
+      pFLDrcd  = ^dbFLDrcd;
+      dbFLDrcd = record
+                 DBFfpt : pFLDrcd;   { next field definition pointer   }
+                 DBFrcd : dbFLDdfn;  { field definition                }
+                 end;
+
+      dbFLDblk = array               { field definition block          }
+                 [1..32] of dbFLDdfn;
+
+VAR
+      dbmFile  : FILE;      { data base manager file                   }
+      dbCurBlk : integer;   { current position block number            }
+      dbCurOfs : integer;   { current position offset                  }
+      dbStat   : integer;   { request status                           }
+      dbStatmg : StrTyp;     { request status message                   }
+      dbActive : boolean;   {                                          }
+      dbBatch  : boolean;   { batch mode flag                          }
+      dbPhySeq : boolean;   { physical block sequence flag             }
+      dbTrace  : boolean;   {                                          }
+      DBFlsthd : pFLDrcd;   { queued field definitions                 }
+      dbFileID : StrTyp;     { data base file name                      }
+      dbAlloc  : integer;   { data base file allocation (blocks)       }
+(*    dbWndPtr : pWndRcd;   { window record for debugging              }  *)
+      dbHeap   : ^integer;  { heap pointer after block buffer alloc    }
+
+{$P}
+PROCEDURE vsiDBM (
+
+dbREQfil: dbName;  {data base name               }
+
+dbREQfnc: integer; {data base function           }
+
+dbREQkey: pData;   {request key pointer          }
+
+dbREQdta: pData);  {request data pointer         }
+
+
+IMPLEMENTATION
+
+CONST
+{ P.VSIXDB0.TEXT ------------------------------------------------------}
+{
+{       VSIDBM -- Data Base Manager for UCSD Pascal
+{
+{       (c) Copyright 1981 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{----------------------------------------------------------------------}
+
+blksize  = 2048;        { data base block length                       }
+ovhdsize = 16;          { block overhead length                        }
+ctlsize  = 496;         { control block data length (512 - ovhdsize)   }
+dtasize  = 2032;        { data block data length (blksize - ovhdsize)  }
+
+{ P.VSIXDB0.TEXT ------------------------------------------------------}
+
+
+TYPE
+{ P.VSIXDB1.TEXT ------------------------------------------------------}
+{
+{       VSIDBM -- Data Base Manager for UCSD Pascal
+{
+{       (c) Copyright 1981 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{----------------------------------------------------------------------}
+
+PtrRcd   = record case integer of
+           1: (b: ^dbBlkBuf);
+           2: (c: ^dbCtlBlk);
+           3: (d: ^dbDtaBlk);
+           end;
+
+dbBlocks = (DBfil, DBdfn, DBctl, DBix1, DBix2, DBdta, DBuu1, DBuu2);
+
+dbOvhd   = record
+           chksum  : integer;  { 0-1: block checksum                   }
+           name    : dbName;   { 2-3: data base name                   }
+           blktyp  : dbBlocks; { 4-5: block type                       }
+           rcdlen  : integer;  { 6-7: block record length              }
+           rcdcnt  : integer;  { 8-9: number of records in block       }
+           rcdblk  : integer;  { A-B: maximum records per block        }
+           fwdptr  : integer;  { C-D: forward block pointer            }
+           bwdptr  : integer;  { E-F: backward block pointer           }
+           end;
+
+dbBlkBuf =
+{!CC}             array [1..blksize] of -128..127;
+
+dbDtaBuf = record case integer of
+{!CC}      1: (b:        array [1..dtasize] of -128..127);
+           2: (c: packed array [1..dtasize] of char);
+           end;
+
+dbDtaBlk = record
+           ovhd    : dbOvhd;   { block overhead                        }
+           dta     : dbDtaBuf; { block data buffer                     }
+           end;
+
+{$P}
+dbCtlBlk = record
+           ovhd    : dbOvhd;   { block overhead                        }
+           case integer of
+           1: (fil: packed array [1..ctlsize] of char);
+           2: (def: record     { data base file definition block       }
+                    swpbyt  : integer;  {                              }
+                    aloblk  : integer;  { next block to allocate       }
+                    freblk1 : integer;  { free block list (ctl)        }
+                    freblk2 : integer;  { free block list (dta)        }
+                    lstblk  : integer;  { last block number            }
+                    nxtctl  : integer;  { first dbcb pointer           }
+                    end);
+           3: (ctl: record     { data base control block               }
+                    nxtctl  : integer;  { next dbcb pointer            }
+                    rlen    : integer;  { trunk record length          }
+                    klen    : integer;  { key record length            }
+                    ix1blk  : integer;  { first index block number     }
+                    dtablk  : integer;  { first data block number      }
+                    rcdcnt  : integer;  { nmbr of records in data base }
+                    flddef  : dbfldblk; { field definitions            }
+                    end);
+           end;
+
+CtlBlk   = record
+           CBtype  : dbBlocks; { block type                            }
+           CBmodfg : boolean;  { block modified flag                   }
+           CBptr   : PtrRcd;   { block buffer pointer                  }
+           CBblkno : integer;  { block number                          }
+           CBlen   : integer;  { block length                          }
+
+           {--- DBix1, DBix2, DBdta block variables -------------------}
+           CBrln   : integer;  { record length                         }
+           CBkln   : integer;  { key length                            }
+           CBrno   : integer;  { record number (dta = 0)               }
+           CBofs   : integer;  { record offset in block (dta = 0)      }
+           CBrrm   : integer;  { records remaining in block            }
+           CBlrm   : integer;  { length remaining in block             }
+           { CBrno range: 0 --> ovhd.rcdcnt                            }
+           { CBofs range: 0 --> ovhd.rcdcnt * ovhd.rcdlen              }
+           { CBrrm range: ovhd.rcdcnt --> 0                            }
+           { CBlrm range: ovhd.rcdcnt * ovhd.rcdlen --> 0              }
+           end;
+
+{ P.VSIXDB1.TEXT ------------------------------------------------------}
+
+
+{$P}
+VAR
+      defCNTL  : CtlBlk;  { }
+      ctlCNTL  : CtlBlk;  { }
+      ix1CNTL  : CtlBlk;  { }
+      ix2CNTL  : CtlBlk;  { }
+      dtaCNTL  : CtlBlk;  { }
+
+      iostat   : integer; { data base file I/O status                  }
+      locked   : boolean; { data base file locked flag                 }
+      FileOpen : boolean; { data base file open flag                   }
+      rqKEYptr : pData;   { request key pointer                        }
+      rqDTAptr : pData;   { request data pointer                       }
+(*    dbWndow  : WndRcd;  {                                            } *)
+
+
+{ P.VSIXDB2.TEXT ------------------------------------------------------}
+{
+{       VSIDBM -- Data Base Manager for UCSD Pascal
+{
+{       (c) Copyright 1981 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  06-01-81  LEF  Original unit
+{       v 1.1  04-22-83  LEF  Ported to Corvus Concept
+{
+{----------------------------------------------------------------------}
+
+
+{ vsiDBM --------------------------------------------------------------}
+{ VSIDBM request processing
+{----------------------------------------------------------------------}
+PROCEDURE vsiDBM;
+      var n: integer;
+
+
+{ dbmEXIT -------------------------------------------------------------}
+{ Convert status to message processing
+{----------------------------------------------------------------------}
+PROCEDURE dbmEXIT (status: integer);    { message status number        }
+      var msg: string[34];
+
+{ dbmEXIT.dbIOmesg ----------------------------------------------------}
+{----------------------------------------------------------------------}
+(*    PROCEDURE dbIOmesg;
+          begin
+          case status of
+               1: msg := 'Bad block, parity error';
+               2: msg := 'Invalid unit number';
+               3: msg := 'Invalid mode, invalid operation';
+               4: msg := 'Undefined hardware error';
+               5: msg := 'Unit not online';
+               6: msg := 'File is not in directory';
+               7: msg := 'Invalid file name';
+               8: msg := 'Insufficient space for file';
+               9: msg := 'Volume not online';
+              10: msg := 'File not on volume';
+              11: msg := 'Duplicate file';
+              12: msg := 'Attempt to open an open file';
+              13: msg := 'Attempt to access a closed file';
+              16: msg := 'Write protect error';
+              end; {case}
+          dbStatmg := CONCAT (dbStatmg,msg);
+          end;
+
+{$P}
+{ dbmEXIT.dbDBmesg ----------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE dbDBmesg;
+          begin
+          case status of
+                   0: msg := '';
+              dbsNFL: msg := 'Data base file not found';
+              dbsNDB: msg := 'Data base does not exist';
+              dbsIFN: msg := 'Invalid VSIDBM function';
+              dbsDBE: msg := 'Data base already exists';
+              dbsIBM: msg := 'Invalid VSIDBM block in memory';
+              dbsNRM: msg := 'Unable to allocate blk buffers';
+              dbsNMR: msg := 'No matching record';
+              dbsNAR: msg := 'No additional matching records';
+              dbsDUP: msg := 'Duplicate record';
+              dbsDBC: msg := 'Data base created';
+              dbsRAD: msg := 'Record added';
+              dbsRUP: msg := 'Record updated';
+              dbsRDL: msg := 'Record deleted';
+              end; {case}
+          if status > -10 then dbStatmg := '';
+          dbStatmg := CONCAT (dbStatmg,msg);
+          end;
+*)
+{ dbmEXIT -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin {dbmEXIT}
+(*    msg := 'Undefined error';
+      if status in [1..16] then dbIOmesg else dbDBmesg;  *)
+      if status < 0 then
+          if status > -5 then status := 0;
+      dbStat := status;
+(*    if dbActive then begin
+          GoToXY (64,23); write ('             '); GoToXY (0,0);
+          end;    *)
+      exit (vsiDBM);
+      end;
+
+{$P}
+{ dbIOstat ------------------------------------------------------------}
+{ Check I/O status
+{----------------------------------------------------------------------}
+PROCEDURE dbIOstat (var dbcb: CtlBlk;   { control block pointer        }
+                          st: StrTyp);   { message string               }
+      var m: string[5]; i: integer;
+      begin
+      iostat := IORESULT;
+      case dbcb.CBtype of
+          DBdfn: m := 'DBDFN'; DBctl: m := 'DBCTL';
+          DBix1: m := 'DBIX1'; DBix2: m := 'DBIX2';
+          DBdta: m := 'DBDTA';
+          DBuu1: m := 'DBUU1'; DBuu2: m := 'DBUU2';
+          end; {case}
+      st := CONCAT (m,' ',st);
+
+(*    if dbTrace AND (dbWndPtr <> NIL) then begin
+{!CC}     i := WinSelect (dbWndPtr^);
+          writeln ('VSIDBM: ',st,' - block ',dbcb.CBblkno:1);
+{!CC}     i := WinSystem (WsysCurr);
+          end;  *)
+
+      if iostat <> 0 then begin
+  (*      dbStatmg := CONCAT ('VSIDBM I/O error [',st,']: ');  *)
+          dbmEXIT (iostat);
+          end;
+      end;
+
+{$P}
+{ dbmLock -------------------------------------------------------------}
+{ Lock data base file for exclusive use
+{----------------------------------------------------------------------}
+PROCEDURE dbmLock;
+      var i: integer;
+      begin
+      if NOT dbBatch then begin
+          locked := TRUE;
+          end;
+      locked := FALSE; {<---- temp}
+      end;
+
+{ dbmUnlock -----------------------------------------------------------}
+{ Unlock data base file
+{----------------------------------------------------------------------}
+PROCEDURE dbmUnlock;
+      var i: integer;
+      begin
+      if locked then begin
+          locked := FALSE;
+          end;
+      end;
+
+{ PutDBblk ------------------------------------------------------------}
+{ Write VSIDBM block
+{----------------------------------------------------------------------}
+PROCEDURE PutDBblk (var dbcb: CtlBlk);  { control block pointer        }
+      var n,BlksIO: integer;
+      begin
+      with dbcb do begin
+          CBptr.c^.ovhd.chksum := -1; BlksIO := CBlen DIV 512;
+          n := BLOCKWRITE (dbmFile,CBptr.c^,BlksIO,CBblkno);
+          dbIOstat (dbcb,'write');
+          if n <> BlksIO then dbmEXIT (8);
+          CBmodfg := FALSE;
+          end;
+      end;
+
+{$P}
+{ GetDBblk ------------------------------------------------------------}
+{ Read VSIDBM block
+{----------------------------------------------------------------------}
+PROCEDURE GetDBblk (var dbcb: CtlBlk;   { control block pointer        }
+                      blknbr: integer); { block number                 }
+      var n,BlksIO: integer;
+      begin
+      with dbcb do begin
+          if locked OR (CBblkno <> blknbr) OR (blknbr = 0) then begin
+              if CBmodfg then PutDBblk (dbcb);
+              CBblkno := blknbr; BlksIO := CBlen DIV 512;
+              n := BLOCKREAD (dbmFile,CBptr.c^,BlksIO,CBblkno);
+              dbIOstat (dbcb,'read');
+              if n <> BlksIO then dbmEXIT (8);
+              end;
+          with CBptr.c^.ovhd do begin
+              if ord(blktyp) = -1 then blktyp := DBuu1;   {--- temp ---}
+              if dbPhySeq
+                  then begin
+                  {   if NOT (blktyp in [DBdfn..DBuu2]) }
+                  {       then dbmEXIT (dbsIBM);        }
+                      end
+                  else begin
+                      if blktyp <> CBtype
+                          then dbmEXIT (dbsIBM);
+                      end;
+              CBofs := 1; CBrno := 0; CBrln := 0; CBkln := 0;
+              CBrrm := rcdcnt; CBlrm := CBrrm * rcdlen;
+              if CBtype in [DBix1,DBix2] then begin
+                  CBkln := ctlCNTL.CBptr.c^.ctl.klen;
+                  CBrln := CBkln+2;
+                  end;
+              if CBtype = DBdta then begin
+                  CBkln := ctlCNTL.CBptr.c^.ctl.rlen;
+                  CBrln := CBkln;
+                  end;
+              end;
+          end;
+      end;
+
+{$P}
+{ PutAllBlk -----------------------------------------------------------}
+{ Write all modified VSIDBM blocks
+{----------------------------------------------------------------------}
+PROCEDURE PutAllBlk;
+      begin
+      if NOT dbBatch then begin
+          if dtaCNTL.CBmodfg then PutDBblk (dtaCNTL);
+          if ix2CNTL.CBmodfg then PutDBblk (ix2CNTL);
+          if ix1CNTL.CBmodfg then PutDBblk (ix1CNTL);
+          if ctlCNTL.CBmodfg then PutDBblk (ctlCNTL);
+          if defCNTL.CBmodfg then PutDBblk (defCNTL);
+          end;
+      end;
+
+{ dbClos --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE dbClos;
+      begin
+      dbBatch := FALSE; PutAllBlk;
+      CLOSE (dbmFile); dbIOstat (dtaCNTL,'file close');
+      FileOpen := FALSE;
+      end;
+
+{ dbOpen --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE dbOpen;
+      var blk: integer;
+      begin
+      dbStat := 0;
+      if not FileOpen then begin
+          RESET (dbmFile,dbFileID); iostat := IORESULT;
+          if iostat <> 0 then begin
+              RESET (dbmFile,dbFileID);
+              dbIOstat (defCNTL,'open for read');
+              end;
+          FileOpen := TRUE;
+          GetDBblk (defCNTL,0);
+          end;
+      if dbREQfil = ctlCNTL.CBptr.c^.ovhd.name then exit (dbOpen);
+      blk := defCNTL.CBptr.c^.def.nxtctl;
+      while blk <> 0 do begin
+          GetDBblk (ctlCNTL,blk);
+          if dbREQfil = ctlCNTL.CBptr.c^.ovhd.name then exit (dbOpen);
+          blk := ctlCNTL.CBptr.c^.ctl.nxtctl;
+          end;
+      dbStat := dbsNDB;
+      end;
+
+{$P}
+{ AllocBlk ------------------------------------------------------------}
+{ Allocate next VSIDBM block
+{----------------------------------------------------------------------}
+PROCEDURE AllocBlk (var dbcb: CtlBlk);  { control block pointer        }
+      var noname: dbName; i,blknbr: integer; m: string[5];
+      begin
+      for i := 1 to sizeof(noname) do noname[i] := ' ';
+      {--- update allocated block number ------------------------------}
+      with defCNTL.CBptr.c^.def do begin
+          blknbr := aloblk;
+          aloblk := aloblk + (dbcb.CBlen DIV 512);
+          defCNTL.CBmodfg := TRUE;
+          end;
+      {--- update allocated block control table -----------------------}
+      with dbcb do begin
+          CBblkno := blknbr; CBmodfg := TRUE;
+          CBofs := 1; CBrno := 0; CBrrm := 0;
+          CBlrm := 0; CBrln := 0; CBkln := 0;
+          if CBtype in [DBix1,DBix2] then begin
+              CBkln := ctlCNTL.CBptr.c^.ctl.klen;
+              CBrln := CBkln+2;
+              end;
+          if CBtype = DBdta then begin
+              CBkln := ctlCNTL.CBptr.c^.ctl.rlen;
+              CBrln := CBkln;
+              end;
+      {--- initialize allocated block ---------------------------------}
+          FILLCHAR (CBptr.b^,CBlen,chr(0));
+          with CBptr.c^.ovhd do begin
+              name := noname; blktyp := dbcb.CBtype;
+              if blktyp in [DBix1,DBix2,DBdta] then begin
+                  name := ctlCNTL.CBptr.c^.ovhd.name;
+                  rcdlen := CBrln; rcdblk := (dtasize DIV rcdlen) - 1;
+                  end;
+              end;
+      {----------------------------------------------------------------}
+(*        if dbTrace AND (dbWndPtr <> NIL) then begin
+              case dbcb.CBtype of
+                  DBdfn: m := 'DBDFN'; DBctl: m := 'DBCTL';
+                  DBix1: m := 'DBIX1'; DBix2: m := 'DBIX2';
+                  DBdta: m := 'DBDTA';
+                  DBuu1: m := 'DBUU1'; DBuu2: m := 'DBUU2';
+                  end;
+{!CC}         i := WinSelect (dbWndPtr^);
+              writeln ('VSIDBM: allocate ',m,' block ',dbcb.CBblkno:1);
+{!CC}         i := WinSystem (WsysCurr);
+              end; *)
+          end;
+      end;
+
+{ P.VSIXDB3.TEXT ------------------------------------------------------}
+{
+{       VSIDBM -- Data Base Manager for UCSD Pascal
+{
+{       (c) Copyright 1981 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  06-01-81  LEF  Original unit
+{       v 1.1  04-22-83  LEF  Ported to Corvus Concept
+{
+{----------------------------------------------------------------------}
+
+
+{ vsiDBI --------------------------------------------------------------}
+{ Initialize VSIDBM unit processing
+{----------------------------------------------------------------------}
+PROCEDURE vsiDBI;
+      var i: integer; origHeap: ^integer;
+{!CC}     wp: record hx,hy,lx,ly: integer; end;
+
+{ vsiDBI.ictl ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE ictl (var dbcb: CtlBlk; ty: dbBlocks; ln: integer);
+          begin
+          if dbHeap = NIL then exit (ictl);
+          FILLCHAR (dbcb,SIZEOF(dbcb),CHR(0));
+          with dbcb do begin
+              CBtype := ty; CBlen := ln; CBmodfg := FALSE;
+              if ln = blksize then NEW (CBptr.d) else NEW (CBptr.c);
+              if CBptr.b <> NIL
+                  then begin
+                      MARK (dbHeap);
+                      FILLCHAR (CBptr.b^,CBlen,CHR(0));
+                      end
+                  else begin RELEASE (origHeap); dbHeap := NIL; end;
+              end;
+          end;
+
+{$P}
+{ vsiDBI --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin {vsiDBI}
+      MARK (origHeap); MARK (dbHeap);
+(*    dbWndPtr := NIL;
+{!CC} ccWNDioInit;
+{!CC} UnitStatus (1,wp,5);
+{!CC} if ioresult = 0 then begin
+{!CC}     i := WinCreate (dbWndow,0,28,wp.lx,wp.ly-28,0);
+{!CC}     if i = 0 then dbWndPtr := @dbWndow;
+{!CC}     end;          *)
+      dbActive := FALSE; dbBatch := FALSE;
+      dbPhySeq := FALSE; dbTrace := FALSE;
+      dbCurBlk := 0; dbCurOfs := 0;
+      dbFileID := 'VSI.DATABASE'; dbAlloc := 0;
+      FileOpen := FALSE; locked := FALSE;
+      ictl (defCNTL,DBdfn,512);     ictl (ctlCNTL,DBctl,512);
+      ictl (ix1CNTL,DBix1,blksize); ictl (ix2CNTL,DBix2,blksize);
+      ictl (dtaCNTL,DBdta,blksize);
+      if dbHeap <> NIL then dbmEXIT (0) else dbmEXIT (dbsNRM);
+      end;
+
+{$P}
+{ vsiDBC --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE vsiDBC;
+      var n,blkfctr,cnt: integer; FldPtr: pFLDrcd;
+
+{ vsiDBC.CreateFile ---------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE CreateFile;
+          var i,n: integer;
+          begin
+          REWRITE (dbmFile,dbFileID); dbIOstat (dtaCNTL,'create open');
+          with dtaCNTL do begin
+              blkfctr := blksize DIV 512;
+{!CC}         for i := 1 to CBlen do CBptr.b^[i] := -1;
+              for i := 0 to (dbAlloc DIV blkfctr)-1 do begin
+                  n := BLOCKWRITE (dbmFile,CBptr.b^,
+                                   blkfctr,(i*blkfctr+1));
+                  dbIOstat (dtaCNTL,'create write');
+                  if n <> blkfctr then begin
+                      CLOSE (dbmFile,PURGE); dbmEXIT (8); end;
+                  end;
+              end;
+          CLOSE (dbmFile,CRUNCH);   dbIOstat (dtaCNTL,'create close');
+          RESET (dbmFile,dbFileID); dbIOstat (dtaCNTL,'open for read');
+          with defCNTL do begin
+              for i := 1 to CBlen do CBptr.b^[i] := 0;
+              with CBptr.c^ do begin
+                  ovhd.blktyp := DBdfn; def.aloblk := 1;
+                  def.lstblk := (dbAlloc DIV blkfctr) * blkfctr;
+                  end;
+              end;
+          PutDBblk (defCNTL);
+          end;
+
+{$P}
+{ vsiDBC --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin {vsiDBC}
+      if FileOpen then CLOSE (dbmFile); FileOpen := FALSE;
+      RESET (dbmFile,dbFileID); iostat := IORESULT;
+      if iostat <> 0 then begin
+          if (iostat = 10) AND (dbAlloc <> 0)
+              then CreateFile
+              else begin
+                  RESET (dbmFile,dbFileID);
+                  dbIOstat (defCNTL,'open for read');
+                  end;
+          end;
+      FileOpen := TRUE;
+      GetDBblk (defCNTL,0);
+      AllocBlk (ctlCNTL);
+      with ctlCNTL.CBptr.c^ do begin
+          with ovhd do name := dbREQfil;
+          with ctl do begin
+              FldPtr := DBFlsthd; rlen := 0; klen := 0; n := 0;
+              while FldPtr <> NIL do begin n := n+1;
+                  flddef[n] := FldPtr^.dbfrcd;
+                  flddef[n].dbfofs := rlen;
+                  rlen := rlen+flddef[n].dbflen;
+                  if flddef[n].dbftyp IN [fkey,fkeywd] then
+                      klen := klen+flddef[n].dbflen;
+                  FldPtr := FldPtr^.dbffpt;
+                  end;
+              end;
+          end;
+      with defCNTL.CBptr.c^.def do
+          if nxtctl = 0 then nxtctl := ctlCNTL.CBblkno;
+      PutAllBlk;
+      dbmEXIT (dbsDBC);
+      end;
+
+{$P}
+{ NextRcd -------------------------------------------------------------}
+{ Update pointers to next record in VSIDBM block processing
+{
+{ Rtn: True  = valid data record
+{      False = no data record (at end of block)
+{              (pointers past last record)
+{----------------------------------------------------------------------}
+FUNCTION NextRcd (var dbcb: CtlBlk):    { control block pointer        }
+                            boolean;    { function result              }
+      begin
+      NextRcd := FALSE;
+      with dbcb do begin
+          if CBrrm > 0 then begin
+              CBrno := CBrno+1; CBofs := CBofs+CBrln;
+              CBrrm := CBrrm-1; CBlrm := CBlrm-CBrln;
+              if CBrrm > 0 then NextRcd := TRUE;
+              end;
+          end;
+      end;
+
+{ PrevRcd -------------------------------------------------------------}
+{ Update pointers to previous record in VSIDBM block processing
+{
+{ Rtn: True  = valid data record
+{      False = no data record (at beginning of block)
+{              (pointers at first record)
+{----------------------------------------------------------------------}
+FUNCTION PrevRcd (var dbcb: CtlBlk):    { control block pointer        }
+                            boolean;    { function result              }
+      begin
+      PrevRcd := FALSE;
+      with dbcb do begin
+          if CBrno > 0 then begin
+              CBrno := CBrno-1; CBofs := CBofs-CBrln;
+              CBrrm := CBrrm+1; CBlrm := CBlrm+CBrln;
+              PrevRcd := TRUE;
+              end;
+          end;
+      end;
+
+{ LastRcd -------------------------------------------------------------}
+{ Update pointers to last record in VSIDBM block processing
+{----------------------------------------------------------------------}
+PROCEDURE LastRcd (var dbcb: CtlBlk);   { control block pointer        }
+      begin
+      with dbcb do begin
+          CBrno := CBrno+CBrrm-1; CBrrm := 1;
+          CBofs := CBofs+CBlrm-CBrln; CBlrm := CBrln;
+          end;
+      end;
+
+{$P}
+{ KeyMatch ------------------------------------------------------------}
+{ Compare data to retrieval key processing
+{
+{ Rtn: < 0 = data less than key
+{      = 0 = data equal to key
+{      > 0 = data greater than key
+{----------------------------------------------------------------------}
+FUNCTION KeyMatch (var dbcb: CtlBlk;    { control block pointer        }
+                     curkey: pData):    { search key data pointer      }
+                             integer;   { function result              }
+      var nd,nk,uc,len,status: integer; chkey,chdta: CHAR;
+      begin
+{!CC} len := SCANEQ (ctlCNTL.CBptr.c^.ctl.klen,'_',curkey^);
+      with dbcb do begin
+          status := 0; nd := CBofs; nk := 0;
+          while (status = 0) AND (nk < len) do begin
+              status := ORD(CBptr.d^.dta.b[nd])-ORD(curkey^[nk]);
+              nd := nd+1; nk := nk+1;
+              end;
+          end;
+      KeyMatch := status;
+      end;
+
+{$P}
+{ SrchBlk -------------------------------------------------------------}
+{ Read VSIDBM block and search for key processing
+{
+{ Rtn: <> 0 - data not equal to key
+{       = 0 - data equal to key
+{----------------------------------------------------------------------}
+FUNCTION SrchBlk (var dbcb: CtlBlk;     { control block pointer        }
+                    blknbr: integer;    { block number                 }
+                    curkey: pData):     { search key data pointer      }
+                            integer;    { function result              }
+      var lo,mid,hi,status: integer;
+      begin
+      GetDBblk (dbcb,blknbr);
+      status := 1;
+      with dbcb do begin
+          if CBrrm > 0 then begin
+              lo := 1; hi := CBrrm;
+              repeat
+                  mid := (lo+hi) DIV 2;
+                  CBofs := ((mid-1) * CBrln) + 1;
+                  status := KeyMatch (dbcb,curkey);
+                  if status < 0 then lo := mid+1;
+                  if status > 0 then hi := mid-1;
+                  until (status = 0) OR (lo > hi);
+              if status <> 0 then CBrno := lo-1
+              else begin
+                  while (mid > 1) AND (status = 0) do begin
+                      CBofs := ((mid-2) * CBrln) + 1;
+                      status := KeyMatch (dbcb,curkey);
+                      if status = 0 then mid := mid-1;
+                      end;
+                  CBrno := mid-1; status := 0;
+                  end;
+              CBofs := (CBrno * CBrln) + 1;
+              CBrrm := CBptr.d^.ovhd.rcdcnt - CBrno;
+              CBlrm := CBrrm * CBrln;
+              end;
+          end;
+      SrchBlk := status;
+      end;
+
+{$P}
+{ InsRcd --------------------------------------------------------------}
+{ Insert records into VSIDBM block processing
+{----------------------------------------------------------------------}
+PROCEDURE InsRcd (var dbcb: CtlBlk;     { control block pointer        }
+                      nrcd: integer;    { number of records            }
+                       ptr: pData);     { source data pointer          }
+      var len: integer;
+      begin
+      with dbcb do begin
+          with CBptr.d^ do begin
+              len := CBrln * nrcd;
+              if CBrrm > 0
+                  then MOVERIGHT (dta.b[CBofs],dta.b[CBofs+len],CBlrm);
+              MOVELEFT (ptr^[0],dta.b[CBofs],len);
+              with ovhd do rcdcnt := rcdcnt+nrcd;
+              end;
+          CBrrm := CBrrm+nrcd; CBlrm := CBlrm+len; cbmodfg := TRUE;
+          end;
+      end;
+
+{ DelRcd --------------------------------------------------------------}
+{ Delete records from VSIDBM block processing
+{----------------------------------------------------------------------}
+PROCEDURE DelRcd (var dbcb: CtlBlk;     { control block pointer        }
+                      nrcd: integer);   { number of records            }
+      var len: integer;
+      begin
+      with dbcb do begin
+          with CBptr.d^ do begin
+              len := CBrln * nrcd;
+              if CBrrm > nrcd then
+                  MOVELEFT (dta.b[CBofs+len],dta.b[CBofs],CBlrm-len);
+              FILLCHAR (dta.b[CBofs+CBlrm-len],len,CHR(0));
+              with ovhd do rcdcnt := rcdcnt-nrcd;
+              end;
+          CBrrm := CBrrm-nrcd; CBlrm := CBlrm-len; cbmodfg := TRUE;
+          end;
+      end;
+
+{$P}
+{ UpdKey --------------------------------------------------------------}
+{ Move key data to VSIDBM block processing
+{----------------------------------------------------------------------}
+PROCEDURE UpdKey (var dbcb: CtlBlk;     { key control block pointer    }
+                       ptr: pData);     { source data pointer          }
+      begin
+      with dbcb do begin
+          MOVELEFT (ptr^,CBptr.d^.dta.b[CBofs],cbkln);
+          cbmodfg := TRUE;
+          end;
+      end;
+
+{ UpdPtr --------------------------------------------------------------}
+{ Update key block pointer processing
+{----------------------------------------------------------------------}
+PROCEDURE UpdPtr (var dbcb: CtlBlk;     { control block pointer        }
+                    blknbr: integer);   { block number                 }
+      var p: integer;
+      begin
+      with dbcb do begin
+          p := CBofs+cbkln;
+          with CBptr.d^ do dta.c[p]   := CHR(blknbr DIV 256);
+          with CBptr.d^ do dta.c[p+1] := CHR(blknbr MOD 256);
+          cbmodfg := TRUE;
+          end;
+      end;
+
+
+{$P}
+{ dbRet ---------------------------------------------------------------}
+{ Retrieve record from data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbRet (CurKey: pData);        { retrieval key pointer        }
+      var i,p,status: integer;
+
+{ dbRet.NxtBlk --------------------------------------------------------}
+{----------------------------------------------------------------------}
+      FUNCTION NxtBlk (var dbcb: CtlBlk): integer;
+          begin
+          p := dbcb.CBofs+dbcb.CBkln;
+          with dbcb.CBptr.d^ do
+              NxtBlk := (ord(dta.c[p])*256)+ord(dta.c[p+1]);
+          end;
+
+{ dbRet ---------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      if ctlCNTL.CBptr.c^.ctl.dtablk = 0
+          then dbStat := dbsNMR
+          else begin
+              status := SrchBlk (ix1CNTL,
+                                 ctlCNTL.CBptr.c^.ctl.ix1blk,CurKey);
+              if ix1CNTL.CBrrm = 0 then
+                  if PrevRcd (ix1CNTL) then {nothing};
+              status := SrchBlk (ix2CNTL,
+                                 NxtBlk(ix1CNTL),CurKey);
+              if ix2CNTL.CBrrm = 0 then
+                  if PrevRcd (ix2CNTL) then {nothing};
+              status := SrchBlk (dtaCNTL,
+                                 NxtBlk(ix2CNTL),CurKey);
+              with dtaCNTL do begin
+                  if status = 0
+                      then begin
+                          if dbREQfnc <> dbcINS then
+{!CC}                         MOVELEFT (CBptr.d^.dta.b[CBofs],
+{!CC}                                   dbREQdta^,CBkln);
+                          dbStat := 0;
+                          end
+                      else dbStat := dbsNMR;
+                  dbCurBlk := CBblkno; dbCurOfs := CBofs;
+                  end;
+              end;
+      end;
+
+{$P}
+{ dbDel ---------------------------------------------------------------}
+{ Delete record from data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbDel;
+      begin
+      dbmLock;
+      GetDBblk (ctlCNTL,ctlCNTL.CBblkno);
+      dbRet (dbREQdta);
+      if dbStat <> 0
+          then dbStat := dbsNMR
+          else begin
+              DelRcd (dtaCNTL,1);
+              if dtaCNTL.CBptr.d^.ovhd.rcdcnt = 0 then begin
+                  {--> save empty block <--}
+                  DelRcd (ix2CNTL,1);
+                  if ix2CNTL.CBptr.d^.ovhd.rcdcnt = 0 then begin
+                      {--> save empty block <--}
+                      DelRcd (ix1CNTL,1);
+                      end;
+                  end;
+              dbStat := dbsRDL;
+              end;
+      with ctlCNTL do begin
+          with CBptr.c^.ctl do rcdcnt := rcdcnt-1;
+          CBmodfg := TRUE; end;
+      PutAllBlk;
+      dbmUnlock;
+      end;
+
+{ dbIns ---------------------------------------------------------------}
+{ Insert record into data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbIns;
+{!CC} var pd: longint;
+
+{ dbIns.dbInt ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE dbInt;
+          begin
+          GetDBblk (defCNTL,0);
+          AllocBlk (dtaCNTL); InsRcd (dtaCNTL,1,rqDTAptr);
+          AllocBlk (ix2CNTL); InsRcd (ix2CNTL,1,rqDTAptr);
+                              UpdPtr (ix2CNTL,dtaCNTL.CBblkno);
+          AllocBlk (ix1CNTL); InsRcd (ix1CNTL,1,rqDTAptr);
+                              UpdPtr (ix1CNTL,ix2CNTL.CBblkno);
+          with ctlCNTL.CBptr.c^ do begin
+              ctl.ix1blk := ix1CNTL.CBblkno;
+              ctl.dtablk := dtaCNTL.CBblkno;
+              end;
+          PutDBblk (defCNTL);
+          dbStat := dbsRAD;
+          end;
+
+{$P}
+{ dbIns.MoveRcd -------------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE MoveRcd (var ctldta,ctlkey: CtlBlk);
+          const dens = 90;
+          var ctltmp: CtlBlk; heapptr: ^integer;
+              NewBlk: boolean; MoveCnt,NewBlkNbr,n: integer;
+          begin
+          NewBlk := FALSE; ctltmp := ctldta;
+          MARK (heapptr); NEW (ctltmp.CBptr.d);
+          with ctldta do begin
+              if CBptr.d^.ovhd.fwdptr = 0
+                  then NewBlk := TRUE
+                  else begin
+                      GetDBblk (ctltmp,CBptr.d^.ovhd.fwdptr);
+                      with ctltmp.CBptr.d^.ovhd do
+                          if rcdcnt >= rcdblk then NewBlk := TRUE;
+                      end;
+              MoveCnt := 1;
+              if NewBlk then begin
+                  AllocBlk (ctltmp); NewBlkNbr := ctltmp.CBblkno;
+                  if CBtype = dtaCNTL.CBtype then begin
+                      with CBptr.d^.ovhd do
+                          MoveCnt := ((100-dens)*rcdcnt) DIV 100;
+                      if MoveCnt < 1 then MoveCnt := 1;
+                      end;
+                  end;
+              LastRcd (ctldta);
+              for n := 2 to MoveCnt do if PrevRcd (ctldta) then {nothing};
+{!CC}         pd := ord4(@CBptr.d^.dta.b[1])+CBofs-1;
+{!CC}         InsRcd (ctltmp,MoveCnt,pointer(pd));
+              DelRcd (ctldta,MoveCnt); LastRcd (ctldta);
+{!CC}         pd := ord4(@CBptr.d^.dta.b[1])+CBofs-1;
+{!CC}         UpdKey (ctlkey,pointer(pd));
+              end;
+{$P}
+          if NewBlk then begin
+              with ctltmp do begin
+                  LastRcd (ctltmp);
+                  if NextRcd (ctlkey) then {nothing};
+{!CC}             pd := ord4(@CBptr.d^.dta.b[1])+CBofs-1;
+{!CC}             InsRcd (ctlkey,1,pointer(pd));
+                  UpdPtr (ctlkey,ctltmp.CBblkno);
+                  with CBptr.d^.ovhd do begin
+                      fwdptr := ctldta.CBptr.d^.ovhd.fwdptr;
+                      bwdptr := ctldta.CBblkno;
+                      end;
+                  end;
+              with ctldta do begin
+                  if CBptr.d^.ovhd.fwdptr <> 0 then begin
+                      GetDBblk (ctltmp,CBptr.d^.ovhd.fwdptr);
+                      ctltmp.CBptr.d^.ovhd.bwdptr := NewBlkNbr;
+                      CBmodfg := TRUE;
+                      end;
+                  with CBptr.d^.ovhd do begin
+                      fwdptr := NewBlkNbr;
+                      end;
+                  end;
+              end;
+          PutDBblk (ctltmp);
+          RELEASE (heapptr);
+          end;
+
+{$P}
+{ dbIns ---------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin {dbIns}
+      dbmLock;
+      GetDBblk (ctlCNTL,ctlCNTL.CBblkno);
+      if ctlCNTL.CBptr.c^.ctl.dtablk = 0 then dbInt
+      else with dtaCNTL do begin
+          dbRet (dbREQdta);
+          if dbStat = 0 then dbStat := dbsDUP
+          else begin
+              {--- insert record in data block ------------------------}
+              InsRcd (dtaCNTL,1,rqDTAptr);
+              if dtaCNTL.CBrrm = 1 then begin
+{!CC}             pd := ord4(@dtaCNTL.CBptr.d^.dta.b[1]) +
+{!CC}                   dtaCNTL.CBofs-1;
+{!CC}             UpdKey (ix2CNTL,pointer(pd));
+                  if ix2CNTL.CBrrm = 1 then begin
+{!CC}                 pd := ord4(@ix2CNTL.CBptr.d^.dta.b[1]) +
+{!CC}                       ix2CNTL.CBofs-1;
+{!CC}                 UpdKey (ix1CNTL,pointer(pd));
+                      end;
+                  end;
+              {--- block overflow processing --------------------------}
+              if CBptr.d^.ovhd.rcdcnt > CBptr.d^.ovhd.rcdblk then begin
+                  MoveRcd (dtaCNTL,ix2CNTL);
+                  with ix2CNTL.CBptr.d^.ovhd do
+                      if rcdcnt > rcdblk then MoveRcd (ix2CNTL,ix1CNTL);
+                  end;
+              dbStat := dbsRAD;
+              end;
+          end;
+      with ctlCNTL do begin
+          with CBptr.c^.ctl do rcdcnt := rcdcnt+1;
+          CBmodfg := TRUE; end;
+      PutAllBlk;
+      dbmUnlock;
+      end;
+
+{$P}
+{ dbUpd ---------------------------------------------------------------}
+{ Replace record in data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbUpd;
+      var i: integer;
+      begin
+      dbmLock;
+      GetDBblk (ctlCNTL,ctlCNTL.CBblkno);
+      with dtaCNTL do begin
+          dbRet (dbREQdta);
+          if dbStat <> 0 then dbStat := dbsNMR
+          else begin
+{!CC}         MOVELEFT (dbREQdta^,CBptr.d^.dta.b[CBofs],CBkln);
+              CBmodfg := TRUE; dbStat := dbsRUP;
+              end;
+          end;
+      PutAllBlk;
+      dbmUnlock;
+      end;
+
+{ CheckRange ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE CheckRange;
+      begin
+      if dbStat <> 0 then dbmEXIT (dbsNAR);
+      with dtaCNTL do begin
+          if dbREQfnc in [dbcGNK,dbcGPK] then
+              if keymatch (dtaCNTL,dbREQkey) <> 0 then dbmEXIT (dbsNAR);
+{!CC}     MOVELEFT (CBptr.d^.dta.b[CBofs],dbREQdta^,CBkln);
+          dbCurBlk := CBblkno; dbCurOfs := CBofs;
+          end;
+      end;
+
+{$P}
+{ dbFirst -------------------------------------------------------------}
+{ Get first record in data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbFirst;
+      var i,p,status: integer; ValidBlock: boolean;
+
+{ dbFirst.NxtBlk ------------------------------------------------------}
+{----------------------------------------------------------------------}
+      FUNCTION NxtBlk (var dbcb: CtlBlk): integer;
+          begin
+          p := dbcb.CBofs + dbcb.CBkln;
+          with dbcb.CBptr.d^ do
+              NxtBlk := (ord(dta.c[p])*256)+ord(dta.c[p+1]);
+          end;
+
+{ dbFirst -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin {dbfirst}
+      if ctlCNTL.CBptr.c^.ctl.dtablk = 0 then dbmEXIT (dbsNMR);
+      if dbPhySeq
+          then with dtaCNTL.CBptr.c^.ovhd do begin
+              i := 0; ValidBlock := FALSE;
+              repeat
+                  GetDBblk (dtaCNTL,i);
+                  if rcdlen = -1 then dbmEXIT (dbsNMR);
+                  if (blktyp = DBdta) AND (name = dbREQfil)
+                      then ValidBlock := TRUE;
+                  if not ValidBlock then case blktyp of
+                      DBdfn,
+                      DBctl: i := i + 1;
+                      DBix1,
+                      DBix2,
+                      DBdta: i := i + (blksize DIV 512);
+{!CC}             otherwise: i := i + 1;
+                        end; {case}
+                  until ValidBlock;
+              end
+          else begin
+              GetDBblk (ix1CNTL,ctlCNTL.CBptr.c^.ctl.ix1blk);
+              GetDBblk (ix2CNTL,NxtBlk(ix1CNTL));
+              GetDBblk (dtaCNTL,NxtBlk(ix2CNTL));
+              end;
+      CheckRange;
+      end;
+
+{$P}
+{ dbCur ---------------------------------------------------------------}
+{ Get pointers to current record
+{----------------------------------------------------------------------}
+PROCEDURE dbCur;
+      begin
+      if dbCurBlk = 0
+          then dbmEXIT (dbsNAR)
+          else with dtaCNTL do begin
+              GetDBblk (dtaCNTL,dbCurBlk);
+              CBofs := dbCurOfs;
+              CBrno := CBofs DIV CBrln;
+              CBrrm := CBptr.d^.ovhd.rcdcnt - CBrno;
+              CBlrm := CBrrm * CBrln;
+              end;
+      end;
+
+{ dbPrv ---------------------------------------------------------------}
+{ Get previous record in data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbPrv;
+      begin dbCur;
+      with dtaCNTL do begin
+          if PrevRcd (dtaCNTL) then begin
+              CheckRange; exit (dbPrv); end;
+          if CBptr.d^.ovhd.bwdptr <> 0
+              then begin
+                  GetDBblk (dtaCNTL,dtaCNTL.CBptr.d^.ovhd.bwdptr);
+                  LastRcd (dtaCNTL); CheckRange;
+                  end
+              else dbmEXIT (dbsNAR);
+          end;
+      end;
+
+{$P}
+{ dbNxt ---------------------------------------------------------------}
+{ Get next record in data base processing
+{----------------------------------------------------------------------}
+PROCEDURE dbNxt;
+      var ValidBlock: boolean;
+      begin dbCur;
+      with dtaCNTL do begin
+          if NextRcd (dtaCNTL) then begin
+              CheckRange; exit (dbNxt); end;
+          if dbPhySeq
+              then with dtaCNTL.CBptr.c^.ovhd do begin
+                  ValidBlock := FALSE;
+                  repeat
+                      if not ValidBlock then case blktyp of
+                          DBdfn,
+                          DBctl: dbCurBlk := dbCurBlk + 1;
+                          DBix1,
+                          DBix2,
+                          DBdta: dbCurBlk := dbCurBlk +
+                                             (blksize DIV 512);
+{!CC}                 otherwise: dbCurBlk := dbCurBlk + 1;
+                            end; {case}
+                      GetDBblk (dtaCNTL,dbCurBlk);
+                      if rcdlen = -1 then dbmEXIT (dbsNAR);
+                      if (blktyp = DBdta) AND (name = dbREQfil)
+                          then ValidBlock := TRUE;
+                      until ValidBlock;
+                  end
+              else if CBptr.d^.ovhd.fwdptr <> 0
+                  then GetDBblk (dtaCNTL,dtaCNTL.CBptr.d^.ovhd.fwdptr)
+                  else begin
+                      if PrevRcd (dtaCNTL) then {nothing};
+                      dbmEXIT (dbsNAR);
+                      end;
+          CheckRange;
+          end;
+      end;
+
+{$P}
+{ dbRtnFld ------------------------------------------------------------}
+{ Return field definitions processing
+{----------------------------------------------------------------------}
+PROCEDURE dbRtnFld;
+      begin
+{!CC} MOVELEFT (ctlCNTL.CBptr.c^.ctl.flddef,dbREQdta^,sizeof(dbFLDblk));
+      end;
+
+
+{ vsiDBM --------------------------------------------------------------}
+{ VSIDBM request processing
+{----------------------------------------------------------------------}
+      begin
+      dbStat := dbsIFN; dbStatmg := '';
+      if dbREQfnc = dbcINT then vsiDBI;
+      if dbREQfnc = dbcDBC then vsiDBC;
+
+(*    if dbTrace AND (dbWndPtr <> NIL) then begin
+{!CC}     n := WinSelect (dbWndPtr^);
+          write ('------  ');
+          case dbREQfnc of
+               dbcGU: writeln ('dbcGU');
+               dbcGN: writeln ('dbcGN');
+               dbcGP: writeln ('dbcGP');
+               dbcGF: writeln ('dbcGF');
+              dbcGNK: writeln ('dbcGNK');
+              dbcGPK: writeln ('dbcGPK');
+              dbcINS: writeln ('dbcINS');
+              dbcREP: writeln ('dbcREP');
+              dbcDEL: writeln ('dbcDEL');
+              dbcOPN: writeln ('dbcOPN');
+              dbcFLD: writeln ('dbcFLD');
+              dbcPBR: writeln ('dbcPBR');
+              dbcCLO: writeln ('dbcCLO');
+                 end;
+{!CC}     n := WinSystem (WsysCurr);
+          end;  *)
+
+(*    if dbActive then begin
+          GoToXY (64,23); write ('VSIDBM active'); GoToXY (0,0); end;
+  *)
+{!CC} rqDTAptr := dbREQdta; rqKEYptr := dbREQkey;
+
+      for n := 1 to sizeof(dbName) do
+          if dbREQfil[n] in ['a'..'z'] then
+              dbREQfil[n] := chr(ord(dbREQfil[n])-ord('A')+ord('a'));
+
+{$P}
+      dbOpen;
+      if dbStat = 0 then begin
+          case dbREQfnc of
+              dbcOPN: dbStat := 0;
+              dbcCLO: dbClos;
+              dbcFLD: dbRtnFld;
+              dbcPBR: dbPhySeq := NOT dbPhySeq;
+              dbcGU:  dbRet (dbREQkey);
+              dbcGN:  dbNxt;
+              dbcGNK: dbNxt;
+              dbcGP:  dbPrv;
+              dbcGPK: dbPrv;
+              dbcGF:  dbFirst;
+              dbcINS: dbIns;
+              dbcREP: dbUpd;
+              dbcDEL: dbDel;
+              end; {case}
+          end;
+      dbmEXIT (dbStat);
+      end; {vsiDBM}
+
+      end.

@@ -1,0 +1,111 @@
+;
+; File ID: PURG.1.2
+;
+;
+; Purge files for CCOS version 1.2 files
+;
+;
+; All files required to reboot will not be deleted.
+;
+; PURG.1.2 assumes volumes /CCSYS and /CCUTIL exist
+; and have read/write access
+;
+pause Continue
+;
+; Do not be concerned if any "File not found" messages appear.
+;
+
+delfil -q /CCSYS/ASM68K
+delfil -q /CCSYS/CC.C2MGR
+delfil -q /CCSYS/CC.EDCHAR
+delfil -q /CCSYS/CC.HELP
+delfil -q /CCSYS/CC.LGICLC
+delfil -q /CCSYS/CC.MNTMGR
+delfil -q /CCSYS/CC.PSYSTEM
+delfil -q /CCSYS/CC.SETDCP
+delfil -q /CCSYS/CC.SETPRT
+delfil -q /CCSYS/CC.SYSMGR
+delfil -q /CCSYS/CODE
+delfil -q /CCSYS/CSH.DEFAULT
+delfil -q /CCSYS/CSK.REV3
+delfil -q /CCSYS/CSK.REV4
+delfil -q /CCSYS/CSV.DEFAULT
+delfil -q /CCSYS/DEBUG
+delfil -q /CCSYS/DESPOOL
+delfil -q /CCSYS/DIAG.DATA
+delfil -q /CCSYS/DRV.ADISK
+delfil -q /CCSYS/DRV.DTACOM
+delfil -q /CCSYS/DRV.EPRNT
+delfil -q /CCSYS/DRV.PRNTR
+delfil -q /CCSYS/ED
+delfil -q /CCSYS/EDINIT.TEXT
+delfil -q /CCSYS/FORTRAN
+delfil -q /CCSYS/FTNLIB.OBJ
+delfil -q /CCSYS/FTNCTERRS.TEXT
+delfil -q /CCSYS/FTNRTERRS.TEXT
+delfil -q /CCSYS/HELP.TEXT
+delfil -q /CCSYS/KEYS.ED.TEXT
+delfil -q /CCSYS/LIBRARY
+delfil -q /CCSYS/LINKER
+delfil -q /CCSYS/LOADER.IMAGE
+delfil -q /CCSYS/PASCAL
+delfil -q /CCSYS/PASLIB.OBJ
+delfil -q /CCSYS/PASCTERRS.TEXT
+delfil -q /CCSYS/SPOOL
+delfil -q /CCSYS/SYSMSG
+delfil -q /CCSYS/SYSTEM.INTERP
+delfil -q /CCSYS/SYSTEM.UPDATE
+
+krunch -q /ccsys
+lstvol /ccsys
+
+delfil -q /CCUTIL/ACCMGR
+delfil -q /CCUTIL/BLDACT
+delfil -q /CCUTIL/BLDALT
+delfil -q /CCUTIL/BOOTMGR
+delfil -q /CCUTIL/BOOT.CONCEPT
+delfil -q /CCUTIL/BOOT.FLOPPY
+delfil -q /CCUTIL/C2.MISC.TEXT
+delfil -q /CCUTIL/CCLIB.OBJ
+delfil -q /CCUTIL/CFLIB.OBJ
+delfil -q /CCUTIL/C2LIB.OBJ
+delfil -q /CCUTIL/CPLIB
+delfil -q /CCUTIL/CF18.3.DATA
+delfil -q /CCUTIL/CF18.4AP.DATA
+delfil -q /CCUTIL/CSD.06.10
+delfil -q /CCUTIL/CSD.06.10.ALT
+delfil -q /CCUTIL/CSD.07.11
+delfil -q /CCUTIL/CSD.07.11.ALT
+delfil -q /CCUTIL/CSD.08.13.ALT
+delfil -q /CCUTIL/CSD.09.14.ALT
+delfil -q /CCUTIL/CSD.IBM
+delfil -q /CCUTIL/CSH.ALTCHARSET
+delfil -q /CCUTIL/DDIAG
+delfil -q /CCUTIL/DRIVEMGR
+delfil -q /CCUTIL/FDIAG
+delfil -q /CCUTIL/FLPY.BOOT
+delfil -q /CCUTIL/FFRMT
+delfil -q /CCUTIL/FUTIL
+delfil -q /CCUTIL/LCDUMP
+delfil -q /CCUTIL/MBACKUP
+delfil -q /CCUTIL/MIRROR
+delfil -q /CCUTIL/OTEST
+delfil -q /CCUTIL/PARMGR
+delfil -q /CCUTIL/PRTWND
+delfil -q /CCUTIL/SYSGEN
+delfil -q /CCUTIL/SYSTEM.LIBRARY
+delfil -q /CCUTIL/SYSTEM.MISCINFO
+delfil -q /CCUTIL/SYSTEM.PASCAL
+delfil -q /CCUTIL/SYSTEM.UPDATE
+delfil -q /CCUTIL/TERMINAL
+delfil -q /CCUTIL/USERKEYS.TEXT
+delfil -q /CCUTIL/USERMGR
+delfil -q /CCUTIL/VOLUTIL
+delfil -q /CCUTIL/WRITEBOOT
+
+krunch -q /ccutil
+lstvol /ccutil
+
+;
+; Finished ....
+;

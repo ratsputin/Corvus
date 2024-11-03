@@ -1,0 +1,339 @@
+         page
+; File: P.PROM.SP.TEXT
+; Date: 26-Oct-83
+
+BusErrV  equ    $8              ;addr of bus error exception vector
+
+MMUexcp  equ    $280001         ;MMU exception register on board 0
+MMUcntxt equ    $280201         ;MMU context register on board 0
+
+SegRegLo equ    $280601         ;first seg register
+SegRegHi equ    $3ffe01         ;last seg register
+SegRegIn equ    $008000         ;seg register address increment
+SegCntIn equ    $000800         ;seg reg inc between contexts
+SegStart equ    $80             ;start value of seg register 16
+SegPEnd  equ    $8F             ;end value for seg register 31
+
+PagRegLo equ    $200401         ;first page register
+PagRegHi equ    $3ffc01         ;last page register
+PagRegIn equ    $000800         ;page register address increment
+
+NumCntxt equ    02              ;number of contexts
+
+; setup bus error interrupt vector in static RAM
+;
+        lea     SPbusEr,a1      ;get bus error processing address
+        move.l  a1, BusErrV.W   ;set bus error interrupt vector
+SPbusRS move.b  #$0,MMUexcp.l   ;zero exception register to prevent
+                                ;   parity error causing Bus Errors
+        move.b  #1,CPextcrt.w   ;use external CRT for messages
+
+    page
+; Setup MMU so that logical addresses $80000 to $FFFFF access
+; physical addresses $00000 to $7FFFF.  The Concept address space
+; is mapped into the physical memory address space.
+;
+; The Concept memory map is selected on the processor board when the
+; ALTMAP bit is 0.  Unfortunately, only 48 of the segment registers
+; are accessible.  This is because the start of the segment registers is
+; is at $280601 instead of $200601 but still must stop at $3FFE01.
+;
+; The MMU maintains 16 different contexts each with 64 segment registers
+; representing the full logical address space (0 ... $1FFFFF).  Context 0
+; is used by the Omninet Transporter for DMA in to/out of host memory.
+; Context 1 is used when the processor is in supervisor (or privileged)
+; state.  Contexts 2 to 15 are user contexts selectable via the context
+; register and are active when the processor is in the user state.  Since
+; CCOS runs only in supervisor state contexts 0 and 1 are only necessary
+; to initialize.  For use by CCOS ALL the contexts are initialized to the
+; same memory map.
+;
+; Setup the segment registers 16 to 31, inclusive.  These seg regs
+; correspond to the logical addresses $80000 to $FFFFF.   We will
+; use to first 16 page segments to refer to the physical memory.
+; Therefore, put the page segment adresses 0 to 15, inclusive, into
+; the segment registers 16 to 31, inclusive. (see ahead for page registers).
+;
+; Have BUG: try setting all 48 seg regs to 0 to F cyclically.
+;
+; Segment register form :
+;
+;   Bits 0 through 5 :  page segment number for this segment.
+;   Bits 6 through 7 :  protection bits
+;         00 :  no access
+;         01 :  read only access
+;         10 :  full access, read/write/execute  <== use this for CCOS
+;         11 :  execute only access
+;
+        lea     SegRegLo+(00*SegRegIn).L,a0 ;get first seg register address
+        movea.l a0, a1          ;save start address
+        clr.l   d3              ;context increment (loop counter)
+        move.w  #SegStart,d1    ;read/write in bits 6-7 and page segment 0
+        move.l  #SegRegIn,d2    ;get address increment
+        moveq   #NumCntxt-1,d4  ;number of contexts(loop counter)
+        moveq   #47, d5         ;do all 48 seg regs
+
+; for i := 0 to NumCntxt-1 do
+;   repeat  set seg regs 00 to 47 for this context
+;
+SPseg01 move.b  d1, (a0)        ;set segment register
+        adda.l  d2, a0          ;update seg register address
+        addq.w  #1, d1          ;bump page segment number
+        cmpi.w  #SegPEnd, d1    ;at end of seg registers?
+        bls.s   SPseg1a         ;no, write next seg reg
+        move.w  #SegStart,d1    ;reset page selector every 16 seg regs
+SPseg1a dbra    d5,SPseg01      ;do for each 48 regs
+        add.l   #SegCntIn, d3   ;do next context
+        lea     0(a1,d3), a0    ;get start of seg regs for this context
+        move.w  #SegStart,d1    ;read/write in bits 6-7 and page segment 0
+        moveq   #47, d5         ;do all 48 seg regs
+        dbra    d4,SPseg01      ;do next context
+
+; Verify segment registers set.  Check for errors.
+; note: this does not do thorough test
+;
+        lea     SegRegLo+(00*SegRegIn).L,a0 ;get first seg register address
+        movea.l a0, a1          ;save start address
+        clr.l   d3              ;context increment (loop counter)
+        move.w  #SegStart,d1    ;read/write in bits 6-7 and page segment 0
+        move.l  #SegRegIn,d2    ;get address increment
+        moveq   #NumCntxt-1,d4  ;number of contexts(loop counter)
+        moveq   #47, d5         ;do all 48 seg regs
+
+; for i := 0 to NumCntxt-1 do
+;   repeat  set seg regs 00 to 47 for this context
+;
+SPseg02 cmp.b   (a0), d1        ;is segment register good?
+        beq.s   SPseg03         ;yes
+        bset    #7, CPsysst.w   ;no, mark error
+SPseg03 adda.l  d2, a0          ;update seg register address
+        addq.w  #1, d1          ;bump page segment number
+        cmpi.w  #SegPEnd, d1    ;at end of seg registers?
+        bls.s   SPseg04         ;no, write next seg reg
+        move.w  #SegStart,d1    ;reset page selector every 16 seg regs
+SPseg04 dbra    d5,SPseg02      ;do for each 48 regs
+        add.l   #SegCntIn, d3   ;do next context
+        lea     0(a1,d3), a0    ;get start of seg regs for this context
+        move.w  #SegStart,d1    ;read/write in bits 6-7 and page segment 0
+        moveq   #47, d5         ;do all 48 seg regs
+        dbra    d4,SPseg02      ;do next context
+     page
+; Page registers :
+;
+; All the page registers in MMU are arranged in 1 page file per memory
+; board.  The page file is divided into 64 page segments.  The page
+; segments are addressed by the contents of a segment register.  Page
+; segments are divided into 16 page registers.  A specific page register
+; within a page segment is addressed by bits a11 to a14 of the logical
+; address presented to the MMU.  The data in the page register selects
+; which physical memory page is accessed.
+;
+; The last page in the physical memory can never be accessed.  It's page
+; address is $FF.  If it is ever accessed a Bus Error occurs.  It is
+; reserved as the "invalid page" identifier.
+;
+; To get segment registers 16 thru 31 which point at page segments 0 thru
+; 15 to access the physical memory 0 thru $7F7FF (all except last 2k page)
+; contiguously set the page registers 0 thru $FE to 0 thru $FE.  Set page
+; register $FF to $FF, to cause a Bus Error if any one tries to read
+; or write it.
+;
+; Logical to physical address conversion :
+;
+; address lines :   | 2 2 2 | 2 1 1 1 1 1 | 1 1 1 1 | 1 0 0 0 0 0 0 0 0 0 0 |
+;                   | 3 2 1 | 0 9 8 7 6 5 | 4 3 2 1 | 0 9 8 7 6 5 4 3 2 1 0 |
+; field :           | x MMU |   segment   |  page   |        offset         |
+;
+; To get a byte accessed the logical address from the processor selects
+; which segment register is used.  The data in the segment register selects
+; which page segment is selected.  The page field in the logical address
+; selects which page register in the page segment is selected.  It page
+; field is an index into the page segment.  The data in the page register
+; selects which 2k page in the physical address  is selected.  The offset
+; in the logical address selects which byte in the 2k page of physical
+; memory is accessed.
+;
+        movea.l #PagRegLo,a0    ;get first page register address
+        clr.l   d1              ;get first page register value
+        move.l  #PagRegIn,d2    ;get address increment
+
+SPpag01 move.b  d1,(a0)         ;set page register
+        adda.l  d2,a0           ;update page register address
+        addq.w  #1,d1           ;update page register value
+        cmp.w   #$FF,d1
+        bls.s   SPpag01         ;for i:=0 to FF do
+  page
+; check page registers
+;                               ;d1 is already zero (0)
+        movea.l #PagRegLo,a0    ;get first page register address
+        move.w  #PagRegIn,d2    ;get address increment
+
+SPpag02 cmp.b   (a0), d1        ;is page reg set correctly
+        beq.s   SPpag03         ;yes
+        bset    #7, CPsysst.w   ;no, show error
+SPpag03 adda.w  d2,a0           ;update page register address
+        addq.w  #1,d1           ;update page register value
+        cmp.w   #$FF,d1
+        bls.s   SPpag01         ;for i:=0 to FF do
+
+; all done
+;
+SPdone
+         BSR.S     SPSER00             ;{!DB}dump seg and page regs
+         BRA       SP1EXIT             ;{!DB}NO, ALL DONE
+
+SPSER00  LEA       SPMGSEG, A0         ;{!DB}MSG ON DISPLAY
+         BSR       DSPUTST             ;{!DB} OF SEG REGS
+         LEA       SegRegLo.L,a0       ;{!DB}get first seg register address
+         MOVEA.L   a0, a1              ;{!DB}save start address
+         CLR.L     d3                  ;{!DB}context increment (loop counter)
+         CLR.L     D4                  ;{!DB}CONTEXT COUNTER
+         CLR.L     D6                  ;{!DB}FORCE BLANK BETWEEN BYTES
+         move.L    #SegRegIn,d2        ;{!DB}get address increment
+         moveq     #47, d5             ;{!DB}do all 48 seg regs
+                                                     ;{!DB}
+; for i := 0 to NumCntxt-1 do                        ;{!DB}
+;   repeat  set seg regs 00 to 47 for this context   ;{!DB}
+;                                                    ;{!DB}
+SPSER01  MOVE.L    A0, -(SP)           ;{!DB}SAVE REG ADDR
+         LEA       SPMGSCN,A0          ;{!DB} display context
+         BSR       DSPUTST             ;{!DB}
+         MOVE.L    (SP)+, A0           ;{!DB}RESTORE REG ADDR
+         MOVE.B    D4,D0               ;{!DB}DISPLAY WHICH
+         BSR.S     SPHEXASC            ;{!DB} CONTEXT'S SEG
+         BSR       DSPUTCH   ;{!DB} Display number
+         MOVEQ     #DSCCR,D0 ;{!DB} Do CR
+         BSR       DSPUTCH   ;{!DB}
+SPSER02  move.b    (a0), D1            ;{!DB}Get segment register
+         adda.L    d2, a0              ;{!DB}update seg register address
+         BSR.S     SPDISPB             ;{!DB}DISPLAY SEG REG
+         dbra      d5,SPSER02          ;{!DB}do for each 48 regs
+         MOVEQ     #'?', D0            ;{!DB}wait for
+         BSR       DSPUTCH             ;{!DB}  user presses
+         BSR       KBGETCH             ;{!DB}  any char
+         add.l     #SegCntIn, d3       ;{!DB}do next context
+         lea       0(a1,d3), a0        ;{!DB}start of seg regs for context
+         moveq     #47, d5             ;{!DB}do all 48 seg regs
+         ADDQ.W    #1,D4               ;{!DB}INC CONTEXT
+         CMP.W     #NumCntxt-1, D4     ;{!DB}ANOTHER CONTEXT LEFT?
+         BLS.S     SPSER01             ;{!DB}YES
+                                   ;{!DB}
+         LEA       SPMGPAG,A0          ;{!DB} display PAGE MESSAGE
+         BSR       DSPUTST             ;{!DB}
+         lea       PagRegLo.l,a0   ;{!DB}get first page register address
+         clr.l     d1              ;{!DB}get first page register value
+         move.w    #$FF, d5        ;{!DB}do for 256 regs
+         move.l    #PagRegIn,d2    ;{!DB}get address increment
+                                   ;{!DB}
+SPPER01  move.b    (a0), d1        ;{!DB}set page register
+         BSR.S     SPDISPB         ;{!DB}DUMP PAGE REG TO DISPLAY
+         adda.l    d2,a0           ;{!DB}update page register address
+         addq.b    #1,d1           ;{!DB}update page register value
+         dbra      d5,SPPER01      ;{!DB}for i:=FF to 0 do
+         MOVEQ     #'?', D0            ;{!DB}wait for
+         BSR       DSPUTCH             ;{!DB}  user presses
+         BSR       KBGETCH             ;{!DB}  any char
+         RTS                           ;{!DB}
+                                       ;{!DB}
+; SPHEXASC - CONVERT D0.B LOW 4 BITS TO TO ASCII HEX ;{!DB}
+;                                                    ;{!DB}
+SPHEXASC ANDI.W    #$F,D0              ;{!DB}only low nibble
+         MOVE.B    SPTABL(D0.W),D0     ;{!DB}GET TABLE CODE
+         RTS                           ;{!DB}
+SPTABL   DATA.B    '0123456789ABCDEF'  ;{!DB}
+                                       ;{!DB}
+; SPDISPB - DISPLAY BYTE IN D1 REGISTER AS ASCII HEX ;{!DB}
+;                                                    ;{!DB}
+SPDISPB  MOVE.L    A0, -(SP) ;{!DB} save seg reg addr
+         MOVE.B    D1,D0     ;{!DB} get hi nibble
+         LSR.B     #4,D0     ;{!DB} put hi to low
+         BSR.S     SPHEXASC  ;{!DB} convert to ascii
+         BSR       DSPUTCH   ;{!DB} display
+         MOVE.B    D1,D0     ;{!DB} get low nibble
+         BSR.S     SPHEXASC  ;{!DB} convert to ascii
+         BSR       DSPUTCH   ;{!DB} display
+         TST.B     D6        ;{!DB}DISPLAY BLANKS?
+         BNE.S     SPDBCR    ;{!DB}NO
+         MOVEQ     #$20,D0   ;{!DB} display a blank
+         BSR       DSPUTCH   ;{!DB}
+SPDBCR   MOVE.B    D5,D0     ;{!DB} every 16 regs
+         ANDI.B    #$F,D0    ;{!DB}   do a CR
+         BNE.S     SPDBEXIT  ;{!DB}
+         MOVEQ     #DSCCR,D0 ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+SPDBEXIT MOVE.L    (SP)+, A0 ;{!DB} restore reg
+         RTS                 ;{!DB}
+                             ;{!DB}
+SPMGSEG  DATA.B    'SEG REGS',DSCCR,0  ;{!DB}
+SPMGPAG  DATA.B    'PAGE REGS',DSCCR,0 ;{!DB}
+SPMGSCN  DATA.B    'CONTEXT ',0        ;{!DB} debug must end even
+                                       ;{!DB}
+; SPBUSDATA -DISPLAY BUS ERROR DATA    ;{!DB}
+;                                      ;{!DB}
+SPBUSDATA                              ;{!DB}
+         MOVEQ     #-1,D6          ;{!DB} NO BLANK BETWEEN BYTES
+         lea       SPmgER, a0      ;{!DB}mesg -- exception reg
+         bsr       DSputSt         ;{!DB}
+         moveq     #0,d5           ;{!DB}DO CR AFTER BYTE
+         bsr.s     SPDISPB         ;{!DB}D1 is set to exception reg
+
+         lea       SPmgAA, a0      ;{!DB}mesg -- access address
+         bsr       DSputSt         ;{!DB}
+         moveq     #1,d5           ;{!DB}NO AFTER BYTE
+         MOVE.L    4+2(SP), D4     ;{!DB}GET ACCESS ADR OFF STACK
+         MOVE.L    D4,D1           ;{!DB}DISPLAY HI BYTE
+         SWAP      D1              ;{!DB}
+         LSR.W     #8,D1           ;{!DB}
+         bsr       SPDISPB         ;{!DB}
+         MOVE.L    D4,D1           ;{!DB}DISPLAY HI mid BYTE
+         SWAP      D1              ;{!DB}
+         bsr       SPDISPB         ;{!DB}
+         MOVE.L    D4,D1           ;{!DB}DISPLAY low MID BYTE
+         LSR.W     #8,D1           ;{!DB}
+         bsr       SPDISPB         ;{!DB}
+         moveq     #0,d5           ;{!DB}DO CR AFTER BYTE
+         MOVE.L    D4,D1           ;{!DB}DISPLAY LOW BYTE
+         bsr       SPDISPB         ;{!DB}
+
+         lea       SPmgPC, a0      ;{!DB}mesg -- PROGRAM COUNTER
+         bsr       DSputSt         ;{!DB}
+         moveq     #1,d5           ;{!DB}NO CR AFTER BYTE
+         MOVE.L    4+$A(SP), D4    ;{!DB}GET PC OFF STACK
+         MOVE.L    D4,D1           ;{!DB}DISPLAY HI BYTE
+         SWAP      D1              ;{!DB}
+         LSR.W     #8,D1           ;{!DB}
+         bsr       SPDISPB         ;{!DB}
+         MOVE.L    D4,D1           ;{!DB}DISPLAY HI mid BYTE
+         SWAP      D1              ;{!DB}
+         bsr       SPDISPB         ;{!DB}
+         MOVE.L    D4,D1           ;{!DB}DISPLAY low MID BYTE
+         LSR.W     #8,D1           ;{!DB}
+         bsr       SPDISPB         ;{!DB}
+         moveq     #0,d5           ;{!DB}DO CR AFTER BYTE
+         MOVE.L    D4,D1           ;{!DB}DISPLAY LOW BYTE
+         bsr       SPDISPB         ;{!DB}
+         RTS                     ;{!DB}*
+SPmgAA  data.b  'AA = ',0        ;{!DB}*
+SPmgPC  data.b  'PC = ',0        ;{!DB}*
+SPmgER  data.b  'ER = ',0        ;{!DB}*
+                                       ;{!DB}
+SP1EXIT                                ;{!DB}
+        clr.b   CPextcrt.w      ;{!CP};Concept Plus uses display
+        bra.s   SetupCk         ;back to normal Concept boot PROM
+
+;
+; SPbusEr - Bus error processing
+;
+SPbusEr
+         MOVE.B    MMUexcp.l, D1   ;{!DB} save exception register
+        move.b  #$0,MMUexcp.l   ;zero exception register to prevent
+                                ;   parity error causing Bus Errors
+        lea     SPmgBus,a0      ;mesg -- Bus error
+        bsr     DSputSt         ;*
+         BSR       SPBUSDATA ;{!DB}DISPLAY WHERE AND WHAT
+         BSR       SPSER00   ;{!DB}DISPLAY seg and page regs
+        lea     CPistack.w, sp  ;reset stack pointer
+        bra     SPbusRS         ;restart from init of MMU
+
+SPmgBus data.b  'Bus error',DSCcr,0
+        data.b  0            ;force even boundary

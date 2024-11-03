@@ -1,0 +1,6 @@
+Apple Interface card (parallel hard disk interface)
+installed in slot 3
+U10 is:
+   AM2716-
+   1DC 8204HP
+   label "A4.7"

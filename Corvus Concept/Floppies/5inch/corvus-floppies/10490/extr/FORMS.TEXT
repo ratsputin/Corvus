@@ -1,0 +1,627 @@
+{$S PRINT  }
+procedure FormsTask;
+const
+  TtlLen = 20;
+  MaxFld = 100;
+
+type
+   FldTyp = packed record
+      SCRROW,
+      SCRCOL,
+      LEN,
+      ITMCOL: 0..255;
+   end;
+
+var
+  CurFld: integer;
+  CurCol: integer;
+  Done, BegWrd: boolean;
+  c: char;
+  WordCap: boolean;
+  FrmNam: StrTyp;
+  CsrCol: integer;
+  NumFld: integer;
+  I: integer;
+  Fld: array[ 1..MaxFld ] of FldTyp;
+  FldNam: array[1..MaxFld] of string[TtlLen];
+
+{
+.PG
+}
+procedure BeginField;
+begin
+   BegWrd := true;
+   CurCol := Fld[CurFld].ScrCol;
+   CsrCol := CurCol;
+end;
+
+{
+.PG
+}
+procedure ShwRecord( R: integer );
+var i: integer;
+begin
+   R := max( 3, R );
+   if R>LstLin then begin
+      AppendLine( LstLin, BlkStr );
+      R := LstLin;
+   end;
+
+   SetUpNewTxt( R );
+   CurFld := 1;
+   BeginField;
+
+   write( '\1BG<\1Bu' );
+   for i := 1 to NumFld do begin
+      with Fld[i] do begin
+         gotoxy( ScrCol, ScrRow );
+         unitwrite( 1, NewTxt[ItmCol], Len );
+      end;
+   end;
+end;
+
+{
+.PG
+Returns the number of Records currently in the file.
+}
+function NumRecords: integer;
+begin
+   NumRecords := LstLin - 2;
+end;
+
+procedure DoPrint;
+type RelOp = (EQ,NE,LT,LE,GT,GE);
+VAR
+  DENum, I, Len, FrmLen: INTEGER;
+  Dir: FilId;
+  TmpStr: string[150];
+  CmpOp: RelOp;
+  CmpFld: integer;
+  SelAll,SelCrit: StrTyp;
+  p: pStrTyp;
+  LinBuf, Img: BA;
+
+{
+.PG
+}
+procedure PrintLine( var Img: BA );
+var I, J, L, Slack: integer;
+    LinBuf: BA;
+
+  procedure SubstVar;
+  var K,T,R,M: integer;
+      S: string[TtlLen];
+  begin
+     if I<L then begin
+        T := I+1;            {PICK OUT ID}
+        S := '';
+        R := min( I+TtlLen, L );
+        while (chr(Img[T])<>'>') and (T<R) do begin
+           S := concat( S, ' ' );
+           if chr(Img[T]) in ['a'..'z'] then begin
+              S[length(S)] := chr(Img[T]-32);
+           end else begin
+              S[length(S)] := chr(Img[T]);
+           end;
+           T := T + 1;
+        end;
+
+        K := 1;               {SUBSTITUTE ID}
+        while (K<=NumFld) do begin
+           if FldNam[K]=S then with Fld[K] do begin
+              moveleft( NewTxt[ItmCol], LinBuf[J], Len );
+              J := J+LEN-1;
+              M := - scanne( -LEN, ' ', LinBuf[J] );
+              J := J - M;
+              Slack := Slack + Len - M - (T-I+1);
+              I := T;
+              K := NumFld;
+           end;
+           K := K + 1;
+        end;
+     end;
+  end;
+
+begin
+   Slack := 0;
+   I := 1;
+   J := 1;
+   LinBuf := BlkStr;
+   L := BkSpanNE( Img, MaxLinLen, ' ' );
+   while I<=L do begin
+      LinBuf[J] := Img[I];
+      if Img[I]=ord('<') then begin
+         SubstVar;
+      end;
+
+(*   else if Img[I]=ord(' ') then begin
+         if Slack>0 then begin
+            if Img[I-1]=ord(' ') then begin
+               J := J - 1;
+               Slack := Slack - 1;
+            end;
+         end else if Slack<0 then begin
+            I := I - 1;
+            Slack := Slack + 1;
+         end;
+      end;
+*)
+
+      I := I + 1;
+      J := J + 1;
+   end;
+   fillchar( LinBuf[J], MaxLinLen-J+1, ' ' );
+   PrintLn( LinBuf );
+end;
+
+{
+.PG
+}
+procedure DelTrlBlk( var S: StrTyp );
+begin
+   {$R-}
+   while S[length(S)]=' ' do delete( S, length(S), 1 );
+   {$R+}
+end;
+
+{
+.PG
+}
+procedure CrackCmd( var Cmd: StrTyp );
+var i: integer;
+    FldStr, OpStr: StrTyp;
+begin
+   UpShift( Cmd );
+   {$R-}
+   if Cmd=SelAll then begin
+      CmpFld := 0;
+   end else begin
+      i := 1;
+      while not(Cmd[i] in ['<','=','>']) and (i<length(Cmd)) do
+         i := i + 1;
+      FldStr := copy( Cmd, 1, i-1 );
+      delete( Cmd, 1, i-1 );
+      DelTrlBlk( FldStr );
+      CmpFld := 0;
+      for i := 1 to NumFld do if FldNam[i]=FldStr then CmpFld := i;
+
+      i := 1;
+      while Cmd[i] in ['<','=','>'] do i := i + 1;
+      OpStr := copy( Cmd, 1, i-1 );
+      delete( Cmd, 1, i-1 );
+      if OpStr='<' then CmpOp := LT
+      else if OpStr='<=' then CmpOp := LE
+      else if OpStr='<>' then CmpOp := NE
+      else if OpStr='>=' then CmpOp := GE
+      else if OpStr='>' then CmpOp := GT
+      else CmpOp := EQ;
+      {$R+}
+
+      while pos(' ',Cmd)=1 do delete( Cmd, 1, 1 );
+      DelTrlBlk( Cmd );
+   end;
+end;
+
+
+{
+.PG
+}
+function Compare( Op: RelOp; var A, B: StrTyp ): boolean;
+begin
+   case Op of
+      LT: Compare := A < B;
+      LE: Compare := A <= B;
+      EQ: Compare := A = B;
+      GE: Compare := A >= B;
+      GT: Compare := A > B;
+      NE: Compare := A <> B;
+   end;
+end;
+
+{
+.PG
+}
+procedure GetKeyStr( var B: BA; F: integer; var S: StrTyp );
+var p: ^byte;
+begin
+   with Fld[F] do begin
+      p := pointer( ord4(@S)+1 );
+      moveleft( B[ItmCol], p^, Len );
+      p := pointer( ord4(@S) );
+      p^ := Len;
+      DelTrlBlk( S );
+      UpShift( S );
+   end;
+end;
+
+{
+.PG
+}
+procedure FormsPrint( Lin, Lst: integer );
+var L: integer;
+    Dum: boolean;
+    Img: BA;
+    KeyStr: StrTyp;
+
+   procedure PrintItem;
+   begin
+      while not EndPrint and (L<=FrmLen) do begin
+         Img := BlkStr;
+         Dum := RecGet( FrmFid, L, Len, Img[1] );
+         PrintLine( Img );
+         BackGround;
+         if not UsrIdle then begin
+            L := FrmLen;
+            Lin := Lst;
+            unitstatus( 6, l, 22 );
+            Dum := FilClear( PrtFid );
+         end;
+         L := L+1;
+      end;
+   end;
+
+begin
+   TellUsr(Msg(MGPRNT,42));
+   Dum := FilNumRecs( FrmFid, FrmLen );
+   while Lin<=Lst do begin
+      SetUpNewTxt( Lin );
+      L := 1;
+      if CmpFld=0 then begin
+         PrintItem;
+      end else begin
+         GetKeyStr( NewTxt, CmpFld, KeyStr );
+         if Compare( CmpOp, KeyStr, SelCrit ) then
+            PrintItem;
+      end;
+      Lin := Lin + 1;
+   end;
+
+   Img := BlkStr;
+   StrToBA( Img, 1, '.END' );
+   PrintLn( Img );
+   Done := true;
+   Cmd := KTASK;
+   Key := chr(TIDEdit);
+
+   TellUsr( Msg(MGGENL,10) );
+end;
+
+{
+.PG
+}
+begin
+   FrmNam := '';
+   { GET NAME OF MAIL MERGE WORKPAD }
+   if PmtStr( Msg(MGFRMS,2), FrmNam ) then begin
+      if not GetFID( FrmNam, Dir, FrmFid, DENum ) then begin
+         TellUsr( Subst(@FrmNam, Msg(MGWKSP,60)) );
+      end else begin
+         p := Msg(MGFRMS,16);
+         SelAll := p^;
+         UpShift( SelAll );
+         SelCrit := SelAll;
+         if PmtStr( Msg(MGFRMS,15), SelCrit ) then begin
+            CrackCmd( SelCrit );
+            PrintTask( CurLin, LstLin, FormsPrint );
+         end;
+      end;
+   end;
+end;
+
+procedure SortRecord;
+var SrtFld, L: integer;
+    Ascending: boolean;
+    S: StrTyp;
+    C: char;
+begin
+  S := FldNam[CurFld];
+  if PmtStr( Msg(MGFRMS,14), S ) then begin
+     UpShift( S );
+     SrtFld := 1;
+     while (SrtFld<NumFld) and (FldNam[SrtFld]<>S) do
+        SrtFld := SrtFld + 1;
+
+     if FldNam[SrtFld]=S then with Fld[SrtFld] do begin
+        Ascending := Confirm( Msg(MGSORT,7), true );
+        TellUsr( Msg(MGFRMS,6) );
+        L := LstLin + 1;
+        repeat
+           L := L - 1;
+           SetUpNewTxt( L );
+        until SpanNE( NewTxt, 1, ' ' )<=MaxLinLen;
+
+        BeginEvent;
+  (*    Sort( TxtFid, 3, L, ItmCol, Len, Ascending, 500 ); *)
+        Sort(3,L,ItmCol,Len,False,True);
+        ShwRecord( 3 );
+        EndEvent;
+
+        TellUsr( Msg(MGFRMS,7) );
+     end else begin
+        TellUsr( Msg(MGFRMS,13) );
+        Bell(BelErr);
+     end;
+  end;
+end;
+
+procedure InsRecord;
+begin
+   InsertLine( CurLin, BlkStr );
+   ShwRecord( CurLin );
+end;
+
+{
+.PG
+}
+procedure DelRecord;
+begin
+   if CurLin>2 then begin
+      DeleteLine( CurLin );
+   end else begin
+      NewTxt := BlkStr;
+      NewTxtMty := false;
+   end;
+   ShwRecord( CurLin );
+end;
+
+{
+.PG
+}
+procedure NextField;
+begin
+  BegWrd := true;
+  CurFld := CurFld + 1;
+  if CurFld>NumFld then CurFld := 1;
+  CurCol := min( CsrCol, Fld[CurFld].ScrCol+Fld[CurFld].Len-1 );
+end;
+
+{
+.PG
+}
+procedure PrevField;
+begin
+  BegWrd := true;
+  CurFld := CurFld - 1;
+  if CurFld<1 then CurFld := NumFld;
+  CurCol := min( CsrCol, Fld[CurFld].ScrCol+Fld[CurFld].Len-1 );
+end;
+
+{
+.PG
+}
+procedure MovCsrRht;
+begin
+   CurCol := CurCol + 1;
+
+   if CurCol>Fld[CurFld].ScrCol+Fld[CurFld].Len-1 then begin
+      NextField;
+      CurCol := Fld[CurFld].ScrCol;
+   end;
+   CsrCol := CurCol;
+end;
+
+{
+.PG
+}
+procedure MovCsrLft;
+begin
+   CurCol := CurCol - 1;
+   if CurCol<Fld[CurFld].ScrCol then begin
+      PrevField;
+      CurCol := Fld[CurFld].ScrCol + Fld[CurFld].Len - 1;
+   end;
+   CsrCol := CurCol;
+end;
+
+{
+.PG
+}
+procedure DoText;
+
+Var
+  OK : Integer;
+
+begin
+  with Fld[CurFld] do begin
+    NewTxtMty := false;
+    if (Key in ['a'..'z']) and BegWrd and WordCap theN
+      Key := chr( ord(Key) - ord('a') + ord('A') );
+    BegWrd := Key=' ';
+    OK := Ord(Key);
+    If OK > 127 then OK := OK - 256;
+    NewTxt[ ItmCol+CurCol-ScrCol ] := OK;
+    with Fld[CurFld] do
+       if (CurFld<NumFld) or (CurCol<ScrCol+Len-1) then
+          MovCsrRht;
+    write( '\1BG<', Key, InvVid );
+  end;
+end;
+
+{
+.PG
+}
+procedure DefRecord;
+var i,j,k,n,
+    Raskin: integer;
+    S: string[1];
+    Ttl: BA;
+
+begin
+   Gotoxy( 0, TxtTop );
+   write( ClrEos );
+   GetLine( Ttl, 2 );  { TITLE LINE }
+   SetUpNewTxt( 1 );
+   NumFld := 0;
+   i := 1;
+   S := ' ';
+   while NewTxt[i]=ord('+') do begin
+      if NumFld<MaxFld then begin
+         NumFld := NumFld + 1;
+
+         j := SpanNE( NewTxt, i+1, '-' );
+         Gotoxy( 0, TxtTop + NumFld );
+         k := BkSpanNE( Ttl, j-1, ' ' );
+         write( '':TtlLen-(k-i+1) );
+
+         FldNam[NumFld] := '';               { eAGete@ eAIPCe@ eAfielde@ eAnames,e@ eAmaxe@ eA20e@ eAcharse@ }
+         Raskin := k;
+         If Raskin > ( i + 19 ) Then Raskin := I + 19;
+         for n := i to Raskin do begin
+            S[1] := chr(Ttl[n]);
+            write( S[1] );
+            if S[1] in ['a'..'z'] then S[1] := chr(Ttl[n]-32);
+            FldNam[NumFld] := concat( FldNam[NumFld], S );
+         end;
+
+         with Fld[NumFld] do begin
+            ScrRow := TxtTop + NumFld;
+            ScrCol := TtlLen+2;
+            Len := j-i;
+            gotoxy( ScrCol, ScrRow );
+            write( '\1BG<', '':Len, '\1BG0');
+            ItmCol := i;
+         end;
+         i := j;
+      end else begin
+         TellUsr( Msg(MGFRMS,12) );
+      end;
+   end;
+end;
+
+{
+.PG
+}
+procedure DoCr;
+begin
+   if CurFld<NumFld then begin
+      NextField;
+      BeginField;
+   end else begin
+      ShwRecord( CurLin+1 );
+   end;
+end;
+
+{
+.PG
+}
+procedure DoSearch;
+var i: integer;
+begin
+   if PmtStr( Msg(MGSRCH,4), Pat ) then begin
+      i := CurLin;
+      TellUsr( Subst(@Pat,Msg(MGSRCH,2)) );
+      if RecFndNxt( TxtFid, Pat ) then begin
+         i := CurLin;
+      end else begin
+         TellUsr( Subst(@Pat,Msg(MGSRCH,5)) );
+      end;
+      ShwRecord( i );
+   end;
+end;
+
+{
+.PG
+procedure FormsTask;
+}
+begin
+  I := CurLin;
+  SetUpNewTxt( 1 );
+  if (NewTxt[1]=ord('+')) and WrtOk then begin
+     WordCap := true;
+     DefRecord;
+     LoadLabels( FormFrame );
+     DpyChg := false;
+
+     ShwRecord( I );
+
+     Done := false;
+     while not Done do begin
+        with Fld[CurFld] do begin
+           gotoxy( CurCol, Fld[CurFld].ScrROw );
+           Key := GetKey( false, Cmd );
+           case Cmd of
+             KBS:   MovCsrLft;
+             KBTAB: begin PrevField; BeginField; end;
+             KCR:   DoCr;
+             KCSRD: NextField;
+             KCSRL: MovCsrLft;
+             KCSRR: MovCsrRht;
+             KCSRU: PrevField;
+             KF1:   ShwRecord( CurLin-1 );
+             KF2:   ShwRecord( CurLin+1 );
+             KF3:   DoSearch;
+             KF5:   InsRecord;
+             KF6:   DelRecord;
+             KF7:   SortRecord;
+             KF8:   DoPrint;
+             KF9:   WordCap := Confirm( Msg(MGFRMS,8), WordCap );
+             KF10:  Done := true;
+             KF11:  ShwRecord( 3 );
+             KF12:  ShwRecord( LstLin );
+             KTAB:  begin NextField; BeginField; end;
+             KTEXT: DoText;
+             otherwise: Done := true;
+           end;
+        end;
+     end;
+
+     write( InvVid );
+     DpyChg := true;
+     Redraw( WinTop );
+  end else begin
+     TellUsr( Msg(MGFRMS,20) );
+     Cmd := KF10;
+  end;
+end;
+
+{$S FORMS}
+{
+.PG
+}
+procedure CreateList;
+var C, Wid, i: integer;
+    Nam: StrTyp;
+    Done, OK: boolean;
+begin
+   if LstLin>1 then begin
+      OK := Confirm( Msg(MGFRMS,22), false );
+   end else begin
+      OK := true;
+   end;
+   if WrtOK and OK then begin
+      OK := FilClear( TxtFid );
+      OK := FilClear( UndoFid );
+      OK := FilClear( RedoFid );
+      gotoxy( 0, 2 );
+      write( '\1BY' );
+      NewTxtMty := true;
+      for i := 1 to 3 do OK := RecQ( TxtFid, 0, BlkStr[1] );
+      C := 1;
+      repeat
+         Done := true;
+         Nam := '';
+         if PmtStr(Msg(MGFRMS,17),Nam) and (Nam<>'') then begin
+            Wid := length( Nam );
+            if PmtInt(Msg(MGFRMS,18),Wid) then begin
+               if C+Wid>MaxLinLen then begin
+                  TellUsr(Msg(MGFRMS,19));
+                  Wid := MaxLinLen-C;
+               end else begin
+                  Done := false;
+               end;
+               SetUpNewTxt( 1 );
+               NewTxt[C] := ord('+');
+               for i := 1 to Wid-1 do NewTxt[C+i] := ord('-');
+               NewTxtMty := false;
+               SetUpNewTxt( 2 );
+               for i := 1 to length(Nam) do
+                  NewTxt[C+i-1] := ord(Nam[i]);
+               NewTxtMty := false;
+               C := C + Wid;
+               SetUpNewTxt( 3 );
+            end;
+         end;
+      until Done or (C>=MaxLinLen);
+   end;
+   NextCmd;
+end;

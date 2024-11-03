@@ -1,0 +1,564 @@
+{$I-}
+UNIT WKSP;
+
+INTERFACE
+uses
+  {$U /ccutil/cclib }  ccdefn, cclblio, ccwndio, ccgrfio,
+  {$U userio } userio,
+  {$U UTIL.OBJ} Util;
+
+const
+  MaxLogBlk = 249;
+  MaxRecLen = 255;
+  T = true;
+  F = false;
+  LstBlk = 2000;
+  FstBlk = 0;
+  MGWkSp = 60;
+
+type
+  Str255 = string[255];
+  DskBlk = 0..LstBlk;
+  FilId = record
+            Loc: DskBlk;
+            Key: integer;
+          end;
+
+var
+  Sample: array[0..40] of longint;
+  CurSample: integer;
+  CntBlkRd,
+  CntBlkWrt,
+  WkSpErr: integer;
+
+{$S WkSp }
+procedure LockWkSp( {.IX} procedure p );
+procedure WkSpDiag;
+procedure GetErrMsg( var M: StrTyp );
+function FilOpen( Fil: FilId ): boolean;
+function FilCreate( var Fil: FilId ): boolean;
+function FilUndo( Fil: FilId ): boolean;
+function FilClose( Fil: FilId ): boolean;
+function FilClear( Fil: FilId ): boolean;
+function FilDelete( Fil: FilId ): boolean;
+function FilChkpt( Fil: FilId ): boolean;
+function FilCurRec( Fil: FilId; var Val: integer ): boolean;
+function FilNumBlks( Fil: FilId; var Val: integer ): boolean;
+function FilNumRecs( Fil: FilId; var Val: integer ): boolean;
+function FilChkRecPtrs( Fil: FilId ): boolean;
+function WkSpInit( Nam: StrTyp; Siz: integer ): boolean;
+function WkSpClose: boolean;
+function WkSpOpen( Nam: StrTyp ): boolean;
+function WkSpSpace( var Siz, Fil, Free: integer ): boolean;
+function WkSpVfy: boolean;
+function WkSpPost: boolean;
+function WkPdSiz( Fil: FilId; var Siz, Lim: integer ): boolean;
+function RecHead( Fil: FilId ): boolean;
+function RecTail( Fil: FilId ): boolean;
+function RecGo( Fil:FilId; RecNum: integer ): boolean;
+function RecSeek( Fil: FilId; RecNum: integer ): boolean;
+function RecDel( Fil: FilId; RecNum: integer ): boolean;
+function RecIns( Fil: FilId; RecNum: integer;
+           Len: integer; var Src: Byte ): boolean;
+function RecApp( Fil: FilId; RecNum: integer;
+           Len: integer; var Src: Byte ): boolean;
+function RecPush( Fil: FilId; Len: integer; var Src: Byte ): boolean;
+function RecPop( Fil: FilId; var Len: integer; var Dst: Byte ): boolean;
+function RecGet( Fil: FilId; RecNum: integer;
+           var Len: integer; var Dst: Byte ): boolean;
+function RecPut( Fil: FilId; RecNum: integer;
+           Len: integer; var Src: Byte ): boolean;
+function RecQ( Fil: FilId; Len: integer; var Src: Byte ): boolean;
+function RecDQ( Fil: FilId; var Len: integer; var Src: Byte ): boolean;
+function RecFndNxt( Fil: FilId; Pat: StrTyp ): boolean;
+function RecFndPrv( Fil: FilId; Pat: StrTyp ): boolean;
+function NamFtch( Nam: StrTyp; var Val: integer ): boolean;
+function NamStor( Nam: StrTyp; Val: integer ): boolean;
+procedure DictSave( K,D: str255 );
+function DictFind( var K, R: str255 ): boolean;
+
+Implementation
+
+const
+  DskFilBlk = 0;
+  SizNdxBlk = 512;
+  MaxBufNdx = 510;
+  MaxBfr = 25;
+
+type
+  LogBlk = 0..MaxLogBlk;
+  BfrNdx = 1..MaxBfr;
+  MapTyp = set of DskBlk;
+  InfoTyp = packed record
+              Dup: boolean;
+              Adr: DskBlk;
+            end;
+  WkSpBlk = record case integer of
+              0:( BA: array [1..512] of Byte);
+              1:( Bks: integer;
+                  Sync: boolean;
+                  Map: MapTyp; );
+              2:( AltNdx: DskBlk;
+                  NumBlks: integer;
+                  CurBlk: integer;
+                  CurByt: integer;
+                  CurRec: integer;
+                  LstRec: integer;
+                  BlkInfo: array [LogBlk] of InfoTyp; );
+              3:( Lim: integer;
+                  Buf: array[1..MaxBufNdx] of Byte );
+           end;
+
+(*$P*)
+var
+  PriBlk,
+  SecBlk,
+  RecBlk,
+  FreeBlk,
+  FilBlk    : integer;
+
+  OldFreeBlk: WkSpBlk;
+
+  WkSpFil   : file;
+  DskFreeBlk: DskBlk;
+  DictFid   : FilId;
+  CurFil    : FilId;
+
+  VBfrOf    : array[ DskBlk ] of Byte;
+  BlkBuf    : BfrNdx;
+  BufFil    : DskBlk;
+
+  V: array [BfrNdx] of WkSpBlk;
+
+  VInfo: array [BfrNdx] of record
+           Adr:  DskBlk;
+           Use:  integer;
+           Locked: boolean;
+           Drty: boolean;
+           Critical: boolean;
+         end;
+
+  BfrTim : integer;
+
+
+(*$P*)
+{.IX} procedure LockWkSp2( procedure p );
+begin LockUserIO( p ); end;
+
+{$S WkSp2}
+procedure GetErrMsg;
+var p: pStrTyp;
+    MN : Integer;
+
+begin
+  if (0<WkSpErr) and (WkSpErr<=28) then begin
+    MN := WkspErr + 20;
+    If MN in [21..49] Then Mn := 84;  { eAGenerale@ eAworkspacee@ eAerrore@ }
+    p := Msg( MGWkSp, MN+20 );
+  end else begin
+(*  p := Subst( AsStr(WkSpErr,10), Msg(MGWkSp,49) ); *)
+    p := Msg(MGWksp, 84)
+  end;
+  M := p^;
+end;
+
+{$S WkSp }
+{.IX} procedure Err( Num: integer );
+var M: StrTyp;
+begin
+  if WkSpErr<>0 then begin
+    GetErrMsg( M );
+    writeln( M );
+  end;
+  WkSpErr := Num;
+end;
+
+{$S WkSp 2}
+{.IX} procedure DmpBlk( B: integer; Blk: integer );
+var L, i, j: integer;
+begin
+  with V[PriBlk] do begin
+    L := V[B].Lim;
+    for i := 0 to 15 do
+      if L div 32 >= i then write( '*' ) else write( '-' );
+    writeln( '   Log Blk ', Blk:1, '   Phy Blk=', BlkInfo[Blk].Adr:1,
+             '   Used=', L+2:1, '  Free=', MaxBufNdx-L:1 );
+    if (L>=0) and (L<=MaxBufNdx) then begin
+      I := 1;
+      while I<=L do begin
+        if Blk=CurBlk then begin
+          write( chr(27) );
+          if I=CurByt then write('G<') else write('G4');
+        end else write( chr(27), 'G0' );
+        write( I:3, CnvBI(V[B].Buf[I]):3,'[' );
+        for J := I+1 to I+CnvBI( V[B].Buf[I] ) do begin
+          if chr(V[B].Buf[J]) in [' '..'~'] then
+            write( chr(V[B].Buf[J]) )
+          else
+            write( '~' );
+        end;
+        writeln( ']' );
+        I := I + CnvBI( V[B].Buf[I] ) + 1;
+      end;
+    end else begin
+      writeln( '*** Lim is out of range ***');
+    end;
+  end;
+end;
+
+{$S WkSp }
+(*$I DSKMGR.TEXT *)
+
+{$S WkSp }
+(*$I BLKMGR.TEXT *)
+
+{$S WkSp }
+(*$I RECMGR.TEXT *)
+
+{$S WkSp }
+{
+.PG
+}
+procedure LockWkSp; begin LockUserIO(p); end;
+
+(*$I WKSPMGR.TEXT *)
+
+{$S WkSp2}
+{
+.PG
+}
+procedure DmpBfrPool;
+var i,j,Swap: integer;
+    T: array[BfrNdx] of integer;
+begin
+  for i := 1 to MaxBfr do T[I] := i;
+  for i := 1 to MaxBfr-1 do
+    for j := i+1 to MaxBfr do
+      if VInfo[T[I]].Use<VInfo[T[J]].Use then begin
+        Swap := T[I];
+        T[I] := T[J];
+        T[J] := Swap;
+      end;
+  writeln( 'Buffer Pool' );
+  for i := 1 to MaxBfr do with VInfo[T[I]] do begin
+    write( T[I], Adr, 'B', Use, 'U' );
+    if Locked then write( ' Locked' );
+    if Drty then write( ' Drty' );
+    if Critical then write( ' Critical' );
+    if T[I]=PriBlk then write( ' Primary' );
+    if T[I]=SecBlk then write( ' Secondary' );
+    if T[I]=RecBlk then write( ' RecBlk' );
+    if T[I]=FilBlk then write( ' FileMap' );
+    if T[I]=FreeBlk then write( ' FreeMap' );
+    writeln;
+  end;
+end;
+
+(*$P*)
+{.IX} procedure DmpCurFil;
+var I,J: integer;
+    C: char;
+begin
+  if UseFile( CurFil ) then with V[PriBlk] do begin
+    write( 'dump block:' );
+    readln( I );
+    while I>=0 do begin
+      writeln( 'CurBlk ', CurBlk:1, '    CurByt ', CurByt:1,
+               '    CurRec ', CurRec:1, '    LstRec ', LstRec:1 );
+      if VLock( J, BlkInfo[I].Adr, F, T ) then begin
+        DmpBlk( J, I );
+        if VUnLock( J ) then begin end;
+      end;
+      write( 'dump block:' );
+      readln( I );
+    end;
+  end;
+end;
+
+(*$P*)
+{.IX} function FilChkRecPtrs;
+var OCurBlk, OCurByt, OCurRec: integer;
+    pS: pStrTyp;
+    Bad :boolean;
+begin
+  FilChkRecPtrs := true;
+  Bad := false;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    OCurBlk := CurBlk;
+    OCurByt := CurByt;
+    OCurRec := CurRec;
+    writeln;
+    WrtMsg( MGWkSp, 15 );
+    if RecHead( CurFil ) then begin
+      while RecSeek( CurFil, 1 ) do begin end;
+    end;
+    if LstRec<>CurRec-1 then begin
+      writeln;
+      WrtMsg( MGWkSp, 52 );
+      pS := Msg( MGWkSp, 51 );
+      pS := Subst( AsStr( LstRec, 10 ), ps );
+      pS := Subst( AsStr( CurRec-1, 10 ), ps );
+      WrtpMsg( ps );
+      Bad := true;
+      FilChkRecPtrs := false;
+      LstRec := CurRec-1;
+    end;
+    if RecHead( CurFil ) then begin
+      while (CurBlk<>OCurBlk) or (CurByt<>OCurByt) do begin
+        if not RecSeek( CurFil, 1 ) then begin
+          CurBlk := 0;
+          CurByt := 0;
+          CurRec := 1;
+          OCurBlk := CurBlk;
+          OCurByt := CurByt;
+        end;
+      end;
+    end;
+    if CurRec<>OCurRec then begin
+      writeln;
+      WrtMsg( MGWkSp, 50 );
+      pS := Msg( MGWkSp, 51 );
+      pS := Subst( AsStr( OCurRec, 10 ), ps );
+      pS := Subst( AsStr( CurRec, 10 ), ps );
+      writeln( pS^ );
+      Bad := true;
+      FilChkRecPtrs := false;
+    end;
+  end;
+  if not Bad then begin
+    WrtMsg( MGWkSp, 17 );
+  end;
+end;
+
+(*$P*)
+{.IX} procedure dump;
+var tfstr: array [boolean] of StrTyp;
+    i,j: integer;
+
+  {.IX} procedure bitdump( t: StrTyp; var b: MapTyp );
+  var i: integer;
+  begin
+    writeln( t );
+    for i := 0 to 159 do
+      if i in b then write( 'T' ) else write( '.' );
+    writeln;
+  end;
+
+begin
+  bitdump( 'Free Blocks', V[FreeBlk].Map );
+  bitdump( 'Old Free Blocks', OldFreeBlk.Map );
+  bitdump( 'File Index Blocks', V[FilBlk].Map );
+  writeln( 'Current file = ', CurFil.Loc:1 );
+  if CurFil.Loc<>0 then begin
+    tfstr[ true ] := 'DUP';
+    tfstr[ false ] := '   ';
+    with V[PriBlk] do begin
+      writeln( 'Pri. Index (Blk ', CurFil.Loc:3, ')      ',
+               'Sec. Index (Blk', AltNdx:3, ')' );
+      write( NumBlks:3, 'Bks', AltNdx:3, 'Alt',
+             CurBlk:3,'Blk',CurByt:3,'Byt  ' );
+      j := NumBlks;
+      if AltNdx=0 then
+        writeln
+      else begin
+        if VLock( SecBlk, AltNdx, F, T ) then with V[SecBlk] do begin
+          if NumBlks>j then j := NumBlks;
+          writeln( NumBlks:3, 'Bks', AltNdx:3, 'Alt',
+                   CurBlk:3,'Blk',CurByt:3,'Byt  ' );
+        end;
+      end;
+      writeln( '------------------------  -------------------------' );
+      for i := 0 to j-1 do begin
+        if i>=NumBlks then
+          write( ' ':26 )
+        else with BlkInfo[i] do
+          write( i:2, '  ', tfstr[ Dup ], ' Block ', Adr:4, ' ':8 );
+        if AltNdx=0 then
+          writeln
+        else with V[SecBlk] do begin
+          if i>=NumBlks then
+            writeln
+          else with BlkInfo[i] do
+            writeln( tfstr[ Dup ], ' Block ', Adr );
+        end;
+      end;
+      if AltNdx<>0 then
+        if VUnLock( SecBlk ) then begin end;
+    end;
+    writeln;
+  end;
+end;
+
+(*$P*)
+{.IX} procedure VBFRCHK;
+var i, j: integer;
+begin
+  writeln( '             Blk  VBfrOf  VBufOf' );
+  J := 1;
+  for i := 0 to LstBlk do begin
+    if VBfrOf[I]<>-1 then begin
+      write( J, I, VBfrOf[I], VBufOf( I ) );
+      if VBfrOf[I]<>VBufOf(I) then writeln( ' *' ) else writeln;
+      J := J + 1;
+    end;
+  end;
+end;
+
+(*$P*)
+{.IX} procedure WkSpDiag;
+type BufTyp = array [1..512] of Byte;
+var Cmd,Ch: char;
+    Buf: BufTyp;
+    Dum: array [1..512] of Byte;
+    WNam: StrTyp;
+    Nam, Pat: StrTyp;
+    Msg, m: StrTyp;
+    Val, i,j,Len: integer;
+    Fil: FilId;
+
+  {.IX} procedure spit( B: boolean );
+  begin
+    if B then begin
+      writeln( 'TRUE' );
+      write( Len:3, '[' );
+      unitwrite( 1, Buf, Len );
+      writeln( ']' );
+    end else
+      writeln( 'FALSE' );
+  end;
+
+  {.IX} function GetStr( var Buf: BufTyp ): integer;
+  var M: string[200];
+      I: integer;
+  begin
+    write( '?' );
+    readln( M );
+    for I := 1 to length(M) do
+      Buf[I] := ord(M[I]);
+    GetStr := length(M);
+  end;
+
+(*$P*)
+  {.IX} procedure help;
+  begin
+    writeln( ' ()  open/close workspace' );
+    writeln( ' !   initialize workspace' );
+    writeln( ' ?$  dump workspace info/buffer pool' );
+    writeln( ' *   use file' );
+    writeln( ' ,   dump current file' );
+    writeln( ' .;  chk wksp integ./chk LstRec/CurRec' );
+    writeln( ' <>  RecPut/RecGet' );
+    writeln( ' []  RecDQ/RecQ' );
+    writeln( ' ia  RecIns/RecApp' );
+    writeln( ' d&  RecDelete/VBfrChk' );
+    writeln( ' s   RecSeek' );
+    writeln( ' +-  RecPush/RecPop' );
+    writeln( ' {}  RecHead/RecTail' );
+    writeln( ' pn  RecFndPrv/RecFndNxt' );
+    writeln( ' vV  NamFtch/NamStor' );
+    writeln( ' =~  checkpoint/restore' );
+    writeln( ' N   create new file' );
+    writeln( ' OC  open/close file' );
+    writeln( ' ZD  clear/delete file' );
+    writeln( ' e   exit' );
+    writeln( ' h:  help/zglot' );
+  end;
+
+  {.IX} function GetNum( Msg: StrTyp ): integer;
+  var Ans: integer;
+  begin
+    write( Msg );
+    readln( Ans );
+    GetNum := Ans;
+  end;
+
+(*$P*)
+begin
+  WkSpErr := 0;
+  for i := 1 to 512 do
+    Dum[I] := (ord(' ')+(I mod 95 ) );
+  help;
+  write( '\1Bc' ); {cursor on}
+  while true do begin
+    CntBlkRd := 0;
+    CntBlkWrt := 0;
+    write( chr(27), 'G0*> ' );
+    read( cmd );
+    writeln( chr(27), 'J' );
+    case cmd of
+      'e': exit( WkSpDiag );
+      '&': VBFRCHK;
+      '$': DmpBfrPool;
+      ')': writeln( WkSpClose );
+      '?': dump;
+      ',': DmpCurFil;
+      'v': begin
+             write( 'Name? ' );
+             readln( Nam );
+             writeln( NamFtch( Nam, Val ), Val );
+           end;
+      'V': begin
+             write( 'Name? ' );
+             readln( Nam );
+             writeln( NamStor( Nam, GetNum( 'Val? ' ) ) );
+           end;
+      '=': writeln( FilChkPt( CurFil ) );
+      '~': writeln( FilUndo( CurFil ) );
+      'O': writeln( FilOpen( CurFil ) );
+      ';': writeln( FilChkRecPtrs( CurFil ) );
+      'C': writeln( FilClose( CurFil ) );
+      '!': begin
+             write( 'Workspace?' ); readln( WNam );
+             writeln( WkSpInit( WNam, GetNum('Size?') ) );
+           end;
+      '(': begin
+             write( 'Workspace?' ); readln( WNam );
+             writeln( WkSpOpen( WNam ) );
+           end;
+      'N': writeln( FilCreate( Fil ), Fil.Loc );
+      'Z': writeln( FilClear( CurFil ) );
+      'D': writeln( FilDelete( CurFil ) );
+      '+': writeln( RecPush( CurFil, GetStr( Buf ), Buf[1]) );
+      '-': spit( RecPop( CurFil, Len, Buf[1] ) );
+      '.': writeln( WkSpVfy );
+      '*': begin
+             Fil.Loc := GetNum( 'file?' );
+             writeln( UseFile( Fil ) );
+           end;
+      '>': spit( RecGet( CurFil, GetNum('Rec?'), Len, Buf[1] ) );
+      '<': writeln( RecPut( CurFil, GetNum('Rec?'), GetStr(Buf), Buf[1] ) );
+      '[': spit( RecDQ( CurFil, Len, Buf[1] ) );
+      ']': writeln( RecQ( CurFil, GetStr( Buf ), Buf[1] ) );
+      '{': writeln( RecHead( CurFil ) );
+      '}': writeln( RecTail( CurFil ) );
+      ':': begin
+             for i := 1 to GetNum('Recs?') do
+               writeln( RecIns( CurFil, 0, 50, Dum[I] ) );
+           end;
+      'i': writeln( RecIns( CurFil, GetNum('Rec?'), GetStr( Buf ), Buf[1] ) );
+      'a': writeln( RecApp( CurFil, GetNum('Rec?'), GetStr( Buf ), Buf[1] ) );
+      'd': writeln( RecDel( CurFil, GetNum('Rec?') ) );
+      's': writeln( RecSeek( CurFil, GetNum( 'offset?' )) );
+      'n': begin
+             write( 'Pattern? ' );
+             readln( Pat );
+             writeln( RecFndNxt( CurFil, Pat ) );
+           end;
+      'p': begin
+             write( 'Pattern? ' );
+             readln( Pat );
+             writeln( RecFndPrv( CurFil, Pat ) );
+           end;
+      'h': help;
+    end;
+    if WkSpErr<>0 then begin
+      GetErrMsg( Msg );
+      writeln( Msg );
+    end;
+    writeln( CntBlkRd+CntBlkWrt:1, ' Disk accesses (',
+             CntBlkRd:1, 'R ', CntBlkWrt:1, 'W)' );
+  end;
+end;
+
+end.
+

@@ -1,0 +1,696 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                              File: AUXIO.TEXT                             *)
+(*                                                                           *)
+(*           (C) Copyright 1982, 1983 Silicon Valley Software, Inc.          *)
+(*                                                                           *)
+(*                            All Rights Reserved.               11-Jan-83   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+procedure %_ferror{addr: longint; n: integer};
+  var i: integer; errmess: text; s: string[80];
+begin {%_ferror}
+writeln('FORTRAN run time error number: ',n:1);
+if addr > 0 then %_prloc(addr);
+reset(errmess,EMESSFILE);
+if ioresult <> 0 then reset(errmess,EMESS2FILE);
+if ioresult = 0
+then begin
+  repeat
+    read(errmess,i);
+    if i = n
+    then begin
+      readln(errmess,s); writeln(s);
+      end
+    else readln(errmess);
+  until i > n;
+  close(errmess);
+  end;
+%_rtsfin; halt(ERRHALT);
+end; {%_ferror}
+
+procedure %_stop{s: ppac; len: integer};
+  var i: integer;
+begin
+writeln;
+write('Programmed STOP ');
+for i := 1 to len do
+    write(s^[i]);
+writeln;
+%_rtsfin; halt(OKHALT);
+end; {%_stop}
+
+procedure %_pause{s: ppac; len: integer};
+  var i: integer; ch: char;
+begin
+writeln;
+write('Programmed PAUSE ');
+for i := 1 to len do
+    write(s^[i]);
+writeln;
+repeat
+       write(ERRPROMPT);
+       if ENVIRONMENT = ADVENTURE then readln(ch) else read(ch);
+       writeln;
+       if ch = '\1B' then halt(OKHALT);
+until ch = ' ';
+end; {%_pause}
+
+
+{ Set fiostat based on whether an error has occurred.  Exit          }
+{ to user FORTRAN program at location errexit by patching return     }
+{ location of calling procedure if there has been a run time error.  }
+{ If run time error has occurred and the user failed to trap it then }
+{ abort program with a run time error and routine does not return.   }
+
+procedure termiostmt(fiostat: plongint; errexit: pcodearray);
+begin {termiostmt}
+if fiostat <> nil then fiostat^ := errornumber;
+if errornumber <> 0
+then begin
+  if errexit[1] <> nil
+  then errexit[-1]^.returnaddr := errexit[1]
+  else
+    if fiostat = nil
+    then { User failed to trap error using errexit or iostat }
+      %_ferror(ord(errexit[-1]^.returnaddr),errornumber);
+  end;
+end; {termiostmt}
+
+
+function rtsmatch(fpac: ppac; fpaclen: integer; fst: string16): Boolean;
+  var i,cnt: integer; lch: char; MatchFlag: Boolean;
+begin {rtsmatch}
+i := 1; cnt := length(fst); MatchFlag := TRUE;
+while (i <= cnt) and MatchFlag do begin
+  if i <= fpaclen then lch := fpac^[i] else lch := '*';
+  if (lch >= 'a') and (lch <= 'z') then lch := chr(ord(lch) - 32);
+  MatchFlag := fst[i] = lch;
+  i := i + 1;
+  end;
+rtsmatch := MatchFlag;
+end; {rtsmatch}
+
+
+function findunit(unitnum: longint): punitrec;
+  var lunit: punitrec; NotFound: Boolean;
+begin {findunit}
+lunit := units; NotFound := TRUE; 
+while (lunit <> nil) and NotFound do
+  if lunit^.unitid = unitnum 
+  then NotFound := FALSE 
+  else lunit := lunit^.nextunit;
+findunit := lunit;
+end; {findunit}
+
+
+{ Procedure lclose does the work of %_rtscl but does not use errexit or  }
+{ fiostat.  This allows it to be called internally in the I/O system.    }
+
+procedure lclose(unitnum: longint; fstatus: ppac; fstatuslen: integer);
+  var KeepIt: Boolean;
+
+  procedure disposeunit(funit: punitrec);
+    var lunit: punitrec;
+  begin {disposeunit}
+  if funit = units
+  then units := funit^.nextunit { %_rtsfin depends on this }
+  else begin
+    lunit := units;
+    while lunit <> nil do
+      with lunit^ do begin
+        if nextunit = funit then nextunit := funit^.nextunit;
+        lunit := nextunit;
+        end;
+    end;
+  { Don't reclaim consoleunit or stderrunit even if closed }
+  { since they do not have reuseable pointers to fibs.     }
+  if (funit <> consoleunit) and (funit <> stderrunit)
+  then begin funit^.nextunit := freeunits; freeunits := funit; end;
+  end; {disposeunit}
+
+begin {lclose}
+curunit := findunit(unitnum);
+if curunit <> nil 
+then 
+  with curunit^ do begin
+    if Seqen 
+    then forceeofiflastwritten
+    else begin
+      updatehighwatermark;
+      if ENVIRONMENT = MERLIN
+      then
+        if odd(osfib^.fmaxblock) and Formted
+        then begin
+          if osfib^.FIsBlocked and osfib^.FBufChanged then pageoutfbuffer;
+          pageinfbuffer(osfib^.fmaxblock); { Clears fbuffer }
+          pageoutfbuffer;
+          end;
+      end;
+    KeepIt := not Scratch;
+    if fstatus <> nil
+    then 
+      if rtsmatch(fstatus,fstatuslen,'KEEP')
+      then 
+        if Scratch then error(71) else KeepIt := TRUE
+      else 
+        if rtsmatch(fstatus,fstatuslen,'DELETE')
+        then KeepIt := FALSE
+        else error(72);
+    sysclose(KeepIt,curunit);
+    disposeunit(curunit);
+    end;
+end; {lclose}
+
+procedure %_rtscl{unitnum: longint;
+                  fiostat: plongint;
+                  errexit: pcodearray;
+                  fstatus: ppac; fstatuslen: integer};
+begin {%_rtscl}
+errornumber := 0; 
+lclose(unitnum,fstatus,fstatuslen);
+termiostmt(fiostat,errexit);
+end; {%_rtscl}
+
+
+{ Create lname, normalized form of fname and fnamelen }
+
+procedure makelname(var lname: filenamestring; name: ppac; namelen: integer);
+  var i: integer;
+begin {makelname}
+if namelen > MAXFILENAMELEN then namelen := MAXFILENAMELEN;
+lname := 'TMP  ';
+if name = nil
+then begin
+  lname[4] := chr(((tempfilectr div 10) mod 10) + ord('0'));
+  lname[5] := chr((tempfilectr mod 10) + ord('0'));
+  tempfilectr := tempfilectr + 1;
+  end
+else
+  for i := 1 to namelen do begin
+    lname[i] := name^[i];
+    if name^[i] <> ' ' then lname[0] := chr(i);
+    end;
+end; {makelname}
+
+procedure %_rtsop{unitnum: longint;
+                  fiostat: plongint;
+                  errexit: pcodearray;
+                  name: ppac; namelen: integer;
+                  fstatus: ppac; fstatuslen: integer;
+                  faccess: ppac; faccesslen: integer;
+                  fform: ppac; fformlen: integer;
+                  frecl: longint; FReclPresent: integer;
+                  fblank: ppac; fblanklen: integer;
+                  fbuffed: ppac; fbuffedlen: integer};
+  var lunit: punitrec; UnitIsNew, OpenOld, Buffered: Boolean; 
+      lname: filenamestring;
+  
+  function newunit: punitrec;
+    var llunit: punitrec;
+  begin {newunit}
+  if freeunits = nil
+  then begin new(llunit); new(llunit^.ostextfile); end
+  else begin llunit := freeunits; freeunits := freeunits^.nextunit; end;
+  with llunit^ do begin
+    unitid := unitnum; nextunit := units; fname := lname; Formted := TRUE;
+    reclen := 0; Scratch := FALSE; Seqen := TRUE; BlankNull := TRUE;
+    PastEndFile := FALSE; lastop := READOP;
+    end;
+  units := llunit; newunit := llunit;
+  end; {newunit}
+
+  procedure sysopen(OpenOld: Boolean; funit: punitrec);
+  begin {sysopen}
+  with funit^ do begin { Never nil }
+    if ENVIRONMENT = MERLIN
+    then
+      if OpenOld
+      then reset(osfile^,fname)
+      else rewrite(osfile^,fname)
+    else {ENVIRONMENT <> MERLIN}
+      if Buffered
+      then
+        if OpenOld
+        then reset(ostextfile^,fname,buffered)
+        else rewrite(ostextfile^,fname,buffered)
+      else
+        if OpenOld
+        then reset(ostextfile^,fname,unbuffered)
+        else rewrite(ostextfile^,fname,unbuffered);
+    if ioresult <> 0 then error(69);
+    if ENVIRONMENT = MERLIN
+    then
+      if osfib^.FIsBlocked
+      then begin
+        if osfib^.fheader.fkind = TEXTFILE then osfib^.fnextblock := 2;
+        osfib^.fnextbyte := FBLKSIZE; osfib^.FBufChanged := FALSE;
+        end
+      else
+        if not Seqen then error(54);
+    end;
+  end; {sysopen}
+  
+begin {%_rtsop}
+makelname(lname,name,namelen);
+
+{ Tie up to proper lunit, or allocate a new one if necessary }
+
+UnitIsNew := FALSE; { Need to remember if freshly allocated }
+Buffered := TRUE; { Default }
+lunit := findunit(unitnum); { does the specified unit exist? }
+if lunit = nil
+then begin lunit := newunit; UnitIsNew := TRUE; end
+else { lunit <> nil, unit already exists with the same unitnum }
+  if name <> nil
+  then
+    if lname <> lunit^.fname
+    then begin 
+      lclose(unitnum,nil,0); lunit := newunit; UnitIsNew := TRUE; 
+      end;
+    { Else names match in which case lunit is the punitrec to be "reopened" }
+  { Else name = nil in which case lunit is the punitrec to be "reopened" }
+
+{ Set up lunit^ }
+
+errornumber := 0;
+with lunit^ do begin
+  OpenOld := TRUE;
+  if UnitIsNew
+  then begin
+    if fbuffed <> nil
+    then
+      if rtsmatch(fbuffed,fbuffedlen,'UNBUFFERED')
+      then Buffered := FALSE
+      else
+        if not rtsmatch(fbuffed,fbuffedlen,'BUFFERED')
+        then error(72);
+    if fstatus <> nil
+    then
+      if rtsmatch(fstatus,fstatuslen,'OLD') or 
+         rtsmatch(fstatus,fstatuslen,'UNKNOWN')
+      then begin
+        if name = nil then error(73);
+        end
+      else
+        if rtsmatch(fstatus,fstatuslen,'NEW')
+        then begin
+          OpenOld := FALSE;
+          if name = nil then error(73);
+          end
+        else
+          if rtsmatch(fstatus,fstatuslen,'SCRATCH')
+          then begin
+            Scratch := TRUE; OpenOld := FALSE;
+            if name <> nil then error(74);
+            end
+          else error(72);
+    if faccess <> nil
+    then
+      if rtsmatch(faccess,faccesslen,'DIRECT')
+      then Seqen := FALSE
+      else
+        if not rtsmatch(faccess,faccesslen,'SEQUENTIAL')
+        then error(72);
+    if fform = nil
+    then Formted := Seqen
+    else
+      if rtsmatch(fform,fformlen,'UNFORMATTED')
+      then Formted := FALSE
+      else
+        if not rtsmatch(fform,fformlen,'FORMATTED')
+        then error(72);
+    if FReclPresent <> 0
+    then begin
+      if Seqen then error(75);
+      if frecl <= 0 then error(76);
+      reclen := frecl;
+      end
+    else 
+      if not Seqen then error(77);
+    end; { UnitIsNew }
+  if fblank <> nil
+  then begin
+    if not Formted then error(78);
+    if rtsmatch(fblank,fblanklen,'ZERO')
+    then BlankNull := FALSE
+    else
+      if rtsmatch(fblank,fblanklen,'NULL')
+      then BlankNull := TRUE
+      else error(72);
+    end;
+  end;
+if UnitIsNew and (errornumber = 0) then sysopen(OpenOld,lunit);
+termiostmt(fiostat,errexit);
+end; {%_rtsop}
+
+procedure %_rewd{unitnum: longint; fiostat: plongint; errexit: pcodearray};
+begin {%_rewd}
+errornumber := 0; 
+curunit := findunit(unitnum);
+if curunit <> nil 
+then 
+  with curunit^ do
+    if Seqen 
+    then begin
+      forceeofiflastwritten;
+      if ENVIRONMENT = MERLIN
+      then begin
+        if osfib^.FIsBlocked 
+        then begin
+          if osfib^.FBufChanged then pageoutfbuffer;
+          if osfib^.fheader.fkind = TEXTFILE 
+          then osfib^.fnextblock := 2 
+          else osfib^.fnextblock := 0;
+          osfib^.fnextbyte := FBLKSIZE; osfib^.FBufChanged := FALSE;
+          end;
+        end
+      else { ENVIRONMENT <> MERLIN }
+        sysseek(0);
+      lastop := READOP; PastEndFile := FALSE;
+      end
+    else error(79);
+termiostmt(fiostat,errexit);
+end; {%_rewd}
+
+procedure %_endf{unitnum: longint; fiostat: plongint; errexit: pcodearray};
+begin {%_endf}
+errornumber := 0; 
+curunit := findunit(unitnum);
+if curunit <> nil 
+then 
+  with curunit^ do
+    if Seqen 
+    then begin
+      lastop := WRITEOP; forceeofiflastwritten; lastop := READOP;
+      PastEndFile := TRUE;
+      end
+    else error(80);
+termiostmt(fiostat,errexit);
+end; {%_endf}
+
+procedure %_back{unitnum: longint; fiostat: plongint; errexit: pcodearray};
+  var lint1: int1;
+  
+  { Is it possible to back up the file one char }
+  
+  function AtStartOfFile: Boolean;
+  begin {AtStartOfFile}
+  if ENVIRONMENT = MERLIN
+  then
+    with curunit^ do
+      if osfib^.fheader.fkind = TEXTFILE
+      then 
+        AtStartOfFile := ((osfib^.fnextbyte = 0) and (osfib^.fnextblock = 3)) or
+                         ((osfib^.fnextbyte = 512) and (osfib^.fnextblock = 2))
+      else
+        AtStartOfFile := ((osfib^.fnextbyte = 0) and (osfib^.fnextblock = 1)) or
+                         ((osfib^.fnextbyte = 512) and (osfib^.fnextblock = 0));
+  end; {AtStartOfFile}
+  
+  
+  { Peekatprevch returns the character value of the previous character      }
+  { written to the file.  It does not change the file curser.               }
+  { Under MERLIN, if it is necessary to fetch a previous block to get the   }
+  { value, fnextbyte is set to FBLKSIZE (512) to show that the curser is    }
+  { off the end of the block.                                               }
+  
+  function peekatprevch: int1;
+    var count: integer;
+  begin {peekatprevch}
+  with curunit^ do
+    if ENVIRONMENT = MERLIN
+    then
+      if AtStartOfFile
+      then peekatprevch := 13 { <CR> }
+      else begin
+        if osfib^.fnextbyte = 0
+        then begin { Need to look at previous block }
+          if osfib^.FBufChanged then pageoutfbuffer;
+          pageinfbuffer(osfib^.fnextblock - 2);
+          osfib^.fnextbyte := FBLKSIZE;
+          if not odd(osfib^.fnextblock)
+          then
+            while osfib^.fbuffer[osfib^.fnextbyte - 1] = 0 do 
+              osfib^.fnextbyte := osfib^.fnextbyte - 1;
+          end;
+        peekatprevch := osfib^.fbuffer[osfib^.fnextbyte - 1];
+        end
+    else begin {ENVIRONMENT <> MERLIN}
+      %_fseek(ostextfile,-1,SEEK_RELATIVE);
+      if ioresult <> 0
+      then begin
+        peekatprevch := ord(EOLCH); {AtStartOfFile}
+        sysseek(0);
+        end
+      else begin
+        %_fread(@lint1,ostextfile,count);
+        if count = 0 
+        then peekatprevch := ord(EOLCH)
+        else peekatprevch := lint1;
+        end;
+      end;
+  end; {peekatprevch}
+  
+  { Backuponech must not be called except after a call to peekatprevch. }
+  
+  procedure backuponech;
+  begin {backuponech}
+  if ENVIRONMENT = MERLIN
+  then begin
+    if not AtStartOfFile
+    then curunit^.osfib^.fnextbyte := curunit^.osfib^.fnextbyte - 1;
+    end
+  else begin {ENVIRONMENT <> MERLIN}
+    %_fseek(curunit^.ostextfile,-1,SEEK_RELATIVE);
+    end;
+  end; {backuponech}
+  
+begin {%_back}
+errornumber := 0; 
+curunit := findunit(unitnum);
+if curunit <> nil
+then 
+  with curunit^ do 
+    if Seqen
+    then
+      if PastEndFile
+      then PastEndFile := FALSE
+      else
+        if ENVIRONMENT = MERLIN
+        then
+          if osfib^.FIsBlocked and Formted
+          then begin { Sequential, formatted, blocked }
+            forceeofiflastwritten;
+            lint1 := peekatprevch; { call to set up backuponech }
+            repeat
+              backuponech;
+            until peekatprevch = 13; { <CR> }
+            lastop := READOP;
+            end
+          else error(60)
+        else begin {ENVIRONMENT <> MERLIN}
+          if Formted
+          then begin { Sequential, formatted }
+            forceeofiflastwritten;
+            repeat
+              backuponech;
+            until peekatprevch = ord(EOLCH);
+            lastop := READOP;
+            end
+          else error(60)
+          end
+    else error(81);
+termiostmt(fiostat,errexit);
+end; {%_back}
+
+procedure %_inq{unitnum: longint;
+                name: ppac; namelen: integer;
+                fiostat: plongint;
+                exist: plongint;  (+ really plogical*4 +)
+                opened: plongint; (+ really plogical*4 +)
+                number: plongint;
+                named: plongint;  (+ really plogical*4 +)
+                recl: plongint;
+                nextrec: plongint;
+                errexit: pcodearray;
+                nm: ppac; nmlen: integer;
+                access: ppac; accesslen: integer;
+                seq: ppac; seqlen: integer;
+                dir: ppac; dirlen: integer;
+                form: ppac; formlen: integer;
+                ftted: ppac; fttedlen: integer;
+                unftted: ppac; unfttedlen: integer;
+                blank: ppac; blanklen: integer};
+  
+  var Found: Boolean; lname: filenamestring; lfile: file;
+      orgblk, currec: longint;
+  
+  procedure setint4(fplongint: plongint; fval: longint);
+  begin {setint4}
+  if fplongint <> nil then fplongint^ := fval;
+  end; {setint4}
+  
+  procedure stuffchar(fpac: ppac; fpaclen: integer; fstring: filenamestring);
+    var i: integer;
+  begin {stuffchar}
+  if fpac <> nil
+  then
+    for i := 1 to fpaclen do
+      if i <= length(fstring) 
+      then fpac^[i] := fstring[i] 
+      else fpac^[i] := ' ';
+  end; {stuffchar}
+  
+  procedure booloption(fpac: ppac; fpaclen: integer; fbool: Boolean;
+                       tstring, fstring: filenamestring);
+  begin {booloption}
+  if fbool 
+  then stuffchar(fpac,fpaclen,tstring)
+  else stuffchar(fpac,fpaclen,fstring);
+  end; {booloption}
+  
+begin {%_inq}
+errornumber := 0; 
+if name = nil
+then curunit := findunit(unitnum) { inquire by unit }
+else begin { inquire by name }
+  { set curunit to named unit if it can be found, nil otherwise }
+  makelname(lname,name,namelen);
+  curunit := units; Found := FALSE;
+  while (curunit <> nil) and (not Found) do begin
+    if curunit^.fname = lname 
+    then Found := TRUE 
+    else curunit := curunit^.nextunit;
+    end;
+  end;
+if (name <> nil) and (curunit = nil)
+then begin 
+  { inquire by name, file not connected, just a chance that it exists }
+  reset(lfile,lname);
+  if ioresult = 0
+  then begin setint4(exist,1); close(lfile); end
+  else setint4(exist,0);
+  setint4(opened,0); setint4(named,1); stuffchar(nm,nmlen,lname);
+  stuffchar(seq,seqlen,'UNKNOWN'); 
+  stuffchar(dir,dirlen,'UNKNOWN');
+  stuffchar(ftted,fttedlen,'UNKNOWN'); 
+  stuffchar(unftted,unfttedlen,'UNKNOWN');
+  end
+else { either inquire by unit or unit connected to inquired name }
+  if curunit = nil
+  then begin setint4(exist,0); setint4(opened,0); end
+  else 
+    with curunit^ do begin
+      setint4(exist,1); setint4(opened,1); setint4(named,ord(not Scratch));
+      stuffchar(nm,nmlen,fname);
+      setint4(number,unitnum); setint4(recl,curunit^.reclen);
+      if ENVIRONMENT = MERLIN
+      then begin
+        if (not Seqen) and (nextrec <> nil)
+        then begin
+          if osfib^.fheader.fkind = TEXTFILE then orgblk := 2 else orgblk := 0;
+          if Formted
+          then 
+            currec :=
+              { Number of records in prev bigblocks }
+              (1024 div reclen) * ((osfib^.fnextblock - 1 - orgblk) div 2) +
+              
+              { Number of records in current bigblock }
+              ((((osfib^.fnextblock - 1) mod 2) * FBLKSIZE) + osfib^.fnextbyte) 
+              div reclen
+            
+          else { not formatted }
+            currec :=   (
+              ((osfib^.fnextblock - 1 - orgblk) * FBLKSIZE) + { #bytes in prev blks }
+              osfib^.fnextbyte  )                             { #bytes in cur blk   }
+                 div reclen;
+          nextrec^ := currec + 2;
+          end;
+        end
+      else 
+        if ENVIRONMENT = UNISOFT
+        then begin
+          if (not Seqen) and (nextrec <> nil)
+          then begin
+            %_fseek(ostextfile,0,SEEK_RELATIVE); {Force flush}
+            nextrec^ := (_lseek(1,0,idosfib^.fd) div reclen) + 2;
+            end;
+          end
+        else
+          if ENVIRONMENT = UNOS
+          then begin
+            if (not Seqen) and (nextrec <> nil)
+            then begin
+              %_fseek(ostextfile,0,SEEK_RELATIVE); {Force Flush}
+              nextrec^ := (_jfilepos(idosfib^.fd) div reclen) + 2;
+              end;
+            end
+          else
+            if ENVIRONMENT = ADVENTURE
+            then begin
+              if (not Seqen) and (nextrec <> nil)
+              then begin
+                %_fseek(ostextfile,0,SEEK_RELATIVE); {Force Flush}
+                nextrec^ := (idosfib^.filepos div reclen) + 2;
+                end;
+              end
+            else begin {Temporary until tell system call}
+              if (not Seqen) and (nextrec <> nil)
+              then nextrec^ := 0;
+              end;
+      booloption(access,accesslen,Seqen,'SEQUENTIAL','DIRECT');
+      booloption(seq,seqlen,Seqen,'YES','NO');
+      booloption(dir,dirlen,Seqen,'NO','YES');
+      booloption(form,formlen,Formted,'FORMATTED','UNFORMATTED');
+      booloption(ftted,fttedlen,Formted,'YES','NO');
+      booloption(unftted,unfttedlen,Formted,'NO','YES');
+      booloption(blank,blanklen,BlankNull,'BLANK','NULL');
+      end;
+termiostmt(fiostat,errexit);
+end; {%_inq}
+
+procedure %f821201;
+  type pac6 = packed array[1..6] of char;
+  var lname2: ppac; lname6: ^pac6; lname: filenamestring;
+      s: string[80];
+begin {%f821201}
+{ Preconnect unit 0 to output for writing }
+new(lname6); lname6^ := 'output'; moveleft(lname6,lname2,4);
+makelname(lname,lname2,6);
+freeunits := nil; tempfilectr := 0; errornumber := 0;
+new(consoleunit);
+with consoleunit^ do begin
+  unitid := 0; nextunit := nil; fname := lname; Formted := TRUE;
+  reclen := 0; Scratch := FALSE; Seqen := TRUE; BlankNull := TRUE;
+  PastEndFile := FALSE; lastop := READOP;
+  ostextfile := @output;
+  end;
+units := consoleunit;
+
+{ Preconnect unit 1 to stderr for writing }
+new(lname6); lname6^ := 'stderr'; moveleft(lname6,lname2,4);
+makelname(lname,lname2,6);
+new(stderrunit);
+with stderrunit^ do begin
+  unitid := 1; nextunit := units; fname := lname; Formted := TRUE;
+  reclen := 0; Scratch := FALSE; Seqen := TRUE; BlankNull := TRUE;
+  PastEndFile := FALSE; lastop := READOP;
+  ostextfile := @stderr;
+  end;
+units := stderrunit;
+s := COPYRIGHT; s := RIGHTS;
+ranseed := $137f8044;
+end; {%f821201}
+
+procedure %_rtsfin;
+begin {%_rtsfin}
+while units <> nil do 
+  if (units = consoleunit) or (units = stderrunit)
+  then units := units^.nextunit
+  else lclose(units^.unitid,nil,0); { Side effect: units := units^.nextunit }
+end; {%_rtsfin}
+
+

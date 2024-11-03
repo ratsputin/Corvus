@@ -1,0 +1,623 @@
+PROGRAM DiskBi;
+{***  CONCEPT omninet disk burn-in master 10/15/82  *******************}
+{ This program resides on a network of concept systems and monitors    }
+{ the test activity.  Each disk udergoing burn-in will report       }
+{ errors when polled by the concept burn-in software.  The master }
+
+
+USES {$U /pt/cclib.obj} CCdefn, CChexout, CCcrtio, CCclkIO, CClblio, ccomnio,CCwndIO,
+     {$U /pt/c2lib.obj} ccdrvio,ccdrvu1;
+
+{$I OBDATA }
+{$I-}
+
+
+FUNCTION cvtint( int: INTEGER ): INTEGER;
+   VAR
+     cvt: RECORD CASE BOOLEAN OF
+          TRUE: (nrm: ARRAY[1..2] OF byte);
+         FALSE: (abs: INTEGER);
+          END;
+     p1,p2: INTEGER;
+   BEGIN
+     cvt.abs := int;
+     IF cvt.nrm[1] < 0 THEN p1 := cvt.nrm[1] + 256 ELSE p1 := cvt.nrm[1];
+     IF cvt.nrm[2] < 0 THEN p2 := cvt.nrm[2] + 256 ELSE p2 := cvt.nrm[2];
+     IF debug THEN WRITELN('inp:',int:6,' cnvr:',p1:5,p2:5);
+     cvtint := p1 + p2*256;
+   END;
+
+PROCEDURE mstinit;
+   VAR
+      i,j: INTEGER;
+   BEGIN
+      autofile := FALSE;
+      curstn := 0; {initial station address}
+      filout := false; {console i/o unless otherwise specified}
+      FOR i := 0 TO maxadr DO
+       WITH netwrk[i] DO
+         BEGIN
+           time := '';
+           date := '';
+           rdate := '';
+           rtime := '';
+           srl := '';
+           status := 0;
+           FOR j := 1 TO mxerr DO errs[j].used := FALSE;
+         END;
+    END;
+
+  FUNCTION cnvrtlw( VAR data: lw ): longint;
+    VAR l,h: longint; {low and high order 16bit quantities}
+        cvt: RECORD CASE BOOLEAN OF
+              TRUE: (nrm: ARRAY[1..2] OF INTEGER);
+             FALSE: (abs: lw);
+             END;
+    BEGIN
+      cvt.abs := data;
+      l := cvtint( cvt.nrm[1] ); {low order word}
+      h := cvtint( cvt.nrm[2] ) * 65536; {high order word}
+      cnvrtlw := l + h;
+    END;
+
+  PROCEDURE prtclk( clk: clkpb; name: STRING80 );
+    BEGIN
+      writeln(name,'* hr: ',clk.hour,' min: ',clk.mins,' sec: ',clk.secs);
+    END;
+
+  PROCEDURE timeout( VAR rc: byte );
+    VAR begclk: clkpb;
+        tckdone: BOOLEAN;
+    BEGIN
+      {wait for the maximum specified timeout period or rc = 0 and return}
+      {timin = timeout minutes part}
+      {timsec = timeout seconds part}
+
+      IF rc = 0 THEN EXIT( timeout );
+      clkread( clock );
+      begclk := clock;
+      tckdone := FALSE;
+
+      REPEAT
+        IF rc = 0 THEN EXIT( timeout );
+        clkread( clock );
+        clock.hour := clock.hour - begclk.hour;
+        IF ((clock.hour > 0) OR (clock.hour < 0 )) THEN clock.mins := clock.mins + 60;
+        clock.mins := clock.mins - begclk.mins;
+        IF clock.mins < 0 THEN clock.secs := clock.secs + 60;
+        clock.secs := clock.secs - begclk.secs;
+        IF ((clock.mins >= timin) AND (clock.secs >= timsec)) THEN tckdone := TRUE;
+      UNTIL tckdone;
+    END;
+
+   PROCEDURE display( stno : integer );
+     VAR t,d: clkstr40;
+         i: integer;
+         badtrk,lincmp: boolean;
+         h,s: longint;
+     BEGIN
+       {display a given stations data}
+       {if filout is true then we write the data to file 'reprt'}
+       IF netwrk[stno].status = 0 {not in use} THEN EXIT( display );
+       clkdate1(d);
+       clktime1(t);
+       IF NOT filout {console I/O} THEN
+         BEGIN
+           WRITELN('Disk serial #: ',netwrk[stno].srl,'   Omninet DiskServer address: ',stno:2);
+           WRITE('Date/Time in: ',netwrk[stno].date,' ',netwrk[stno].time,'   ');
+           WRITELN('Last Date/Time: ',netwrk[stno].rdate,' ',netwrk[stno].rtime);
+           WRITELN('Report date: ',d,' Report time: ',t);
+           WRITE('Disk seeks: ',netwrk[stno].seeks:10);
+           IF netwrk[stno].status = -1 THEN WRITELN
+           ELSE WRITELN(beep,'           ',ABS(netwrk[stno].status)-1:3,' INVALID REPORTS RECEIVED **');
+           badtrk := FALSE;
+           WRITELN('BAD TRACKS: ');
+           i := 1;
+           lincmp := TRUE;
+             REPEAT
+              WITH netwrk[stno].errs[i] DO
+              BEGIN
+               {print at most 2 bad tracks to the line}
+               IF used THEN
+                 BEGIN
+                   lincmp := FALSE;
+                   badtrk := TRUE;
+                   WRITE('TRK=', cvtint(trk):6,' ');
+                   WRITE('HRD=',cvtint(hrd):6,' ');
+                   WRITE('SFT=',cvtint(sft):6,' ');
+                   IF (i MOD 2) = 0 THEN BEGIN lincmp := TRUE; WRITELN; END;
+                 END;
+               i := i + 1;
+              END;
+             UNTIL i > mxerr;
+             IF NOT lincmp THEN WRITELN;
+             IF NOT badtrk THEN WRITELN('**********   NONE   *************');
+         END
+       ELSE {file output}
+         BEGIN
+           WRITELN(reprt,'Disk serial #: ',netwrk[stno].srl,'   Omninet DiskServer address: ',stno:2);
+           WRITE(reprt,'Date/Time in: ',netwrk[stno].date,' ',netwrk[stno].time,'   ');
+           WRITELN(reprt,'Last Date/Time: ',netwrk[stno].rdate,' ',netwrk[stno].rtime);
+           WRITELN(reprt,'Date/Time out: ',d,' ',t);
+           WRITE(reprt,'Disk seeks: ',netwrk[stno].seeks:10);
+           IF netwrk[stno].status = -1 THEN WRITELN(reprt)
+           ELSE WRITELN(beep,'           ',ABS(netwrk[stno].status)-1:3,' INVALID REPORTS RECEIVED **');
+           badtrk := FALSE;
+           WRITELN(reprt,'BAD TRACKS: ');
+           i := 1;
+           lincmp := TRUE;
+             REPEAT
+              WITH netwrk[stno].errs[i] DO
+               BEGIN
+                {print at most 2 bad tracks to the line}
+                IF used THEN
+                 BEGIN
+                   lincmp := FALSE;
+                   badtrk := TRUE;
+                   WRITE(reprt,'TRK=', cvtint(trk):6,' ');
+                   WRITE(reprt,'HRD=',cvtint(hrd):6,' ');
+                   WRITE(reprt,'SFT=',cvtint(sft):6,' ');
+                   IF (i MOD 2) = 0 THEN BEGIN lincmp := TRUE; WRITELN(reprt); END;
+                 END;
+               i := i + 1;
+              END;
+             UNTIL i > mxerr;
+             IF NOT lincmp THEN WRITELN( reprt );
+             IF NOT badtrk THEN WRITELN(reprt,'**********   NONE   *************');
+         END;
+       IF filout THEN WRITELN(reprt) ELSE WRITELN;
+       rslt := ioresult; {see if any file error}
+       If rslt <> 0 THEN
+         BEGIN
+           WRITELN('Report file write error ',rslt);
+           CLOSE( reprt, LOCK );
+           filout := FALSE;
+         END;
+     END;
+
+{$I OBINT } {burn-in prep block interface code(getrpt) and monitor procedure}
+
+
+   PROCEDURE getfname;
+     BEGIN
+       REPEAT
+          WRITE('Enter output file name: ');
+          instr := birpt;
+       UNTIL GETSTRING( instr ) = NORMAL;
+       instr := CONCAT(instr,'.TEXT');
+     END;
+
+   PROCEDURE getaname;
+     BEGIN       {autofile name}
+       REPEAT
+          WRITE('Enter output file name: ');
+          filstr := birpt;
+       UNTIL GETSTRING( filstr ) = NORMAL;
+       filstr := CONCAT(filstr,'.TEXT');
+     END;
+
+   PROCEDURE getoutput;
+     BEGIN
+       filout := TRUE;
+       getfname;
+       REWRITE(reprt, instr);
+       rslt := ioresult;
+       IF rslt <> 0 THEN
+         BEGIN
+           WRITELN('Unable to open output file, error = ',rslt);
+           filout := FALSE;
+         END;
+     END;
+
+   PROCEDURE chkoutput;
+     BEGIN
+        filout := FALSE;
+        WRITE('Do you want to save the report in a text file (Y/N)? ');
+        ch := GETBYTE;
+        writeln;
+        IF ch = 'N' THEN EXIT( chkoutput );
+        {come here if want to output to a file}
+        getoutput;
+     END;
+
+
+
+   PROCEDURE prepbi( stno, ofst, blk: INTEGER);
+   {read from pfil one block starting at block blk and send it to the drive}
+     BEGIN
+       vectr.rln := 1;
+       rslt := BLOCKREAD(pfil, vectr.b[ofst], 1, blk); {read one block starting at blk}
+       IF rslt <> 1 THEN
+         BEGIN
+           WRITELN('Cannot read burn-in prep block');
+           CLOSE( pfil );
+           IF rslt = 0 THEN rslt := -2;
+           EXIT( prepbi );
+         END;
+       rslt := lsend( stn, vectr );
+       IF rslt <> 0 THEN
+         BEGIN
+          badrslt( rslt, stno );
+          EXIT( prepbi );
+         END;
+       rslt :=  vectr.b[1] ;
+     END;
+
+   PROCEDURE login;
+   {log a disk server/disk combo into the network}
+   {and start sector quiet test}
+     LABEL 1,2;
+
+     VAR stnno: INTEGER;    {omninet address of the diak being logged in}
+         i : INTEGER;
+         cont: BOOLEAN;
+         morinit: BOOLEAN;
+     BEGIN
+      stnno := 0;
+  2:  REPEAT
+       morinit := FALSE;
+       REPEAT
+          WRITE('Enter OmniNet address: ');
+       UNTIL (GETNUM(stnno)=NORMAL) AND ((stnno>=0) AND (stnno<=maxadr));
+         BEGIN
+           {READ THE PARAM BLOCK TO GET THE SERIAL #}
+           stn.slotno := slt;
+           stn.driveno := driv;
+           stn.kind := omninetdisk;
+           stn.stationno := stnno;
+           stn.blkno := 0;
+           stn.netno := 0;
+           cont := FALSE;
+           REPEAT
+             rslt := prepdisk( stn, '!DIAG.DATA');
+             IF rslt <> 0 THEN
+                BEGIN
+                  IF rslt = -1 THEN
+                    BEGIN {request timed out}
+                      WRITELN('Prep mode request timed out');
+                      WRITE('Try again? (Y/N): ');
+                      ch := getbyte; writeln;
+                      IF ch = 'N' THEN GOTO 1{see if more to log in} ELSE cont := TRUE;
+                    END
+                  ELSE
+                    BEGIN
+                      WRITELN('Prep mode error ',rslt);
+                      GOTO 1;
+                    END;
+                END;
+           UNTIL NOT cont;
+           {drive in prep mode}
+           vectr.sln := 2;
+           vectr.rln := 513;
+           vectr.b[1] := 50; {read firmware block}
+           vectr.b[2] := 3; {block 3 }
+           REPEAT
+             cont := FALSE;
+             rslt := osend( stn, vectr);
+             IF rslt < 0 THEN
+               BEGIN {request timedout}
+                 badrslt( rslt,stn.stationno );
+                 WRITE('Try again? (Y/N): ');
+                 ch := getbyte; writeln;
+                 IF ch = 'N' THEN GOTO 1 ELSE cont := TRUE;
+               END;
+           UNTIL NOT cont;
+           rslt := ORD( vectr.c[1] );
+           IF rslt < 0 THEN
+             BEGIN
+               WRITELN('Cannot read parameter block, error = ',rslt);
+               REPEAT
+                  instr := '************';
+                  WRITE('Enter disk serial number: ');
+               UNTIL GETSTRING( instr ) = NORMAL;
+             END
+           ELSE
+             BEGIN
+               instr := '            '; {should be srlsiz blanks}
+               IF ((vectr.b[502] > 31) AND (vectr.b[502] < 127)) THEN
+                     FOR i := 502 TO 513 DO instr[i-501] := vectr.c[i]
+               ELSE
+                 BEGIN
+                   WRITELN('Serial number contains invalid characters');
+                   REPEAT
+                      instr := '************';
+                      WRITE('Enter disk serial number: ');
+                   UNTIL GETSTRING( instr ) = NORMAL;
+                 END;
+               WRITELN('Disk serial number is ',instr);
+             END;
+           IF netwrk[stnno].status < 0 THEN
+             BEGIN
+               IF instr <> netwrk[stnno].srl THEN
+                 BEGIN
+                   WRITELN('Logging a new disk into a previously assigned disk server');
+                   WRITE('Do you want to save the data from the old disk in a text file? (Y/N): ');
+                   ch := getbyte;
+                   writeln;
+                   IF ch = 'N' THEN filout := FALSE ELSE getoutput;
+                   display( stnno );
+                 END;
+             END;
+           deprep( stn ); {un prep the disk}
+
+           {now set up entry in netwrk array}
+           netwrk[stnno].srl := instr;
+           clkdate1( dt );
+           netwrk[stnno].date := dt;
+           clktime1( dt );
+           netwrk[stnno].time := dt;
+           netwrk[stnno].seeks := 0;
+           FOR i := 1 TO mxerr DO netwrk[stnno].errs[i].used := FALSE;
+           {now send the bi prep blocks to the drive}
+           {bi prep blk is 1024 bytes long(2 seperate blocks)}
+           {now open bi prep file and read it in}
+           RESET( pfil, biprep);
+           rslt := ioresult;
+           IF rslt < 0 THEN
+             BEGIN
+               WRITELN('Cannot open ',biprep,' error= ',rslt);
+               EXIT( login );
+             END;
+           vectr.sln := 514;
+           vectr.b[1] := 17; {prep mode}
+           vectr.b[2] := 1;
+           rslt := 0;
+           prepbi(stnno,3,1); {read first block and send it}
+           IF rslt <> 0 THEN BEGIN close(pfil); GOTO 1; END;
+           vectr.sln := 512;
+           prepbi(stnno,1,2); {read 2nd(and last) and send it}
+           IF rslt <> 0 THEN BEGIN close(pfil); GOTO 1; END;
+           CLOSE( pfil );
+           {drive now in burn in prep mode}
+           {send command to start test}
+           startbi( stnno ); {start sector quiet test}
+           IF rslt <> 0 THEN goto 1; {go on to next command}
+           rslt := ORD( vectr.c[1] );
+           IF rslt <> 0 THEN WRITELN('Error ',rslt,' on sector quiet execute request')
+           ELSE netwrk[stnno].status := -1; {mark as busy}
+        END;
+     1: WRITE('More stations to log in? (Y/N) ');
+        ch := getbyte; writeln;
+        IF ch = 'Y' THEN morinit := TRUE;
+       UNTIL NOT morinit;
+      END;
+
+
+
+  PROCEDURE logoff;
+    LABEL 1;
+    VAR stnno: INTEGER;
+        i,j,low,high: INTEGER;
+        moroff: BOOLEAN;
+    BEGIN
+  1: REPEAT
+      moroff := FALSE;
+      stnno := 0;
+      REPEAT
+        WRITE('Enter Omninet Address to log off(or -1 for all): ');
+      UNTIL GETNUM( stnno ) = NORMAL;
+      IF ((stnno < -1) OR (stnno > maxadr)) THEN
+        BEGIN
+          WRITELN('Illegal OmniNet address: ',stnno:2);
+          GOTO 1;
+        END;
+      chkoutput; {see if file output}
+      IF stnno <> -1 THEN
+        BEGIN
+          low := stnno;
+          high := stnno; {if not -1 only do the one specified}
+        END
+      ELSE {do all possible}
+        BEGIN
+          low := 0;
+          high := maxadr;
+        END;
+      FOR i := low TO high DO
+        BEGIN
+         IF netwrk[i].status = 0 THEN WRITELN('Station ',i:2,' not logged in')
+         ELSE
+           BEGIN
+            j := getrpt( i ); {get a report from the burn in program}
+            display( i ); {display results }
+            netwrk[i].status := 0;
+            FOR j := 1 TO mxerr DO netwrk[i].errs[j].used := FALSE;
+            IF low = high {only one addr specified} THEN
+             BEGIN
+               WRITE('Any more stations to log off? (Y/N) ');
+               ch := getbyte; writeln;
+               IF ch = 'Y' THEN moroff := TRUE;
+             END;
+           END;
+        END;
+      IF filout THEN CLOSE( reprt, crunch );
+     UNTIL NOT moroff;
+    END;
+
+
+   PROCEDURE setserial;
+     VAR i,ind: integer;
+         cd: cdaddr;
+         xcv,new: sndrcvstr;
+     BEGIN
+       cd.kind := omninetdisk;
+       cd.driveno := 1;
+       cd.slotno := 5;
+       cd.netno  := 0;
+       cd.blkno := 0;
+       REPEAT
+       WRITE('Enter station address: ');
+         READLN( i );
+       UNTIL ((i>=0) AND (i<=maxadr));
+       cd.stationno := i;
+       rslt := putprep( cd, '!DIAG.DATA' );
+       IF rslt <> 0 THEN
+         BEGIN
+           WRITELN('Could not put drive at ',cd.stationno:3,' in prep mode: ',rslt);
+           EXIT( setserial );
+         END;
+       {drive in prep mode}
+       xcv.sln := 2;
+       xcv.rln := 513;
+       xcv.b[1] := 50; {read firmware block}
+       xcv.b[2] := 3 ; {block 3}
+       cdsend( cd, xcv );  cdrecv( cd, xcv );
+       rslt := xcv.b[1];
+       IF rslt < 0 THEN
+         BEGIN
+           WRITELN('Error ',rslt:4,' reading block 3 of the firmware');
+           rslt := unprep( cd );
+           exit( setserial );
+         END;
+       {now get serial #}
+       FOR i := 2 TO 501 DO new.b[i+1] := xcv.b[i];
+       FOR i := 503 TO 514 DO new.c[i] := ' ';
+       REPEAT
+         instr := '            ';
+         WRITE('Enter the drive serial number: ');
+       UNTIL GETSTRING( instr ) =  NORMAL;
+       ind := 503;
+       REPEAT
+        new.c[ind] := instr[ind-502];
+        ind := ind + 1;
+       UNTIL ((ind > 514) OR ((ind-504) = LENGTH(instr)));
+       writeln;
+       IF ind < 514 THEN new.c[ind-1] := ' ';
+       new.sln := 514;
+       new.rln := 1;
+       new.b[1] := 51;
+       new.b[2] := 3; {write block 3}
+       cdsend( cd, new ); cdrecv( cd, new );
+       rslt := new.b[1];
+       IF rslt < 0 THEN WRITELN('Could not write firmware block 3: ',rslt);
+       rslt := unprep( cd );
+    END;
+
+{$I obfrmt }
+
+  BEGIN {MAIN PROGRAM}
+    CCwndIOinit;
+    cchexinit;
+    cccrtioinit;
+    ccdrvioinit;
+    ccdrvu1init;
+    CCclkIOinit;
+    cclblioinit;
+    ccomnioinit;
+    ocinittrans;
+    debug := FALSE;
+    crtsdef := TRUE;
+    crttpgm := 'DBI';
+    crttvrs := vers;
+    crttitle('CONCEPT OmniNet Disk Burn-in Monitor ');
+    {set up soft key labels}
+    lblsinit;
+    rslt := lblset(0,'Logon','L');
+    rslt := lblset(1,'Resume','C');
+    rslt := lblset(2,'Logoff','O');
+    rslt := lblset(3,'AutoFil','A');
+    rslt := lblset(4,'Report','R');
+    rslt := lblset(5,'Monitor','M');
+    rslt := lblset(6,'BI Help','H');
+    rslt := lblset(8,'ShowNet','S');
+    rslt := lblset(9,'Exit','E');
+    rslt := lblset(10,'SetSrl','X');
+    rslt := lblset(12,'Format','F');
+    rslt := lblset(18,'ClrScrn','W');
+    lblson;
+    mstinit;
+    REPEAT
+      WRITE('Select Burn-In function: ');
+      ch := getbyte;
+      writeln;
+      CASE ch OF
+       'W': CRTACTION( EraseALL);
+       'F': format;
+       'X': setserial;
+       'C': FOR i := 0 TO maxadr DO
+               BEGIN
+                 WRITELN('Attempting to establish contact with station ',i:3);
+                 IF getrpt(i) = 0 THEN netwrk[i].status := -1;
+               END;
+       'A': BEGIN autofile := NOT autofile;
+                 IF autofile THEN
+                   BEGIN
+                    i := WinSystem(2);
+                    CRTACTION( vdoinv );
+                    WRITELN('AUTOFILE IS ON');
+                    CRTACTION( vdonor );
+                    i:= WinSystem(1);
+                    getaname;
+                   END
+                 ELSE BEGIN
+                    i:=WinSystem(2);
+                    CRTACTION( vdoinv );
+                    WRITELN('AUTOFILE IS OFF');
+                    CRTACTION( vdonor );
+                    i:=WinSystem(1);
+                 END;
+            END;
+
+       'S': shownet; {display stations on the net}
+       'H': ohelp;    {display general BI help texts}
+       'B': bidebug;    {send debugging commands to a disk (  now invisible to user )}
+       'D': debug := NOT debug;
+       'E': BEGIN
+             WRITE('Exiting the Burn-In master, do you want to save all data? (Y/N): ');
+             ch := getbyte;
+             writeln;
+             {if not saving data then exit}
+             IF ch = 'N' THEN EXIT(diskbi);
+             IF ch = 'Y' THEN
+               BEGIN
+                 getoutput;
+                 {now generate reports}
+                 FOR i := 0 TO maxadr DO BEGIN j := getrpt(i); display( i ); END;
+                 IF filout THEN CLOSE( reprt, LOCK );
+               END;
+             EXIT( diskbi );
+            END;
+       'M': monitor;
+       'L': BEGIN login; monitor; END;
+       'O': BEGIN logoff; monitor; END;
+       'R': BEGIN
+             chkoutput;
+             i := 0;
+             REPEAT
+              WRITE('Enter station address for report( or -1 for all ): ');
+             UNTIL (GETNUM( i ) = NORMAL) AND ((i > -2) AND (i <= maxadr));
+             IF i = -1 THEN
+              BEGIN
+                FOR i := 0 TO maxadr DO IF netwrk[i].status < 0 THEN
+                    BEGIN j := getrpt(i); display( i ); END;
+                IF filout THEN CLOSE(reprt,LOCK);
+              END
+             ELSE
+              BEGIN
+               REPEAT
+                morrpt := FALSE;
+                IF netwrk[i].status = 0 THEN WRITELN('Station ',i:2,' not logged in')
+                ELSE
+                  BEGIN
+                    j := getrpt(i);
+                    display(i);
+                    IF filout THEN CLOSE(reprt,LOCK);
+                    WRITE('Any more reports required? (Y/N) ');
+                    ch := getbyte; writeln;
+                    IF ch = 'Y' THEN morrpt := TRUE;
+                    IF morrpt THEN
+                     BEGIN
+                      chkoutput;
+                      i := 0;
+                      REPEAT
+                       WRITE('Enter station address for report: ');
+                      UNTIL (GETNUM( i ) = NORMAL) AND ((i>=0) AND (i<=maxadr));
+                     END;
+                  END;
+               UNTIL NOT morrpt;
+              END; {else part}
+             monitor;
+            END;
+      END;
+     UNTIL FALSE;
+  END.
+

@@ -1,0 +1,152 @@
+
+         To  : Distribution
+         From: Keith Ball
+
+         file: spldrv.doc.text
+         date: January 6, 1984
+
+         Re: Proposal on implementation of network printer driver
+
+         It is necessary to implement a printer driver for each
+         of our supported systems, mainly MSDOS 2.0, CP/M 86, and
+         CCOS, to make a network based printer provide the same
+         services as a local printer.  A spool driver could
+         provide most of the required services.
+
+         A spool driver would use a pipe, a file, to emulate a
+         character device.  It need only open one pipe per
+         access.  It must determine when to open the pipe, the
+         first write, and when to close.  Unfortunately, none of
+         the systems for which we support Constellation II
+         communicate with the driver level when a file is opened
+         and closed.  Also, user software can communicate
+         directly to the driver without going through the file
+         system.  Therefore, no transparent closing mechanism is
+         available for our driver.  This restriction does limit
+         our support but should not preclude us from implementing
+         this very necessary feature.  The close function,
+         generally, will be performed by a special driver call,
+         such as unitstatus for CCOS or IOCONTROL for MSDOS 2.0,
+         and a special program written to make the special driver
+         call.  A special character sequence, such as Escape
+         Control-Z Control-Z, may be used to inform the standard
+         output portion of the driver the user wants the pipe
+         closed.
+
+         The spool driver would communicate with the generic
+         disk drive command interface specified for our disk
+         drivers.
+
+         Future development can be to implement special
+         transparent or end user controllable closing mechnaisms
+         specially tailored for each OS and computer system.
+
+         Example design of a spool driver.
+
+         Initialize driver function :
+
+         Clear pipe open flag.
+         set pipe name to default value of 'PRINTER'.
+         set message to default value of user name and date.
+         save the message length.
+         set server host number to "home server".
+
+         Output function :   (does not use close char sequence)
+
+         if (pipe NOT open) then
+            begin
+            open pipe with saved pipe name.
+            if error then report error and exit,
+                     else save pipe number.
+            create preamble block in buffer.
+              zero fill the buffer.
+              move in file name message.
+              move in message length from save area.
+              move in message.
+            write preamble block.
+            if error then purge pipe, report error and exit.
+            zero fill the buffer.
+            zero the byte counter.
+            set pipe open flag.
+            end then
+
+         for i = (number of chars user sent) to 0 do
+            begin
+            put next char from user buffer into buffer[counter].
+            counter = counter + 1
+            if (counter = 512) then
+               begin
+               write buffer to pipe.
+               if error then purge pipe, report error and exit.
+               zero fill the buffer.
+               zero the byte counter.
+               end then
+            end for
+
+
+         IOcontrol function :
+
+         if (control string = 'closepipe') then
+            begin
+            if (counter NOT = 0) then write buffer to pipe.
+            close pipe.
+            clear pipe open flag
+            if error then purge pipe, report error and exit.
+            end then
+         else
+         if (first 2 chars of control string = 'p=') then
+            begin
+            blank fill pipe name save area.
+            if (no remaining characters) then
+               begin
+               move default name of 'PRINTER' into pipe name
+                 save area.
+               end then
+            else
+               begin
+               move remaining portion of control string up to 8
+                 characters into the pipe name save area.
+               end else
+            end then
+         else
+         if (first 2 chars of control string = 'm=') then
+            begin
+            if (no remaining characters) then
+               begin
+               move default message of the user name and date
+                 into pipe name save area.
+               end then
+            else
+               begin
+               move remaining portion of control string up to 80
+                 characters into the message name save area.
+               end else
+            end then
+            save length of message into message length save area.
+            end then
+         else
+         if (first 2 chars of control string = 's=') then
+            begin
+            convert next 2 characters to the decimal number they
+              represent. Example :  '34' = decimal 34 or hex $22.
+            if (value > 63) or (value <0) then
+               report error, host number out of range.
+            else
+               save value into server host number area.
+            end then
+         else report error, invalid function.
+
+
+         Data areas needed :
+
+         field name      data type
+
+         pipe open       Flag bit
+         pipe name       8 byte character array
+         message         80 byte character array
+         message length  1 byte integer minimum
+         pipe number     1 word integer
+         buffer          512 byte character array
+         counter         1 word integer
+         server host number
+                         1 byte integer

@@ -1,0 +1,1043 @@
+; file : sboot.40.3.text
+; last modified: 01/23/84
+;
+; contains utility subroutines:
+;       c2greet                 Sendit      Getstr      C2compr
+;       c2erprt                 Strobit                 C2CVinf
+;       c2chkdr                 ClrScrn                 C2getnm
+;       encrypt, decrypt        Homeup                  C2getpw
+;       EndRecv, SetupRecv      Gotoxy
+;       Logon
+
+    page
+; c2greet - write Constellation II greeting message to screen
+;
+;           This procedure writes the Constellation II logon greeting
+;           message to the display. The prompts for the user name and
+;           password are not performed here.
+;
+;
+c2greet movem.l  a4/d0,-(sp)    ;store registers
+        tst.b    CPextcrt.w     ;is external crt?
+        bne.s    C2GR10         ;yes
+        bsr      clrscrn        ;clear screen
+                                ;
+        move.w   #$1E0C,d0      ;set X=30  Y=12
+        bsr      gotoxy         ;position cursor
+C2GR10  lea      c2msg03,a4     ;write Constellation II message to screen
+        bsr      messout        ;
+
+        tst.b    CPextcrt.w     ;is external crt?
+        bne.s    C2GR20         ;yes
+        move.w   #$1E0D,d0      ;set X=30 Y=13
+        bsr      gotoxy         ;position cursor
+C2GR20  lea      c2msg04,a4     ;write message to screen
+        bsr      messout        ;
+
+        tst.b    CPextcrt.w     ;is external crt?
+        bne.s    C2GR30         ;yes
+        move.w   #$230E,d0      ;set X=35 Y=14
+        bsr      gotoxy         ;position cursor
+C2GR30  lea      c2msg05,a4     ;write message to screen
+        bsr      messout        ;
+
+        tst.b    CPextcrt.w     ;is external crt?
+        bne.s    C2GR40         ;yes
+        move.w   #$2310,d0      ;set X=35 Y=16
+        bsr      gotoxy         ;position cursor
+C2GR40  lea      c2msg06,a4     ;write message to screen
+        bsr      messout        ;
+
+        tst.b    CPextcrt.w     ;is external crt?
+        bne.s    C2GR50         ;yes
+        move.w   #$2312,d0      ;set X=35 Y=18
+        bsr      gotoxy         ;position cursor
+C2GR50  lea      bootsrv,a4     ;                                       3.8
+        clr.l    d0             ;                                       3.8
+        move.b   (a4),d0        ;                                       3.8
+        move.l   d0,d1          ;                                       3.8
+        divu     #10,d0         ;                                       3.8
+        mulu     #10,d0         ;                                       3.8
+        sub.w    d0,d1          ;                                       3.8
+        divu     #10,d0         ;                                       3.8
+        addi.w   #$30,d0        ;                                       3.8
+        addi.w   #$30,d1        ;                                       3.8
+        lea      c2msg08,a4     ;                                       3.8
+        move.b   d0,(a4)        ;                                       3.8
+        move.b   d1,1(a4)       ;                                       3.8
+        lea      c2msg07,a4     ;write message to screen
+        bsr      messout        ;
+                                ;
+        movem.l  (sp)+,a4/d0    ;restore registers
+        rts                     ;return
+    page
+; c2erprt - print a constellation II error message
+;
+;           Output a constellation II error message onto the display
+;           screen. All error messages are output on the 42nd line
+;           of the display.
+;
+; Parameters:
+;              d0 - error message code
+;
+;
+c2erprt movem.l  a0-a4/d0,-(sp) ;save registers
+        lea      c2erm13,a4     ;load unknown error message string
+c2er10  cmp.w    #er10,d0       ;is this an invalid user name error
+        bne.s    c2er11         ;try next error
+        lea      c2erm10,a4     ;load error message string address
+c2er11  cmp.w    #er11,d0       ;
+        bne.s    c2er12         ;try next error
+        lea      c2erm11,a4     ;load error message string address
+c2er12  cmp.w    #er12,d0       ;
+        bne.s    c2er13         ;try next error
+        lea      c2erm12,a4     ;load error message string address
+c2er13  cmp.w    #er13,d0       ;
+        bne.s    c2er14         ;try next error
+        lea      c2erm13,a4     ;load error message string address
+c2er14  cmp.w    #er14,d0       ;
+        bne.s    c2er15         ;try next error
+        lea      c2erm14,a4     ;load error message string address
+c2er15  cmp.w    #er15,d0       ;
+        bne.s    c2er16         ;try next error
+        lea      c2erm15,a4     ;load error message string address
+c2er16  cmp.w    #er16,d0       ;
+        bne.s    c2er20         ;try next error
+        lea      c2erm16,a4     ;load error message string address
+c2er20  cmp.w    #er20,d0       ;is this an invalid user name error
+        bne.s    c2er21         ;try next error
+        lea      c2erm20,a4     ;load error message string address
+c2er21  cmp.w    #er21,d0       ;
+        bne.s    c2er22         ;try next error
+        lea      c2erm21,a4     ;load error message string address
+c2er22  cmp.w    #er22,d0       ;
+        bne.s    c2er23         ;try next error
+        lea      c2erm22,a4     ;load error message string address
+c2er23  cmp.w    #er23,d0       ;
+        bne.s    c2er24         ;try next error                      *3.6
+        lea      c2erm23,a4     ;load error message string address
+c2er24  cmp.w    #er24,d0       ;                                    *3.6
+        bne.s    c2er25         ;try next error                      *3.6
+        lea      c2erm24,a4     ;load error message string address   *3.6
+c2er25  cmp.w    #er25,d0       ;                                    *4.0
+        bne.s    c2ergo         ;try next error                      *4.0
+        lea      c2erm25,a4     ;load error message string address   *4.0
+c2ergo  move.w   #$002A,d0      ;set X=0 Y=42
+        bsr      gotoxy         ;position cursor
+        bsr      messout        ;write error message
+        movem.l  (sp)+,a0-a4/d0 ;restore registers
+        rts
+
+        page
+
+;
+;
+; c2srch -  search the table for a particular value.
+;
+; Parameters:
+;             a1 -  pointer to search control vector
+;             d7 -  return code
+;                   0 - MATCH FOUND
+;                   1 - NO MATCH FOUND IN BLOCK
+;                  -1 - END-OF-TABLE ENCOUNTERED
+;
+; Register usage:
+;
+; a5 <-  pointer to field in table being examined
+; a6 <-  pointer to search item
+; a2 <-  pointer to end of table
+; a0 <-  pointer to beginning of entry
+;
+;
+c2srch  movem.l a0-a6/d0-d6,-(sp)
+        move.l  08(a1),a6       ;get address of search item
+        move.l  16(a1),a0       ;get address of start of table
+        adda.w  2(a1),a0        ;make starting address in table to begin search
+                                ;by adding table offset. this is used mostly for
+                                ;the first block of the table...
+        move.l  16(a1),a2       ;making ending address of table
+        adda.w  #512,a2         ;a2 <= end of table address
+c2matl1 move.l  a0,a5           ;make address within an entry to begin the
+                                ;the actual search comparison
+        adda.w  20(a1),a5       ;d5 <= address within entry of match field
+        move.w  4(a1),d0        ;d0 <= length of search item
+;
+; test for null ( UNUSED) table entry
+;
+                                ;
+        cmpi.b  #0,(a5)         ;look for null table entries
+        beq.s   c2null          ;null table entry
+        cmpi.b  #$FF,(a5)       ;look for end-of-table entry
+        beq.s   c2eot           ;end-of-table found
+;
+; an entry has been located, determine if entry matches search item
+;
+        bsr     c2compr         ;call string comparision routine
+        tst.w   d0              ;do strings match
+        bne.s   c2null          ;strings can not match
+;
+; match found
+;
+        move.l  12(a1),a2       ;get address of buffer to receive matched entry
+        move.w  6(a1),d2        ;get the length of an individual entry
+        subq.w  #1,d2           ;d2 <= entry length adjusted for DBRA
+c2matl2 move.b  (a0)+,(a2)+     ;copy entry from table to match buffer
+        dbra    d2,c2matl2      ;
+        sub.l   d7,d7           ;MATCH return code is zero (0)
+        bra.s   c2matex         ;
+c2null  adda.w  6(a1),a0        ;increment pointer to start of next entry
+        cmpa.l  a0,a2           ;compare end address to new starting address
+        bne.s   c2matl1         ;if not end-of-block branch
+;
+; end-of-block  -  entry not found in this block
+;
+        moveq   #1,d7           ;NO MATCH return code  (1)
+        bra.s   c2matex         ;branch to end of routine
+;
+; end-of-table encountered - this condition is signalled by a
+;                            $FF found in any constellation field
+;                            for which a search may be performed.
+;
+c2eot   move.l  #-1,d7          ;END-OF_TABLE return code ( -1 )
+c2matex movem.l (sp)+,a0-a6/d0-d6
+        rts
+
+        page
+
+;
+;
+; c2chkdr - determine the number of drives connected to a
+;           particular disk server/ or disk cluster. This routine
+;           attempts to read block zero from the drive. If an
+;           error occurs, this is assumed to be the last drive
+;           on the network.
+;
+; Parameters:  d0 - (INPUT)   - maximum no. of drives to search for
+;                   (OUTPUT)  - no. of drives found on cluster
+;              d1 - (INPUT)   - disk server station number.
+;
+;
+c2chkdr movem.l a0-a6/d2-d6,-(sp)
+        cmpi.w  #1,d0           ;only need to verify one drive
+        beq.s   c2drlp4         ;no need to execute program
+        moveq   #2,d3           ;d3 <= current drive no. being verified
+                                ;start with drive 2 since drive 1 must be boot drive
+        move.l  d0,d4           ;d4 <= maximum drive  no.
+        subq.l  #1,d4           ;subtract one because of DBRA instruction
+        lea     bootdrv,a1      ;a1 <= address of boot server no.
+        move.b  (a1),-(sp)      ;store boot server station number
+        move.b  d1,(a1)         ;replace boot server station no. with new station no.
+        lea     bootsrv,a1      ;a1 <= address of boot drive number
+        move.b  (a1),-(sp)      ;store boot drive no.
+        move.l  #512,d2         ;d2 <= number bytes to read
+        lea     iobuf,a0        ;a0 <= input buffer address
+;
+; loop until last drive is found
+;
+c2drlp1 lea     bootdrv,a1
+        move.b  d3,(a1)         ;setup new current drive number
+        moveq   #DiOfset,d0     ;d0 <= disk block number to read
+        bsr     DskRd           ;read disk block from drive
+        tst.w   d7              ;test disk drive return code
+        bne.s   c2drlp2         ;error reading drive ( last drive found )
+;
+;       see if there are more drives on cluster
+;
+        addq    #1,d3           ;increment drive no. being verified
+        dbra    d4,c2drlp1      ;decrement count of no. of drives, branch to test
+;
+;       maximum drive count reached
+;
+        bra.s   c2drlp3         ;exit from program branch
+;
+; no more drives left, decrement drive count by one
+;
+c2drlp2 subq    #1,d3           ;decrement drive count
+c2drlp3 lea     bootsrv,a1      ;
+        move.b  (sp)+,(a1)      ;restore boot drive number
+        lea     bootdrv,a1      ;
+        move.b  (sp)+,(a1)      ;restore boot server number
+        move.l  d3,d0           ;setup no. of drives found in d0
+c2drlp4 movem.l (sp)+,a0-a6/d2-d6
+        rts
+   page
+
+;
+;
+; encrypt
+;
+; parameters: a0  -  ptr to decrypted name
+;             a1  -  ptr to encrypted name
+;             a2  -  ptr to MAPBASE table
+;             a3  -  ptr to MAPINCR table
+;             d0  -  len of string
+;                 -  CHARVAL
+;             d1  -  MASKVAL
+;             d5  -  ENCRYPT.C[1]
+;             d6  -  CHARNUM
+;
+;
+encrypt movem.l a0-a6/d0-d6,-(sp)
+        move.l  d0,d6           ;copy length
+        subq    #1,d6           ;adjust length by one
+        sub.l   d1,d1           ;MASKVAL := 0
+        moveq   #1,d2           ;CHARNUM := 1
+        sub.l   d5,d5
+        move.b  (a0),d5         ;store first character of encrypt field
+;
+; FOR CHARNUM := 1 TO LEN ( NAMELEN or PSWLEN) DO
+;    BEGIN
+;
+enlp1   move.b  (a0)+,d0        ;CHARVAL := ORD(DECRIPT.C[CHARNUM])
+        sub.l   d4,d4           ;
+        move.w  d1,d4           ;CHARVAL := MASKVAL
+        add.w   (a2)+,d4        ;CHARVAL := MASKVAL + MAPBASE[CHARNUM]
+        sub.l   d3,d3           ;
+        move.b  d0,d3           ;CHARVAL := MASKVAL
+        subi.w  #32,d3          ;CHARVAL := (CHARVAL - 32 )
+        muls    (a3)+,d3        ;CHARVAL := (CHARVAL - 32) * MAPINCR[CHARNUM]
+        add.l   d3,d4           ;CHARVAL :=
+        move.b  d4,(a1)+        ;ENCRYPT.C[CHARNUM] := CHR(CHARVAL)
+        cmpi    #1,d2           ;IF CHARNUM = 1 THEN
+        bne     enlp2           ;
+        subi    #32,d5          ;MASKVAL := (ORD(DECRYPT.C[1]-32) )
+        divs    #9,d5           ;MASKVAL := ORD(DECRYPT.C[1] - 32) MOD 9)
+        move.l  d5,d4
+        swap    d5              ;
+        move    d5,d1           ;
+enlp2   addq    #1,d2           ;CHARNUM := CHARNUM + 1
+        dbra    d6,enlp1        ;END
+        movem.l (sp)+,a0-a6/d0-d6
+        rts
+
+        page
+
+;
+;
+; decrypt
+;
+; parameters: a0  -  ptr to encrypted name
+;             a1  -  ptr to decrypted name
+;             a2  -  ptr to MAPBASE table
+;             a3  -  ptr to MAPINCR table
+;             d0  -  len of string
+;                 -  CHARVAL
+;             d1  -  MASKVAL
+;             d5  -  ENCRYPT.C[1]
+;             d6  -  CHARNUM
+;
+;
+decrypt movem.l a0-a6/d0-d6,-(sp)
+        move.l  d0,d6           ;copy length
+        subq    #1,d6           ;adjust length by one
+        sub.l   d1,d1           ;MASKVAL := 0
+        moveq   #1,d2           ;CHARNUM := 1
+;
+; FOR CHARNUM := 1 TO LEN ( NAMELEN or PSWLEN) DO
+;    BEGIN
+;
+delp1   move.b  (a0)+,d0        ;d0      := ORD(ENCRYPT.C[CHARNUM])
+        sub.l   d3,d3           ;
+        move.b  d0,d3           ;d3      := ORD(ENCRYPT.C[CHARNUM])
+        sub.w   d1,d3           ;d3      :=         "      -  MASKVAL
+        sub.w   (a2)+,d3        ;d3      :=               "        - MAPBASE[CHARNUM]
+        divs    (a3)+,d3        ;d3      :=                  "   DIV MAPINCR[CHARNUM]
+        sub.l   d4,d4           ;
+        move.w  d3,d4           ;keep the quotient
+        addi.w  #32,d4          ;d4      :=  d3 (above) + 32
+        move.b  d4,(a1)+        ;DECRYPT.C[CHARNUM] := CHR(CHARVAL)
+        cmpi    #1,d2           ;IF CHARNUM = 1 THEN
+        bne.s   delp2           ;
+        sub.l   d5,d5
+        move.b  d4,d5           ;get first character of decrypt field
+        subi    #32,d5          ;MASKVAL := (ORD(DECRYPT.C[1]-32) )
+        divs    #9,d5           ;MASKVAL := ORD(DECRYPT.C[1] - 32) MOD 9)
+        move.l  d5,d4
+        swap    d5              ;
+        move.w  d5,d1           ;
+delp2   addq    #1,d2           ;CHARNUM := CHARNUM + 1
+        dbra    d6,delp1        ;END
+        movem.l (sp)+,a0-a6/d0-d6
+        rts
+
+        page
+
+;
+; EndRecv
+;
+; This subroutine does an EndRecv to clear out the socket used by Const II
+; commands.
+;
+; Register usage:
+;       {input} A1 - address of data area for transporter commands
+;
+;               A5 - clobbered
+;
+;      {output} D0 - return code  (either 0 or NoTrans)
+;
+;
+;         Command control block = Trans_Cmd       result record = Rcv_Hdr
+;       +-----------------------+               +-----------------------+
+;       | command = $10         |               | return code           |
+;       +-----------------------+               +-----------------------+
+;       | result            msb |
+;       +---                 ___+
+;       | record                |
+;       +---                 ---+
+;       | address           lsb |
+;       +-----------------------+
+;       | socket number         |
+;       +-----------------------+
+
+
+EndRecv
+        move.b  #waiting,RHdr(A1)       ;initialize result code
+        pea     Rcv_Hdr                 ;load address of result vector
+        move.l  (SP)+,TC_PRslt(A1)      ; and put four bytes into trans command
+        move.b  #EndOp,   TC_Op(A1)     ;load command code over 1st byte of address
+        move.b  #C2_sock, TC_sock(A1)   ;load socket number
+;                                       ;all set up; now do it
+        lea     Trans_Cmd,A5
+        bsr     Strobit
+        cmpi.b  #True, D0               ;was strobe successful???
+        bne     CantStrobe              ;transporter not responding
+Elp1    cmpi.b  #waiting, RHdr(A1)      ;command accepted yet???
+        beq.s   Elp1
+        clr.w   D0                      ;success!!
+        rts
+
+        page
+
+;
+; SetupRecv
+;
+; This subroutine sends a SetupRecv command in preparation for the Where are you
+; command.
+;
+; Register usage:
+;       {input} A1 - address of data area for transporter commands
+;
+;               A5 - clobbered
+;
+;      {output} D0 - return code  (either 0 or NoTrans)
+;
+;
+;         Command control block = Trans_Cmd       result record = Rcv_Hdr
+;       +-----------------------+               +-----------------------+
+;       | command = $F0         |               | return code           |
+;       +-----------------------+               +-----------------------+
+;       | result            msb |               | source host           |
+;       +---                 ___+               +-----------------------+
+;       | record                |               | data              msb |
+;       +---                 ---+               +---                 ___+
+;       | address           lsb |               | length            lsb |
+;       +-----------------------+               +-----------------------+
+;       | socket number         |
+;       +-----------------------+                 data record = C2x_cmd
+;       | data              msb |               +-----------------------+
+;       +---                 ---+               | protoid = 1       msb |
+;       | address               |               +---                 ---+
+;       +---                 ---+               |         = $FE     lsb |
+;       |                   lsb |               +-----------------------+
+;       +-----------------------+               | msgtype = $10     msb |
+;       | data              msb |               +---                 ---+
+;       +---                 ---+               |         = 0       lsb |
+;       | length            lsb |               +-----------------------+
+;       +-----------------------+               | source            msb |
+;       | control length = 0    |               +---                 ---+
+;       +-----------------------+               |                   lsb |
+;                                               +-----------------------+
+;                                               | devtype           msb |
+;                                               +---                 ---+
+;                                               |                   lsb |
+;                                               +-----------------------+
+;                                               | name           byte 1 |
+;                                               + ...                ...+
+;                                               |               byte 10 |
+;                                               +-----------------------+
+
+
+SetupRecv
+        move.b  #waiting,RHdr(A1)       ;initialize result code
+        pea     Rcv_Hdr                 ;load address of result vector
+        move.l  (SP)+,TC_PRslt(A1)      ; and put four bytes into trans command
+        move.b  #RecvOp,  TC_Op(A1)     ;load command code over 1st byte of address
+        pea     C2x_Cmd                 ;load address of data vector -- it points to
+        move.l  (SP)+, TC_PData(A1)     ;   a My Id is ... message
+        move.b  #C2_sock, TC_sock(A1)   ;load socket number over 1st byte of data address
+        move.w  #C2_Dlen, TC_Dlen(A1)   ;load data length
+        move.b  #C2_Clen, TC_Hlen(A1)   ;load control word length
+;                                       ;all set up; now do it
+        lea     Trans_Cmd,A5
+        bsr     Strobit
+        cmpi.b  #True, D0               ;was strobe successful???
+        bne.s   CantStrobe              ;transporter not responding
+lp1     cmpi.b  #waiting, RHdr(A1)      ;command accepted yet???
+        beq.s   lp1                     ;can't fail
+        clr.w   D0                      ;success!!
+        rts
+
+CantStrobe                              ;set error code and exit
+        move.w  #NoTrans, D0            ;no transporter...
+        rts
+
+        page
+
+;
+; Logon
+;
+; This subroutine broadcasts the Hello command
+;
+; Register usage:
+;       {input} A1 - address of data area for transporter commands
+;
+;               A0, A2, A3, A5, A6 - clobbered
+;
+;      {output} D0 - result (0, TimedOut, or (impossible) transporter error)
+;
+;         Command control block = Trans_Cmd       result record = Snd_Hdr
+;       +-----------------------+               +-----------------------+
+;       | command = $40         |               | return code           |
+;       +-----------------------+               +-----------------------+
+;       | result            msb |               | unused                |
+;       +---                 ___+               +---                 ---+
+;       | record                |               | unused                |
+;       +---                 ---+               +---                 ___+
+;       | address           lsb |               | unused                |
+;       +-----------------------+               +-----------------------+
+;       | destination socket=$80|
+;       +-----------------------+                 data record = C2_cmd
+;       | data              msb |               +-----------------------+
+;       +---                 ---+               | protoid = 1       msb |
+;       | address               |               +---                 ---+
+;       +---                 ---+               |         = $FE     lsb |
+;       |                   lsb |               +-----------------------+
+;       +-----------------------+               | msgtype = 0       msb |
+;       | data              msb |               +---                 ---+
+;       +---                 ---+               |         = 0       lsb |
+;       | length            lsb |               +-----------------------+
+;       +-----------------------+               | source  = this    msb |
+;       | control length = 0    |               +---                 ---+
+;       +-----------------------+               |           station lsb |
+;       | destination host = $FF|               +-----------------------+
+;       +-----------------------+               | devtype = 0       msb |
+;                                               +---                 ---+
+;                                               |         = $37     lsb |
+;                                               +-----------------------+
+;                                               | name=user name byte 1 |
+;                                               + ...                ...+
+;                                               |               byte 10 |
+;                                               +-----------------------+
+
+Logon
+        move.b  #waiting,SHdr(A1)       ;initialize result code
+        pea     Snd_Hdr                 ;load address of result vector
+        move.l  (SP)+, TC_PRslt(A1)     ;  and move into trans command buffer
+        move.b  #SendOp, TC_Op(A1)      ;load command code over 1st byte of address
+        pea     C2_cmd                  ;load address of data vector -- it points to
+        move.l  (SP)+,TC_PData(A1)      ;   a Hello message that is set up below.
+        move.b  #C2_sock, TC_sock(A1)   ;load socket number over 1st byte of data address
+        move.w  #C2_dlen,TC_Dlen(A1)    ;load data length
+        move.b  #C2_clen,TC_Hlen(A1)    ;load control length
+        move.b  #Broadcast,TC_Dest(A1)  ;load destination -- a broadcast
+;                                       ;now set up the Hello command in C2_cmd
+        move.w  #C2_pid,C2_proto(A1)    ;load protocol
+        move.w  #C2_hello,C2_msgtype(A1);load message type
+        clr.w   D0                      ;load this Concept's host number
+        move.b  CPtprnbr.W, D0
+        move.w  D0, C2_src(A1)
+        move.w  #C2_CCwrkstn,C2_devtype(A1);load device type
+        lea     C2nmbuf, a5             ;move user name into buffer
+        lea     C2_Name(A1), a6
+        moveq   #namelen,d0
+Logon1  move.b  (a5)+, (a6)+
+        dbra    d0, Logon1
+                                        ;have to decrypt the name
+        move.l  a1, a5                  ;save transporter command address
+        lea     C2_Name(A1),a0          ;set up parameters
+        move.l  a0, a1
+        lea     nambase,a2              ;encryption tables
+        lea     namincr,a3
+        move.w  #Namelen,d0
+        bsr     decrypt
+        move.l  a5, a1                  ;restore transporter command address
+;
+; now send the command
+;
+        bra.s   Send
+
+        page
+
+;
+; SendIt
+;
+; This subroutine broadcasts the Where are you command that will (hopefully) find the
+; user's boot disk server.
+;
+; Register usage:
+;       {input} A1 - address of data area for transporter commands
+;
+;               A5 - clobbered
+;
+;      {output} D0 - result (0, TimedOut, or (impossible) transporter error)
+;
+;         Command control block = Trans_Cmd       result record = Snd_Hdr
+;       +-----------------------+               +-----------------------+
+;       | command = $40         |               | return code           |
+;       +-----------------------+               +-----------------------+
+;       | result            msb |               | unused                |
+;       +---                 ___+               +---                 ---+
+;       | record                |               | unused                |
+;       +---                 ---+               +---                 ___+
+;       | address           lsb |               | unused                |
+;       +-----------------------+               +-----------------------+
+;       | destination socket=$80|
+;       +-----------------------+                 data record = C2_cmd
+;       | data              msb |               +-----------------------+
+;       +---                 ---+               | protoid = 1       msb |
+;       | address               |               +---                 ---+
+;       +---                 ---+               |         = $FE     lsb |
+;       |                   lsb |               +-----------------------+
+;       +-----------------------+               | msgtype = 3       msb |
+;       | data              msb |               +---                 ---+
+;       +---                 ---+               |         = 0       lsb |
+;       | length            lsb |               +-----------------------+
+;       +-----------------------+               | source            msb |
+;       | control length = 0    |               +---                 ---+
+;       +-----------------------+               |                   lsb |
+;       | destination host = $FF|               +-----------------------+
+;       +-----------------------+               | devtype = 00      msb |
+;                                               +---                 ---+
+;                                               |         = $FF     lsb |
+;                                               +-----------------------+
+;                                               | name=C2_dsbuf  byte 1 |
+;                                               + ...                ...+
+;                                               |               byte 10 |
+;                                               +-----------------------+
+
+SendIt
+        move.b  #waiting,SHdr(A1)       ;initialize result code
+        pea     Snd_Hdr                 ;load address of result vector
+        move.l  (SP)+, TC_PRslt(A1)     ;  and move into trans command buffer
+        move.b  #SendOp, TC_Op(A1)      ;load command code over 1st byte of address
+        pea     C2_cmd                  ;load address of data vector -- it points to
+        move.l  (SP)+,TC_PData(A1)      ;   a Where are you message that is set up below.
+        move.b  #C2_sock, TC_sock(A1)   ;load socket number over 1st byte of data address
+        move.w  #C2_dlen,TC_Dlen(A1)    ;load data length
+        move.b  #C2_clen,TC_Hlen(A1)    ;load control length
+        move.b  #Broadcast,TC_Dest(A1)  ;load destination -- a broadcast
+;                                       ;now set up the where are you command in C2_cmd
+        move.w  #C2_pid,C2_proto(A1)    ;load protocol
+        move.w  #C2_whrru,C2_msgtype(A1);load message type
+        clr.w   D0                      ;prepare to get source host number
+        move.b  CPtprnbr.W, D0          ;get it
+        move.w  D0, C2_src(A1)          ;load source host number
+        move.w  #C2_Anysrv,C2_devtype(A1);response any server of this name *4.0
+                                        ;name is already there -- put there by C2verpw
+;
+; now send the command
+;
+Send    lea     Trans_Cmd,A5
+        bsr.s   Strobit
+        cmpi.b  #True, D0               ;was strobe successful???
+        bne     CantStrobe              ;transporter not responding
+        move.w  #10000, D0              ;for time out
+wlp2    cmpi.b  #waiting, SHdr(A1)
+        bne.s   Wdone                   ;wait until result changes
+        dbra    D0, wlp2
+timout  move.w  #timedOut, D0
+        rts
+wdone   tst.b   Shdr(A1)                ;did it work??
+        bmi     Serr                    ;fatal error
+        clr.w   D0                      ;success!!
+        rts
+
+serr    clr.w   D0
+        move.b  SHdr(A1), D0
+        rts                             ;return the transporter error code
+
+Strobit
+        ; this subroutine actually sends the commands to the transporter
+        ; register usage:
+        ;
+        ;     {input}   A5 - address of transporter command
+        ;
+        ;     {output}  D0 - transporter error code
+        ;
+
+                movem.l D1-D3/A1-A2,-(sp)  ; save registers
+                move.l  A5, D0          ;D0.b2 = cmdadr HI
+                swap    D0              ;now D0.b = cmdadr HI
+                move.w  A5, D2          ;D2.b = cmdadr LO
+                move.w  A5, D1          ;save cmdadr MED
+                lsr.w   #8, D1          ;d1.b = cmdadr MED
+
+                lea     StrAdr.l,A2     ;load strobe address
+                bsr.s   waitrdy         ;is transporter ready???
+                boff    failed          ;no
+                move.b  D0, (A2)        ;strobe address HI
+                bsr.s   waitrdy
+                boff    failed
+                move.b  D1,(A2)         ;strobe address MED
+                bsr.s   waitrdy
+                boff    failed
+                move.b  D2,(A2)         ;strobe address LO
+                moveq   #True, D0       ;success!!!
+
+Exit            movem.l (sp)+,D1-D3/A1-A2 ; restore registers
+                rts
+
+failed          moveq   #False,D0       ;failed
+                bra.s   exit
+
+waitrdy         move.w  #10000, d3
+waitlp          btst    #0, RdyAdr.l
+                dbne    d3, waitlp
+isrdy           rts
+
+        page
+;
+; Clrscrn - Clear display screen
+;
+;           This procedure moves the clears the display. The cursor is
+;           left in the home position by the action. The escape sequence
+;           <ESC><'J'> is transmitted to the display driver to perform
+;           this function.
+;
+;
+; Parameters:
+;
+;
+Clrscrn tst.b   CPextcrt.w      ;don't do if    *4.0
+        bne.s   CLRSCex         ; external crt  *4.0
+        movem.l a0-a1/d0,-(sp)  ;save registers
+        move.l  CPdsputc.l,a1   ;get address of display routine
+        moveq   #$1B,d0         ;load escape character
+        jsr     (a1)            ;output escape character
+        moveq   #'J',d0         ;load 'J'
+        jsr     (a1)            ;output 'J'
+        movem.l (sp)+,a0-a1/d0  ;restore registers
+CLRSCex rts                     ;return
+
+;
+;
+; Homeup  - Homeup the cursor to top of screen
+;
+;           This procedure moves the cursor to the top of the display
+;           regardless of the display orientation. The escape sequence
+;           <ESC><'H'> is transmitted to the display driver to perform
+;           this function.
+;
+;
+; Parameters:
+;
+;
+Homeup  tst.b   CPextcrt.w      ;don't do if    *4.0
+        bne.s   HOMUPex         ; external crt  *4.0
+        movem.l a0-a1/d0,-(sp)  ;save registers
+        move.l  CPdsputc.l,a1   ;get address of display routine
+        moveq   #$1B,d0         ;load escape character
+        jsr     (a1)            ;output escape character
+        moveq   #'H',d0         ;load 'H'
+        jsr     (a1)            ;output 'H'
+        movem.l (sp)+,a0-a1/d0  ;restore registers
+HOMUPex rts                     ;return
+
+        page
+; Gotoxy  - position the cursor at a specific point on the display
+;
+;           This procedure move the cursor to a specified position
+;           on the screen. The coordinates are passed in register
+;           zero (D0) in the form of graphics mode X-Y coordinates.
+;           The 'X' coordinated is in the 2nd byte and the 'Y'
+;           coordinate is in the 3rd byte.
+;
+; Parameters:    D0.W   (Right byte is 'X')
+;                       (Left  byte is 'Y')
+;
+Gotoxy  movem.l a0-a6/d0-d6,-(sp)  ;save registers
+        tst.b   CPextcrt.w      ;don't do if    *4.0
+        bne.s   gtOut           ; external crt  *4.0
+        move.l  d0,d2           ;save X-Y
+        move.l  CPdsputc.l,a1   ;get address of display routine
+;
+; First home the cursor
+;
+        bsr.s   Homeup          ;*4.0
+;
+; perform 'X' positioning
+;
+gtXpos  move.w  d2,d3           ;copy 'X' count
+        lsr.w   #8,d3           ;shift 'X' count into counter register
+        tst.w   d3              ;Is 'X' count zero
+        beq.s   gtYpos          ;Yes, already at 'X' position zero
+                                ;
+gtXloop moveq   #$0C,d0         ;load CURSOR RIGHT
+        jsr     (a1)            ;output character
+        subq.w  #1,d3           ;substract 1 from 'X' count
+        bne.s   gtXloop         ;right position
+;
+; perform 'Y' positioning
+;
+gtYpos  move.w  d2,d3           ;copy 'Y' count
+        and.w   #$00FF,d3       ;
+        tst.w   d3              ;Is 'Y' count zero
+        beq.s   gtOut           ;Yes, already at 'Y' position zero
+                                ;
+gtYloop moveq   #$0D,d0         ;load CR-FL  character
+        jsr     (a1)            ;output character
+        subq.w  #1,d3           ;substract 1 from 'Y' count
+        bne.s   gtYloop         ;down again
+                                ;
+gtOut   movem.l (sp)+,a0-a6/d0-d6  ;restore registers
+        rts                     ; return
+    page
+;
+; Getstr - Get a string of characters from the keyboard
+;
+;          This procedure reads a string of characters from the
+;          keyboard and stores them in the buffer addressed by
+;          address register (A0). The maximum length of the
+;          string is in data register (D0). The number of bytes
+;          received is returned is D0. The carriage return (CR)
+;          is not returned as part of the input string. Characters
+;          are not echoed if the top bit of D0 is 1.
+;
+; Parameters:
+;
+;             a0 - address of buffer to receive characters
+;             d0 - (INPUT)  maximum no. of characters
+;                  (OUTPUT) no. of characters received
+;
+;
+Getstr  movem.l a0-a6/d1-d6,-(sp)
+        move.l  d0,d1           ;
+        move.l  d0,d3           ;copy D0 to use as echo flag
+        moveq   #31,d2          ;msb is 31
+        bclr    d2,d1           ;clear top bit of character counter
+        clr.l   d2              ;Initialize word counter
+        move.l  CPdsputc.l,a2   ;Display  input vector loaded
+        move.l  CPkbgetc.l,a1   ;Keyboard input vector loaded
+                                ;
+getlp1  jsr     (a1)            ;Get character from keyboard
+        cmpi.b  #$0D,d0         ;Is it a carriage return
+        beq.s   gtsout1         ;Yes we have Bananas (CR)
+        cmpi.b  #$61,d0         ;convert lower case to upper case
+        blt.s   getlp3          ;
+        cmpi.b  #$7A,d0         ;
+        bgt.s   getlp3          ;
+        subi.b  #$20,d0         ;upper case := lower case - $20
+                                ;
+getlp3  cmpi.b  #$08,d0         ;perform backspace operation
+        bne.s   getlp4          ;
+        tst.w   d2              ;how many characters have we printed
+        beq.s   getlp1          ;no more characters to backspace over
+        subq.w  #1,d2           ;subtract one from current character count
+        addq.w  #1,d1           ;adjust maximum character input count
+
+        tst.l   d3              ;test echo flag
+        blt.s   getlp8          ;branch if bit is set ( NO ECHO)
+;
+;       do the actual backspace operation on the
+;       video screen.
+;
+        jsr     (a2)            ;output backspace character
+        move.b  #$20,d0         ;
+        jsr     (a2)            ;write blank blank character
+        move.b  #08,d0          ;
+        jsr     (a2)            ;write backspace character
+                                ;
+getlp8  subq.w  #1,a0           ;adjust current buffer pointer
+        move.b  #$20,(a0)       ;write blank into buffer backspaced over (WEIRD BUT EFFECTIVE)
+        bra.s   getlp1          ;
+                                ;
+getlp4  tst.l   d3              ;test echo flag
+        blt.s   getlp2          ;branch if bit is set ( NO ECHO)
+        jsr     (a2)            ;Output character to display
+                                ;
+getlp2  move.b  d0,(a0)+        ;Store characters in buffer
+        addq.w  #1,d2           ;Increment count of no. of chars input
+        subq.w  #1,d1           ;Decrement maximum input count
+        bne.s   getlp1          ;Still more to come
+                                ;
+gtsout1 moveq   #$0D,d0         ;Output a <CR> at end of input if
+        jsr     (a2)            ;to many characters
+                                ;
+        moveq   #$0A,d0         ;Output a linefeed at end of input
+        jsr     (a2)            ;
+        move.l  d2,d0           ;Return no.  of characters read
+
+        movem.l (sp)+,a0-a6/d1-d6
+        rts
+  page
+
+; C2compr - compare the contents of two buffers in memory
+;
+; Parameters:     a5  -  address of first string
+;                 a6  -  address of second string
+;                 d0  -  length of string
+;                        returns  0  -  if strings match
+;                                -1  -  if strings do not match
+;
+;
+c2compr movem.l a5-a6/d7,-(sp)
+        move.l  d0,d7           ;copy length of string
+        subq.w  #1,d7           ;adjust for dbne instructions
+        move.w  #-1,d0          ;initialize match pointer
+cmploop cmpm.b  (a5)+,(a6)+     ;compare strings
+        dbne    d7,cmploop      ;loop until finished
+        bne.s   cmpdone         ;
+        not.w   d0              ;strings match
+cmpdone movem.l (sp)+,a5-a6/d7  ;restore registers
+        rts
+
+        page
+; c2CVinf - get corvus volume table information. This procedure
+;           reads the DRIVE.INFO block from a drive and stores
+;           the Corvus volume table length and addresses in a
+;           local program structure.. Address register A1 contains
+;           the address of this particular structure.
+;
+; Parameters: d0  - drive number to read
+;             d1  - Disk server station address
+;             a1  - address of corvus volume info block
+; Returns:    d7  - return code from drive (non-negative) or valid chk ($FFFFFFFF)
+;             ne  - error                                  *3.6
+;             eq  - good                                   *3.6
+;
+;
+c2CVinf movem.l a0-a6/d0-d6,-(sp)
+        lea     bootdrv,a2      ;get address of boot drive no.
+                                ;
+        move.b  (a2),-(sp)      ;store current boot drive
+        move.b  d0,(a2)         ;store new drive number
+        lea     bootsrv,a2      ;get address of boot server
+        move.b  (a2),-(sp)      ;store current server no.
+        move.b  d1,(a2)         ;store new disk server station address
+                                ;
+        move.l  #512,d2         ;d2 <= setup block size = 512 bytes
+        lea     Iobuf,a0        ;a0 <=  general IOBUF as buffer area
+        moveq   #DiOfset,d0     ;d0 <= Drive.Info table block address
+        bsr     DskRd           ;read DRIVE.INFO block     *3.6
+        bne.s   c2inf1          ;error reading disk        *3.6
+        bsr     Valid8B8        ;validate drive.info block *3.6
+        bne.s   c2inf1          ;invalid                   *3.6
+;
+;
+; store corvus volume table addresses and lengths in local
+; boot code data locations.
+;
+        lea     Iobuf,a0        ;a0 <=  general IOBUF as buffer area
+        move.l  DIDUaof(a0),8(a1)
+        move.l  DIDAaof(a0),12(a1)
+        move.l  DIDVaof(a0),16(a1)
+        move.l  DINUaof(a0),20(a1)
+
+        move.w  DIDUlof(a0),0(a1)
+        move.w  DIDAlof(a0),2(a1)
+        move.w  DIDVlof(a0),4(a1)
+        move.w  DINUlof(a0),6(a1)
+c2inf1  lea     bootsrv,a2      ;get address of boot drive no.
+        move.b  (sp)+,(a2)      ;restore current boot drive
+        lea     bootdrv,a2      ;get address of boot server
+        move.b  (sp)+,(a2)      ;restore current server no.
+        movem.l (sp)+,a0-a6/d0-d6
+        tst.w   d7              ;set cc                    *3.6
+        rts
+  page
+
+; C2getnm - get user name from console
+;
+;           This procedure prompts the operator for the user name
+;           The user name prompt is output on display line 38.
+;           The name returned is placed in the buffer address by
+;           address register 0 ( a0 ). If the name enter is too
+;           long or no name is entered, an error message is printed
+;           by this routine. The name returned is blanked filled.
+;
+; Parameters:
+;
+;             a0  -  address of user name buffer
+;
+;
+c2getnm movem.l a0-a4/d0,-(sp)
+        lea     c2nmad1,a1
+        move.l  a0,(a1)         ;store name buffer address
+c2nmlp1 move.w  #$0026,d0       ;position cursor for name prompt
+        bsr     gotoxy          ;
+        lea     c2msg01,a4      ;get address of prompting message
+        bsr     messout         ;write user name prompting message
+        moveq   #Namelen-01,d0  ;setup length of maximum user name field
+        lea     c2nmad1,a1      ;
+        move.l  (a1),a0         ;restore name buffer address
+        move.l  a0,a1           ;copy buffer address
+c2nmlp2 move.b  #' ',(a1)+      ;copy blanks to use name field buffer
+        dbra    d0,c2nmlp2      ;terminate when count is zero
+        move.l  #80,d0          ;maximum user name length is 80
+        bsr     getstr          ;get user name
+        cmpi.w  #Namelen,d0     ;is name greater than 10
+        bgt.s   c2nmer1         ;name is too long
+        tst.w   d0              ;test for name length less than zero
+        beq.s   c2nmer1         ;no name entered
+        move.l  a0,a1           ;decode password
+        lea     nambase,a2      ;
+        lea     namincr,a3      ;
+        move.w  #Namelen,d0     ;
+        bsr     encrypt         ;
+        bra.s   c2nmex          ;exit program
+                                ;
+c2nmer1 move.w  #er10,d0        ;set invalid name error code
+        bsr     c2erprt         ;print error message routine called
+        bra.s   c2nmlp1         ;reprompt for user name
+c2nmex  movem.l (sp)+,a0-a4/d0
+        rts
+;
+c2nmad1 data.l  0
+
+        page
+
+; C2getpw - get user psw  from console
+;
+;           This procedure prompts the operator for the user password.
+;           The user password prompt is output on display line 40.
+;           The password returned is placed in the buffer address by
+;           address register 0 ( a0 ). If the password enter is to
+;           long an error message is printed by this routine and the
+;           operator is reprompted. The password buffer is blank filled.
+;
+; Parameters:
+;
+;             a0  -  address of user  psw buffer
+;
+c2getpw movem.l a0-a4/d0,-(sp)  ;
+        lea     c2pwad1,a1      ;
+        move.l  a0,(a1)         ;store address of psw buffer
+c2pwlp1 move.w  #$28,d0         ;set X=0 Y=40
+        bsr     gotoxy          ;position cursor
+        lea     c2msg02,a4      ;get address of prompting message
+        bsr     messout         ;write user psw  prompting message
+        moveq   #Pswlen-01,d0   ;setup length of maximum user name field
+        lea     c2pwad1,a1      ;
+        move.l  (a1),a0         ;restore address of psw buffer
+        move.l  a0,a1           ;copy buffer address
+c2pwlp2 move.b  #' ',(a1)+      ;copy blanks to use psw  field buffer
+        dbra    d0,c2pwlp2      ;terminate when count is zero
+        move.l  #$8000004F,d0   ;maximum user psw  length is 80
+                                ;no echo of password by GETSTR if high bit is ON
+        bsr     getstr          ;get user password
+        cmpi    #pswlen,d0      ;is psw  greater than 08
+        bgt.s   c2pwer1         ;psw  is too long
+        move.l  a0,a1           ;decode password
+        lea     pswbase,a2      ;
+        lea     pswincr,a3      ;
+        move.w  #pswlen,d0      ;
+        bsr     encrypt         ;
+        bra.s   c2pwex          ;exit program
+                                ;
+c2pwer1 move.w  #er11,d0        ;set invalid psw  error code
+        bsr     c2erprt         ;print error message routine called
+;;;;;   bra.s   c2pwlp1         ;reprompt for user name
+c2pwex  movem.l (sp)+,a0-a4/d0  ;
+        rts
+
+c2pwad1 data.l  0

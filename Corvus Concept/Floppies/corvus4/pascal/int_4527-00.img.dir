@@ -1,0 +1,16 @@
+
+Directory of UCSD disk image file 'int_4527-00.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume INT has 8 files,  0 to 6 (6), eov 500, size 339, free 8
+
+ 1: 0WORD.INTERP    Data  9-Feb-83    6-  24(  18),  9216+512=  9728 bytes
+ 2: 2WORD.INTERP    Data  9-Feb-83   24-  46(  22), 11264+512= 11776 bytes
+ 3: 4WORD.INTERP    Data  9-Feb-83   46-  70(  24), 12288+512= 12800 bytes
+ 4: REAL2.CODE      Code  2-Nov-82   70-  80(  10),  5120+512=  5632 bytes
+ 5: REAL4.CODE      Code  2-Nov-82   80-  92(  12),  6144+512=  6656 bytes
+ 6: 68000.OPCODES   Data 18-Jan-82   92-  96(   4),  2048+120=  2168 bytes
+ 7: 68000.ERRORS    Data 18-Jan-82   96- 105(   9),  4608+272=  4880 bytes
+ 8: SYSTEM.ASSMBLER Code 18-May-82  105- 161(  56), 28672+512= 29184 bytes

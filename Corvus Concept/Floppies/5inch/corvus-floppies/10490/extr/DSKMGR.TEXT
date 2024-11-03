@@ -1,0 +1,194 @@
+procedure VInit;
+var I: BfrNdx;
+begin
+  if debug then pcall( 1 );
+  CntBlkWrt := 0;
+  CntBlkRd := 0;
+  BfrTim := 1;
+  fillchar( VBfrOf, sizeof( VBfrOf ), chr(-1) );
+  for I := 1 to MaxBfr do begin
+    with VInfo[I] do begin
+      Adr := 0;
+      Use := 0;
+      Drty := false;
+      Critical := false;
+      Locked := false;
+    end;
+  end;
+  if debug then pexit;
+end;
+
+function VPost: boolean;
+var I: integer;
+    cs: integer;
+begin
+  if debug then pcall( 2 );
+  cs := cursample;
+  cursample := 17;
+  WkSpErr := 0;
+  I := 1;
+  while (I<=MaxBfr) and (WkSpErr=0) do begin
+    with VInfo[I] do begin
+      if (Use>0) then begin
+        if Drty or Locked then begin
+          if blockwrite( WkSpFil, V[I], 1, Adr ) = 1 then begin
+            CntBlkWrt := CntBlkWrt + 1;
+            if not Locked then begin
+              Critical := false;
+              Drty := false;
+            end;
+          end else err(6);
+        end;
+      end;
+    end;
+    I := I + 1;
+  end;
+  VPost := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+function VBufOf( Blk: DskBlk ): integer;
+var Ndx: integer;
+    cs: integer;
+begin
+  if debug then pcall( 3 );
+  cs := cursample;
+  cursample := 19;
+  VBufOf := -1;
+  for Ndx := 1 to MaxBfr do with VInfo[Ndx] do begin
+    if (Adr=Blk) and (Use>0) then
+      VBufOf := Ndx;
+  end;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+function VBlkAlloc( var Ndx: integer ): boolean;
+var I: integer;
+    cs: integer;
+begin
+  if debug then pcall( 4 );
+  cs := cursample;
+  cursample := 18;
+  WkSpErr := 0;
+
+  Ndx := 1;
+  I := 2;
+  while (I<=MaxBfr) do with VInfo[I] do begin
+    if (not Locked and (Use<VInfo[Ndx].Use)) or
+       VInfo[Ndx].Locked then begin
+      Ndx := I;
+    end;
+    I := I + 1;
+  end;
+
+  with VInfo[Ndx] do begin
+    if not Locked then begin
+      VBfrOf[Adr] := -1;
+      if (Use>0) and Drty then begin (* something to post *)
+        if Critical then begin (* post entire buffer pool *)
+          if WkSpPost then begin end;
+        end else begin (* post single buffer *)
+          if blockwrite( WkSpFil, V[Ndx], 1, Adr ) = 1 then begin
+            CntBlkWrt := CntBlkWrt + 1;
+          end else err(6);
+        end;
+        Adr := 0;
+        Critical := false;
+        Drty := false;
+        Locked := false;
+      end;
+    end else err(27);
+  end;
+
+  VBlkAlloc := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+
+function VFree( Blk: DskBlk ): boolean;
+var Ndx: integer;
+    cs: integer;
+begin
+  if debug then pcall(5);
+  cs := cursample;
+  cursample := 20;
+  WkSpErr := 0;
+  Ndx := VBfrOf[ Blk ];
+  if (1<=Ndx) and (Ndx<=MaxBfr) then with VInfo[Ndx] do begin
+    VBfrOf[ Blk ] := -1;
+    Adr := 0;
+    Use := 0;
+    Locked := false;
+    Critical := false;
+    Drty := false;
+  end;
+  VFree := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+
+function VLock( var Ndx: integer;
+                    Blk: DskBlk;
+                    Crit: boolean;
+                    Rd: boolean ): boolean;
+var cs: integer;
+begin
+  if debug then pcall( 6 );
+  cs := cursample;
+  cursample := 21;
+  WkSpErr := 0;
+  Ndx := VBfrOf[ Blk ];
+  if (Ndx=-1) then begin
+    if VBlkAlloc( Ndx ) then begin
+      if Rd then begin
+        if blockread( WkSpFil, V[Ndx], 1, Blk ) = 1 then begin
+          CntBlkRd := CntBlkRd + 1;
+        end else err(7);
+      end;
+    end;
+  end;
+  if WkSpErr=0 then with VInfo[Ndx] do begin
+    VBfrOf[Blk] := Ndx;
+    Adr := Blk;
+    Locked := true;
+    Use := BfrTim;
+    if Crit then Critical := true;
+  end;
+  VLock := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+
+function VUnLock( var Ndx: integer ): boolean;
+var i: integer;
+    cs: integer;
+begin
+  if debug then pcall( 7 );
+  cs := cursample;
+  cursample := 22;
+  WkSpErr := 0;
+  if (1<=Ndx) and (Ndx<=MaxBfr) then begin
+    with VInfo[Ndx] do begin
+      if BfrTim>=5000 then begin
+        for I := 1 to MaxBfr do
+          if VInfo[I].Use>0 then
+             VInfo[I].Use := 1;
+        BfrTim := 1;
+      end else
+        BfrTim := BfrTim + 1;
+      Use := BfrTim;
+      Locked := false;
+      if Critical then Drty := true;
+    end;
+  end;
+  Ndx := -1;
+  VUnLock := WkSpErr=0;
+  cursample := cs;
+  if debug then pexit;
+end;
+

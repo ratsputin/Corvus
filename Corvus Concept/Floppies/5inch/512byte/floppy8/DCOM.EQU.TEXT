@@ -1,0 +1,309 @@
+  page
+; Equates for Data com driver
+; file : DCOM.EQU.TEXT
+; date : 10 - August - 1983
+;
+;added definition of LFsprsflg as byte value of UCSD and Apple p-systems
+;      mode flags (D5) : 1-24-83  kb
+;added ESCSEQ flag to write buffer flag word 2 and Escape seq definitions
+;       4-11-83  kb
+;added 3 new functions to end of unitstatus list :  8-10-83 kb
+;
+;
+; EQUATES FOR ALL DATACOM DRIVER SOFTWARE
+; BIT NUMBER DEFINITIONS
+;
+BITD0       EQU        0                         ;BIT 0
+BITD1       EQU        1                         ;BIT 1
+BITD2       EQU        2                         ;BIT 2
+BITD3       EQU        3                         ;BIT 3
+BITD4       EQU        4                         ;BIT 4
+BITD5       EQU        5                         ;BIT 5
+BITD6       EQU        6                         ;BIT 6
+BITD7       EQU        7                         ;BIT 7
+;
+; Flags for port common Flag word
+;
+PORTFLG     EQU        BITD0                     ;IF 0 THEN INIT PORT 0 ELSE INIT PORT 1
+;
+; Buffer control table INTERNAL Flag  bit definitions **LO BYTE***  BF_INTL
+; Low order byte
+;
+ENQFLG      EQU        BITD4                     ;SENT ENQ WAITING FOR ACK
+;
+; Buffer Control Table PROTOCOL flag bit definitions  ****lo byte**** BF_PROF
+;
+LINE        EQU        BITD0                     ;LINE TYPE HANDSHAKE
+XONXOFF     EQU        BITD1                     ;XON/XOFF HANDSHAKE
+ENQACK      EQU        BITD2                     ;ENQ/ACK HANDSHAKE
+CTSLIN      EQU        BITD3                     ;LINE IS CTS
+DSRLIN      EQU        BITD4                     ;LINE IS DSR
+DCDLIN      EQU        BITD5                     ;LINE IS DCD
+INVBUSY     EQU        BITD6                     ;1=LINE IS INVERTED(0) WHEN BUSY
+ETXACK      EQU        BITD7                     ;ETX/ACK HANDSHAKE
+;
+; BUFFER CONTROL TABLE PROTOCOL FLAG BIT DEFINITIONS ***HI BYTE***BF_PROF
+;
+PROT_P2     EQU        BITD0                    ;IF SET THEN SOME TYPE OF PROTOCOL EXISTS
+                                                ;ELSE NO PROTOCOLS --BUFFERS OVERFLOW ETC
+MODM_P2     EQU        BITD1                    ;IF SET THEN A MODEM PROTOCOL EXISTS
+NMOD_P2     EQU        BITD2                    ;IF SET THEN NULL MODEM PROTOCOL(PROBABLY OF LITTLE USE)
+FULL_P2     EQU        BITD3                    ;IF SET THEN FULL DUPLEX (DERFAULT)
+;                                               ;OTHERWISE HALF DUPLEX
+;
+;
+;      WRITE BUFFER flag word bit definitions    FLAG 1 ->>lo byte
+;
+BUSY_W1     EQU        BITD0                    ;WRITE BUSY FLAG
+ERR_W1      EQU        BITD1                    ;BUFFER SIZE ERROR FOUND IN XMIT INT RTN
+ALTBF_W1    EQU        BITD2                    ;IF SET(1) HAVE ALTERNATE BUFFER TO USE
+OUTE_W1     EQU        BITD4                    ;IF 0 DATA FROM BUFFER TO PORT ENABLED
+INPE_W1     EQU        BITD5                    ;IF 0 DATA FROM USER TO BUFFER ENABLED
+OUTC_W1     EQU        BITD6                    ;IF SET(1) THEN USER IS CONTROLLING OUTE
+                                                ;OTHERWISE CONTROLLED INTERNALLY
+INPC_W1     EQU        BITD7                    ;IF SET(1) THEN USER IS CONTROLLING INPE
+;
+;     WRITE BUFFER flag word bit definitions    FLAG 2 ->>lo byte
+;
+FULL_W2     EQU        BITD0                    ;IF SET (1) THEN BUFFER IS FULL
+EMPT_W2     EQU        BITD1                    ;IF SET (1) THEN BUFFER IS EMPTY
+LOST_W2     EQU        BITD2                    ;DATA LOST ON INPUT (USER OVERRUNS BUFFER)
+SNDLF_W2    EQU        BITD3                    ;IF SET THEN SEND AN LF
+AULF_W2     EQU        BITD4                    ;IF SET THEN always send a LF after a CR
+ESCSEQ_W2   EQU        BITD5                    ;IF SET THEN in middle of escape sequence
+;
+;      READ BUFFER flag word bit definitions    FLAG 1 ->>LO BYTE
+;
+BUSY_R1     EQU        BITD0                    ;READ BUSY FLAG
+ERR_R1      EQU        BITD1                    ;UART ERROR FLAG
+ALTBF_R1    EQU        BITD2                    ;IF SET(1) HAVE ALTERNATE BUFFER TO USE
+OUTE_R1     EQU        BITD4                    ;IF 0 DATA FROM BUFFER TO USER ENABLED
+INPE_R1     EQU        BITD5                    ;IF 0 DATA FROM PORT TO BUFFER ENABLED
+OUTC_R1     EQU        BITD6                    ;IF SET(1) THEN USER IS CONTROLLING OUTE
+                                                ;OTHERWISE CONTROLLED INTERNALLY
+INPC_R1     EQU        BITD7                    ;IF SET(1) THEN USER IS CONTROLLING INPE
+;
+;      READ BUFFER flag word bit definitions   FLAG 2 LO BYTE
+;
+FULL_R2     EQU        BITD0                    ;IF SET (1) THEN BUFFER IS FULL
+EMPT_R2     EQU        BITD1                    ;IF SET (1) THEN BUFFER IS EMPTY
+LOST_R2     EQU        BITD2                    ;DATA LOST ON INPUT (PORT OVERRUNS BUFFER)
+;
+;      CONTROL CHARACTER BUFFER flag word bit definitions  LO BYTE
+;
+FULL_CB     EQU        BITD0                    ;IF SET (1) THEN BUFFER IS FULL
+EMPT_CB     EQU        BITD1                    ;IF SET (1) THEN BUFFER IS EMPTY
+;
+; 68000 Interrupt Auto Vector Addresses
+;
+VEC1        EQU        $64                       ;AUTO VECTOR #1-DATA COM CONTROL
+                                                 ;This is the VIA used in line
+                                                 ;protocols
+VEC2        EQU        $68                       ;AUTO VECTOR #2-DC 1
+VEC4        EQU        $70                       ;AUTO VECTOR #4-DC 0
+;
+;
+;*****************************************************************************
+;
+; Unit I/O Command codes  --found IN D4.W
+;
+INSTCMD     EQU        0                         ; Install the unit
+READCMD     EQU        1                         ; read command
+WRCMD       EQU        2                         ; write command
+CLRCMD      EQU        3                         ; CLEAR THE UNIT
+BUSYCMD     EQU        4                         ; busy command
+STSCMD      EQU        5                         ; STATUS COMMAND -ACTUAL COMMANDS IN D2.W
+UNMCMD      EQU        6                         ; unmount command
+;
+; mode flags -- found in D4.W
+;
+LFsprsflg   EQU        $0C                       ; Auto LF suppress bits 2 or 3
+;
+;    STATUS COMMANDS FOUND IN D2.W
+
+; functions compatible with old printer driver
+
+D2_FREEW    EQU        0                        ;RETURN WRITE BUFFER FREE SPACE
+D2_BAUDS    EQU        D2_FREEW+1               ;SET READ/WRITE BAUD RATE
+D2_PARTY    EQU        D2_BAUDS+1               ;SET PARITY
+D2_FREER    EQU        D2_PARTY+1               ;RETURN READ BUFFER FREE SPACE
+D2_CHARS    EQU        D2_FREER+1               ;SET CHARACTER SIZE
+D2_HANDS    EQU        D2_CHARS+1               ;SET HANDSHAKE METHOD
+D2_BFCTRL   EQU        D2_HANDS+1               ;RETURN STATE OF BUFFER CONTROL TABLE
+
+; new functions
+
+D2_RESTS    EQU        D2_BFCTRL+1              ;RETURN READ STATUS
+D2_WRSTS    EQU        D2_RESTS+1               ;RETURN WRITE STATUS
+D2_REAHI    EQU        D2_WRSTS+1               ;SET READ HI WATER MARK(NMBR OF CHARS LEFT FREE)
+D2_REALO    EQU        D2_REAHI+1               ;SET READ LO WATER MARK(NMBR OF CHARACTERS LFT IN BFR)
+D2_OUTRD    EQU        D2_REALO+1               ;USER DISABLE OF OUTBOUND READ (BUFFER DISABLE)
+D2_INBRD    EQU        D2_OUTRD+1               ;USER DISABLE OF INBOUND READ  (DEVICE DISABLE)
+D2_OUTWT    EQU        D2_INBRD+1               ;USER DISABLE OF OUTBOUND WRITE (DEVICE DISABLE)
+D2_INBWT    EQU        D2_OUTWT+1               ;USER DISABLE OF INBOUND WRITE (BUFFER DISABLE)
+D2_WBCHR    EQU        D2_INBWT+1               ;RETURN THE NUMBER OF CHARACTERS IN WRITE BUFFER
+D2_RBCHR    EQU        D2_WBCHR+1               ;RETURN THE NUMBER OF CHARACTERS IN READ BUFFER
+D2_ATLF     EQU        D2_RBCHR+1               ;TOGGLE auto LineFeed flag
+D2_BENQ     EQU        D2_ATLF+1                ;SET number of chars between ENQ's or ETX's
+D2_RDALTB   EQU        D2_BENQ+1                ;Set Read Alternate Buffer
+D2_WTALTB   EQU        D2_RDALTB+1              ;Set Write Alternate Buffer
+; *kb 8/10/83*
+D2_RDCLRB   EQU        D2_WTALTB+1              ;Clear Read Buffer
+D2_WTCLRB   EQU        D2_RDCLRB+1              ;Clear Write Buffer
+D2_SNDBRK   EQU        D2_WTCLRB+1              ;Send 1/4 second of BREAK
+; *kb 8/10/83*
+TBLSTATE    EQU        D2_SNDBRK                ;The last status function code
+  page
+;
+; 68000 status Register values
+;
+;
+UPRMSK      EQU        $A000                     ; KEEPS ALL STATES AND TRACE BITS AS IS
+STATEMSK    EQU        $2000                     ; ANDS OFF STATE BIT
+TRACEMSK    EQU        $8000                     ; ANMDS OFF TRACE BIT
+INTMSK      EQU        $0700                     ; ANDS OFF ALL INT LEVELS
+INT4        EQU        $400                      ; INTERRUPT LEVEL 4 AND LOWER
+INT2        EQU        $200                      ; ETC LEVEL2
+INT1        EQU        $100                      ;ETC LEVEL 1
+DISINT4     EQU        $2400                     ; Disable all DataCom 0 (priority 4) and below device ints
+DISINT2     EQU        $2200                     ; DISABLE DATACOM 1 (priority 2 )and below ints
+DISINT1     EQU        $2100                     ; Disable DataCom-Control int
+CARRYST     EQU        $0001                     ; CCR with carry set
+;
+; VIA Addresses
+;
+ORA         EQU        $30F63                    ; PORT A
+DDRA        EQU        $30F67                    ; PORT A DATA DIRECTION REG.
+NHIRA       EQU        $30F7F                    ; PORT A W/O HANDSHAKE(IGNORE DDRA)
+;
+; VIA register values
+;
+IODDRA      EQU        $80                       ; PORT A BIT CONFIGURATION
+;
+;******************************************************************************
+;
+; UART register definitions
+;
+UARTDC0     EQU        $30F20                    ;BASE ADDRESS OF DATACOM 0 UART
+DC1OFF      EQU        $20                       ;OFFSET FROM DC0 BASE TO DC1 BASE
+DATAREG     EQU          1                       ;DATA PORT REGISTER INDEX
+STATRI      EQU          3                       ;STATUS REGISTER INDEX
+CMDREGI     EQU          5                         ;COMMAND REGISTER INDEX
+CTLREGI     EQU          7                         ;CONTROL REGISTER INDEX
+;
+;   UART STATUS REGISTER EQUATES
+;
+S_PARI      EQU        BITD0                    ;PARITY ERROR IF SET--SELF CLEARING
+S_FRAME     EQU        BITD1                    ;FRAMING ERROR IF SET --SELF CLEARING
+S_OVRN      EQU        BITD2                    ;DATA OVERRUN IF SET
+S_RCVF      EQU        BITD3                    ;RECEIVE REGISTER FULL IF SET -CLEARED BY READ DATA
+S_WRTE      EQU        BITD4                    ;WRITE REGISTER EMPTY IF SET
+S_DCD       EQU        BITD5                    ;DATA CARRY DETECT IF LO ---WIRED LOW
+S_DSR       EQU        BITD6                    ;DATA SET READY IF LOW --- WIRED LOW
+S_IRQ       EQU        BITD7                    ;INTERRUPT REQUEST IF SET
+;                                     S_RCVF EQUIVALENT TO RCVBF
+;                                     S_WRTE EQUIVALENT TO XMITBE
+;
+; UART status registe masks
+;
+S_ERRBits   EQU        $07                      ;Parity, Framing, and Overrun
+;
+;   UART COMMAND REGISTER
+;                      NOTE:cannot or members of same section together
+;
+CM_DISP     EQU        0                        ;DISABLE PARITY
+CM_OPBT     EQU        $20                      ;ODD PARITY BOTH XMIT AND RCV
+CM_EPBT     EQU        $60                      ;EVEN PARITY BOTH XMIT AND RECEIVE
+CM_MPBD     EQU        $A0                      ;MARK PARITY BIT UPON XMIT -PARITY CK DISABLED
+CM_SPBD     EQU        $E0                      ;SPACE PARITY BIT ON XMIT - PARITY CK DISABLED
+;--------------------------------------
+CM_ECHO     EQU        $10                      ;IF SET-ECHO MODE FOR RECEIVER
+;--------------------------------------
+CM_DTRL     EQU        $1                       ;ENABLE RCVR/XMITRR IF SET DTR BAR=LOW
+;--------------------------------------
+CM_IRQD     EQU        $2                       ;DISABLE INTERRUPTS IF SET --- NOTE CORVUS CUTEY
+                                                ;  THIS IS ENABLED FROM STATUS BIT 3, NOT BIT 0
+                                                ;  AS IS INDICATED IN SYNERTEK LITERATURE
+;--------------------------------------
+CM_TDHI     EQU        0                        ;XMIT DISABLED RTS BAR HI
+CM_TELO     EQU        $4                       ;XMIT ENABLED RTS BAR LO
+CM_TDLO     EQU        $8                       ;XMIT DISABLED RTS BAR LO
+CM_TDBRK    EQU        $C                       ;XMIT DISABLED --XMIT BREAK
+;
+;                      SOME USEFUL MACRO COMMANDS
+;                      FOR THE COMMAND REGISTER
+TURNOFF     EQU        CM_IRQD
+XMITENB     EQU        CM_TELO
+XMITDIS     EQU        CM_TDLO
+CMDRC       EQU        CM_DTRL+CM_TDLO          ;NO XMIT INT, RCV INT,ENAB DTR, NO PARITY
+CMDRWC      EQU        CM_DTRL+CM_TELO          ;SAME AS CMDRC XCEPT XMIT INTERRUPTS ENABLED ALSO
+;
+;--------------------------------------
+;
+CLRD3D2     EQU        $F3                       ;CLEAR BITS D3 & D2 A MASK
+;
+;=================================================================
+;
+;    UART CONTROL REGISTER EQUATES
+;
+;           NOTE: Baud is lower 4 bits of control word--see BAUDCNV table below
+;
+CR_STPB     EQU        $80                      ;IF 0 THEN = 1 STOP BIT
+                                                ;  IF SET AS INDICATED = 2 STOP BITS IF NO PARITY
+                                                ;                      =1 STOP BIT IF 8 BIT CHAR + PARITY
+                                                ;                      =1.5 STOP BITS IF 5BIT WORD NO PARITY
+;--------------------------------------
+CR_WRDL8    EQU        0                        ;8 BITS WORD LENGTH
+CR_WRDL7    EQU        $20                      ;7 BIT WORD LENGTH
+CR_WRDL6    EQU        $40                      ; 6 ETC
+CR_WRDL5    EQU        $60                      ; 5 ETC.
+;--------------------------------------
+CR_EXTCLK   EQU        0                        ;EXTERNAL RECEIVE CLOCK
+CR_BDCLK    EQU        $10                      ;BAUD RATE GEN FOR CLOCK
+;--------------------------------------
+;
+; UART CONTROL REGISTER CONSTANTS FOR UART SETUP
+;
+CTLRC       EQU        CR_BDCLK+CR_WRDL8         ;1 STOP BIT,8BIT WORD LENGTH,BAUD RATE GENERATOR
+
+; ASCII Control characters for printer control
+;
+XON         EQU        $11                       ;CAN XMIT (CTL-Q)
+XOFF        EQU        $13                       ;STOP XMIT (CTL-S)
+ETX         EQU        $03                       ;READY FOR MORE? (CTL-C)
+ENQ         EQU        $05                       ;READY FOR MORE? (CTL-E)
+ACK         EQU        $06                       ;YES, I'M READY (CTL-F)
+NULL        EQU        $00                       ;NULL CHARACTER-DO NOTHING
+CR          EQU        $0D                       ;CARRIAGE RETURN
+LF          EQU        $0A                       ;LINE FEED
+ESC         EQU        $1B                       ;Escape *4/11/83 kb*
+;
+; escape sequence control       *4/11/83 kb*
+;
+EscSeqLen   EQU         10                       ;Max. number of chars in Escape Seq
+;
+; Maximum Parameter values for Unitstatus Set table entry functions
+;
+MAXBAUD     EQU        6                         ;FOR SET BAUD RATE
+MAXPRTY     EQU        4                         ;FOR SET PARITY
+MAXWRDS     EQU        1                         ;FOR SET WORD SIZE
+MAXDTCM     EQU        1                         ;FOR SET DATACOM
+MAXHNDS     EQU        9                         ;FOR SET HANDSHAKE TYPE
+MAXWHI      EQU        133                      ;HI WATER WRITE MAX # CHARS
+MAXWLO      EQU        80                       ;LO WATER WRITE MAX # CHARS
+MAXRHI      EQU        133                      ;HI WATER READ #CHARS MAX
+MAXRLO      EQU        80                       ;LO WATER READ #CHARS MAX
+;
+; error codes (IORESULT)
+;
+INVCMD      EQU        IOEioreq                  ;invalid cmd-(invalid I/O request)
+INVTBLID    EQU        IOEtblid                  ;invalid table id
+INVPRM      EQU        IOEuiopm                  ;invalid parameter
+INVFNC      EQU        IOEfnccd                  ;invalid function code
+;
+; Miscellaneous definitions
+;
+TRUE        EQU        1                         ; Pascal true boolean value
+ON          EQU        1                         ;LISTING CONTROL - START LISTING
+OFF         EQU        0                         ;LISTING CONTROL - STOP LISTING
+HILOMSK     EQU        $F0                       ;MASK OFF WATER MARKS -THRO THEM AWAY

@@ -1,0 +1,59 @@
+{$S suspend}
+{
+.PG
+}
+procedure CallTask;
+var ArgV: array [0..0] of longint;
+    iost: integer;
+    HeapMark: ^longint;
+{
+.PG
+}
+function SetUpCallWin: boolean;
+var iost, i: integer;
+begin
+   FlushNewTxt;
+   if memavail<50000 then begin
+      TellUsr( Msg(MGGENL,13) );
+      SetUpCallWin := false;
+   end else begin
+      SetUpCallWin := true;
+      BkGrndOK := false;
+      If Not ProgFlg Then If not WkSpClose then
+         Warn( Msg(MGWKSP,86) );
+      mark( HeapMark );
+   end;
+end;
+
+{
+.PG
+}
+procedure SetUpSuspWin;
+var iost: integer;
+    Dum: boolean;
+begin
+   Release( HeapMark );
+   If Not ProgFlg Then If not WkSpOpen( WkSpNam ) then
+      Warn( Msg(MGWKSP,32));
+   BkGrndOK := true;
+
+   if not PrintEnable then begin
+      Dum := unitbusy(6);
+      PrintEnable := ioresult=0;
+      if PrintEnable then TellUsr( Msg(MGPRNT,51) );
+   end;
+   LoadLabels( Menu1Frame );
+   ResetCmdKey;
+end;
+
+begin
+   if SetUpCallWin then begin
+      ReleaseMsgs;                     { eAFreee@ eAupe@ eAae@ eAlote@ eAofe@ eAdatae@ eAspacee@ }
+      KeepCnt := 0;                    { eANoe@ eAdictionarye@ eAstuffe@ eAlefte@ eAone@ eAthee@ eAheap!e@ }
+      iost := call( '!CC.ISYS', input, output, ArgV, 0 );
+      InitMessages('WPSYSMSG');        { eARetreivee@ eAthee@ eAmessagese@ }
+      SetUpSuspWin;
+   end;
+   Cmd := KTASK;
+   Key := chr(TIDEdit);
+end;

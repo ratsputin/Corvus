@@ -1,0 +1,454 @@
+unit ProtoDispat;
+
+{**********************************************************}
+{                                                          }
+{ Development program for Protocol Dispatcher.             }
+{ file : prtcldsp.text                                     }
+{ date : 18-August-1983  kb                                }
+{                                                          }
+{ PROBLEMS :                                               }
+{   1) What to do if setup recv fails?  Especially in      }
+{      interrupt routine.                                  }
+{   2) What to do if get dequeue error?                    }
+{   3) Do I need User Control data in result vector?       }
+{   4) Need to disable/enable level 3 ints when changing   }
+{      entries in table.                                   }
+{   5) Instead of having a max buffer size based on        }
+{      protocols max use dispatchers max buffer size until }
+{      can dynamically allocate buffers.                   }
+{   6) What to do if end recv fails????.  could just be    }
+{      inuse of curcmd entry??????                         }
+{                                                          }
+{**********************************************************}
+Interface
+
+Uses
+    {$U /CCOS/OS.GLOBALS} Globals,
+    {$U       NETGLOBALS} NetGlobals;
+
+Var
+    IOerror: Integer;        {temp for development}
+    TRCsave: Byte;           {temp for development}
+
+{Functions and Procedures}
+
+{direct user call}
+function PDuser(ScktNmbr: TCsockets;   {socket number}
+                FncCode,               {function code}
+                PID,                   {protocol id  }
+                MaxBfSz : Integer;     {max buffer size}
+                Address,               {pointer to int rtn or buffer}
+                UserData: Longint)     {user specified data}
+                                  : Integer;  {returns IOresult}
+
+{initialization}
+procedure PDinit;
+{$P}
+Implementation
+
+Const
+    PDtblLOC   = $1B0;   {save of PDControl address}
+
+    {68000 status register values}
+    SRNoOmni  =  $2300;  {disable omninet interrupts}
+    SRAll     =  $2000;  {enable all interrrupts}
+
+Var
+    PDControl: PDCtlBlk;
+    PD80Buffers,PD90Buffers: PDBufList;
+
+{Procedures and Functions}
+
+    procedure getA4A5(var A4,A5: Longint); external;
+
+    procedure CallUserInt(var PIDent: PIDentry; var BCtl: BCentry); external;
+
+    function DisInts(SR: Integer) : Integer; external;
+
+    procedure EnbInts(SR: Integer); external;
+
+    function GetPDtable : pPDCtlBlk;
+
+    Var
+       ppPDtbl: ^pPDCtlBlk;
+
+    begin
+    {get PD table pointer from SysCom}
+    ppPDtbl := pointer(PDtblLOC);
+    GetPDtable := ppPDtbl^;
+    end; {GetPDtable}
+{$P}
+    procedure FillTCmd(var TC   : PDtrnpCMD;
+                           pRslt: pPDresult;
+                           pData: pPD1Buffer;
+                           DLen : Integer;
+                           cmd  : Byte;
+                           sckt : TCsockets);
+    begin
+    pRslt^.ResultCode := TRCwait;
+    with TC do
+      begin
+      p.RP := pRslt;
+      p.DP := pData;
+      p.LN := DLen;
+      p.HL := 0;     {$80 and $90 have no user control}
+      a[crOPCD] := cmd;
+      case sckt of
+        Sckt80: a[crSOCK] := TC80;
+        Sckt90: a[crSOCK] := TC90;
+        ScktA0: a[crSOCK] := TCA0;
+        ScktB0: a[crSOCK] := TCB0;
+        end;{case}
+      end; {with}
+    end;  {FillTCmd}
+
+    procedure FillTPBlk(var TPB : PDtranpPB;
+                        pTCmd   : pPDtrnpCMD;
+                        pRtn    : pBytes);
+    begin
+    with TPB do
+      begin
+      pComd :=  pTCmd;
+      pProc :=  pRtn;
+      pUser :=  ord4(GetPDtable);
+      end; {with}
+    end;  {FillTPBlk}
+{$P}
+    function PDrecvCMD(pCtlBlk: pPDBufCtl; Index: Integer;
+                       sckt: TCsockets) : Integer;
+    Var TCcmdBlk : PDtrnpCMD;
+        TDparmBlk: PDtranpPB;
+
+    begin
+    {setup transporter command block}
+    with pCtlBlk^ do
+      FillTCmd(TCcmdBlk, @BC[Index].Result, BC[Index].BufferAdr,
+                  MaxBufSize, TCrcvOP, sckt);
+
+    {setup driver parameter block}
+    FillTPBlk(TDparmblk, @TCcmdBlk, pCtlblk^.IntrptRtn);
+
+    UnitStatus( 33,TDparmblk,(ord(sckt)+1) ); {call driver}
+    PDrecvCMD := IOresult;
+    end; {PDrecvCMD}
+
+
+    function PDendRecv(pCtlBlk: pPDBufCtl; Index: Integer;
+                       sckt: TCsockets) : Integer;
+    Var TCcmdBlk : PDtrnpCMD;
+        TDparmBlk: PDtranpPB;
+        ior,i: Integer;
+
+    begin
+    {setup transporter command block}
+    with pCtlBlk^ do
+      FillTCmd(TCcmdBlk, @BC[Index].Result, NIL, 0, TCendOP, sckt);
+      {has no data buffer or buffer size}
+
+    {setup driver parameter block - no interrupt procedure}
+    FillTPBlk(TDparmblk, @TCcmdBlk, NIL);
+
+    {call driver to clear socket and end receive}
+    UnitStatus( 33,TDparmblk,(128 + (ord(sckt) + 1)) ); ior := IOresult;
+
+    if (ior <> 0) then
+       with pCtlBlk^.BC[Index].Result do
+         begin
+{????}   i := 40000; {time out counter}
+         while ((ResultCode = TRCwait) AND (i>0)) do i := i - 1;
+         if (ResultCode = TRCwait) then ior := 22; {IOEtimot}
+         end; {with}
+
+    PDendRecv := ior;
+    end; {PDendRecv}
+{$P}
+    procedure PDsetRecv(pPDCtl: pPDBufCtl; sckt: TCsockets);
+    Var i,ior,SR: Integer;
+        Found: Boolean;
+
+    begin
+    SR := DisInts(SRNoOmni); {turn of net ints}
+    with pPDCtl^ do
+       begin
+       {get another buffer}
+       i := 1; Found := FALSE;
+       while ( (i <= PDmaxBuffs) AND (NOT Found) ) do
+          if (NOT BC[i].InUse) then
+             Found := TRUE
+          else
+             i := i + 1;
+
+       {if no buffer then set cur buf index = 0 then return}
+       if NOT Found then
+          begin
+          CurrentBuff := 0;
+          EnbInts(SR);
+          exit(PDsetRecv);
+          end
+       else BC[i].InUse := TRUE;
+       end; {with}
+
+    EnbInts(SR);
+    ior := PDrecvCMD(pPDCtl,i,sckt); {call transporter driver to setup rcv}
+
+    with pPDCtl^.BC[i].Result do
+      {if queued or (ok and result = $FE) then exit}
+      if (ior = 30) OR ((ResultCode = TRCrcvset) AND (ior = 0)) then
+         IOerror := ior
+      else {error}
+         {if sckt inuse do clear entry w/ endreceive then setup rcv}
+         if (ior = 52) OR (ResultCode = TRCinuse) then
+            begin
+{????}      while (PDendRecv(pPDCtl,i,sckt) <> 0) do;
+            ior := PDrecvCMD(pPDCtl,i,sckt)
+            end
+         else
+            begin
+{????}      IOerror := ior; {if other error???}
+{????}      TRCsave := ResultCode;
+            end;
+    end; {PDsetRecv}
+{$P}
+    procedure IntRoutine(Dque, Error: Integer;   {dequeue flag & err code}
+                         BufferPtr: pPD1Buffer;  {data buffer}
+                         CtlBuf: pPDCtlBlk;      {user data= cntrl blk}
+                         pPDBC: pPDBufCtl;       {ptr to BufCtl}
+                         Sckt: TCsockets);       {socket number}
+
+    Var  i,curbuff: Integer;
+         Found: Boolean;
+
+    begin
+    with CtlBuf^ do
+      if Dque = 0 then
+         begin
+         {current buf ctl entry is indexed by CurrentBuff field}
+         curbuff := pPDBC^.CurrentBuff;
+         PDsetRecv(pPDBC,Sckt); {setup another receive on socket $80}
+
+         {get PID table entry}
+         i := 1; Found := FALSE;
+         while ( (i <= MAXPIDentries) AND (NOT Found) ) do
+           with PIDtable[i] do
+             if (ProtoID = BufferPtr^[1]) AND (SocketNum = Sckt) then
+                Found := TRUE
+             else
+                i := i + 1;
+
+         {if is a known protocol then call proto mgr else ignore}
+         if (Found) then
+            CallUserInt( PIDtable[i],pPDBC^.BC[ curbuff ] );
+
+         end
+      else { if bad then reset up command. }
+           { unless is bad transporter ????}
+         if Error <> 0 then PDsetRecv(pPDBC,Sckt);
+    end; {IntRoutine}
+
+    procedure PD90intrpt(Dque, Error: Integer;   {dequeue flag & err code}
+                         RsltPtr: pPDresult;     {result array}
+                         BufferPtr: pPD1Buffer;  {data buffer}
+                         CtlBuf: pPDCtlBlk);     {user data= cntrl blk}
+
+    begin
+    IntRoutine(Dque, Error, BufferPtr, CtlBuf, @CtlBuf^.PD90Ctl, Sckt90);
+    end; {PD90intrpt}
+
+    procedure PD80intrpt(Dque, Error: Integer;   {dequeue flag & err code}
+                         RsltPtr: pPDresult;     {result array}
+                         BufferPtr: pPD1Buffer;  {data buffer}
+                         CtlBuf: pPDCtlBlk);     {user data= cntrl blk}
+
+    begin
+    IntRoutine(Dque, Error, BufferPtr, CtlBuf, @CtlBuf^.PD80Ctl, Sckt80);
+    end; {PD80intrpt}
+{$P}
+    function PDuser;{(ScktNmbr: TCsockets;
+                      FncCode, PID, MaxBfSz: Integer;
+                      Address, UserData: Longint) : Integer;}
+
+    Var  pPDCB: pPDCtlBlk;
+         pBufCtl: pPDBufCtl;
+         A4,A5: Longint;
+         ior,BufSize: Integer;
+
+      procedure Deactivate;  {remove and deactivate entry}
+      { Uses global variables: pPDCB and pBufCtl }
+
+      Var count,i: Integer;
+
+      begin
+      { remove PID from PIDtable and count active entries}
+      count := 0;
+      for i := 1 to MAXPIDentries do
+        with pPDCB^.PIDtable[i] do
+          if Active then
+             begin
+             if (ProtoID = PID) AND (ScktNmbr = SocketNum) then
+                Active := FALSE
+             else
+                count := count + 1;
+             end;
+
+      { if was last one then end recv }
+      if (count = 0) then
+         with pBufCtl^ do
+           begin
+{????}     while (PDendRecv(pBufCtl,CurrentBuff,ScktNmbr) <> 0) do;
+           MaxBufSize := 0;  {to restart dispatcher new max size >}
+           CurrentBuff := 0; {and no buffer setup. curbuf = 0     }
+           end;
+      end; {Deactivate}
+{$P}
+      procedure Activate;    {create and activate new entry}
+      { Uses global variables: pPDCB and pBufCtl }
+
+      Var i,SR: Integer;
+          Found: Boolean;
+
+      begin
+      {if pmgr buf size is bigger than buffers then error}
+      if (MaxBfSz > BufSize) then ior := 69 {IOEbszerr}
+      else
+        begin
+        {find free PIDtable entry}
+        i := 1;  Found := FALSE;
+        while (i <= MAXPIDentries) AND (NOT Found) do
+          if (pPDCB^.PIDtable[i].Active) then i := i + 1
+                                         else Found := TRUE;
+
+        {exit if no entry, give error, else setup entry}
+        if Found then
+           begin
+           with pPDCB^.PIDtable[i] do
+             begin
+             SocketNum  := ScktNmbr;
+             ProtoID    := PID;
+             MaxBufSize := MaxBfSz;
+             PMgrData   := UserData;
+             PMgrRcvRtn := Address;
+             RegA4      := A4;
+             RegA5      := A5;
+             end; {with}
+
+           {if this protocol max buffer size is > current}
+           {max buffer size then reset up receive with   }
+           {this buffer size as new max.                 }
+           with pBufCtl^ do
+             if (MaxBfSz > MaxBufSize) then
+                begin
+                SR := DisInts(SRNoOmni); {turn of net ints}
+                if CurrentBuff <> 0 then {else no rcv setup}
+                   begin
+{????}             while (PDendRecv(pBufCtl,CurrentBuff,ScktNmbr) <> 0) do;
+                   BC[CurrentBuff].InUse := FALSE;
+                   end;
+                EnbInts(SR);
+                MaxBufSize := MaxBfSz;
+                PDsetRecv(pBufCtl,ScktNmbr);
+                end;
+
+           pPDCB^.PIDtable[i].Active := TRUE; {last thing is make it active}
+           end {Found then}
+        else ior := 51; {IOEtblfl}
+        end; {else}
+      end; {Activate}
+{$P}
+      procedure RestorBuf;
+      { Uses global variables: pPDCB and pBufCtl }
+
+      Var count,i: Integer;
+          pPDbuf: pPD1Buffer;
+
+      begin
+      pPDbuf := pointer(Address);
+      for i := 1 to PDmaxBuffs do
+         with pBufCtl^.BC[i] do
+           if (pPDbuf = BufferAdr) then InUse := FALSE;
+
+      {count active entries}
+      count := 0;
+      for i := 1 to MAXPIDentries do
+        if pPDCB^.PIDtable[i].Active then count := count + 1;
+
+      {check if need to do setup receive because}
+      {ran out of buffers in interrupt routine. }
+      if (pBufCtl^.CurrentBuff = 0) AND (count <> 0) then
+         PDsetRecv(pBufCtl,ScktNmbr);
+      end;
+
+    begin {PDuser}
+      ior := 0;  {assume no error}
+      getA4A5(A4,A5);        {save user's A4 and A5 registers}
+      pPDCB := GetPDtable;   {get ptr to PD table}
+      case ScktNmbr of
+        Sckt80: begin
+                BufSize := PD80BfSz;
+                pBufCtl := @pPDCB^.PD80Ctl;
+                end;
+        Sckt90: begin
+                BufSize := PD90BfSz;
+                pBufCtl := @pPDCB^.PD90Ctl;
+                end;
+        ScktA0,
+        ScktB0: begin
+                PDuser := 3; {IOEioreq}
+                exit(PDuser);
+                end;
+        end; {case}
+
+      Case FncCode of
+         PDFCactv: Activate;
+         PDFCdact: Deactivate;
+         PDFCrstr: RestorBuf;
+         Otherwise: ior := 56; {IOEfnccd}
+         end;
+      PDuser := ior;
+    end; {PDuser}
+{$P}
+    procedure PDinit;
+    Var  z: ^pBytes;
+         i: Integer;
+
+    begin
+    {save address of table in SysCom}
+    z := pointer(PDtblLOC); z^ := @PDControl;
+
+    {init PID table to NO active entries}
+    for i := 1 to MAXPIDentries do
+        PDControl.PIDtable[i].Active := FALSE;
+
+    {init the buffer control block for socket $80}
+    with PDControl.PD80Ctl do
+       begin
+       IntrptRtn   := @PD80intrpt;
+       MaxBufSize  := 0;
+       CurrentBuff := 0;
+       for i := 1 to PDmaxBuffs do
+         with BC[i] do
+           begin
+           BufferAdr   := @PD80Buffers[i];
+           BufAttached := TRUE;
+           InUse       := FALSE;
+           end; {with BC}
+       end; {with PD80Ctl}
+
+    {init the buffer control block for socket $90}
+    with PDControl.PD90Ctl do
+       begin
+       IntrptRtn   := @PD90intrpt;
+       MaxBufSize  := 0;
+       CurrentBuff := 0;
+       for i := 1 to PDmaxBuffs do
+         with BC[i] do
+           begin
+           BufferAdr   := @PD90Buffers[i];
+           BufAttached := TRUE;
+           InUse       := FALSE;
+           end; {with BC}
+       end; {with PD90Ctl}
+
+    end; {PDinit}
+
+
+end.  {ProtoDispat}

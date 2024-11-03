@@ -1,0 +1,10 @@
+clrwnd
+;
+; LASERLIST -- Spool program listing to HP LaserJet in landscape orientation
+;
+laser
+spool p=laser e=no .laser.text
+delfil -q .laser.text
+;
+; Finished ....
+;

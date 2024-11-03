@@ -1,0 +1,759 @@
+*****************************************
+* C O R V U S   C O N F I D E N T I A L *
+*****************************************
+
+Corvus IBM/PC DOS 1.1 Technical Note
+------------------------------------
+
+Date:    8 April 1983
+Author:  Donna Ono
+
+The purpose of this document is to provide Engineering and
+Technical Support with a detailed description of Corvus
+MSDOS volumes and how they are mounted.  It includes a
+description of the Corvus BIOS information initialized by
+the boot code and maintained by the Corvus Mount Manager
+Utility.
+
+The information contained in this document is organized as
+follows.
+
+ page  title
+ ____  _____
+
+    2  Corvus MSDOS Volume Layout
+
+  3-4  Corvus MSDOS Volume Configuration
+
+  5-6  Calculating the MSDOS Directory Size
+         and FAT Size
+
+    7  Creating A Corvus MSDOS Volume
+
+    8  Illustration of the Corvus MSDOS Volume Format
+
+    9  Typical Volume Configurations
+
+   10  Sample Calculation of FAT Memory Requirement
+
+   11  Volume Information Maintained by the
+         Corvus Mount Manager Utility
+
+   12  Volume Mount Procedure
+
+13-17  The Corvus BIOS Tables
+{$PAGE+}
+                          - 2 -
+
+Corvus MSDOS Volume Layout
+__________________________
+
+MSDOS volumes on a Corvus drive consist of five areas:
+
+  1. Corvus MSDOS volume header
+  2. reserved sectors
+  3. two copies of the File Allocation Table (FAT)
+  4. file directory
+  5. data area for files
+
+A standard MSDOS floppy diskette contains areas 2 - 5,
+with area 2 being one sector containing the boot record
+written by the MSDOS FORMAT command.  See Appendix C of
+the IBM DOS 1.1 Disk Operating System for a description
+of the DOS DISKETTE ALLOCATION.
+
+* The VOLUME HEADER consists of four 512-byte physical
+  disk sectors.  The first two sectors are reserved for
+  use by UCSD.  The third sector contains a UCSD-style
+  directory so that MSDOS volumes can be recognized
+  as allocated (but not mountable) by the Constellation II
+  drive management utilities.  The fourth sector contains
+  the MSDOS volume descriptor used by the Corvus Mount
+  Manager program.  It has the following format:
+
+    bps:        DW      512     ; bytes per sector
+    spc:        DW      cluster ; sectors per cluster
+    rs:         DW      reserved; reserved sectors
+    FATcount:   DW      2       ; number of FAT copies
+    DIRmax:     DW      DirEnts ; max directory entries
+    spv:        DW      VolLen-4; sectors per volume - 4
+    FATsectors: DW      FATsize ; sectors per FAT
+
+  This same information is stored in the Corvus BIOS, but in
+  a slightly different format which is shown on page 9 and
+  again on page 17.  The format of the volume descriptor
+  shown above evolved from the format in the Corvus BIOS,
+  with modifications made based upon IBM Pascal packing
+  constraints and user interface requirements.
+
+* Two copies of the FILE ALLOCATION TABLE (FAT) are kept
+  on disk and one copy is maintained in memory.  The
+  minimum FAT size is one sector.  Since each FAT entry
+  is 12 bits (1.5 bytes) long, the FAT can address at most
+  4096 allocation units (clusters) of data.  Thus, the
+  maximum FAT size is 12 sectors, or 6K bytes. Appendix C
+  C of the IBM DOS 1.1 Disk Operating System contains a
+  description of the DOS FILE ALLOCATION TABLE.
+
+{$PAGE+}
+                          - 3 -
+
+Corvus MSDOS Volume Configuration
+_________________________________
+
+An MSDOS volume configuration is a function of four
+volume attributes:
+
+  1. reserved sectors
+  2. cluster size
+  3. volume length
+  4. directory entries
+
+* RESERVED SECTORS is the number of 512-byte physical
+  disk sectors reserved at the start of the volume.  On
+  a standard IBM floppy diskette, 1 reserved sector is
+  used to hold boot code.  For an MSDOS volume on a
+  Corvus drive, there is no need to declare any reserved
+  sectors except to create a floppy image on a Corvus
+  drive.
+
+* CLUSTER SIZE is the number of 512-byte physical disk
+  sectors in a file allocation unit.  This is an 8-bit
+  number which must be a power of 2.  This limits it to
+  the values 1, 2, 4, 8, 16, 32, 64, and 128.  The FAT
+  will contain one 12-bit entry for each cluster in the
+  volume.  The Constellation II Volume Manager utility
+  supplies default cluster sizes for MSDOS volumes.  The
+  value supplied depends upon the volume length.  For
+  volumes under 2000 sectors in length, a cluster size
+  of 4 sectors is supplied.  Volumes longer than 2000
+  sectors are supplied with a default cluster size of
+  16.  All other volume are supplied with a default
+  cluster size of 8 sectors.
+
+  A relatively small cluster size saves disk space in
+  that each file is allocated disk space with little
+  waste in the last cluster; there are between 0 and
+  (cluster size - 1) unused sectors at the end of the
+  data area.  With larger volumes, however, a small
+  cluster size results in a large FAT which requires
+  that much more disk and memory space.  Conversely, a
+  relatively large cluster size requires less disk and
+  memory space for the two copies of the FAT while
+  allocating file space less efficiently.
+
+  It follows that a volume containing many small files
+  should have a small cluster size and, conversely, a
+  volume containing a few large files should have a
+  large cluster size.  In general, a good choice is to
+  make the cluster size approximately equal to the
+  square root of the volume length in sectors (to the
+  nearest power of two).
+{$PAGE+}
+                          - 4 -
+
+* VOLUME LENGTH is specified in terms of 512-byte
+  physical disk sectors plus four 512-byte physical
+  sectors for the volume header.  Because this is a
+  16-bit value in the IBM BIOS, it must be less than
+  65536.  The maximum volume length allowed by MSDOS,
+  65535 sectors, would result in an MSDOS volume length
+  of 65531 512-byte sectors (or 33,551,872 bytes, just
+  under 32 MB).  Currently the Constellation II Volume
+  Manager utility limits this number to 32767 sectors,
+  an effective volume length of 32763 sectors (or
+  16,774,656 bytes, just under 16 MB).
+
+* DIRECTORY ENTRIES is the maximum number of directory
+  entries.  This number must be less than 4080.  For
+  maximum efficiency, it should be a multiple of 16, the
+  number of 32-byte directory entries that can fit in a
+  512-byte physical disk sector.  If it is not a multiple
+  of 16, there will be unused space for between 1 and 15
+  directory entries at the end of the directory.
+
+It is important to note that the space actually available
+to a volume as data area is at most
+
+  Volume Length - 4 sectors for Corvus MSDOS
+                - Reserved Sectors
+                - 2 * (FAT Length)
+                - Directory Length .
+
+This figure is rounded down to the nearest multiple of
+the Cluster Size.  The formula used to calculate this
+value is given in the next section.
+{$PAGE+}
+                          - 5 -
+
+Calculating the MSDOS Directory Size and FAT Size
+_________________________________________________
+
+The number of 512-byte physical disk sectors required
+for the MSDOS file directory is calculated as follows:
+
+               X directory entries    32 bytes     disk sector
+  DIRsectors = -------------------.---------------.-----------
+                        1          directory entry  512 bytes
+               X
+             = -- disk sectors
+               16
+
+  If X is not a whole multiple of 16, round up.
+
+The FAT has one 12-bit (1.5-byte) entry per allocation
+unit in the data area.  The size of the FAT depends on
+the size of the data area, which in turn depends on the
+size of the FAT.  The number of sectors required for a
+single copy of the FAT is calculated iteratively as
+follows:
+
+  1.  Start by assuming a FAT size of one sector:
+
+        FATsectors := 1
+
+  2.  Compute the size of the data area (in sectors) based
+      on the current estimate of the FAT size:
+
+                      volume size
+        DATAsectors =     in      - 4 sector offset
+                        sectors   - number of reserved sectors
+                                  - (2 * FATsectors)
+                                  - DIRsectors
+
+  3.  Translate that value to allocation units (cluster
+      size), then add 2 to allow for the 2 FAT entries
+      reserved by the standard DOS:
+
+                        DATAsectors
+        DATAclusters := ------------
+                        cluster size
+
+        If DATAsectors is not a whole multiple of the
+        cluster size, round up.
+
+        DATAclusters := DATAclusters + 2
+{$PAGE+}
+                          - 6 -
+
+  4.  Using the current estimate of the size of the data
+      area in allocation units, recompute the FAT size in
+      bytes:
+
+                                   DATAclusters
+        FATbytes := DATAclusters + ------------
+                                        2
+
+        If DATAclusters is not an even number, round up.
+
+  5.  Translate that value to sectors:
+
+                      FATbytes
+        FATsectors := --------
+                        512
+
+        If FATbytes is not a whole multiple of 512, round up.
+
+  6.  If the current estimate of FATsectors is not the same
+      as the previous estimate, repeat steps 2 through 5.
+
+  7.  Note that two copies of the FAT are kept on disk, so
+      the FAT area on disk is 2 * FATsectors.
+{$PAGE+}
+                          - 7 -
+
+Creating A Corvus MSDOS Volume
+------------------------------
+
+To create an MSDOS volume, use the Constellation II Volume
+Manager Utility, specifying the desired volume attributes--
+volume name, starting location, length, and volume type
+MSDOS.  The program asks the user to confirm these attributes
+before creating the volume with global read/write access and
+giving user 1 (SMGR) access to the volume.  Creating the
+volume consists of adding the appropriate DRIVE.VOLUME entry
+to the Constellation II tables and initializing the UCSD
+directory entry in the four-sector Corvus MSDOS volume header.
+
+Next, the program asks the user if the volume needs to be
+initialized.  Unless the user is re-creating the volume over a
+previous MSDOS volume and wants to preserve the directory of
+that old volume, the user's response should be YES.  In that
+case, the user is then asked for the additional MSDOS volume
+attributes-- reserved sectors, cluster size, and directory
+entries.  The program asks the user to confirm these additional
+attributes before writing the MSDOS volume descriptor into the
+volume header, skipping the specified number of reserved
+sectors, writing two copies of the FAT, and initializing the
+MSDOS directory for the specified number of entries.
+{$PAGE+}
+                          - 8 -
+
+Illustration of the Corvus MSDOS Volume Format
+______________________________________________
+
+                 |                       |
+              ***|***********************|*** start of volume header ****
+ sector offset 0 |                       |                                *
+                 |-  reserved for UCSD  -|                                 *
+               1 |                       |                                 *
+                 |-----------------------|                                 *
+               2 |    UCSD Directory     |                                 *
+                 |-----------------------|                                 *
+               3 |MSDOS volume descriptor|                                 *
+                 |***********************|*** start of MSDOS volume info ***
+               4 |   reserved sectors    |                                 *
+                 | (may be nonexistent)  |                                 *
+                 |***********************|                                 *
+          4 + rs |                       |                                 *
+                 |        2 FATs         |                                 *
+                 |   (2 to 24 sectors)   |                                 *
+                 |                       |                                 *
+4 + rs           |***********************|                                 *
+  + 2*FATsectors |                       |<-- the last 1 to 15 directory   *
+                 |   MSDOS Directory     |    entries are wasted if DIRmax *
+                 |  (1 to 255 sectors)   |    is not a multiple of 16      ***** Corvus MSDOS
+4 + rs           |                       |                                 *     Volume Format
+  + 2*FATsectors |***********************|*** start of MSDOS data area *****
+  + DIRsectors   |      one cluster      |<-- data area is allocated in    *
+                 |-----------------------|    clusters of 1, 2, 4, 8, 16,  *
+                 |      one cluster      |    32, 64, or 128 sectors       *
+                 |-----------------------|                                 *
+                 |                       |                                 *
+                 <                       >                                 *
+                 >    (many clusters)    <   +-- the last 1 to (spc - 1)   *
+                 <                       >   |   sectors are unusable      *
+                 |                       |   |   unless                    *
+                 |-----------------------|   |                             *
+                 |      one cluster      |   |   VolLen - 4                *
+                 |-----------------------|   |          - rs               *
+                 |      one cluster      |   |          - 2*FATsectors     *
+                 |-----------------------|   |          - DIRsectors       *
+                 |    0 to (spc - 1)     |<--+   is a multiple of spc      *
+                 |   unusable sectors    |                                *
+              ***|***********************|*** end of MSDOS volume *******
+          VolLen |                       |
+{$PAGE+}
+                          - 9 -
+
+Typical Volume Configurations
+_____________________________
+
+Here are some typical volume configurations defined in the
+format in which they are stored in the Corvus BIOS.
+
+* MSDOS Volume Configuration of a 5 1/4" Floppy Diskette,
+  Single Sided, Double Density, Soft Sectored,
+  512-bytes per sector
+
+    bps:        DW      512     ; 512 bytes/sector
+    spc:        DB      1       ; 1 sector/cluster
+    rs:         DW      1       ; 1 reserved sector for boot code
+    FATcount:   DB      2       ; 2 FATs, one for backup
+    DIRmax:     DW      64      ; 64 directory entries = 4 sectors
+    spv:        Dw      320     ; 40 tracks/diskette, 8 sectors/track
+
+* MSDOS Volume Configuration of a 5 1/4" Floppy Diskette,
+  Double Sided, Double Density, Soft Sectored,
+  512-bytes per sector
+
+    bps:        DW      512     ; 512 bytes/sector
+    spc:        DB      2       ; 2 sectors/cluster
+    rs:         DW      1       ; 1 reserved sector for boot code
+    FATcount:   DB      2       ; 2 FATs, one for backup
+    DIRmax:     DW      112     ; 112 directory entries = 7 sectors
+    spv:        Dw      640     ; 80 tracks/diskette, 8 sectors/track
+
+* Corvus MSDOS Volume Configuration for a volume having
+
+  length:           4096 sectors
+  cluster size:        8 sectors
+  reserved sectors:    0 sectors
+  directory entries: 256 entries (16 sectors)
+
+    bps:        DW      512     ; 512 bytes/sector
+    spc:        DB      8       ; 8 sectors/cluster
+    rs:         DW      0       ; 0 reserved sectors
+    FATcount:   DB      2       ; 2 FATs, one for backup
+    DIRmax:     DW      256     ; 256 directory entries = 16 sectors
+    spv:        DW      4092    ; (exclude 4-sector header)
+
+  Note that the volume descriptor (located in the 4th sector
+  of the volume header) is similar but not identical to the
+  volume configuration.  The spc and FATcount fields are 2
+  bytes long, and there is an additional 2-byte field,
+  FATsector, for storing the size of 1 FAT.
+
+    bps:        DW      512     ; 512 bytes/sector
+    spc:        DW      8       ; 8 sectors/cluster
+    rs:         DW      0       ; 0 reserved sectors
+    FATcount:   DW      2       ; 2 FATs, one for backup
+    DIRmax:     DW      256     ; 256 directory entries = 16 sectors
+    spv:        DW      4092    ; (exclude 4-sector header)
+    FATsectors: DW      2       ; 2 sectors for 1 FAT
+{$PAGE+}
+                         - 10 -
+
+Sample Calculation of FAT Memory Requirement
+____________________________________________
+
+The Corvus MSDOS volume described in the previous example
+incurs a 2-sector (1024-byte) memory overhead for the FAT
+copy maintained by the DOS.  The calculation of the FAT
+size is shown below, using the formulas given on pages 5 - 6
+and the following MSDOS volume attributes:
+
+  4096 sectors length
+     8 sectors per cluster
+     0 reserved sectors
+   256 directory entries
+
+To calculate directory size in sectors,
+
+                     256
+        DIRsectors = --- disk sectors
+                      16
+
+                   = 16 disk sectors.
+
+To calculate FAT size in sectors,
+
+    1)  FATsectors = 1
+
+    2)  DATAsectors = 4096 - 4 - 0 - (2 * 1) - 16 = 4074
+
+                       4074
+        DATAclusters = ----- + 2 = 510 + 2 = 512
+                         8
+
+                         512
+        FATbytes = 512 + --- = 512 + 256 = 768
+                          2
+
+                     768
+        FATsectors = --- = 2
+                     512
+
+    3)  DATAsectors = 4096 - 4 - 0 - (2 * 2) - 16 = 4072
+
+                       4072
+        DATAclusters = ---- + 2 = 509 + 2 = 511
+                         8
+
+                         511
+        FATbytes = 511 + --- = 511 + 256 = 767
+                          2
+
+                     767
+        FATsectors = --- = 2
+                     512
+
+{$PAGE+}
+                         - 11 -
+
+Volume Information Maintained by the Corvus Mount Manager Program
+_________________________________________________________________
+
+The basic purpose of the Mount Manager program is to enable
+the logon user to dynamically mount and unmount accessible
+volumes.  Additionally, mounted volumes which are not write-
+protected by Constellation II may be dynamically protected
+and unprotected by the Mount Manager program.  These changes
+in mount and protection status stay in effect until the
+system is rebooted.
+
+The Corvus MSDOS Mount manager program must maintain mount
+and protection information kept at various locations in
+memory.
+
+* Data read from the Constellation II tables and from the
+  Corvus BIOS tables is used to build a linked list
+  containing the following information about each volume
+  accessible to the logon user.  These records are stored
+  in a linked list by ascending starting block number.
+
+  UAtype = PACKED RECORD   { user access record          }
+    startblk:   AbsBlkNum; { first block of volume     0 }
+    vollen:     AbsBlkNum; { length of volume          4 }
+    volname:    Name;      { decrypted volume name     8 }
+    logunit:    CHAR;      { logical unit number      18 }
+    onlyread:   BOOLEAN;   { access = readonly        19 }
+    UserWP:     BOOLEAN;   { temp write-protection    20 }
+    nxtrcd:     INTEGER;   { index of next record     21 }
+    END;                                            { 23 }
+
+* Data read from the Corvus BIOS tables is also used to
+  build an array containing the following information
+  about each volume mounted for the logon user.  These
+  records are stored in an array ordered by logical unit.
+  Each record contains a logunit field which is indicates
+  whether the unit is available, (permanently) configured
+  as a floppy drive unit, or mounted with a Corvus MSDOS
+  volume.
+
+  MntRcd = PACKED RECORD   { Corvus volume mount status  }
+    logunit:    CHAR;      { logical unit number       0 }
+    CorVolMnt:  BOOLEAN;   { TRUE if Corvus vol mnted  1 }
+    CorVolName: Name;      { decrypted volume name     2 }
+    CorVolAddr: BlkAddr;   { Corvus volume address    12 }
+    CorVolLen:  INTEGER;   { Corvus volume length     18 }
+    onlyread:   BOOLEAN;   { readonly access          20 }
+    END;                                            { 21 }
+
+* The Corvus BIOS tables must also be kept current with
+  the mount and protection status changes specified by
+  the user.  These changes are outlined in the next two
+  sections.
+{$PAGE+}
+                         - 12 -
+
+Volume Mount Procedure
+______________________
+
+When the operator chooses to mount an accessible but
+currently unmounted volume, the Mount Manager program
+prompts for a unit until the operator either enters
+the letter of an available unit which is assigned the
+same volume configuration as the specified volume or
+presses the escape key.  The configuration of the
+specified volume is read directly from the 4th block
+of the volume itself.  The configuration assigned to
+the unit is determined by reading the Corvus BIOS
+tables.
+
+Next, if the volume is not write-protected at the
+system manager level, the operator is given the option
+to change the temporary write-protection status of the
+volume.  This volume write-protection is temporary in
+that, like the volume mounts, it is in effect only until
+the system is rebooted.
+
+This information must be updated in all three of the
+associated memory locations: the Corvus BIOS tables,
+the array of volume mount records, and the linked list
+of volume access records.
+{$PAGE+}
+                         - 13 -
+
+The Corvus BIOS Tables
+----------------------
+
+Here is the Corvus interface to the BIOS tables.  The location
+of CORTAB is returned by the INTEGER function BIOPTR in module
+DRVIOC2.
+                 .
+                 .
+                 .
+;
+;--- Corvus Equates --------------------
+;
+BVERS           EQU     4               ; BIOS version #
+NDRIVE          EQU     12              ; max log units supported
+NDRV            EQU     24              ; max unit-to-volconfig mappings
+XPORTER         EQU     0FFh            ; flat cable xporter #
+BOTSRVR         EQU     0FFh            ; flat cable boot server #
+DATA            EQU     2EEh            ; disk I/O port #
+STAT            EQU     2EFh            ; disk status port #
+DRDY            EQU     001h            ; mask for drive ready bit
+DIFAC           EQU     002h            ; mask for bus direction bit
+RDCOM           EQU     032h            ; 512-byte sector read command code
+WRCOM           EQU     033h            ; 512-byte sector write command code
+SSIZE           EQU     00200h          ; sector size = 512 bytes
+ROMSEG          EQU     0DF00h          ; segment # of boot I/O ROM
+;
+;--- DOS Equates -----------------------
+;
+BIOSSEG         EQU     00060h          ; BIOS segment number
+DOSSEG          EQU     00120h          ; DOS segment number (final)
+LDSSEG          EQU     00140h          ; DOS segment number (initial boot load)
+STACK           EQU     00600h          ; temporary stack locn for init (seg 0)
+CR              EQU     00Dh            ; carriage return
+LF              EQU     00Ah            ; line feed
+;
+;--- Interface Jump Table --------------
+;
+                ORG     0               ; start at segment origin
+                PUT     0               ; hex file at 0 also
+;
+                JMP     INIT            ; initialize system
+                 .
+                 .
+                 .
+{$PAGE+}
+                         - 14 -
+
+;
+;--- Corvus Tables ---------------------
+;
+CORTAB:         DB      'CORTAb'        ; Corvus table identifier
+                DB      BVERS           ; BIOS version #
+                DW      0               ; optional config date
+                DW      DPH             ; -> map of units to vol configs ptrs
+                DW      DPTS            ; -> floppy vol configs
+                DW      DPBASE          ; -> Corvus vol configs
+                DW      OFBAS           ; -> map of Corvus volumes
+                DW      MTTAB           ; -> unit assignments
+                DB      NDRIVE          ; max units supported
+CDRIVE:         DB      4               ; # of units specified at startup
+NFLOP:          DB      0               ; # of floppies (set by boot mount)
+                DB      NDRV            ; max DPH entries
+                DW      SFUNCT          ; -> special function routine tables
+                DW      DVTDVR          ; -> map of units to DPH entries
+PTXPTR:         DB      XPORTER         ; OmniNet boot Xporter #, else %FF
+                DW      USERNAME        ; -> logon user's encrypted name
+                DW      BIOSSEG         ; BIOS segment #
+                DB      BIOLEN          ; BIOS load length in 512-byte sectors
+                DW      DOSNAME;        ; -> DOS/BIOS boot file name
+                DB      BOTSRVR         ; station # of boot server, else %FF
+{$PAGE+}
+                         - 15 -
+
+;
+;--- Start of Corvus Data --------------
+;
+USERNAME:       DB      0,0,0,0,0,      ; encrypted logon user name, terminated
+                        0,0,0,0,0,0     ;   by a zero for no special reason
+;
+DOSNAME:        DB      'IBMxxxxx',0    ; ASCII name of .SYS file containing
+                                        ;   Corvus BIOS and IBM DOS boot image,
+                                        ;   terminated by a zero
+                                        ;   (currently unused)
+;
+;--- Entry Point for Direct Corvus I/O -
+;
+;    Initialized for built-in flat cable routines, but
+;    patched to ROM entry points if ROM is found.
+;
+SFUNCT:         JMP     RTL1,BIOSSEG    ; dummy cold start
+                JMP     RTL1,BIOSSEG    ; dummy warm start
+                JMP     DRVIO,BIOSSEG   ; ROM I/O support routines
+                JMP     INTX,BIOSSEG    ; dummy IRET
+;
+;--- Unit Assignments Table ------------
+;
+;    Index in by unit to get unit status information.
+;    A zero entry indicates an available unit.
+;    The table may be partially initialized to specify
+;      a startup configuration.
+;    Each one-byte entry has the following format.
+;
+;    bits 4-0: 0 if unit available, else physical drive unit #
+;    bit 5:    unused
+;    bit 6:    0/1 => Corvus/floppy
+;    bit 7:    0/1 => RW/RO access
+;
+MTTAB:          DB      041h            ; unit A assigned floppy A
+                DB      042h            ; unit B assigned floppy B
+                DB      001h;           ; unit C assigned Corvus vol 1
+                DB      002h;           ; unit D assigned Corvus vol 2
+                DB      0,0,0,0,0,0,0,0 ; units E-J are available
+;
+;--- Volume Configuration Pointer Table ---
+;
+;    Index in by unit to get DPH entry number.  That DPH
+;    entry contains a pointer to a volume configuration.
+;
+DVTDVR:         DB      0               ; unit A is DPH entry 0
+                DB      2               ; unit B is DPH entry 2
+                DB      4               ; unit C is DPH entry 4
+                DB      5               ; unit D is DPH entry 5
+                DS      NDRIVE-4        ; space for remaining entries
+                                        ; (1 byte/entry, 4 entries defined)
+{$PAGE+}
+                         - 16 -
+
+;
+;--- Corvus Drive(s) Map ---------------
+;
+;    Index in by Corvus physical drive number
+;      (masked from MTTAB entry) to get disk server
+;      number, drive number, and starting (512-byte)
+;      sector number of the Corvus volume mounted
+;      on the given unit.
+;
+OFBAS:          DW      50              ; lo 16 bits of disk sector #
+                DB      0               ; hi 8 bits of disk sector #
+                DB      1               ; Corvus drive # (1-4)
+                DB      0               ; disk server station #
+;
+                DW      4150            ; lo 16 bits of disk sector #
+                DB      0               ; hi 8 bits of disk sector #
+                DB      1               ; Corvus drive # (1-4)
+                DB      0               ; disk server station #
+;
+                DS      OFBAS+NDRIVE-2  ; space for remaining entries
+                             +NDRIVE-2  ;
+                             +NDRIVE-2  ;
+                             +NDRIVE-2  ;
+                             +NDRIVE-2-$; (5 bytes/entry, 2 entries defined)
+;
+;--- Disk Configuration Tables ---------
+;
+;    Each entry consists of a unit number followed by a
+;    pointer to a volume configuration.  For any unit,
+;    at most one entry in this table is "activated" by
+;    an entry in the volume configuration pointer table
+;    DVTDVR.
+;
+DPH:            DB      06              ; # of entries in use
+                DB      00              ; unit A
+                DW      DPTS            ; -> single-sided floppy configuration
+                DB      00              ; unit A
+                DW      DPTD            ; -> double-sided floppy configuration
+                DB      01              ; unit B
+                DW      DPTS            ; -> single-sided floppy configuration
+                DB      01              ; unit B
+                DW      DPTD            ; -> double-sided floppy configuration
+                DB      02              ; unit C
+                DW      DPTC            ; -> Corvus volume configuration
+                DB      03              ; unit D
+                DW      DPTC            ; -> Corvus volume configuration
+                DS      DPH+1+NDRV-6    ; space for remaining entries
+                             +NDRV-6    ;
+                             +NDRV-6-$  ; (3 bytes/entry, 6 entries defined)
+{$PAGE+}
+                         - 17 -
+
+;
+;--- Floppy Disk Parameter Tables ------
+;
+DPTS:           DW      512             ; bytes per sector
+                DB        1             ; sectors per block (512-byte block)
+                DW        1             ; reserved sectors
+                DB        2             ; FAT copies on disk
+                DW       64             ; 64 directory entries = 4 sectors
+                DW      320             ; sectors per disk (single-sided)
+;
+DPTD:           DW      512             ; bytes per sector
+                DB        2             ; sectors per block (1024-byte block)
+                DW        1             ; reserved sectors
+                DB        2             ; FAT copies on disk
+                DW      112             ; 112 directory entries = 7 sectors
+                DW      640             ; sectors per disk (double-sided)
+;
+;--- Corvus Disk Parameter Table -------
+;
+                DB         1            ; number of entries in use
+DPBASE          EQU     $               ; start of user-supplied configs
+;
+DPTC:           DW       512            ; bytes per sector (hard-coded)
+                DB         1            ; sectors per block (hard-coded)
+                DW         0            ; reserved sectors (hard-coded)
+                DB         2            ; FAT copies on disk (hard-coded)
+                DW       256            ; directory entries (default)
+                DW      1020            ; 1024-sector volume
+;
+                DS      DPTC+NDRIVE-1   ; space for remaining entries
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1   ;
+                            +NDRIVE-1-$ ; (10 bytes/entry, 1 entry defined)
+                 .
+                 .
+                 .
+{ EOF }

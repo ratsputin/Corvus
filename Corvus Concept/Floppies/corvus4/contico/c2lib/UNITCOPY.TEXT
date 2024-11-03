@@ -1,0 +1,19 @@
+cat /ccdecls/CONTYPES.TEXT > /sources/CONTYPES.TEXT
+cat /ccdecls/CCDRVIO.TEXT  > /sources/CCDRVIO.TEXT
+cat /ccdecls/CCDRVU1.TEXT  > /sources/CCDRVU1.TEXT
+cat /ccdecls/CCPIPES.TEXT  > /sources/CCPIPES.TEXT
+cat /ccdecls/CCSEMA4.TEXT  > /sources/CCSEMA4.TEXT
+cat /ccdecls/CVSYSTAB.TEXT > /sources/CVSYSTAB.TEXT
+cat /ccdecls/CVTABLES.TEXT > /sources/CVTABLES.TEXT
+cat /ccdecls/CVTDRV.TEXT   > /sources/CVTDRV.TEXT
+cat /ccdecls/CVTNET.TEXT   > /sources/CVTNET.TEXT
+cat /ccdecls/CVTUTILS.TEXT > /sources/CVTUTILS.TEXT
+cat /ccdecls/CCTBLRTN.TEXT > /sources/CCTBLRTN.TEXT
+cat /ccdecls/CVCRYPT.TEXT  > /sources/CVCRYPT.TEXT
+cat /ccdecls/NIUTIL.TEXT   > /sources/NIUTIL.TEXT
+cat /ccdecls/UIUTILS.TEXT  > /sources/UIUTILS.TEXT
+cat /ccdecls/SYSDEFS.TEXT  > /sources/SYSDEFS.TEXT
+cat /ccdecls/ERRORS.TEXT   > /sources/ERRORS.TEXT
+cat /ccdecls/ERRREPS.TEXT  > /sources/ERRREPS.TEXT
+
+

@@ -1,0 +1,20 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 655360, 1280 blocks of 512 bytes each
+
+Volume BACKUP1 has 13 files,  0 to 6 (6), eov 1280, size 0, free 13
+
+ 1: BOOM            Data 16-Jan-84    6-  18(  12),  6144+512=  6656 bytes
+ 2: CC.CALC         Data  1-Feb-84   18-  90(  72), 36864+512= 37376 bytes
+ 3: CC.CALEN        Data  1-Feb-84   90- 141(  51), 26112+512= 26624 bytes
+ 4: CC.CLOCK        Data  1-Feb-84  141- 199(  58), 29696+512= 30208 bytes
+ 5: CC.DCOMM        Data  1-Feb-84  199- 328( 129), 66048+512= 66560 bytes
+ 6: CC.GR.FONTS     Data  1-Feb-84  328- 348(  20), 10240+512= 10752 bytes
+ 7: CC.GR.IPC.TEXT  Text  1-Feb-84  348- 360(  12),  6144+512=  6656 bytes
+ 8: CC.GR.LST.TEXT  Text  1-Feb-84  360- 378(  18),  9216+512=  9728 bytes
+ 9: CC.GR.TMPLTS    Data  1-Feb-84  378- 581( 203), 103936+512= 104448 bytes
+10: CC.GRAPH        Data  1-Feb-84  581- 828( 247), 126464+512= 126976 bytes
+11: CC.LOOKUP       Ux2005  1-Feb-84  828- 894(  66), 33792+512= 34304 bytes
+12: CC.SORT         Data  1-Feb-84  894- 947(  53), 27136+512= 27648 bytes
+13: 1CC.WP          Data  1-Feb-84  947-1280( 333), 170496+512= 171008 bytes

@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'ccBootPromSrc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 13 files,  0 to 6 (6), eov 500, size 12, free 13
+
+ 1: CC.PROM.AD.TEXT Text  3-Sep-82    6-  94(  88), 45056+512= 45568 bytes
+ 2: CC.PROM.DS.TEXT Text 15-Jun-82   94- 142(  48), 24576+512= 25088 bytes
+ 3: CC.PROM.EQ.TEXT Text 26-Aug-82  142- 164(  22), 11264+512= 11776 bytes
+ 4: CC.PROM.FD.TEXT Text 19-Jun-82  164- 246(  82), 41984+512= 42496 bytes
+ 5: CC.PROM.KB.TEXT Text 15-Jun-82  246- 276(  30), 15360+512= 15872 bytes
+ 6: CC.PROM.LD.TEXT Text 29-Jun-82  276- 302(  26), 13312+512= 13824 bytes
+ 7: CC.PROM.MB.TEXT Text 26-Jun-82  302- 324(  22), 11264+512= 11776 bytes
+ 8: CC.PROM.OD.TEXT Text 29-Jun-82  324- 368(  44), 22528+512= 23040 bytes
+ 9: CC.PROM.TEXT    Text 26-Aug-82  368- 434(  66), 33792+512= 34304 bytes
+10: RAMTEST.TEXT    Text 27-Jul-82  434- 450(  16),  8192+512=  8704 bytes
+11: NDRAWT.TEXT     Text 17-Jul-83  450- 472(  22), 11264+512= 11776 bytes
+12: NXT.TEXT        Text 17-Jul-83  472- 478(   6),  3072+512=  3584 bytes
+13: VRFUZ.TEXT      Text 24-Aug-83  478- 488(  10),  5120+512=  5632 bytes

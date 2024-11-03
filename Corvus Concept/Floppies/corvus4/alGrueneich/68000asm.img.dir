@@ -1,0 +1,18 @@
+
+Directory of UCSD disk image file '68000asm.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 10 files,  0 to 6 (6), eov 500, size 76, free 10
+
+ 1: ASM68K          Data  4-Nov-82    6-  79(  73), 37376+512= 37888 bytes
+ 2: CC.PSYSTEM      Data  4-Feb-83   79- 102(  23), 11776+512= 12288 bytes
+ 3: SYSTEM.PASCAL   Data  4-Feb-83  102- 224( 122), 62464+512= 62976 bytes
+ 4: SYSTEM.MISCINFO Data  4-Feb-83  224- 225(   1),   512+512=  1024 bytes
+ 5: SYSTEM.LIBRARY  Data  4-Feb-83  225- 232(   7),  3584+512=  4096 bytes
+ 6: SYSTEM.INTERP   Data  4-Feb-83  232- 256(  24), 12288+512= 12800 bytes
+ 7: C1984.LC        Data 18-Jul-83  256- 259(   3),  1536+512=  2048 bytes
+ 8: C1985.LC        Data 18-Jul-83  259- 262(   3),  1536+512=  2048 bytes
+ 9: NEW.CODE        Data 18-Jun-83  262- 349(  87), 44544+512= 45056 bytes
+10: NEW.ASM68K      Data 18-Jun-83  349- 424(  75), 38400+512= 38912 bytes

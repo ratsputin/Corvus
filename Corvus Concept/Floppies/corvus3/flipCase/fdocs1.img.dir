@@ -1,0 +1,12 @@
+
+Directory of UCSD disk image file 'fdocs1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FDOCS1 has 4 files,  0 to 6 (6), eov 500, size 2, free 4
+
+ 1: ONEFIVESIX.TEXT Text 17-Jan-84    6- 162( 156), 79872+512= 80384 bytes
+ 2: MANUAL1.TEXT    Text  5-Nov-84  162- 298( 136), 69632+512= 70144 bytes
+ 3: MANUAL2.TEXT    Text  5-Nov-84  298- 408( 110), 56320+512= 56832 bytes
+ 4: C2IMPL2.TEXT    Text 10-Jun-83  408- 498(  90), 46080+512= 46592 bytes

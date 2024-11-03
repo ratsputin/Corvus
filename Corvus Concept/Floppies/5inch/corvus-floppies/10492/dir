@@ -1,0 +1,20 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY8 has 13 files,  0 to 6 (6), eov 1440, size 960, free 13
+
+ 1: DCOM.EQU.TEXT   Text 10-Aug-83    6-  42(  36), 18432+512= 18944 bytes
+ 2: DRV.DTACOM      Data 10-Aug-83   42-  50(   8),  4096+512=  4608 bytes
+ 3: DRV.DTACOM.TEXT Text 10-Aug-83   50- 234( 184), 94208+512= 94720 bytes
+ 4: DRV.EPRNT       Data 20-Sep-83  234- 239(   5),  2560+512=  3072 bytes
+ 5: DRV.EPRNT.TEXT  Text 14-Dec-83  239- 387( 148), 75776+512= 76288 bytes
+ 6: EPTST           Data 18-Nov-82  387- 396(   9),  4608+512=  5120 bytes
+ 7: EPTST.TEXT      Text 15-Nov-82  396- 408(  12),  6144+512=  6656 bytes
+ 8: TESTP           Data 19-Jan-83  408- 411(   3),  1536+512=  2048 bytes
+ 9: TESTP.TEXT      Text 19-Jan-83  411- 415(   4),  2048+512=  2560 bytes
+10: TSTTR           Data 11-Jan-83  415- 418(   3),  1536+512=  2048 bytes
+11: TTY.TEXT        Text 27-Oct-82  418- 424(   6),  3072+512=  3584 bytes
+12: TTY2            Data  9-Feb-83  424- 434(  10),  5120+512=  5632 bytes
+13: TTY2.TEXT       Text 29-Jan-83  434- 480(  46), 23552+512= 24064 bytes

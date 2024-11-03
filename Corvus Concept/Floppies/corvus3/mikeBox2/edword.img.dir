@@ -1,0 +1,12 @@
+
+Directory of UCSD disk image file 'edword.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 4 files,  0 to 6 (6), eov 500, size 179, free 4
+
+ 1: ED              Data  7-Feb-83    6- 302( 296), 151552+512= 152064 bytes
+ 2: TUT.M           Data  6-Apr-83  302- 306(   4),  2048+271=  2319 bytes
+ 3: TUT.S           Data  6-Apr-83  306- 309(   3),  1536+302=  1838 bytes
+ 4: EDLBLS.TEXT     Ux4113 21-Mar-83  309- 321(  12),  6144+512=  6656 bytes

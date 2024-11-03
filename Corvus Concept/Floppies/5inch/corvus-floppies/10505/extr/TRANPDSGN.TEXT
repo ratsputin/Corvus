@@ -1,0 +1,169 @@
+
+file : /dsgn/tranpdsgn.text
+date : 18-Mar-1982   kb
+
+This document describes the Transporter "Physical" Driver for Concept.
+
+The Physical driver has two (2) main functions :
+   1) "strobe in" transporter commands
+   2) handle Transporter generated interrupts
+
+Part of handling Transporter interrupts involves maintaining the Transporter
+Interrupt Service Table.  The SVS Unitstatus mechanism is the driver interface
+for the user.
+
+              ****** Transporter Interrupt Service Table  ******
+
+This table has 5 entries, one for each Receive Socket and one more for the
+Current Command.  Entries have the form :
+
+     type    byte = -128..127;
+             bytes = array [0..9999] of byte;
+             Pbytes = ^bytes;
+
+             record  BitFlags : integer;
+                     ResultPointer : Pbytes;
+                     ProcedurePointer : Pbytes;
+                     BufferPointer : Pbytes;
+                     A4SaveArea : longint;  ---> for SVS
+                     A5SaveAres : longint;  ---> Pascal
+             end;
+
+The first entry is the Current Command entry.  It is used for any request
+which expects an interrupt response.  The entry is marked used when it is
+filled in and marked unused when it's interrupt occurs and before the user
+routine, if any, is called.
+
+The last 4 entries correspond to the 4 Receive Sockets on the Transporter.
+They are used only when a user is expecting two (2) interrupts.  It specifies
+the user service routine for the second interrupt.
+
+Field descriptions :
+
+ 1) BitFlags => This field contains 16 bit flags controlling the useage of
+        the entry.  The following flags are defined :
+          a) EntryInUse - if set means the entry is currently waiting for
+                          an interrupt.  it is an active entry. if clear
+                          means entry not being used, inactive.
+
+ 2) ResultPointer => points to the byte result code from the Transporter.
+        significant states are  :
+          $FF = no interrupt yet
+          $FE = performed receive command, if Current Command entry then
+                call it's corresponding Procedure, if one exists (see
+                ProcedurePointer description).
+          <$FE = result code response for completed command.  Get a value in
+                this range for Command and Socket interrupts.
+                When ResultPointer points at this value then call the entry's
+                corresponding Procedure, if one exists.
+
+ 3) ProcedurePointer => points to the procedure to call when this entries
+        interrupt occurs.  If the user passes a Procedure pointer parameter
+        equal to Nil (0) then the interrupt is expected but there is no
+        procedure to call.  For this case, the ProcedurePointer field is Nil (0).
+
+ 4) BufferPointer =>  points to the receive buffer for this socket.  It is
+        only used by the receive socket entries 1-4.
+
+ 5) A4SaveArea and A5SaveArea => these hold the 68000 A4 and A5 register values
+    for the Procedure to be called when this entry's interrupt occurs.  They
+    are acquired when the entry is filled in.  They are assumed to be the same
+    as the Procedure which called the driver to setup the table.  Therefore,
+    any SVS Pascal procedure which uses this driver must call the driver to
+    setup the table entry from a global level procedure at least.  Furthermore,
+    the user Procedure called when the entry's interrupt occurs must be in
+    the same program and also be a global procedure to that program.
+
+Upon receipt of an interrupt the interrupt handler will scan the active entries
+looking for one whose ResultPointer points at a byte which is less than $FE
+for the Receive Socket entries and less than $FF for the Current Command entry.
+When the valid entry with a Ready Result byte is found then the interrupt
+handler calls the Procedure pointed at by the entry's ProcedurePointer, if
+it is not Nil (0).  If it is Nil (0) the Procedure is not called.  Before the
+call, registers A4 and A5 are set to the entry's A4 and A5 save area values.
+The the ResultPointer and BufferPointer variables are passed as parameters
+to the user service routine via the stack using the SVS Pascal parameter
+passing conventions.  Finally, the 68000 interrupts are enabled.  Next, the
+user service routine is called.  User service routines must make a standard
+return to the driver.
+
+Calling interface is :
+
+  Procedure Done(ResultPointer, BufferPointer : Pbytes);
+
+Whether or not a Procedure is called always mark the entry not in use by
+clearing the EntryInUse flag.  If a Procedure is called, the flag must be
+cleared before calling the user service routine and re-enabling interrupts.
+
+The interrupt handler must reset the Omninet (Transporter) interrupt first
+thing done in order not to lose a successive Omninet interrupt.
+
+           ****** Interface for Transporter Physical Driver ******
+
+The Pascal defined Unitstatus call is as follows :
+
+   UnitStatus (Unit#,ParameterBlock,function code);
+
+The function code specifies 4 different Transporter calls.  The meaning of
+the ParameterBlock depends on which call is made.
+
+The first is when the function code equals $FFFF.  This code specifies no
+interrupt call to the user is wanted for this command and that no interrupt
+is expected.  The ParameterBlock's address is the address to strobe into the
+Transporter.  Therefore, strobe in the buffer address.  No entry in the table
+is used and no entry is changed.
+
+The second is when it equals 5. This is a command with a single interrupt and
+no Receive socket is used. The ParameterBlock is 12 bytes long and has the
+following form :
+
+              record CommandAddress : Pbytes;
+                     ResultPointer : Pbytes;
+                     ProcedurePointer : Pbytes;
+              end;
+
+This call uses the Current Command entry only.  Therefore, place the ResultPointer
+and the ProcedurePointer in the Current Command table entry (the first entry).
+Assign the entry's BufferPointer to Nil (0).  The CommandAddress is strobed
+into the Transporter.
+
+The third is when the function code equals 6.  This is a two (2) interrupt
+command.  It uses the Current Command entry and 1 of the socket entries.
+The ParameterBlock is 22 bytes long and has the form :
+
+              record CommandAddress : Pbytes;
+                     ResultPointer : Pbytes;
+                     Procedure1Pointer : Pbytes:
+                     SocketNumber : integer;
+                     BufferPointer : Pbytes;
+                     Procedure2Pointer : Pbytes;
+
+The CommandAddress is strobed into the Transporter.  The ResultPointer is placed
+in both the Current Command entry and the Receive Socket entry specified by
+the SocketNumber.  Procedure1Pointer is the pointer to the Current Command's user
+service routine.  It is placed in the ProcedurePointer field of the Current
+Command entry of the table.  SocketNumber is an integer from 1 to 4, inclusive
+specifying which Receive Socket entry is to be used.  The BufferPointer is
+placed in the Receive Socket's entry's BufferPointer field.  It is passed to
+the user's service routine for that entry when called.  The Current Command
+entry's BufferPointer field is cleared to Nil (0).  Procedure2Pointer is a
+pointer to the Receive Socket's entry's user service routine.  It is placed
+in the Receive Socket's entry's ProcedurePointer field.  Either Procedure
+address may be zero.  If it is then an interrupt is expected for this entry,
+however, no user service routine exists for the interrupt handler to call.
+
+The last type is when the function code equals 0,1,2,3, or 4.  These mean to
+clear the entry in the Transporter Interrupt Service Table designated by the
+function code.  In other words, clear the EntryInUse flag for the entry
+indexed by the function code.
+
+For every call made to setup a table entry, the driver must check the EntryInUse
+flag.  If it is set, the entry is in use waiting for an interrupt, then this
+call to the driver is in Error.  Return to the user an IORESULT error code
+specifying Entry In Use Error.  Also, do NOT change the table.
+
+
+
+
+
+The End

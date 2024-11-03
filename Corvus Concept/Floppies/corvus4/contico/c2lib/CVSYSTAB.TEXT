@@ -1,0 +1,136 @@
+{----------------------------------------------------------------------}
+{ Unit:       CVSYSTAB                                                 }
+{                                                                      }
+{ Purpose:    The unit contains a variant record used to access Con-   }
+{             stellation II system tables.                             }
+{                                                                      }
+{ Depenency:  The CCDEFN and CVTABLES files must be USED when compi-   }
+{             ling with this module.                                   }
+{                                                                      }
+{                                                                      }
+{ Updates:    31-Mar-82  Unit created  (CMC)                           }
+{----------------------------------------------------------------------}
+
+UNIT CVsystab;
+
+INTERFACE
+
+USES    {CVsystab public}
+   {$U /CCLIB/CCLIB.OBJ         }       CCdefn,
+   {$U /CCDECLS/CCdrvIO.OBJ     }       CCdrvIO,
+   {$U /CCDECLS/CCdrvU1.OBJ     }       CCdrvU1,
+   {$U /CCDECLS/CVtables.OBJ    }       CVtables;
+
+CONST   {CVsystab public}
+   DriveInfo          = 0;      { File code for DRIVE.INFO table                    }
+   SystemBoot         = 1;      { File code for SYSTEM.BOOT table                   }
+   NetworkUser        = 2;      { File code for NETWORK.USER table                  }
+   DriveVolume        = 3;      { File code for DRIVE.VOLUME table                  }
+   DriveUser          = 4;      { File code for DRIVE.USER table                    }
+   DriveAccess        = 5;      { File code for DRIVE.ACCESS table                  }
+   Bootfile           = 6;      { File code for corvus boot code files              }
+   NetworkActive      = 8;      { File code for NETWORK.ACTIVE table                }
+   CVdirentry         = 100;    {                                                   }
+   MaxDirEnt          = 19;     { No. direcotry entries in 512 byte block           }
+
+TYPE
+   bootentry  = RECORD
+                   CASE INTEGER OF
+                      1:  (baddr:     reldiskaddr);
+                      2:  (daddr:     INTEGER);
+                   END;
+   SBtype     = bootentry;
+
+
+   {--------------------------------------------------------------------}
+   { This record describes an entry returned from the NIGETDRIVE        }
+   { routine which tells vital statistics about the drive configuration }
+   { at a MUX or at a disk server...                                    }
+   {--------------------------------------------------------------------}
+
+   DRtype     = RECORD
+                   DrvName:     name;
+                   DrvStat:     PhysDrInfo;
+                   END;
+
+   NAarray    = PACKED ARRAY [1..64] OF NAtype;
+   DRarray    = PACKED ARRAY [1..04] OF DRtype;
+   Diblock    = RECORD
+                   CASE INTEGER OF
+                      1: (dblk:    DrvBlk );
+                      2: (dinfo:   DItype);
+                      3: (D2blk:   CD_Buf);
+                   END;
+
+   proctype   = byte;
+   daterec    = INTEGER;
+   vid        = STRING[7];
+   tid        = STRING[15];
+
+   filekind   = (untypedfile, xdskfile, codefile, textfile, infofile,
+                 datafile, graffile, fotofile, securdir );
+
+   {--------------------------------------------------------------------}
+   { This record describes a directory entry used by the CONCEPT, UCSD  }
+   { Pascal, and Corvus Constellation II file systems.                  }
+   {--------------------------------------------------------------------}
+
+   direntry   = PACKED RECORD
+                   firstblock:  reldiskaddr;    { starting block of file    }
+                   nextblock:   reldiskaddr;
+                   status:      BOOLEAN;
+                   filler:      0..2047;        { unused area of record     }
+                   fkind:       filekind;
+                   CASE filekind  OF
+                      securdir,
+                      untypedfile:
+                         {                                                     }
+                         { volume directory or unit type entry                 }
+                         {                                                     }
+                         (dvid:        vid;          { entry length/name       }
+                          deovblock:   reldiskaddr;  { last block of volume    }
+                          dnumfiles:   INTEGER;      { number of files         }
+                          dloadtime:   INTEGER;      { time of last access     }
+                          dlastboot:   daterec;      { most recent date setting}
+                          memflipped:  BOOLEAN;      { TRUE if memflipped      }
+                          dskflipped:  BOOLEAN);     { TRUE if disk flipped    }
+                      xdskfile,
+                      codefile,
+                      textfile,
+                      infofile,
+                      datafile,
+                      graffile,
+                      fotofile:
+                         {                                                      }
+                         { directory file entry                                 }
+                         {                                                      }
+                         (dtid:             tid;           { file length/name   }
+                          dlastbyte:        0..512;        { bytes in last block}
+                          daccess:          daterec);      { last modification  }
+                END;   { direntry }
+
+   dirblk     = RECORD
+                   CASE INTEGER OF
+                      1:   (Dent:    PACKED ARRAY[1..MaxDirEnt] OF direntry);
+                      2:   (Dblk:    DrvBlk);
+                      3:   (D2blk:   CD_Buf);
+                   END;
+
+   CVsystbl   = RECORD
+                   CASE INTEGER OF
+                      DriveInfo:      (DI:     DItype);
+                      SystemBoot:     (SB:     PACKED ARRAY[1..256] OF SBtype  );
+                      NetworkUser:    (NU:     PACKED ARRAY[1..16]  OF NUtype  );
+                      DriveVolume:    (DV:     PACKED ARRAY[1..16]  OF DVtype  );
+                      DriveUser:      (DU:     PACKED ARRAY[1..16]  OF DUtype  );
+                      DriveAccess:    (DA:     PACKED ARRAY[1..64]  OF DAtype  );
+                      NetworkActive:  (NA:     PACKED ARRAY[1..32]  OF NAtype  );
+                      CVdirentry:     (DE:     PACKED ARRAY[1..MaxDirEnt] Of DirEntry);
+                      DrvBlkSize:     (CVblk:  DrvBlk);
+                      CDBuf_Max:      (CV2Blk: CD_Buf);
+                      END;
+
+IMPLEMENTATION
+
+END.
+

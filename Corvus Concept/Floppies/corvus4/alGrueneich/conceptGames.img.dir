@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'conceptGames.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 6 files,  0 to 6 (6), eov 500, size 387, free 6
+
+ 1: ROACH           Data  3-Feb-83    6-  85(  79), 40448+512= 40960 bytes
+ 2: GRCH            Data 27-Jan-83   85-  88(   3),  1536+214=  1750 bytes
+ 3: MUSIC           Data 19-May-82   88-  97(   9),  4608+512=  5120 bytes
+ 4: NOTES.TEXT      Text 21-Mar-83   97- 103(   6),  3072+512=  3584 bytes
+ 5: RAG.TEXT        Text 19-May-82  103- 109(   6),  3072+512=  3584 bytes
+ 6: CHILD.TEXT      Text 19-May-82  109- 113(   4),  2048+512=  2560 bytes

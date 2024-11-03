@@ -1,0 +1,37 @@
+program BuildFile;
+
+var s: string[1];
+    fname: string[30];
+    strdata: string[100];
+    lines,fblk,i: integer;
+    f: text;
+
+begin
+  writeln; writeln('BLDTST - build ACORN test file'); writeln;
+  s := ' ';
+  strdata := 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  write('Enter file name (not a .TEXT) :  '); readln(fname);
+  rewrite(f,fname);  writeln('File open: ',fname);
+  writeln;
+
+  write('Enter number of blocks to build file :  '); readln(fblk);
+
+  {calc number of lines to write in file: line is 64 bytes.}
+  {lines = total blks * (blocksize / line length) }
+
+  lines := fblk * 8; writeln('Total number of lines: ',lines:1); writeln;
+
+  write('Writing line...');
+  for i := 1 to lines do
+      begin
+      writeln(f,'LINE ',i:5,' ',strdata); write(i:5);
+      {rotate characters through string}
+      s[1] := strdata[1]; delete(strdata,1,1);
+      strdata := concat( strdata, s );
+      if (i mod 16) = 0 then writeln;
+      end;
+
+  writeln; writeln('Closing file: ',fname);
+  close(f,lock);
+  writeln('Finished.');
+end.

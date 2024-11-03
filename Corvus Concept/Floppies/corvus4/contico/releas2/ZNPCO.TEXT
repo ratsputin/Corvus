@@ -1,0 +1,173 @@
+
+ P/M Utilities                                 20-Feb-82
+
+This PCO covers CP/M Utilities for the Zenith H-89.
+
+            6/10/20 ZN (5 1/4" hard-sectored media 10 track - 107/1D)
+
+This release was tested with version 2.2 of CP/M supplied by Zenith.
+
+CLINK2.ASM is set up as follows:
+
+   - link above
+   - Z80B
+   - 10 MB drive
+   - 2 pseudo drives
+   - pipes area starting at block 64
+   - block size of 8k
+   - memory size of 64k
+
+The default CLINK's require the user to generate a '63k'
+version of CP/M.
+
+Known problems
+--------------
+
+   None.
+This release adds the CLINK7 files, and fixes bugs in other programs.
+Files changed include:
+
+   CLINK2FV.COM, CLINK2TN.COM, CLINK2TW.COM - reassembled to be slightly
+      smaller, and to work with a 64K system, rather than a 48K system.
+
+   INDEX.DOC - updated to reflect new contents of floppies.
+
+   DRIVEL.COM - was reporting incorrect size for volumes on a 20MB
+      drive; now prints version number.
+
+   CDIAGNOS.ASM, PUTGET.ASM, MIRROR.ASM - moved to separate floppies;
+      these programs are available by special order only.
+
+   CDIAGNOS.COM, PUTGET.COM, MIRROR.COM, SEMA4.COM, CLOADR.ASM,
+   CBOOT.ASM, BIOSC.ASM - prompts are now lined up.
+
+   CPMIO.MAC - equate is set for Zenith; it was previously set for
+      S-100.
+$P
+The floppy labels are listed below including the Corvus part number.
+
+  ZN Utilities-vol 1 of 4              ZN Source Utilities - vol 1 of 2
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+  CP#: 8100-08481                      CP#: 8100-08489
+
+  ZN Utilities-vol 2 of 4              ZN Source Utilities - vol 2 of 2
+  for CP/M 2.2                         for CP/M 2.2
+  Release date:  17-Feb-82             Release date:  17-Feb-82
+  CP#: 8100-08482                      CP#: 8100-08490
+
+  ZN Utilities-vol 3 of 4
+  for CP/M 2.2
+  Release date:  17-Feb-82
+  CP#: 8100-08483
+
+  ZN Utilities-vol 4 of 4
+  for CP/M 2.2
+  Release date:  17-Feb-82
+  CP#: 8100-08484
+
+To copy floppies:
+----------------
+   Zenith floppies are copied on the Zenith H-89 using the built-in
+   floppy drive and a Corvus drive.
+   Boot from the Zenith H-89 boot disk.
+
+   Use FORMAT to format new floppies.
+
+   See Denise Pitsch, Keith Odom, or Bruce Kendall for instructions on
+   copying floppies.
+
+Note there is a difference between 'ZN Utilities-vol 1 of 4' and
+'ZN Source Utilities-vol 1 of 2'.  Likewise for volume 2.
+
+$P
+Files on each floppy are shown below:
+
+Vol 1 of 4                      Version         CRC
+      INDEX   .DOC              2/15/82         E2 6E
+      CERROR  .DOC              -               34 81
+      PUTGET  .COM              1.4 HZ          E1 F2
+      CLINK2FV.COM              -               47 AB
+      CLINK2TN.COM              -               96 5E
+      CLINK2TW.COM              -               0C 0A
+      CLINK7FV.COM              -               4E 41
+      CLINK7TN.COM              -               87 9F
+      CLINK7TW.COM              -               AE 27
+      CDIAGNOS.COM              2.3 HZ          29 59
+      CDIAGNOS.DOC              -               6C BE
+      CORVB173.CLR              17.3            A1 21
+      MIRROR  .COM              1.32HZ          B0 F4
+      SEMA4   .COM              1.3 HZ          7B 2E    sum= CA 55
+
+Vol 2 of 4
+      PMGR    .COM              1.1             11 1F
+      DRIVEL  .COM              1.0             22 D7
+      SPOOL   .COM              2.0             5E 81
+
+      PIPEGEN .SUB              -               39 9F
+      PIPES   .SRC              -               81 14
+      PIPED   .PAS              -               FD 0D
+      PIPEC   .PAS              -               C8 C0
+      PIPES   .PAS              -               00 73
+      CPMIO   .MAC              -               61 29    sum= 74 93
+
+Vol 3 of 4
+      CLINK2  .ASM              1.09HZ          68 E6
+      SEMA4   .ASM              1.3 HZ          22 FD
+      SPOOLGEN.SUB              -               4A FF
+      SPOOL   .SRC              -               74 75
+      SPOOL   .DEF              -               40 8E
+      SPOOLC  .PAS              -               D6 44
+      SPOOL   .PAS              -               17 01
+      SPOOLM  .PAS              -               17 51    sum= 90 7B
+
+Vol 4 of 4
+      CLOADR  .ASM              1.4 HZ          25 4F
+      CBOOT   .ASM              1.3 HZ          E9 52
+      BIOSC   .ASM              1.22            2E 29    sum= 3C CA
+
+Source utilities - vol 1 of 2
+      CDIAGNOS.ASM              2.3 HZ          A4 AB
+      PUTGET  .ASM              1.4 HZ          56 10    sum= FA BB
+
+Source utilities - vol 2 of 2
+      MIRROR  .ASM              1.32HZ          AC BB    sum= AC BB
+$P
+
+Previous releases :
+------------------
+
+18-Dec-81.  New release includes support for pipes and spooling.
+
+This release includes firmware version 17.3
+
+The floppy are labels are listed below including Corvus part number.
+
+HZ Utilities - vol 1 of 5
+for CP/M 2.2
+Release date: 18-Dec-81
+CP#: 8100-01984
+
+HZ Utilities - vol 2 of 5
+for CP/M 2.2
+Release date: 18-Dec-81
+CP#: 8100-01985
+
+HZ Utilities - vol 3 of 5
+for CP/M 2.2
+Release date: 18-Dec-81
+CP#: 8100-01986
+
+HZ Utilities - vol 4 of 5
+for CP/M 2.2
+Release date: 18-Dec-81
+CP#: 8100-01987
+
+HZ Utilities - vol 5 of 5
+for CP/M 2.2
+Release date: 18-Dec-81
+CP#: 8100-01988
+
+$P
+
+

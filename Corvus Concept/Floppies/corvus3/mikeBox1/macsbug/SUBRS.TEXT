@@ -1,0 +1,375 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                           File: NFTN1:SUBRS.TEXT                          *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               22-Apr-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+procedure error(errnum: integer);
+begin (* error *)
+if errornumber = 0 then errornumber := errnum + 600;
+end; (* error *)
+
+
+procedure pageoutfbuffer;
+begin (* pageoutfbuffer *)
+if ENVIRONMENT = MERLIN
+then
+  if curunit <> nil
+  then
+    with curunit^ do begin
+      if blockwrite(osfile^,osfib^.fbuffer,1,osfib^.fnextblock - 1) <> 1 
+      then error(48);
+      osfib^.FModified := TRUE; osfib^.FBufChanged := FALSE;
+      end;
+end; (* pageoutfbuffer *)
+
+
+procedure pageinfbuffer(relblknum: integer);
+begin (* pageinfbuffer *)
+if ENVIRONMENT = MERLIN
+then
+  if curunit <> nil
+  then
+    with curunit^ do begin
+      if relblknum >= osfib^.fmaxblock
+      then begin (* Block over the previous high water mark for this file *)
+        osfib^.fbuffer[0] := 0; osfib^.fbuffer[1] := 0; 
+        moveleft(osfib^.fbuffer[0],osfib^.fbuffer[2],FBLKSIZE-2);
+        osfib^.fmaxblock := relblknum + 1; (* New highest block touched in file *)
+        if not Formted then osfib^.fheader.dlastbyte := 0; (* Won't stay 0 *)
+        end
+      else (* Read in file block to initialize buffer *)
+        if blockread(osfile^,osfib^.fbuffer,1,relblknum) <> 1 then error(49);
+      osfib^.fnextbyte := 0; osfib^.fnextblock := relblknum + 1; 
+      osfib^.FBufChanged := FALSE;
+      end;
+end; (* pageinfbuffer *)
+
+
+procedure foutputrecbuf;
+  var i, nummoved: integer;
+begin (* foutputrecbuf *)
+if curunit <> nil
+then
+  with curunit^ do
+    if ENVIRONMENT = MERLIN
+    then
+      if osfib^.FIsBlocked
+      then (* FIsBlocked *)
+        if (osfib^.fnextbyte + maxlastwritten) > FBLKSIZE
+        then (* no room in existing buffer *)
+          if odd(osfib^.fnextblock)
+          then begin (* Even block, fill it up and move on to next *)
+            nummoved := FBLKSIZE - osfib^.fnextbyte;
+            moveleft(recbuf,osfib^.fbuffer[osfib^.fnextbyte],
+                     FBLKSIZE - osfib^.fnextbyte);
+            pageoutfbuffer; pageinfbuffer(osfib^.fnextblock);
+            moveleft(recbuf[nummoved+1],osfib^.fbuffer,
+                     maxlastwritten - nummoved);
+            osfib^.fnextbyte := maxlastwritten - nummoved; 
+            osfib^.FBufChanged := TRUE;
+            end
+          else begin (* Finishing odd block, zero pad and go on *)
+            for i := osfib^.fnextbyte to FBLKSIZE - 1 do
+              osfib^.fbuffer[i] := 0;
+            if osfib^.FBufChanged then pageoutfbuffer; 
+            pageinfbuffer(osfib^.fnextblock);
+            moveleft(recbuf,osfib^.fbuffer,maxlastwritten);
+            osfib^.fnextbyte := maxlastwritten; osfib^.FBufChanged := TRUE;
+            end
+        else begin (* Room in fbuffer *)
+          moveleft(recbuf,osfib^.fbuffer[osfib^.fnextbyte],maxlastwritten);
+          osfib^.fnextbyte := osfib^.fnextbyte + maxlastwritten; 
+          osfib^.FBufChanged := TRUE;
+          end
+      else (* not FIsBlocked *)
+        unitwrite(osfib^.funit,recbuf,maxlastwritten)
+    else begin { ENVIRONMENT <> MERLIN }
+      %_fwrite(maxlastwritten,@recbuf,ostextfile);
+      if ioresult <> 0 then error(48);
+      end;
+end; (* foutputrecbuf *)
+
+
+(* For unitread input, finputrecbuf expects the eof indicator to be *)
+(* after completed lines.                                           *)
+
+procedure finputrecbuf;
+  var lint1: int1; Done: Boolean; count: integer;
+  
+  (* Getrawch automatically skips forward off ends of odd blocks *)
+  
+  procedure getrawch;
+  begin (* getrawch *)
+  if ENVIRONMENT = MERLIN
+  then
+    with curunit^ do begin
+      if osfib^.fnextbyte >= FBLKSIZE
+      then begin 
+        if osfib^.FBufChanged then pageoutfbuffer;
+        pageinfbuffer(osfib^.fnextblock);
+        end;
+      lint1 := osfib^.fbuffer[osfib^.fnextbyte]; 
+      osfib^.fnextbyte := osfib^.fnextbyte + 1;
+      end;
+  end; (* getrawch *)
+  
+begin (* finputrecbuf *)
+recbuflen := 0;
+if (curunit <> nil) and (not EofFlag)
+then
+  with curunit^ do
+    if ENVIRONMENT = MERLIN
+    then
+      if osfib^.FIsBlocked
+      then begin (* FIsBlocked *)
+        getrawch;
+        if (lint1 = 0) and (osfib^.fnextblock < osfib^.fmaxblock)
+        then begin
+          if osfib^.FBufChanged then pageoutfbuffer;
+          pageinfbuffer(osfib^.fnextblock);
+          getrawch;
+          end;
+        if lint1 = 0
+        then EofFlag := TRUE
+        else begin
+          if lint1 = 16
+          then begin
+            if not Seqen then error(68); (* DLE not allowed in direct files *)
+            getrawch;
+            while lint1 > 32 do begin
+              recbuflen := recbuflen + 1; recbuf[recbuflen] := 32;
+              lint1 := lint1 - 1;
+              end;
+            getrawch;
+            end;
+          while lint1 <> 13 do begin
+            if recbuflen < MAXRECLEN
+            then begin
+              recbuflen := recbuflen + 1; recbuf[recbuflen] := lint1;
+              end;
+            getrawch;
+            end;
+          end;
+        end
+      else begin (* not FIsBlocked *)
+        Done := FALSE;
+        unitread(osfib^.funit,lint1,1);
+        if lint1 = 13 {<cr>}
+        then Done := TRUE
+        else 
+          if lint1 = 3 {<ctrl-c>, end of file indicator}
+          then begin EofFlag := TRUE; Done := TRUE; end
+          else 
+            if lint1 = 16 {DLE}
+            then begin
+              if not Seqen then error(68); (* DLE not allowed in direct files *)
+              unitread(osfib^.funit,lint1,1);
+              while lint1 > 32 do begin
+                recbuflen := recbuflen + 1; recbuf[recbuflen] := 32;
+                lint1 := lint1 - 1;
+                end;
+              end
+            else begin recbuflen := 1; recbuf[1] := lint1; end;
+        while not Done do begin
+          unitread(osfib^.funit,lint1,1);
+          if lint1 = 13 {<cr>}
+          then Done := TRUE
+          else 
+            if recbuflen < MAXRECLEN
+            then begin
+              recbuflen := recbuflen + 1; recbuf[recbuflen] := lint1;
+              end;
+          end;
+        end (* not FIsBlocked *)
+    else begin { ENVIRONMENT <> MERLIN }
+      Done := FALSE;
+      %_fread(@lint1,ostextfile,count);
+      if ioresult <> 0 then error(49);
+      if (count = 0) {Zero read count end of file}
+      then begin EofFlag := TRUE; Done := TRUE; end
+      else
+        if lint1 = ord(EOLCH)
+        then Done := TRUE
+        else begin recbuflen := 1; recbuf[1] := lint1; end;
+      while not Done do begin
+        %_fread(@lint1,ostextfile,count);
+        if ioresult <> 0 then error(49);
+        if (lint1 = ord(EOLCH)) or (count = 0)
+        then Done := TRUE
+        else 
+          if recbuflen < MAXRECLEN
+          then begin
+            recbuflen := recbuflen + 1; recbuf[recbuflen] := lint1;
+            end;
+        end;
+      end;
+end; (* finputrecbuf *)
+
+
+procedure sysclose(KeepIt: Boolean; funit: punitrec);
+begin (* sysclose *)
+with funit^ do begin (* Never nil *)
+  if ENVIRONMENT = MERLIN
+  then begin
+    if osfib^.FIsBlocked and osfib^.FBufChanged then pageoutfbuffer;
+    (*$I-*)
+    if KeepIt then close(osfile^,lock) else close(osfile^);
+    (*$I+*)
+    end
+  else begin {ENVIRONMENT <> MERLIN}
+    (*$I-*)
+    if KeepIt then close(ostextfile^,lock) else close(ostextfile^);
+    (*$I+*)
+    end;
+  if ioresult <> 0 then error(70);
+  end;
+end; (* sysclose *)
+
+
+procedure forceeofiflastwritten;
+  var i: integer;
+begin (* forceeofiflastwritten *)
+if ENVIRONMENT = MERLIN
+then
+  if curunit <> nil
+  then
+    with curunit^ do
+      if osfib^.FIsBlocked and (lastop = WRITEOP)
+      then begin
+        for i := osfib^.fnextbyte to fblksize do
+          osfib^.fbuffer[i] := 0;
+        if not Formted then osfib^.fheader.dlastbyte := osfib^.fnextbyte;
+        pageoutfbuffer;
+        if odd(osfib^.fnextblock) and Formted
+        then begin
+          osfib^.fnextblock := osfib^.fnextblock + 1;
+          osfib^.fbuffer[0] := 0; osfib^.fbuffer[1] := 0; 
+          moveleft(osfib^.fbuffer[0],osfib^.fbuffer[2],FBLKSIZE-2);
+          pageoutfbuffer;
+          end;
+        osfib^.fmaxblock := osfib^.fnextblock;
+        end;
+end; (* forceeofiflastwritten *)
+
+
+procedure updatehighwatermark;
+begin (* updatehighwatermark *)
+if ENVIRONMENT = MERLIN
+then
+  if curunit <> nil
+  then
+    with curunit^ do begin
+      if (not Formted) and (osfib^.fnextblock = osfib^.fmaxblock) and 
+         (osfib^.fnextbyte > osfib^.fheader.dlastbyte)
+      then osfib^.fheader.dlastbyte := osfib^.fnextbyte;
+      end;
+end; (* updatehighwatermark *)
+
+
+procedure sysseek(targetposition: longint);
+  var targblk, targnxtbyte: integer;
+begin (* sysseek *)
+if ENVIRONMENT = MERLIN
+then begin
+  targblk := targetpostion div FBLKSIZE;
+  targnxtbyte := targetpostion mod FBLKSIZE;
+  if curunit <> nil
+  then
+    with curunit^ do begin
+      if osfib^.fheader.fkind = TEXTFILE then targblk := targblk + 2;
+      if osfib^.fnextblock <> (targblk + 1)
+      then begin
+        if osfib^.FBufChanged then pageoutfbuffer;
+        pageinfbuffer(targblk);
+        end;
+      osfib^.fnextbyte := targnxtbyte;
+      end;
+  end
+else begin {ENVIRONMENT <> MERLIN}
+  if curunit <> nil
+  then begin
+    %_fseek(curunit^.ostextfile,targetposition,SEEK_ABSOLUTE);
+    if ioresult <> 0 then error(49);
+    end;
+  end;
+end; (* sysseek *)
+
+
+(*****************************************************************************)
+(*                      Private Routines for UNFORMTED                       *)
+(*****************************************************************************)
+
+procedure uput(fval: int1);
+  var i, nummoved: integer;
+begin (* uput *)
+reclenctr := reclenctr + 1;
+if curunit <> nil
+then
+  with curunit^ do
+    if ENVIRONMENT = MERLIN
+    then
+      if osfib^.FIsBlocked
+      then begin (* FIsBlocked *)
+        if osfib^.fnextbyte >= FBLKSIZE (* no room in existing buffer *)
+        then begin 
+          if osfib^.FBufChanged then pageoutfbuffer; 
+          pageinfbuffer(osfib^.fnextblock); 
+          end;
+        osfib^.fbuffer[osfib^.fnextbyte] := fval; 
+        osfib^.fnextbyte := osfib^.fnextbyte + 1; osfib^.FBufChanged := TRUE;
+        end
+      else (* not FIsBlocked *)
+        unitwrite(osfib^.funit,fval,1)
+    else begin {ENVIRONMENT <> MERLIN}
+      %_fwrite(1,@fval,ostextfile);
+      if ioresult <> 0 then error(48);
+      end;
+end; (* uput *)
+
+
+procedure uget(var fval: int1);
+  var count: integer;
+begin (* uget *)
+reclenctr := reclenctr + 1;
+if curunit <> nil
+then
+  with curunit^ do begin
+    if ENVIRONMENT = MERLIN
+    then
+      if osfib^.FIsBlocked
+      then
+        if (osfib^.fnextbyte < FBLKSIZE) and
+          ((osfib^.fnextbyte < osfib^.fheader.dlastbyte) or 
+           (osfib^.fnextblock < osfib^.fmaxblock))
+        then begin (* Character in fbuffer *)
+          fval := osfib^.fbuffer[osfib^.fnextbyte]; 
+          osfib^.fnextbyte := osfib^.fnextbyte + 1;
+          end
+        else (* No more characters in fbuffer *)
+          if osfib^.fnextblock >= osfib^.fmaxblock
+          then begin EofFlag := TRUE; fval := 0; end
+          else begin (* Pick up next block *)
+            if osfib^.FBufChanged then pageoutfbuffer;
+            pageinfbuffer(osfib^.fnextblock);
+            fval := osfib^.fbuffer[osfib^.fnextbyte]; 
+            osfib^.fnextbyte := osfib^.fnextbyte + 1;
+            end
+      else unitread(osfib^.funit,fval,1)
+    else begin {ENVIRONMENT <> MERLIN}
+      %_fread(@fval,ostextfile,count);
+      if count = 0
+      then begin
+        if ioresult <> 0 then error(49);
+        EofFlag := TRUE; fval := 0;
+        end;
+      end;
+    end;
+end; (* uget *)
+
+

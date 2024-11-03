@@ -1,0 +1,43 @@
+
+eHBugs fixed in WordProc 1.2xe@
+
+4/23/84
+
+* Error in [Mark]/[Bound] caused SEARCH and REPLACE operations
+  to proceed from the cursor point onwards, instead of being
+  restricted to the bounded area.
+
+* Another error in [Mark]/[Bound]... the line length for [Save]s
+  was computed incorrectly when the left margin of the bounded
+  area was not 1, causing the right ends of lines to be dropped.
+
+
+4/25/84
+
+* The [SaveFile] command did not properly check for I/O errors,
+  and would cheerfully report "File saved" when it was, in fact,
+  not, due to such things as too little volume space.
+
+4/26/84
+
+* Hack in PRNT module to turn enhancements off at the ends of lines
+  when spooling from WordProc directly; additional form feed sent
+  at the end of printing.
+
+
+5/13/84
+
+* A string range error would occur is the title of an IPC field was
+  longer than 20 chars in the [Lists] mode. Fixed so that only the
+  first 20 characters are considered.
+
+eHCurrent bugs:e@
+
+
+5/02/84
+
+[InsertFile] clobbers the first five blanks on a line, if the line
+starts with blanks.
+
+
+

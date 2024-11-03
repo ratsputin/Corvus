@@ -1,0 +1,674 @@
+
+
+Keith Ball
+March 9, 1983
+
+Network products
+
+
+Looking at possible new network products, there are 2 main
+market places.
+
+       1) mini-computer competition - closed net type
+       2) Net connected to mainframe - open net type
+
+These net types are not realisitic structures, but only ideals.
+However, they are a good analytical tool for defining priorities
+for new products based on which of the 2 markets we wish to
+emphasize.
+
+1) mini competition market
+
+Why do people buy mini computers?
+
+       a) most important - MULTI-USER APPLICATIONS involving
+          shared data.  Security demanded of shared data.
+       b) Currrent availability of application software.
+       c) performance - thruput
+
+Why people buy personal computers?
+
+       a) single user applications, e.g. word processing
+          and personal data bases.
+       b) cost, software and hardware
+       c) better price/performance then the large computer
+          running single user software.
+
+Currently our net provides most of the single user end :
+
+     Software :
+       a) word processsing
+       b) spread sheet
+
+       more needed : e.g. personal record management and
+                          graphics
+
+     We can now share data between users to a limited degree.
+     Also, local disks on a Concept gives the user secure
+     personal data.
+
+To compete with the minis we must provide services required of
+the mini.
+
+       a) Multi-user applications with shared data require a
+          common data base. This requires :
+
+               - file server
+               - data base server
+
+          Servers provide controlled access to data as well as
+          shared data.  Controlling user data access gives us
+          the ability to enforce data security.
+
+              Commercial applications :
+
+               - accounting
+               - inventory
+               - MRP
+               - production management
+               - administration, personnel and payroll
+               - finance, credit
+
+              Education applications :
+
+               - on-line library
+               - CAI
+               - literary search - communication with other
+                 repositories
+
+       b) Net to Net communications - short and long distances
+
+          All nets are open, therefore, we must support
+          communication between nets, over hybrid nets and
+          between nets and main frames for the closed type net as
+          well as the open net type.
+
+          Services required :
+
+               - file sending and receiving; automated, batched
+               - remote access to shared data; e.g. off-site
+                 sales terminals
+
+          These Services demand gateways :
+
+               - Broadband; the higher level net to connect local
+                 nets together.  UBI or Sytek working with Corvus
+                 provide the technology.
+
+               - SNA; a link into the IBM market.  It allows
+                 users to send local office data to a client's or
+                 the corporate's remote IBM main frames.
+
+               - X.25; interface to packet switching long haul
+                 nets
+
+          and servers :
+
+               - modem servers; phone connection to National nets
+
+     ????????  - PBX server or is it a gateway
+
+          off-site data access require one of two solutions :
+
+               - Off-site access to the data is made via a
+                 computer which runs the user inteface to the
+                 data base system and accesses the net via the
+                 modem server or a gateway.
+
+               - A second method utilizes a terminal connected to
+                 a modem which calls the net through a modem
+                 server.  The terminal communicates to a
+                 dedicated node, which can be another server.
+                 This node supplies to the terminal the user
+                 interface to the data base.  The data flows from
+                 the terminal to a modem server.  It then sends
+                 the data to a node, a workstation or server
+                 either dedicated to this service or one where
+                 the task is running in background. The node
+                 takes the users requests and accesses the data
+                 base. The data base, either on a data base or
+                 file server, sends the data requested back to
+                 the node.  The node then sends the data
+                 requested by the user back to the terminal via
+                 the modem server.
+
+          The use of gateways and servers require the definition
+          of protocols and the software to support them on the
+          servers and workstations.
+
+          Needed protocols :
+
+                internet, terminal, server protocols.
+
+       c) archival, backup/recovery and distribution
+
+               - User needs to migrate old information out of the
+                 main secondary storage units but still retain
+                 access to the data.  This service will be
+                 provided on our net by a Bank server.
+                 Workstation based floppies and Banks would be
+                 useful to save personal information.
+
+               - Backup/recovery can be served by the Remote
+                 Mirror option used with Archival storage
+                 software.  However, the Bank server will be a
+                 better solution to this problem.  The Archival
+                 storage gives backup/recovery on the volume
+                 level.  The bank gives it on a file level.
+                 Furthermore, the medium will be transportable to
+                 other tape machines (conversation on 3/1 with
+                 engineers) which is not the case for the mirror.
+
+               - If the Bank medium, the loop cartridge video
+                 tapes, can be written by one machine and read
+                 back reliably by another machine then distri-
+                 bution can be made with the Bank.  Engineering
+                 says this will be true.  Other factors :  how
+                 well medium stores and retains physical
+                 integrity;  how easy it is to erase the tape,
+                 will tape retain information if stored for long
+                 periods of time.  Floppies are also a viable
+                 distribution medium.  However, they require a
+                 workstation local unit and more of medium,
+                 diskettes, then the Bank requires tapes.
+
+              - according to engineering opinion the mirror will
+                phased out when the Bank is introduced.
+
+       d) printers
+
+               - We need 4 types of printers :
+
+                       - fast for data processing, not
+                         necessarily high quality
+
+                       - letter quality.  Need enhancements, high
+                         quality print but not necessarily high
+                         speed.
+
+                       - graphics.  Two types, a) dot matrix and
+                         b) plotter.
+
+                       - laser printer.  Has all above but is
+                         expensive.  Typesetting capabilities.
+
+               - All 4 must be a shared resource on the
+                 net.  A single server should support any
+                 combination of letter
+                 quality, data processing and graphic printers.
+                 The laser printer
+                 must have the network interface built into it.
+
+               - graphics requires workstation software to format
+                 the data to be sent to the server controlling
+                 the printer.  This software must use data files
+                 from existing applications, like LogiCalc, or
+                 new data from new applications which allow the
+                 user to draw, like chart making or engineering
+                 designs.
+
+               - Instead of requiring the application to send
+                 printer dependent character sequences a Graphics
+                 server can be developed which supports a printer
+                 independent interface to perform graphics.
+
+               - Typesetting can be accomplished with workstation
+                 software which can format a file and send it to
+                 the laser printer server.  The laser printer interprets
+                 the data and prints it.  This requires a pretty
+                 substantial computer to be built into the laser
+                 printer, the level of a Concept.  It may also
+                 require local mass storage, which is needed to
+                 store fonts and possibly management software.
+
+               - A low cost printer must be available to attach
+                 to the workstation for personal use.
+
+       e) software development tools
+
+               - Most buyers of mini computers will build custom
+                 software to fulfill their business requirements.
+                 It is necessary we provide adequate development
+                 tools, like the minis, for this purpose.
+
+               - Internal and external software developers
+                 seperate from our customers require these to
+                 build and expand our product.
+
+               - products :
+
+                       - Report generator
+                       - languages: Pascal, C, COBOL,
+                         Fortran, BASIC, Modula-2, Assembly,
+                         Ada (?), others???
+                       - symbolic debuggers.
+                       - design tools
+                         - Software to build on-line graphic
+                           designs such as flowcharts,
+                           structure trees, etc.
+                         - HIPO charts
+
+                       - revision maintenance
+                         - logs current sources and archives
+                           older revisions.
+
+                       - libraries for workstation, server, net,
+                         and protocol interfaces.  Allows new
+                         applications to be added to the
+                         workstation while maintaining user
+                         interface standard.  Also, may give data
+                         and function integeration between
+                         applications, ie. sharing data.
+
+                       - complex command language.  Allows user
+                         to build new applications from existing
+                         software.  Also needed for installation
+                         management The command interface must
+                         take input from the net, workstation
+                         keyboard, and the data coms
+                         transparently.
+
+                      - a data base language interface to the
+                        programming languages.
+
+       f) installation management tools
+
+               - configuration management
+                       - Constellation II software
+                       - Each server needs installation procedure
+                       - mass stroage, nodes, users/servers, net
+                         topology.
+
+               - diagnostics
+                       -servers
+                       -workstations
+                       -disks
+                       -net
+
+               - activity monitors,
+                       Monitoring of the system performance.
+                       This is the network and the servers.  It
+                       tells the system manager what is the
+                       "system as the net" is doing.
+                            - accounting ??
+
+               - command language on workstation
+                       Allows simple executable procedures to be
+                       developed to perform management task;
+                       e.g. backup.
+
+
+2) Main frame connect market place
+
+   All the previously mentioned products would be useful or
+   necessary with this market.  However, emphasis is not on
+   building a self-sufficient net but in providing access to a
+   main frame for the multi-user applications and using net-local
+   resources for the single-user applications performed on the
+   workstations.  Data from the main frame is available to the
+   net via file transfers and cached data base mechanisms.
+
+
+       Product areas :
+
+       - Terminal emulators
+               - needs gateways, same type as the previously
+                 mentioned.
+               - protocols - mainly terminal and internet
+                             protocols
+
+       - Cached data bases
+
+         User has access to shared global data on the main frame
+         via 2 methods :
+
+         1) For data base updates, the user runs a terminal
+            emulator and talks to the main frame's user interface
+            to change the data base.  A special user friendly
+            interface to the data base can be written on the
+            workstation.  This method may require software to be
+            written on the main frame to support a remote program
+            language interface to the data base.
+
+         2) If the user wishes to access the data but not update
+            it then net-local applications can send data requests
+            to the main frame to get large blocks of information
+            and store it locally.  Then, the user can do all the
+            data manipulations locally removing the burden from
+            the mainframe.
+
+            For example, a program to do inventory forecasting
+            may read the production data base on the main frame.
+            It gets a large "chunk" of data and puts it on the
+            local net resources, station local disks or some
+            server.  Afterwards, all work done on the data is
+            through the local resources and does not tie up the
+            main frame's resources.
+
+      - single user software - professional tools
+
+               - WP
+               - spread sheet
+               - personal record management
+               - graphics
+                     - draw
+                     - graphic display of numeric
+                       data
+                     - charts and diagrams
+               - order processing
+               - sales forecasting
+               - market research tools
+
+               - training programs
+
+       - Mail service
+               - intra-net
+               - inter-net
+               - omninet to other systems local mail
+                 service.  E.g. a main frame internal
+                 mail system.
+
+           - mail server
+               - I prefer a server for :
+
+                   a) data independence, data structures internal
+                      to the mail system are hidden from the
+                      workstations and other networks.
+
+                   b) provides a functional rather than dat
+                      interface.  Simplify the inter-net sending
+                      of mail.  A gateway or server will not have
+                      to understand how to update the data base.
+                      Sender just uses the mail protocol to talk
+                      to any server.
+
+           - local software interface either to server or mail
+             system data base.
+           - packet switching interface
+           - file server for control and storage of the mail data
+           - Datagram and Virtual Circuit mechanisms must be
+             built.
+
+3) Concept must have a superior human interface
+
+       - Graphic not line oriented command interface
+       - graphics on display
+       - touch panel
+       - limitation of keyboard usage.
+
+
+Software only products :
+
+       - terminal emulators and data transfer utilities
+            - get data from :
+               1) omninet using a terminal protocol
+               2) a local datacom
+       - electronic mail
+       - protocols
+         -internet    -terminal       -server special
+       - applications
+       - virtual circuits
+               -redo Concept net driver structure
+
+Hardware products/minimal software
+
+       - Disk drives w/ disk server built in
+       - Printers w/ net interface built in
+
+Hardware/Software products
+
+       - Servers
+           They are a centralized facility to provide a service
+           and manage that service on the network.  They also
+           remove the necessity to duplicate the development
+           effort across all workstions on the net, except for
+           the communications interface.  This is important with
+           heterogeneous workstations, e.g. Concepts, Apples, and
+           IBM PC's.
+
+           Interfaces to server functions must be compatible to
+           workstation driver interfaces.  This allows the
+           applications to transparently use local devices, like
+           printers.  Also, the system interface to the
+           application must make it transparent to the
+           application whether it is talking to a server or a
+           local device.
+
+               - file server, has local disks -+ will need the
+               - data base, has local disks   -+ same
+                                                 hardware
+               - Bank
+
+               - printer
+
+                   - supports the Concept defined character
+                     enhancements.  Since no standard exists for
+                     printers, we provide a printer independent
+                     mechanism for performing character
+                     enhancements.
+                   - controls auto line feed on a server global
+                     and file basis
+                   - does tab expansions on a server global and
+                     file basis
+                   - delete nulls from the character stream
+                   - has a 2 level transparent mode where it
+                     1) does not interpret any of the enhancement
+                     character sequences but does take then out
+                     of the stream and,
+                     2) where it does not do any character stream
+                     interpretation.  This second includes any
+                     functions previously mentioned.
+
+               - modem
+                   - batching files for off-time
+                     data transfer
+
+               - time/event generator
+                   - event generator provides :
+                       wake up calls,
+                       timeouts,
+                       sends message to start an application
+                        running at certain time.
+
+                     It provides an interrupt at some time
+                     interval or at a certain time.
+
+                   - This server can be developed on the
+                     current comm server hardware.
+
+               - Network manager server
+
+                   - Provides Const II management utilities to
+                     net.
+
+                   - Makes sure all active workstations are
+                     still active.  If not broadcasts message to
+                     net resources and updates Const II
+                     structures.
+
+                   - Provides a semaphore service with timeouts.
+                     User must update the semaphore periodically
+                     or server will release it.
+
+                   - Name service (?)
+
+       - gateways
+
+               - Broadband and baseband
+                 UBI or Sytek
+               - SNA
+               - X.25
+               - Phone
+                   - interface to national or public packet
+                     switching networks.
+                     e.g. ARPA net
+                          TYMNET
+                          Dow Jones
+                          Source
+                   - upgraded modem server with public net
+                     protocols
+               - PABX ?????
+
+       - The Workstation
+
+            Two perspectives define what the user's node of the
+            network looks like.  The "system as a net"
+            perspective views the local network as a complete
+            system with the shared resources distributed over the
+            net.  It has workstations which supply the user an
+            interface and access method to the network's shared
+            resources.  The other sees the local network as a net
+            of complete systems.  Therefore, the user works on a
+            sophisticated computer with many local resources.
+            All the network provides is a means for sharing local
+            information and resources between computers.
+
+         - somewhere in between
+
+            The workstation has limited local resources.  It
+            provides the user with a processor and memory to run
+            applications.  If local resources exist they are
+            personal not system global.  Globally shared
+            resources are on the network.  The workstation's
+            operating system provides a means for the user to
+            manage and use the station local resources as well as
+            provide access to the net shared resources.
+
+            For most local resources, for example printers and
+            floppies, the personal resource is private and need
+            be available only to the attached workstation.  With
+            local hard disks the user needs the ability to make
+            the files on the disk available to users on other
+            workstations.  Local files can be shared by at least
+            two means.  The first is very simple.  If a user
+            wants a local file available to the net he puts a
+            copy of it on the shared disks on the net.  Any time
+            multiple copies of the same file are maintained
+            consistency problems will develop.  In other words,
+            after the user changes one copy he must change the
+            other which may not happen all the time.  Therfore,
+            the two files do not contain the same information and
+            are inconsistent.  This may not always be important.
+
+            The second method involves communication and control
+            software in the workstation operating system.  The
+            workstation OS has the ability to take requests from
+            the net to access files on the local disk, if the
+            user has allowed the file to be available to the net.
+            The OS also has the ability to request the use of a
+            file from another workstation.  Allowing a user to
+            access files on any other workstation as well as on
+            the shared network resources generalizes the file
+            server concept.
+
+            From the "system as a net" perspective, the user on a
+            typical workstation has minimal system management
+            responsilities.  1 person can manage all of net
+            resources from their own workstation.  The management
+            of shared resources must never interfere with local
+            resources on other workstations.
+
+            The idea of workstations having limited resources and
+            providing access to files as the only shared local
+            resource is contrary to the concept of the
+            sophisticated node, like a UNIX machine or mini
+            computer.  On these nodes management of net mechanism
+            is local and the net has minimal shared resources.
+            They have many node local resources.  The nodes
+            share resources by making their local resources
+            available to other nodes.
+            Plexus net?????
+
+               - Concept OS needs multi-tasking
+
+                  1) allow user to switch between functions
+                     operating in different windows. This is
+                     what I mean by concurrent windows.
+
+                  2) allow applications and operating systems to
+                     be divided into multiple processes that
+                     perform a well defined function.  This
+                     would allow messages from the network to be
+                     displayed while the user at the station is
+                     performing another task.  Or allow network
+                     management activities to run will user is
+                     running another aplication.
+
+               - A more generalized communications structure
+                 which makes inter-process comunication over the
+                 network or within the same machine transparent.
+                 Suggested structure :
+
+                       - IPC based on queues and message passing
+                       - net interface and naming built into IPC
+
+                 This will allow net based I/O to be treated, if
+                 desired, the same as local I/O from the keyboard
+                 and the display.  With this function
+                 applications can be run remote over the network
+                 from any workstation.  It also makes the
+                 integration of the servers a straight forward
+                 task.
+
+               - Add a new file system based on a revised
+                 workspace structure. The new file system will
+                 emphasize record I/O and reliability.
+
+               - graphic/screen oriented human interface
+
+                   - touch panel instead of mouse
+                   - no icons.  The mouse/icon interface is to
+                     inflexible.  Once the user has become
+                     familiar with the system the slow and
+                     cumbersome cursor movement impedes the
+                     user from developing further skills with
+                     the system.
+                   - Limited keyboard input. However, this can
+                     become more important as the user gains
+                     familiarity with the system.  Function keys
+                     give the user a means to merge sequence of
+                     input operations into a single input action
+                     that the mouse/icon interface forces the
+                     user to enter individually.
+
+               - Add the Memory management unit to the Concept
+                 hardware. Neccesary to support sophisticated OS
+                 with adequate memory management.
+
+               - Change the I/O structure.
+                   1) use vectored interrupts for the I/O
+                      expansion slots. The user interrupts.
+                   2) provide an interrupt mask for the
+                      auto-vector and the vectored interrupts.
+                      This allows selective disabling of
+                      interrupts.
+                   3) Get rid of the Apple bus.  Put on a 68K
+                      compatible I/O bus structure.
+
+               - Upgrade the minimum memory size of the machine
+                 to 1 megabyte.  Give 2 megabytes as a option.
+                 The Lisa is 1 meg minimum.  Technically,
+                 according to Mike Florio, 1 megabyte will almost
+                 free the workstation from the need to swap a
+                 process.
+
+        - Other machines, primarily IBM PC and Apples
+
+               - run terminal emulators to servers to do special
+                 function available on Concept.  For example,
+                 Const II management software runs on a special
+                 net resource management server.  This allows us
+                 to write the software once and not for every
+                 machine we support.
+
+               - some net software, user level, available on
+                 these machines. Example:  ???
+
+               - must be able to use shared resources, but not
+                 necessarily be able to manage them.
+
+                        - Const II
+                        - File servers
+                        - printer/modem servers
+                        - time/event server
+

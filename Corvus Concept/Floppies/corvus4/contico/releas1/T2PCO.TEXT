@@ -1,0 +1,104 @@
+
+
+                                         26-Apr-82
+
+This pco covers CP/M utilities for the TRS-80 Model II.
+
+          6/10/20 (TT 8" media standard IBM format)
+
+This release supercedes all previous releases for this product.
+This release includes support for pipes and spooling; it also includes
+firmware version 17.3.
+
+CLINK2.ASM is set up as follows:
+
+  - link above
+  - Z80B
+  - 10 MB drive
+  - 2 pseudo drives
+  - pipes area starting at block 64
+  - block size of 8k
+  - memory size of 64k
+
+Note that the source utilities floppy for the TRS-80 Model II, (TT)
+is the same as the one for the S-100, (S/TT).
+
+To copy floppies:
+-----------------
+
+The TRS-80 floppies are copied on the CCS.
+
+Boot the CCS with the CCS System Utilities disk.
+Use the CCCOPY program to format and copy.
+Use the CRCK4 program to verify the contents.
+
+The floppy labels are listed below.
+
+TT Utilities-vol 1 of 2             S/TT Source Utilities-vol 1 of 1
+for CP/M 2.2                        for CP/M 2.2
+Release date: 13-Apr-82             Release date: 13-Apr-82
+CP#: 8100-08635                     CP#: 8100-08637
+
+TT Utilities-vol 2 of 2
+for CP/M 2.2
+Release date: 13-Apr-82
+CP#: 8100-08636
+
+$P
+Files on each floppy are shown below:
+
+Vol 1               Version             Date         CRC
+TT      .--1         -    -                         00 00   0k
+INDEX   .DOC         4/13/82            -  -        5D 5B   6k
+CERROR  .DOC         -    -             -  -        34 81   2k
+PUTGET  .COM         1.4 S/TT           -  -        76 7F   2k
+CLINK2FV.COM         -    -             -  -        67 19   1k
+CLINK2TN.COM         -    -             -  -        7B DC   2k
+CLINK2TW.COM         -    -             -  -        9B 62   2k
+CLINK7FV.COM         -    -             -  -        87 50   2k
+CLINK7TN.COM         -    -             -  -        51 2F   2k
+CLINK7TW.COM         -    -             -  -        F1 DB   2k
+CDIAGNOS.COM         2.3 S/TT           -  -        DE BC   9k
+CDIAGNOS.DOC         -    -             -  -        6C BE   6k
+CORVB173.CLR         17.3               -  -        A1 21  31k
+MIRROR  .COM         1.32S/TT          -  -         D0 74   6k
+SEMA4   .COM         1.3 S/TT           -  -        3A 16   3k
+PMGR    .COM         1.1                -  -        52 89  17k
+SPOOL   .COM         2.O                -  -        AA 8C  31k
+DRIVEL  .COM         1.0                -  -        22 D7  15k
+
+Bytes remaining:  101k                          Sum=68 1D
+
+Vol 2
+TT      .--2         - -                             00 00  0k
+CLINK2  .ASM         1.09S/TT           -  -         48 E1 31k
+SEMA4   .ASM         1.3 S/TT           -  -         67 04 16k
+SPOOLGEN.SUB         -    -             -  -         4A FF  1k
+SPOOL   .SRC         -    -             -  -         74 75  1k
+SPOOL   .DEF         -    -             -  -         40 8E  3k
+SPOOLC  .PAS         -    -             -  -         D6 44  4k
+SPOOL   .PAS         -    -             -  -         17 01 20k
+SPOOLM  .PAS         -    -             -  -         17 51  2k
+
+PIPEGEN .SUB         -    -             -  -         39 9F  1k
+PIPES   .SRC         -    -             -  -         81 14  1k
+PIPED   .PAS         -    -             -  -         FD 0D  4k
+PIPEC   .PAS         -    -             -  -         C8 C0  4k
+PIPES   .PAS         -    -             -  -         00 73  7k
+
+CPMIO   .MAC         -    -             -  -         F6 AE  9k
+CLOADR  .ASM         1.4 S/TT           -  -         89 B7  4k
+CBOOT   .ASM         1.3 S/TT           -  -         73 67  4k
+BIOSC   .ASM         1.22S/TT           -  -         BF 76 21k
+
+Bytes remaining: 110k                            sum=7F 48
+
+Source Utilities
+S/TT-SRC.--1         - -                             00 00  0k
+MIRROR  .ASM         1.32S/TT           -  -         AE EA 31k
+CDIAGNOS.ASM         2.3 S/TT           -  -         74 2E 63k
+PUTGET  .ASM         1.4 S/TT           -  -         36 00 18k
+
+Bytes remaining:129k                             sum=59 18
+
+$P

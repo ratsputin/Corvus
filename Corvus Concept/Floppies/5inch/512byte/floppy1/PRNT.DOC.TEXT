@@ -1,0 +1,507 @@
+
+    file : prnt.doc.text
+    date : 27-January-1983
+    author: Keith Ball
+
+    Description of printer driver interface to system
+
+          The printer driver uses the following standard driver
+    commands :
+
+          1) Unitwrite : send characters to printer or turn on/off
+                         enchancements.
+
+          2) Unitbusy  : Boolean response stating whether or not the
+                         printer driver is able to accept more
+                         characters.
+
+          3) Unitclear : Clear the internal buffer of the driver and
+                         reinitialize the state of the driver
+                         enhancements.
+
+          4) Unitinstall : Initializes the driver to its default
+                           state.
+
+                   a) Attach the driver to the default Datacom driver,
+                   b) initialize the UART to its default state,
+                   c) initialize the driver's internal variables,
+
+          5) Unitunmount :  Deattach driver from system.
+
+          6) Unitstatus : used for several driver dependent functions.
+
+                  a) change or return the UART state
+                  b) return state of driver, i.e. buffers.
+                  c) change state of driver  Unitwrite to Transparent
+                     mode or Translate mode.
+                  d) install a new Alternate Character Translation
+                     Table.
+                  e) Attach driver to another unit.
+                  f) select the pitch the driver/printer is working in.
+                  g) select the number of lines per inch.
+                  h) install a new Printer Action table
+                  i) return state of pitch and number of lines per
+                     inch.
+
+    Unitwrite
+
+          The Unitwrite function sends characters to the printer.
+
+          When the driver is in Translation mode it will translate the
+    character stream going to the printer.  In this mode the driver can
+    add or remove enhancements to the characters sent to the printer.
+    Enhancements are controlled by an escape character sequence.  The
+    sequence is :
+
+          ESCAPE e FLAGBYTE
+
+    where ESCAPE is the control character escape (hex value $1B), e is
+    the ASCII character for lower case e (hex value $65), and FLAGBYTE
+    is a byte (one character) of bit flags representing the state of
+    the enhancement flags. The FLAGBYTE has the form :
+
+          BIT NUMBER              FUNCTION
+
+            0                     Bold enhancement
+            1                     Strike Out enhancement
+            2                     Inverse enhancement (not implemented)
+            3                     Underline enhancement
+            4                     SuperScript enhancement
+            5                     SubScript enhancement
+            6                     bit must always be 1
+            7                     Double Underline enhancement
+                                  (not implemented)
+
+    The Inverse and Double Underline enhancements are not implemented
+    in the printer driver.  Bit 6 is always 1 so the byte can never
+    have a value in the control code range (hex $00 thru $1F).  This is
+    necessary to prevent trouble when transmitting this character
+    sequence over DataCom lines.
+
+          After sending an enhancement escape sequence all character
+    symbols printed will have the enhancements specified by FLAGBYTE.
+    The driver will keep the enhancements effective after a Carriage
+    Return.  The enhancements performed by the printer, Bold and
+    Underline, will be turned on again after every CR.  To turn off an
+    enhancement send another Escape e sequence with the specified
+    enhancement bit flag clear (0).  The other flags must have their
+    previous state values in order not to change them.
+
+          The strikeout enhancement is performed on a per character
+    basis.  A character to be struckout is first printed.  A backspace
+    operation is performed on the printer.  Finally, the overstrike
+    character, the minus sign "-" (hex value $2D), is printed.  Any
+    printer used with this driver must be able to perform a single
+    character back space using the backspace character code (hex value
+    $08).  Furthermore, the printer must perform the backspace operation
+    using the same character spacing used on the character that is
+    struckout.  This last requirement is needed to properly do
+    proportional spacing.
+
+          Superscript and subscript are performed by first making the
+    forms advance distance shorter.  Then a Line Feed or Reverse Line
+    Feed operation is done to lower or raise the print position to an
+    area between lines.  The forms advance distance is then restored to
+    the normal value for the current number of lines per inch.  This is
+    necessary in case the enhancement is carried on after a CR.  When the
+    enhancement is turned off then the same operations are performed
+    except the opposite forms advance direction is used.
+
+          The function in translate mode accepts another Escape sequence
+    to do Overstrike.  This sequence is :
+
+          ESCAPE O FIRSTCHAR OVERCHAR
+
+    where ESCAPE is the control character Escape (hex value $1B), O is
+    the ASCII character for upper case o (hex value $4F), FIRSTCHAR is
+    the character to be overstruck, and OVERCHAR is the character to
+    overstrike FIRSTCHAR.
+
+          The overstrike enhancement is performed with the same method
+    as the strikeout enhancement.  It is on a per character basis using
+    the backspace character.  It also has the same requirements in terms
+    of the backspace operation on the printer.
+
+          The Unitwrite function will also do proportional spacing on a
+    line per line basis.  Proportional spacing does not have to start at
+    the beginning of the line or stop at the end of the line.  It can
+    begin and end anywhere.  To turn on proportional spacing, send the
+    following escape character sequence to the driver before sending all
+    the characters to be proportionally spaced.
+
+          ESCAPE P #_OF_Chars #_OF_Pads
+
+    where ESCAPE is the ASCII escape char ($1B), P is the proportional
+    spacing indicator character upper case P (hex value $50), #_OF_Chars
+    is an unsigned byte representing the number of characters to do the
+    proportional spacing with, and #_OF_Pads is an unsigned byte
+    representing the number of character spaces to pad with.
+
+          The driver performs proportional spacing by adding extra micro-
+    spaces between each of the character symbols.  This mechanism takes
+    the number of full character pads needed and divides the space as
+    equally as possible among the characters.  It will add an extra 1, 2,
+    or 3 1/120ths of an inch between each character.  The maximum number
+    of character space pads is a function of the pitch.
+
+         10 pitch :  3/12 * (#_OF_Chars) maximum number of pads
+         12 pitch :  3/10 * (#_OF_Chars) maximum number of pads
+
+          If the number of pads needed is greater than the amount of micro-
+    spaces the driver can add the driver will return an error I/O result
+    code.  Unlike with most errors the driver detects, it does not
+    immediately return to the caller if more characters are available.  It
+    processes the remaining characters with the proportional spacing off.
+
+          The driver recognizes a special character, hex code $A0, for
+    Alternate space.  This is the "rubber" space code.  It is added by some
+    applications, for example EdWord, to lines for proportional spacing.
+    This character is not sent to the printer but is dropped by the driver
+    if proportional spacing is on.  If proportional spacing is off the
+    Blank character code ($20) is sent to the printer.
+
+          If the "rubber space" pad characters are used to justify
+    proportionally spaced lines then if the proportional space operation
+    fails the line will be printed using this simple form of justification.
+
+          All characters, except characters within the escape sequences and
+    the "rubber" space previously mentioned, which are in the Alternate
+    character set (hex values $A0 to $FF) are translated via the Alternate
+    Character Translation Table into a character sequence which will get
+    the character's symbol printed.  This translation is performed prior to
+    any other processing of the Unitwrite character stream.  Therefore, the
+    escape sequence for Overstrike may be used as the translated sequence
+    for an Alternate character.  The table has the following form :
+
+          RECORD
+             PTR_CHAR_SEQ : pCHAR_SEQ;
+             CHAR_INDEX   : ARRAY[0..96] OF Unsigned_byte;
+             CHAR_SEQ     : ARRAY[0..LAST_STR] OF str8;
+             END;
+
+    PTR_CHAR_SEQ is a pointer to the CHAR_SEQ array.  The array CHAR_INDEX
+    is indexed by the Alternate character minus $A0.  The value is either
+    an index into the array CHAR_SEQ or $FF, which means no CHAR_SEQ string
+    for this Alternate character.  CHARSEQ is a variable length character
+    sequence with a maximum length of 8 characters which is sent to the
+    printer for any Alternate character with a CHAR_INDEX which points to
+    it.  Therefore, several Alternate character codes can use a single
+    character sequence.  Alternate characters with a CHAR_INDEX value of
+    $FF do not have a character sequence.  They are sent to the printer
+    with bit 7 clear, therefore, translated to a 7 bit character code.  The
+    driver has a default table defined for the NEC 7710 printer with NEC
+    thimble Courier 72.
+
+    ******* show default table ************
+
+          If the driver is in Transparent mode NONE of the previously
+    mentioned character stream processing is performed.  The characters
+    are sent directly to the printer with no enhancements.  This mode
+    is useful for sending special printer control escape sequences
+    directly to the printer.  It is also useful for doing graphics with
+    the printer.
+
+    Unitbusy
+
+    This function states whether the printer driver can accept more
+    characters into it's buffer.  TRUE means the buffer is NOT full.
+
+    Unitstatus
+
+    All functions that are passed through to the attached unit have
+    function codes less than $80.  All internally processed functions,
+    except the port select function, have function codes greater than or
+    equal to $80 and less than or equal to $FF.  The select port function
+    is processed internally but ha a function code less than $80 in order
+    to maintain compatibility with the old printer driver.
+
+            a) change or return the UART state
+
+               1) pass through functions (compatible with old driver)
+
+                  Baud rates (fc = 1), parity (fc = 2), word size (fc = 4),
+                  handshake protocol (fc = 5)
+
+               2) internally processed functions (compatible with old driver)
+
+                  port (fc = 3)
+
+
+            b) return state of driver, i.e. buffers.
+
+                  Free space in transmit buffer (fc = 0).
+
+            c) change state of driver Unitwrite to Transparent
+               mode or Translate mode.
+
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which has a single integer field (1 = translate mode,
+                  0 = transparent mode), and FuncCode is a function
+                  code of $80.
+
+                  When the driver is put in Transparent mode all
+                  enhancements performed by the printer are turned off.
+                  What about the characters in the buffer, if any?
+                  Answer :  don't clear the state until the chars in
+                  the buffer are sent out then during interrupt time
+                  clear the state of driver and printer.  May need some
+                  type of mark either in the buffer or a pointer to
+                  end of the possibly enhanced characters.
+
+                  Default state is Translate mode.
+
+            d) install a new Alternate Character Translation
+               Table.
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which is a single pointer which points to the
+                  translation table, and FuncCode is a function code of
+                  $81.
+
+                  Default is the table for the NEC 7710 type printer
+                  with the Courier 72 thimble listed above.
+
+                  If the pointer to the new table is Nil (equal to zero)
+                  then the default Alternate Character Translation table
+                  is used.
+
+            e) Attach driver to another unit.
+
+                  The function allows the user to send the output to any
+                  driver mounted in the system.  Uses the unitwrite
+                  and unitstatus interfaces.
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which has a single integer field which is the unit
+                  number to attach the driver, and FuncCode is a
+                  function code of $82.
+
+            f) Change the pitch (CPI) of the driver.
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which has a single integer field representing the new
+                  pitch, and FuncCode is a function code of $83.
+
+                  The pitch parameter has 2 possible values, 1 or 0.  A
+                  parameter value of 1 represents 10 pitch and one of 0
+                  represents 12 pitch.
+
+                  Perform this function when the pitch of the printer is
+                  changed.  It is necessary for proportional spacing.
+
+                  Default is 10 pitch.
+
+            g) Change the lines per inch of the driver.
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which has a single integer field representing the new
+                  linesper inch, and FuncCode is a function code of $84.
+
+                  The lines per inch parameter has 2 possible values, 1
+                  or 0.  A parameter value of 1 represents 6 lines per
+                  inch and one of 0 represents 8 lines per inch.
+
+                  Perform this function when the lines per inch of the
+                  printer is changed.  It is necessary for subscript and
+                  superscript.
+
+                  Default is 6 lines per inch.
+
+            h) Install a new Printer Action Table
+
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which is a single pointer which points to the new
+                  Printer Action Table, and FuncCode is a function code
+                  of $85.
+
+                  This function allows the caller to install a new
+                  Action Table to support a new printer.  The table
+                  defines the character sequences to perform the
+                  enhancement operations on a given printer.
+
+                  If the pointer to the new table is Nil (equal to zero)
+                  then the default Action table is used.
+
+                  The following is a list of the functions necessary
+                  for a given printer:
+
+                       1) Turn on Underline.
+                       2) Turn off Underline.
+                       3) Turn on Bold (Nec calls this enhancement
+                          Shadow).
+                       3) Turn off Bold (Nec calls this enhancement
+                          Shadow).
+                       4) Reverse (or Negative) Line Feed.  This function
+                          must be affected by a change to the From
+                          Advance distance (see 5).
+                       5) Change Form Advance distance for variable line
+                          feed size.  This is used with 4 and 5 to do Sub
+                          and Super script.
+                       6) Change the character spacing.  This is needed
+                          for proportional spacing.
+
+                  The table has the following structure, represented as
+                  a pseudo Pascal record.  It is currently 102 bytes.
+
+                  record
+                       UnderLineOn    : str7;
+                       UnderLineOff   : str7;
+                       BoldOn         : str7;
+                       BoldOff        : str7;
+                       RevrsLF        : str7;
+                       BackSpace      : str7;
+                       SixLinesInch   : record
+                                          SubSuperFormAdv : str7;
+                                          NormalFormAdv   : str7;
+                                          end;
+                       EightLinesInch : record
+                                          SubSuperFormAdv : str7;
+                                          NormalFormAdv   : str7;
+                                          end;
+                       Pitch10        : record
+                                          NormalSpacing   : str7;
+                                          Micro1Extra     : str7;
+                                          Micro2Extra     : str7;
+                                          Micro3Extra     : str7;
+                                          end;
+                       Pitch12        : record
+                                          NormalSpacing   : str7;
+                                          Micro1Extra     : str7;
+                                          Micro2Extra     : str7;
+                                          Micro3Extra     : str7;
+                                          end;
+                       end;
+
+                       Type description :
+
+                       str7 :  7 character Pascal string made up of 8
+                       bytes.  The 1st byte is the number of valid
+                       characters in the other 7 bytes of the data
+                       structure.
+
+                       Field description :
+
+                       UnderLineOn :  Character sequence for printer to
+                       turn underline on.  This must stay on until sent
+                       sequence to turn underline off.
+
+                       UnderLineOff :  Character sequence for printer to
+                       turn underline off.
+
+                       BoldOn :  Character sequence for printer to turn
+                       Bold on.  This enhancement is called Shadow on the
+                       NEC spinwriter.  This enhancement is assumed to
+                       turn off automatically after the printer receives
+                       a CR (Carriage Return hex value $0D) character.
+
+                       BoldOff :  Character sequence for printer to turn
+                       Bold off.  This enhancement is called Shadow on
+                       the NEC spinwriter.
+
+                       RevrsLF :  Character sequence for printer to
+                       perform a Reverse (or Negative) LineFeed
+                       operation.  This function is necessary for
+                       Subscript and Superscript.
+
+                       BackSpace :  Character sequence for printer to
+                       perform a Back Space operation.  On most printers
+                       this is the code $08 for BS.  This function is
+                       necessary for Overstrike and Strikeout.
+
+                       SixLinesInch :  This record's fields are used
+                       when the printer is in 6 lines per inch mode.
+
+                       EightLinesInch :  This record's fields are used
+                       when the printer is in 8 lines per inch mode.
+
+                       SubSuperFormAdv :  Character sequence to change
+                       the Form Advance distance to around a quarter of
+                       the normal Form Advance distance.  This field
+                       varies according to the Lines per Inch used by
+                       the printer.  For the Nec 7710 printer using 6
+                       lines per inch, this form advance distance is 2/48
+                       of an inch.  The character sequence is Escape,
+                       "]", "Q".  This function must change the form
+                       advance distance on the reverse line feed
+                       operation as well as the line feed operation.
+
+                       NormalFormAdv :  Character sequence to change the
+                       Form Advance distance to the standard distance
+                       used by the current pitch.  This field varies
+                       according to the Lines per Inch used by the
+                       printer.  For the Nec 7710 printer using 6 lines
+                       per inch, the normal form advance distance is 8/48
+                       of an inch.  The character sequence is Escape,
+                       "]", "W".
+
+                       Pitch10 : This record's fields are used when the
+                       printer is in 10 pitch or 10 characters per inch
+                       (CPI).
+
+                       Pitch12 : This record's fields are used when the
+                       printer is in 12 pitch or 12 CPI.
+
+                       NormalSpacing :  Character sequence to set the
+                       printer spacing to normal distance for the given
+                       pitch.  For the NEC 7710 running at 10 pitch the
+                       spacing value is 12/120 of an inch and the
+                       character sequence is Escape, "]", "L".
+
+                       Micro1Extra :  Character sequence to change the
+                       character spacing by adding an extra 1/120th of
+                       an inch.  For the NEC 7710 running at 10 pitch
+                       the spacing value is 13/120 of an inch and the
+                       character sequence is Escape, "]", "M".
+
+                       Micro2Extra :  Character sequence to change the
+                       character spacing by adding an extra 2/120ths of
+                       an inch.  For the NEC 7710 running at 10 pitch
+                       the spacing value is 14/120 of an inch and the
+                       character sequence is Escape, "]", "N".
+
+                       Micro3Extra :  Character sequence to change the
+                       character spacing by adding an extra 3/120th of
+                       an inch.  For the NEC 7710 running at 10 pitch
+                       the spacing value is 15/120 of an inch and the
+                       character sequence is Escape, "]", "O".
+
+                  The default table is for the NEC 7710 printer.  It is
+                  listed below.
+
+            i) Characters and Lines per inch status
+
+
+                  Unitstatus( PrinterUnitNumber, ParamBlock, FuncCode );
+
+                  where PrinterUnitNumber is the unit number for the
+                  printer driver (6), ParamBlock is the parameter block
+                  which is a record of 2 integers, and FuncCode is a
+                  function code of $86.
+
+                  This function returns the current state of the
+                  Characters per Inch (CPI) and Lines per Inch (LPI).
+                  The first field in the parameter is the CPI.  It has
+                  a value of 1 for 10 CPI and 0 for 12 CPI.  The second
+                  field is for LPI.  It has a value of 1 for 6 LPI and
+                  0 for 8 LPI.
+

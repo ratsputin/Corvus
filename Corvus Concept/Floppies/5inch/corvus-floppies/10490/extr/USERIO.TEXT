@@ -1,0 +1,1686 @@
+UNIT UserIO;
+
+INTERFACE
+
+uses {$U /CCUTIL/CCLIB } ccdefn, ccWndIO, ccGrfIO, ccLblIO;
+
+const
+   UserIOVers = '2.0';
+   MaxMutes = 32; { Max number of mute keys }
+   MGCCOS = 10;
+   MGGENL = 5;
+   MGTIME = 1;
+   UnitTmr = 34;
+   UnitKbd = 35;
+   UnitDpy = 36;
+   UnitCom = 31;
+
+type
+   BelTyp = ( BelAck, BelWrn, BelErr, BelClik );
+   KeyTyp = (
+      KNUL,KSOH,KSTX,KETX,KEOT,KENQ,KACK,KBEL,           {00-07}
+      KBS, KTAB,KLF, KVT, KFF, KCR, KSO, KSI,            {08-0F}
+      KDLE,KDC1,KDC2,KDC3,KDC4,KNAK,KSYN,KETB,           {10-17}
+      KCAN,KEM, KSUB,KESC,KFS, KGS, KRS, KUS,            {18-1F}
+      KTEXT, KDEL,                                       {20-21}
+      KF1, KF2, KF3, KF4, KF5, KF6, KF7, KF8, KF9, KF10, {22-2B}
+      KF11,KF12,KF13,KF14,KF15,KF16,KF17,KF18,KF19,KF20, {2C-35}
+      KF21,KF22,KF23,KF24,KF25,KF26,KF27,KF28,KF29,KF30, {36-3F}
+      KF31,KF32,KF33,KF34,KF35,KF36,KF37,KF38,KF39,KF40, {40-49}
+      KCSRU, KCSRD, KCSRR, KCSRL, KHOME,                 {4A-4E}
+      KBTAB, KENTR, KTASK, KMENU, KBAD,                  {4F-53}
+      KSCRU, KSCRD, KSCRR, KSCRL,                        {54-57}
+      KC1, KC2, KC3, KC4, KC5, KC6, KC7, KC8, KC9,       {58-60}
+      KMouse);                                           { Mouse data waiting }
+   StrTyp = string[80];
+   pStrTyp = ^StrTyp;
+   MsgPac = Packed record
+              Grp : Integer;
+              Msg : Integer;
+              TXT : StrTyp
+              End;
+   pMsgPac = ^MsgPac;
+   MMode = (Txt,Grf);
+   MuteKey = Record
+               Symbol : Char;
+               Legal,
+               Alts   : StrTyp;
+             End;
+
+var
+   AppWin:    WndRcd;  { Current Application Window }
+   BkGrndOK:  boolean; { set to T for BACKGROUND processing }
+   CommFlg:   Boolean;
+   CmdWin:    WndRcd;  { Command WIndow             }
+   CsrWid:    integer; { width of blinking cursor   }
+   CurFrm:    integer; { Current frame              }
+   IdlTim:    longint; { ms50 of Idle time          }
+   Ms50:      longint; { ms50 since UserIOInit      }
+   NoMsg:     StrTyp;  { *** NO MESSAGE ***         }
+   ProcTim:   longint; { ms50 since last keypress   }
+   ProcWin:   WndRcd;  { Process Window             }
+   StrYes:    StrTyp;  { YES                        }
+   StrNo:     StrTyp;  { NO                         }
+   SysWin:    WndRcd;  { System Root Window         }
+   UsrWin:    WndRcd;  { User Root Window           }
+
+function  AsLong( S: StrTyp ): longint;
+function  AsStr( Bin, Rdx: longint ): pStrTyp;
+procedure Bell( Ton: BelTyp );
+procedure BoxWin( var Win: WndRcd; Mode: integer );
+procedure ClrMsg;
+function  Confirm( Pmt: pStrTyp; Dft: boolean ): boolean;
+function  GetC( Echo: boolean ): char;
+function  GetKey( Echo: boolean; var Key: KeyTyp ): char;
+Procedure InitMessages(Nam : StrTyp);
+Procedure InitMouse;
+Procedure InitMutes;
+Procedure LabelFrame;
+procedure LoadLabels( Frame: integer );
+procedure LockUserIO( procedure P );
+function  Max( x, y: longint ): longint;
+function  Min( x, y: longint ): longint;
+Function  MouseBusy : Boolean;
+Procedure MouseClear;
+Procedure MouseData(Var Valid, LB,MB,RB : Boolean; Var MX,MY : Integer);
+Procedure MouseMode(MD : MMode);
+function  Msg( GrpNum, MsgNum: integer ): pStrTyp;
+procedure Note( Ton, Dur: integer );
+function  PeekL( L: longint ): longint;
+function  PmtChr( Pmt:pStrTyp; Fold: Boolean; var Ans: char ): boolean;
+function  PmtInt( Pmt:pStrTyp; var Int: integer ): boolean;
+function  PmtStr( Pmt:pStrTyp; var Ans: StrTyp ): boolean;
+procedure PopWindow;
+Procedure PushCBuf(VAR C: Char);
+procedure PushWindow( var Win: WndRcd );
+Procedure ReleaseMsgs;
+procedure ResetCmdKey;
+Procedure SetMouse(MX,MY : Integer);
+Procedure SetScale(ScaleX,ScaleY:Integer);
+function  Subst( S, D: pStrTyp) : pStrTyp;
+procedure TellUsr( M: pStrTyp );
+function  TimeTrap( Tim: longint ): boolean;
+function  UpperCase(C : Char) : Char;
+function  UserIdle: boolean;
+procedure UserIOInit;
+procedure UserIOTerm;
+procedure Wait100ms( Tim: integer );
+procedure WaitForRtn;
+procedure WrtMsg( GrpNum, MsgNum: integer );
+procedure WrtpMsg( p: pStrTyp );
+
+
+IMPLEMENTATION
+
+const
+   TokText  = 256; TokEsc   = 257; TokCsrU  = 258; TokCsrD  = 259;
+   TokCsrL  = 260; TokCsrR  = 261; TokCR    = 262; TokTab   = 263;
+   TokBTab  = 264; TokBS    = 265; TokHome  = 266; TokF1    = 267;
+   TokF2    = 268; TokF3    = 269; TokF4    = 270; TokF5    = 271;
+   TokF6    = 272; TokF7    = 273; TokF8    = 274; TokF9    = 275;
+   TokF10   = 276; TokCF1   = 287; TokCF2   = 288; TokCF3   = 289;
+   TokCF4   = 290; TokCF5   = 291; TokCF6   = 292; TokCF7   = 293;
+   TokCF8   = 294; TokCF9   = 295; TokCF10  = 296; TokSF1   = 277;
+   TokSF2   = 278; TokSF3   = 279; TokSF4   = 280; TokSF5   = 281;
+   TokSF6   = 282; TokSF7   = 283; TokSF8   = 284; TokSF9   = 285;
+   TokSF10  = 286; TokCSF1  = 297; TokCSF2  = 298; TokCSF3  = 299;
+   TokCSF4  = 300; TokCSF5  = 301; TokCSF6  = 302; TokCSF7  = 303;
+   TokCSF8  = 304; TokCSF9  = 305; TokCSF10 = 306; TokStr   = 307;
+   TokAuto  = 308; TokBrk   = 309; TokWrnBel= 310; TokErrBel= 311;
+   TokKbdBel= 312; TokUline = 313; TokBold  = 314;
+
+   MaxDev = 36;
+   BADFRAME = 99;              { invalid frame # }
+   BADSTRING= 98;              { invalid line in file }
+   BADKEY   = 97;              { invalid function key }
+   WinTosMax = 10;
+   MousePort = 31;             { LogiMouse on port 1 }
+
+type
+   str15 = string[15];
+   Str250 = string[250];
+
+var
+   AttnTime    : integer;
+   BaseDig     : StrTyp;
+   BrkOn       : boolean;
+   CallFgnd    : boolean;
+   CBuf        : string[100];
+   CmdKey      : boolean;    { true if COMMAND key is depressed }
+   CmdMod      : boolean;
+   CurBlk1     : integer;
+   CurBlk2     : integer;
+   CurHeapPtr  : ^LongInt;
+   FrameName   : string[15];
+   FreBlk      : integer;
+   LblFrmFid   : file;
+   MsgCount    : Integer;      { eANumbere@ eAofe@ eAmessagese@ eAone@ eAthee@ eAheape@ }
+   MsgStr      : StrTyp; {storage for Subst}
+   MsgWinFul   : boolean;
+   MuteFlag    : Boolean; { TRUE if mute key was pressed }
+   MuteKeys    : Array[1..MaxMutes] Of MuteKey;
+   Mutes       : Boolean;
+   NumMutes    : Integer; { Number of active mute keys }
+   NumStr      : StrTyp; {storage for AsStr}
+   NxtKey      : KeyTyp;  { GetChr readahead (KEYTYP)  }
+   NxtChr      : char;    { GetChr readahead (ASCII)   }
+   PmtWin      : WndRcd;
+   PrvGrp      : longint;
+   ReadReqd    : boolean; { set it to F if no read reqd}
+   RtnWin      : pWndRcd;
+   Seed        : longint;
+   TblLoc      : longint;
+   TmrPrmBlk   : record case integer of
+                   0:( DelTid: integer; );
+                   1:( Adr: longint;
+                       Cnt: integer;
+                       Flags: integer;
+                       Tid: integer; );
+                 end;
+   Tok         : integer;
+   TrapFence   : longint;
+   WhichMute   : Integer;
+   WinStk      : array[1..WinTosMax] of pWndRcd;
+   WinTos      : integer;
+   CellHt,
+   CellWd,
+   XScale,
+   YScale,
+   MouseX,
+   MouseY      : Integer;
+   MouseUsed,
+   LeftButton,
+   MiddleButton,
+   RightButton : Boolean;
+   Mode        : MMode;
+
+
+Function BitTest(Data,BitNum : Integer):Boolean; EXTERNAL;
+
+Function BrkPress : Boolean; External;
+
+procedure GoState( S: integer );
+FORWARD;
+
+function pOSCurWnd: pWndRcd;
+EXTERNAL;
+
+function osVrtCrt: Boolean;
+EXTERNAL;
+
+procedure BackGround;
+EXTERNAL;
+
+{$S }
+{
+.PG
+}
+procedure ticker;
+begin
+   ms50 := ms50 + 1;
+   ProcTim := ProcTim + 1;
+   IdlTim := IdlTim + 1;
+end;
+
+
+{$S USERIO}
+(*
+Procedure InitMouse;
+
+Var
+  MouseCommand : Packed Array[0..1] of Char;
+
+Begin
+  MouseX := 0;
+  MouseY := 0;
+  XScale := 1;
+  YScale := 1;
+  Mode := Grf;
+  MouseUsed := True;
+  UnitClear(MousePort);
+  MouseCommand[0] := ' ';
+  UnitWrite(MousePort,MouseCommand,1);
+  MouseCommand[0] := 'S';
+  UnitWrite(MousePort,MouseCommand,1)
+End;
+
+
+Function MouseBusy;
+
+Begin
+  MouseBusy := UnitBusy(MousePort)
+End;
+
+
+Procedure MouseData;
+
+Const
+  SXMask = 239;
+  SYMask = 247;
+
+
+Var
+  XPlus,                       { TRUE if X disp. is positive }
+  YPlus : Boolean;             { TRUE if Y disp. is positive }
+  Raskin,
+  Counter : Integer;           { Retry counter }
+
+
+  Procedure GetByte(Var Byt: Integer);
+
+  Var
+    MData : Packed Array[0..1] Of Char;
+
+  Begin
+    Repeat Until UnitBusy(MousePort);
+    UnitRead(MousePort,MData,1);
+    Byt := Ord(MData[0])
+  End;
+
+
+Begin                  { MouseData }
+  Valid := True;
+  Counter := 0;
+  Repeat
+    GetByte(Raskin);
+    Counter := Counter + 1
+  Until (Raskin > 127) Or (Counter > 10);
+  If Counter > 10 Then Begin
+    Valid := False;
+    Exit(MouseData)
+    End
+  Else Begin
+    XPlus := BitTest(Raskin,4);
+    YPlus := BitTest(Raskin,3);
+    LB := BitTest(Raskin,2);
+    MB := BitTest(Raskin,1);
+    RB := BitTest(Raskin,0);
+    GetByte(Raskin);           { Get X displacement }
+    If XPlus Then MouseX := MouseX + Raskin Else
+                  MouseX := MouseX - Raskin;
+    GetByte(Raskin);
+    If Mode = Txt Then YPlus := Not(YPlus);
+    If YPlus Then MouseY := MouseY + Raskin Else
+                  MouseY := MouseY - Raskin;
+    MX := MouseX DIV XScale;
+    MY := MouseY DIV YScale;
+    If Mode = Txt Then Begin       { Text mode }
+      MX := MX DIV CellWd;
+      MY := MY DIV CellHt
+      End
+    End
+End;
+
+
+Procedure SetMouse;
+
+Begin
+  MouseX := MX * XScale;
+  MouseY := MY * YScale
+End;
+
+
+Procedure SetScale;
+
+Begin
+  XScale := ScaleX;
+  YScale := ScaleY
+End;
+
+
+Procedure MouseClear;
+
+Begin
+  UnitClear(MousePort)
+End;
+
+
+Procedure MouseMode;
+
+Var
+  CSPtr        : pCharSet;
+  CurWnd       : pWndRcd;
+
+Begin
+  Mode := MD;
+  If Mode = Txt Then Begin                       { Get window char set data }
+    CurWnd := pOScurWND;
+    CSPtr := curWND^.CharPt;
+    If OSvrtCRT Then Begin                       { Screen vertical }
+      CellHt := CSPtr^.bpch;                     { Char cell height }
+      CellWd := CSPtr^.lpch                      { Char cell width }
+      End
+    Else Begin                                   { Screen horizontal }
+      CellHt := CSPtr^.lpch;                     { Char cell height }
+      CellWd := CSPtr^.bpch                      { Char cell width }
+      End
+    End
+End;
+*)
+
+Function UpperCase;
+
+Begin
+  If C In ['a'..'z'] Then UpperCase := Chr(Ord(C) - 32)
+    Else UpperCase := C
+End;
+
+
+procedure ResetCmdKey;
+var i: integer;
+begin
+   CmdKey := false;
+   i := 0;
+   unitstatus( 2, i, $F8 );
+end;
+
+
+function Min;
+begin if x<y then Min := x else Min := y; end;
+
+
+function Max;
+begin if x>y then Max := x else Max := y; end;
+
+
+function TimeTrap;
+begin
+   TimeTrap := false;
+   if (TrapFence<Tim) and (Tim<=IdlTim) then begin
+      TimeTrap := true;
+      TrapFence := Tim;
+   end;
+end;
+
+
+function AsLong;
+var
+  I, Sign: integer;
+  Rdx, Sum: longint;
+  Dig: string[30];
+  DigVal: integer;
+begin
+  if length( S ) = 0 then S := '0';
+  S := concat( S, ' ' );
+
+  I := 1;
+  while (S[ I ]=' ') and (I<length(S)) do
+    I := I + 1;
+
+  Sign := 1;
+  if S[ I ] = '-' then begin Sign := -1; I := I + 1; end;
+
+  Rdx := 10;
+  if S[I]='''' then begin Rdx := 2; i := i + 1; end else
+  if S[I]='!' then begin Rdx := 16; I := I + 1; end else
+  if S[I]='%' then begin Rdx := 8; I := I + 1; end else
+  if S[I]='$' then begin Rdx := 16; I := I + 1; end else
+  if S[I]='&' then begin Rdx := 10; I := I + 1; end;
+
+  Dig := '0123456789ABCDEFabcdef';
+  Sum := 0;
+  DigVal := scaneq( 23, S[I], Dig ) - 1;
+  if DigVal>15 then DigVal := DigVal - 6;
+  while (DigVal>=0) and (DigVal<Rdx) do begin
+    Sum := Sum * Rdx + DigVal;
+    I := I + 1;
+    DigVal := scaneq( 23, S[I], Dig ) - 1;
+    if DigVal>15 then DigVal := DigVal - 6;
+  end;
+
+  AsLong := Sign * Sum;
+end;
+
+{
+procedure PushWindow( var Win: WndRcd );
+}
+procedure PushWindow;
+var iost: integer;
+begin
+  if WinTos<WinTosMax then begin
+    WinTos := WinTos + 1;
+    WinStk[WinTos] := pOSCurWnd;
+    iost := WinSelect( Win );
+  end else begin
+    writeln( '*** WINSTK OVERFLOW ***' );
+  end;
+end;
+
+
+procedure PopWindow;
+var iost: integer;
+begin
+  if WinTos>0 then begin
+    iost := WinSelect( WinStk[WinTos]^ );
+    WinTos := WInTos - 1;
+  end else begin
+    writeln( '*** WINSTK UNDERFLOW ***' );
+  end;
+end;
+
+
+procedure WriteDefault( Dft: StrTyp );
+var i: integer;
+begin
+  write( Dft );
+  for i := 1 to length( Dft ) do
+    write( chr(8) );
+end;
+
+{
+procedure TellUsr( M: pStrTyp );
+}
+procedure TellUsr;
+begin
+  PushWindow( PmtWin );
+  gotoxy( 10, 1 );
+  write( '\1Bb', M^, ' \1BK\1Bc' );
+  MsgWinFul := M^<>'';
+  PopWindow;
+end;
+
+
+procedure ClrMsg;
+begin
+  PushWindow( Cmdwin );
+  gotoxy( 10, 1 );
+  write( '\1Bb\1BK\1BH         ' );
+  MsgWinFul := false;
+  PopWindow;
+end;
+
+{
+function PeekL( L: longint ): longint;
+}
+function PeekL;
+var r: record case integer of 0:(A:longint); 1:(L:^longint); end;
+begin
+  r.A := L;
+  PeekL := r.L^;
+end;
+
+{
+procedure Bell( Ton: BelTyp );
+}
+procedure Bell;
+begin
+  case Ton of
+    BelWrn:    begin note( 24, 2 ); note( 12, 2 ); end;
+    BelAck:    note( 32, 2 );
+    BelClik:   note( 1, 1 );
+    otherwise: write( '\7' )
+  end;
+end;
+
+
+Procedure LabelFrame;          { eAPute@ eAframee@ eAnamee@ eAine@ eAcommande@ eAwindowe@ }
+
+{ eAWee@ eAassumee@ eAthate@ eAthee@ eAglobale@ eA"Framename"e@ eAise@ eAsete@ eAtoe@ eAthee@ eAnamee@ eAofe@ eAthee@ eAcurrente@ eAframee@ }
+
+Begin
+  PushWindow( PmtWin );
+  gotoxy( 0, 1 );
+  write( '\1Bb\1BG4         \1BG0 \1BG4' );
+  gotoxy( 1, 1 );
+  write( FrameName, '\1BG0\1BK' );
+  PopWindow
+End;
+
+{
+procedure LoadLabels( Frame: integer );
+}
+procedure LoadLabels;
+const Init    = $FF; { initialize labels function code      }
+      SetKey  = $FE; { set label table entry function code  }
+      TurnOff = $FD; { turn off labels function code        }
+      TurnOn  = $FC; { turn on labels function code         }
+      KeyDefSiz = 24;{ bytes reqd to define a function key  }
+
+type LblFrmTyp = record
+           Key: array[1..20] of record
+                   Lbl: packed array[1..8] of char;
+                   Rtn: string[15];
+                end;
+           Nam: string[15];
+           Cmd: boolean;
+           Jnk: array [1..14] of byte;
+        end;
+
+     LblPrmBlk = record
+           Key: integer;
+           Buf: array [1..KeyDefSiz] of byte;
+        end;
+
+var Loc, i, b: integer;
+    FrmBuf: LblFrmTyp;
+    PrmBlk: LblPrmBlk;
+
+begin
+   b := blockread( LblFrmFid, FrmBuf, 1, Frame-1 );
+   if FrmBuf.Cmd then Loc := 20 else Loc := 0;
+   unitstatus( 2, i, TurnOff );
+   for i := 1 to 20 do begin
+      moveleft( FrmBuf.Key[i], PrmBlk.Buf[1], KeyDefSiz );
+      PrmBlk.Key := i + Loc - 1;
+      unitstatus( 2, PrmBlk, SetKey );
+   end;
+   unitstatus( 2, i, TurnOn );
+   FrameName := FrmBuf.Nam;
+   CurFrm := Frame;
+
+   if not FrmBuf.Cmd then LabelFrame
+end;
+
+
+procedure note;
+var PrmBlk: record
+               Prd: integer;
+               Tmbr: byte;
+               Fill: byte;
+               Dur: integer;
+            end;
+begin
+  PrmBlk.Dur := Dur;
+  with PrmBlk do begin
+    Fill := 0;
+
+    if (Ton>=0) and (Ton<12) then Tmbr := 31
+    else if (Ton>=12) and (Ton<24) then Tmbr := 51
+    else Tmbr := 85;
+
+    case ord(Ton) mod 12 of
+      0: Prd := 254;
+      1: Prd := 240;
+      2: Prd := 226;
+      3: Prd := 213;
+      4: Prd := 201;
+      5: Prd := 190;
+      6: Prd := 179;
+      7: Prd := 169;
+      8: Prd := 159;
+      9: Prd := 150;
+     10: Prd := 142;
+     11: Prd := 134;
+    end;
+  end;
+  UnitStatus( UnitTmr, prmblk, 0 );
+end;
+
+
+function AsStr;
+var Val, Sign: integer;
+    Dig: StrTyp;
+begin
+  if Bin<0 then begin
+    Sign := -1;
+    Val := -Bin;
+  end else begin
+    Sign := 1;
+    Val := Bin;
+  end;
+
+  NumStr := '';
+  Dig := ' ';
+  while Val>0 do begin
+    Dig[1] := BaseDig[ (Val mod Rdx) + 1 ];
+    NumStr := concat( Dig, NumStr );
+    Val := Val div Rdx;
+  end;
+
+  if Bin=0 then NumStr := '0';
+
+  if Sign = -1 then
+    NumStr := concat( '-', NumStr );
+
+  AsStr := @NumStr;
+end;
+
+{
+function Msg( GrpNum, MsgNum: longint ): pStrTyp;
+
+Return a pointer to message number MsgNum of group number GrpNum...
+}
+function Msg;
+
+var
+  MGPTR   : pMsgPac;
+  Counter : Integer;
+  Found   : Boolean;
+
+begin
+  Msg := @NoMsg;
+  MGPtr := Pointer(Ord4(CurHeapPtr));  { eAStartinge@ eApoint...e@ }
+  Counter := 1;                        { eAWe'ree@ eAate@ eAthee@ eAfirste@ eAmessagee@ }
+  Found := False;                      { eASete@ eAtoe@ eATRUEe@ eAwhene@ eAwee@ eAhite@ eAit...e@ }
+  Repeat
+    If (MGPtr^.Grp > GrpNum) Then Exit(Msg); { eANoe@ eAsuche@ eAmessage...e@ }
+    If (MGPtr^.Grp = GrpNum) And (MGPtr^.Msg = MsgNum) Then Begin
+      Found := True;
+      Msg := Pointer(Ord4(MGPtr)+4)    { eACompensatee@ eAfore@ eAtwoe@ eAintegerse@ eAbefore...e@ }
+      End                              { eAWe'ree@ eAdone!e@ }
+    Else Begin
+      MGPtr := Pointer(Ord4(MGPtr) + SizeOf(MsgPac)); { eAPointe@ eAtoe@ eAnexte@ eAmessagee@ }
+      Counter := Counter + 1
+      End
+  Until Found or (Counter > MsgCount)
+end;
+
+{
+procedure WrtMsg( GrpNum, MsgNum: integer );
+}
+procedure WrtMsg;
+var p: pStrTyp;
+begin
+  p := Msg( GrpNum, MsgNum );
+  writeln( p^ );
+end;
+
+{
+procedure WrtpMsg( p: pStrTyp );
+}
+procedure WrtpMsg;
+begin
+  writeln( p^ );
+end;
+
+{
+function Subst( S, D: pStrTyp ) : pStrTyp;
+}
+function Subst;
+var X,Y: StrTyp;
+    i: integer;
+begin
+  X := S^;
+  Y := D^;
+  i := pos( '&', Y );
+  if i>0 then begin
+    delete( Y, i, 1 );
+    insert( X, Y, i );
+  end;
+  MsgStr := Y;
+  Subst := @MsgStr;
+end;
+
+{
+procedure Wait100Ms( Tim: integer );
+}
+procedure Wait100Ms;
+var StpTim: longint;
+begin
+  StpTim := ms50 + (2*Tim);
+  while ms50<StpTim do begin end;
+end;
+
+(*
+procedure Box( T, B, L, R, M: integer );
+begin
+  DrawLine( L, T, R-1, T, M );
+  DrawLine( R, T, R, B+1, M );
+  DrawLIne( R, B, L+1, B, M );
+  DrawLine( L, B, L, T-1, M );
+end;
+
+
+{
+procedure BoxWin( var Win: WndRcd; Mode: integer );
+}
+procedure BoxWin;
+var iost: integer;
+begin
+  PushWindow( SysWin );
+  with Win do begin
+    SetOrigin( BaseX-1, SysWin.LngthY-BaseY-LngthY-1, GrfQgrAbs );
+    Box( LngthY+2, 0, 0, LngthX+2, Mode );
+  end;
+  PopWindow;
+end;
+*)
+
+
+function HexVal( c: char ): integer;
+begin
+  if c in ['0'..'9'] then begin
+    HexVal := ord(c) - ord('0');
+  end else if c in ['A'..'F'] then begin
+    HexVal := 10 + ord(c) - ord('A');
+  end else begin
+    HexVal := 0;
+  end;
+end;
+
+
+procedure PutCBuf( c: char );
+begin
+  CBuf := concat( CBuf, ' ' );
+  CBuf[ length(CBuf) ] := c;
+end;
+
+Procedure PushCBuf;
+
+{ eAShovee@ eAae@ eAchare@ eAintoe@ eAthee@ eAFRONTe@ eAofe@ eAthee@ eACBufe@ eAqueue!e@ }
+
+Begin
+  CBuf := Concat(' ',CBuf);
+  CBuf[1] := c
+End;
+
+procedure FillCBuf;
+const ESC = '\1B';
+
+var b: byte;
+    c: char;
+    PrmBlk: record Key: integer; RtStr: string[17]; end;
+    GotOne : Boolean;
+
+  Procedure ProcessByte(B : Byte; U : Integer);
+
+  Var
+    Counter,
+    L,
+    i: integer;
+
+  begin
+    c := chr( b );               { Convert to a character }
+    PutCBuf( c );                { Put char in buffer     }
+    If B=2 Then Begin
+       Tok := TokBold
+    end else if b=21 then begin
+       Tok := TokULine
+    end else if b=8 then begin   { Check for backspace    }
+       Tok := TokBS;
+    end else if b=9 then begin   { Check for TAB          }
+       Tok := TokTab;
+    end else if b=13 then begin  { Check for C/R          }
+       Tok := TokCR;
+    end else if b=27 then begin  { Check for ESC...       }
+       unitread( U, b, 1 );      { Possible cursor or function key }
+       c := chr( b );            { Get next char...}
+       PutCBuf(c);
+       if c='A' then begin       { Cursor up }
+          Tok := TokCsrU;
+       end else if c='B' then begin
+          Tok := TokCsrD;        { Cursor down }
+       end else if c='C' then begin
+          Tok := TokCsrR;        { Cursor right }
+       end else if c='D' then begin
+          Tok := TokCsrL;        { Cursor left }
+       end else if c='H' then begin
+          Tok := TokHome;        { HOME key    }
+       end else if c='i' then begin
+          Tok := TokBTab;        { Back tab    }
+       end else if c='\1B' then begin
+          Tok := TokESC;         { Two escapes -> 1 escape }
+          delete( Cbuf, length(CBuf), 1 );
+       end else if c='#' then begin      { Function key! }
+          delete( Cbuf, length(CBuf)-1, 2 );
+          Tok := TokF1;
+          unitread( U, b, 1 );
+          Tok := Tok + 16 * HexVal( chr(b) );
+          unitread( U, b, 1 );
+          Tok := Tok + HexVal( chr (b) );
+          PrmBlk.Key := Tok - TokF1;
+          if PrmBlk.Key = $FF then begin
+            i := 1;
+            unitstatus( 2, i, $F8 );
+            CmdKey := true;
+          end else if PrmBlk.Key = $FE then begin
+            i := 0;
+            unitstatus( 2, i, $F8 );
+            CmdKey := false;
+          end else begin
+            PrmBlk.RtStr := '';
+            unitstatus( 2, PrmBlk, $F9 );
+            if PrmBlk.RtStr='' then Bell(BelWrn);
+            for i := 1 to length(PrmBlk.RtStr) do begin
+              PutCBuf( PrmBlk.RtStr[i] );
+            end;
+          end;
+       end;
+    end else begin   { eAProcess texte@ }
+       Tok := TokText;
+       If MuteFlag Then Begin
+         L := Length(MuteKeys[WhichMute].Legal);
+         Counter := 1;
+         Repeat
+           If C = MuteKeys[WhichMute].Legal[Counter] Then Begin
+             C := MuteKeys[WhichMute].Alts[Counter];
+             delete( Cbuf, length(CBuf), 1 );
+             PutCBuf(C);
+             MuteFlag := False
+             End
+           Else Counter := Counter + 1
+         Until Not(MuteFlag) Or (Counter > L);
+         MuteFlag := False
+         End  { eAIf MuteFlage@ }
+       Else If Mutes Then Begin
+         Counter := 1;
+         Repeat
+           If C = MuteKeys[Counter].Symbol Then Begin
+             MuteFlag := True;
+             PutCBuf(Chr(27));
+             PutCBuf('D');
+             Tok := TokCsrL;
+             WhichMute := Counter
+             End;
+           Counter := Counter + 1
+         Until MuteFlag Or (Counter > NumMutes)
+         End  { eAIf Mutese@ }
+       end;   { eAProcess texte@ }
+     If (CommFlg And (Tok IN [TokTEXT,TokBS,TokTAB,TokCR]) and (U=UnitKBD)) Then Begin
+       UnitWrite(UnitCom,B,1);
+       delete( Cbuf, length(CBuf), 1 );
+       GotOne := False
+       End
+  end;                                 { eAProcessBytee@ }
+
+Begin                                  { eAFillCBufe@ }
+  GotOne := False;
+  If Length(CBuf) > 95 Then Begin
+    Bell(BelErr);
+    Exit(FillCBuf)
+    End;
+  Repeat
+    If UnitBusy(UnitKBD) Then Begin
+      GotOne := True;
+      UnitRead(UnitKBD,b,1);
+      ProcessByte(b,UnitKBD)
+      End;
+
+    If CommFlg Then Begin
+      If UnitBusy(UnitCom) Then Begin
+        UnitRead(UnitCom,B,1);
+        If B < 0 Then B := B + 256;
+        If (B In [8,9,10,13,32..127]) Then Begin
+          GotOne := True;
+          C := Chr(B);
+          PutCBuf(C);
+          If B = 8 Then Tok := TokBS;
+          If B = 9 Then Tok := TokTAB;
+          If B = 13 Then Tok := TokCR;
+          If B in [32..127] Then Tok := TokTEXT;
+       (* ProcessByte(B,UnitCom) *)
+          End
+        End
+      End
+
+  Until GotOne
+End;
+
+
+function GetCBuf: char;
+begin
+  while CBuf='' do begin
+    FillCBuf;
+  end;
+  GetCBuf := CBuf[1];
+  delete( CBuf, 1, 1 );
+end;
+
+
+function Match( c: char; Tok, Key:integer ): boolean;
+begin
+  if ord(c)=Key then begin
+    Match := true;
+  end else if Tok=Key then begin
+    Match := true;
+  end else if Key=TokStr then begin
+    Match := (c in [' '..'~']) or (Tok=TokBS) or (Tok=TokCR);
+  end else if Tok=TokBrk then begin
+    Match := BrkPress;
+  end else begin
+    Match := false;
+  end;
+end;
+
+{$S IDLE}
+Procedure lines;   { eAThe famous Corvus "Eagle"e@ }
+
+CONST
+  d =  25;
+  w =  4;
+
+VAR
+  Counter,
+  l, h, k,
+  z, xi, xj, yi, yj,
+  x, x1, y, y1, i, e   : integer;
+  a                    : array [1..d,1..w] of integer;
+
+
+  function  Random( Lo, Hi: integer ): integer;
+  begin
+     Seed := Seed * 31397;
+     Random := Lo + (abs(Seed+ms50) mod (Hi-Lo+1));
+  end;
+
+  FUNCTION sgn( s : integer ) : integer;
+
+  begin
+    if ( s > 0 ) then sgn :=  1;
+    if ( s = 0 ) then sgn :=  0;
+    if ( s < 0 ) then sgn := -1;
+  end;
+
+  PROCEDURE initall;
+
+  var n, ni : integer;
+      ich   : char;
+
+    procedure getsize;
+
+    var
+      iost, hx, hy, wi, ln, cx, cy : integer;
+
+    begin
+      write(chr(27),'g');
+      iost := WinStatus( hx, hy, wi, ln, cx, cy );
+      write(chr(27),'t');
+      l := wi;
+      h := ln;
+    end;
+
+  begin                { InitAll }
+    getsize;
+    k := 2;
+    xi := Random( 1, w );
+    xj := Random( 1, w );
+    yi := Random( 1, w );
+    yj := Random( 1, w );
+    x  := Random( 1, l );
+    x1 := Random( 1, l );
+    y  := Random( 1, h );
+    y1 := Random( 1, h );
+    i  := 1;
+    e  := 2;
+    for n := 1 to d do
+      for ni := 1 to w do a[n,ni] := 0;
+  end;
+
+PROCEDURE mainline;
+begin
+  DrawLine( a[e,1]  , a[e,2], a[e,3]  , a[e,4], -1 );
+  DrawLine( x       , y     , x1      , y1    , -1 );
+  a[i,1] :=  x;
+  a[i,2] :=  y;
+  a[i,3] := x1;
+  a[i,4] := y1;
+  i := i + 1;
+  if ( i > d ) then i := 1;
+  e := e + 1;
+  if (e > d ) then e := 1;
+  if (x+xi<1) or (x+xi>l) then xi := -1*sgn(xi)*(Random(1,w)+k);
+  if (x1+xj<1) or (x1+xj>l) then xj := -1*sgn(xj)*(Random(1,w)+k);
+
+  if (y+yi<1) or (y+yi>h) then yi := -1*sgn(yi)*(Random(1,w)+k);
+  if (y1+yj<1) or (y1+yj>h) then yj := -1*sgn(yj)*(Random(1,w)+k);
+
+  x := x + xi;
+  y := y + yi;
+  x1 := x1 + xj;
+  y1 := y1 + yj;
+end;
+
+BEGIN
+  PushWindow( UsrWin );
+  Bell(BelAck);
+  TellUsr( Msg(MGGENL,21) );
+  initall;
+  repeat
+    mainline;
+  until unitbusy( 2 );
+  For Counter := 1 to 24 do Begin
+    DrawLine( a[e,1]  , a[e,2], a[e,3]  , a[e,4], -1 );
+    e := e + 1;
+    if e > d then e := 1
+  End;
+  PopWindow;
+end;
+
+{$S USERIO}
+(*
+procedure ShowTime;
+var Elapsed: real;
+    p: pStrTyp;
+begin
+   PushWindow( CmdWin );
+   if ProcTim<1200 then begin
+      p := Msg(MGTIME,31);
+      Elapsed := ProcTim/20.0;
+   end else if ProcTim<72000 then begin
+      p := Msg(MGTIME,32);
+      Elapsed := ProcTim/1200.0;
+   end else begin
+      p := Msg(MGTIME,33);
+      Elapsed := ProcTim/72000.0;
+   end;
+   write( '\1BH', Elapsed:4:1, p^:4 );
+   PopWindow;
+end;
+*)
+
+function UserIdle;
+begin
+  if unitbusy(35) then FillCBuf;
+  UserIdle := CBuf='';
+end;
+
+{
+function GetC( Echo: boolean ): char;
+}
+function GetC;
+var C: char;
+    ClrTim: boolean;
+
+
+  procedure DoBgnd;
+  var CsrTim: longint;
+      C: char;
+  begin
+     IdlTim := 0;
+     CsrTim := ms50 - 20;
+     TrapFence := 0;
+     while UserIdle do begin
+
+     (* if IdlTim>1200 then begin
+           if ProcTim mod 50=0 then ShowTime;
+           ClrTim := true;
+        end;
+     *)
+        if ms50-CsrTim>25 then begin
+           C := chr(CsrWid);
+           if CsrWid=1 then write('\1Bb') else write('\1BZ',c);
+           CsrTim := ms50;
+           while ms50-CsrTim<2 do begin end;
+           if CsrWid=1 then write('\1Bc') else write('\1BZ',c);
+        end;
+        if BrkPress then Lines;
+        if BkGrndOk then BackGround;
+     end;
+  end;
+
+
+begin
+   if ProcTim>300 then Bell(BelAck);
+   if ProcTim>15 then begin
+      ClrTim := true;
+   (* ShowTime; *)
+   end else begin
+      ClrTim := false;
+   end;
+
+   if CsrWid=1 then write( '\1Bc' );
+
+   DoBgnd;
+
+   C := GetCBuf;
+   GetC := C;
+   if Echo then write( C );
+
+   write( '\1Bb' );
+
+   if MsgWinFul then ClrMsg;
+
+   if ClrTim then begin
+      PushWindow( CmdWin );
+      write( '\1BH          ' );
+      PopWindow;
+   end;
+
+   ProcTim := 0;
+end;
+
+
+procedure ParseKey( var NxtKey: KeyTyp; var NxtChr: char );
+var FNum: byte;
+    i: byte;
+    T: integer;
+    FStr: StrTyp;
+begin
+   T := ord(NxtChr) and $007F;
+   if T=27 then begin  (* ESC *)
+      NxtChr := GetCBuf;
+      if NxtChr = '#' then begin (* function NxtKey *)
+         FStr := '$  ';
+         FStr[2] := GetCBuf;
+         FStr[3] := GetCBuf;
+         FNum := AsLong( FStr ) + ord(KF1);
+         moveleft( FNum, NxtKey, 1 );
+      end else if NxtChr = '*' then begin { Task key }
+         NxtKey := KTASK;
+         NxtChr := GetCBuf;
+      end else if NxtChr = '!' then begin { Menu Key }
+         NxtKey := KMENU;
+         NxtChr := GetCBuf;
+      end else begin
+         if CmdKey then begin
+            if      NxtChr='A' then NxtKey := KSCRU
+            else if NxtChr='B' then NxtKey := KSCRD
+            else if NxtChr='C' then NxtKey := KSCRR
+            else if NxtChr='D' then NxtKey := KSCRL;
+         end else begin
+            if      NxtChr='A' then NxtKey := KCSRU
+            else if NxtChr='B' then NxtKey := KCSRD
+            else if NxtChr='C' then NxtKey := KCSRR
+            else if NxtChr='D' then NxtKey := KCSRL
+            else if NxtChr='i' then NxtKey := KBTAB
+            else if NxtChr='H' then NxtKey := KHOME
+            else if NxtChr='\1B' then NxtKey := KESC;
+         end;
+      end;
+   end else if T=127 then begin
+      NxtKey := KBS;
+   end else if (T>=32) and (T<127) then begin
+      if CmdKey then begin
+         if NxtChr in ['1'..'9'] then begin
+            FNum := ord(KC1) + ord(NxtChr) - ord('1');
+            moveleft( FNum, NxtKey, 1 );
+         end;
+      end else begin
+         NxtKey := KTEXT;
+      end;
+   end else if T<32 then begin
+      i := T;
+      moveleft( i, NxtKey, 1 );
+   end;
+end;
+
+{
+function GetKey( Echo: boolean; var Key: KeyTyp ): char;
+}
+function  GetKey;
+begin
+  if ReadReqd then begin
+     NxtKey := KBAD;
+     NxtChr := GetC( Echo );
+     ParseKey( NxtKey, NxtChr );
+     end
+   else ReadReqd := true;
+
+  GetKey := NxtChr;
+  Key := NxtKey;
+end;
+
+{$S PROMPT}
+
+procedure ReadStr( var Ans: StrTyp; var Term: KeyTyp );
+var I,J: integer;
+    C: char;
+    T: boolean;
+begin
+  WriteDefault( Ans );
+  C := GetKey( false, Term );
+  if Term in [KTEXT, KBS, KCSRL] then begin
+    write( '\1BK' );
+    Ans := '';
+    J := 1;
+    while true do begin
+      If (Term = KCSRL) and (J > 1) Then Begin
+        J := J - 1;
+        Write(Chr(8))
+        End
+      else if Term=KBS then begin
+        if J>1 then begin
+          J := J - 1;
+          write( chr(8), ' ', chr(8) );
+          delete( Ans, J, 1 );
+        end;
+      end else if Term=KTEXT then begin
+        if j<80 then begin
+          If Not MuteFlag Then Ans := concat( Ans, ' ' );
+          Ans[J] := C;
+          write( C );
+          J := J + 1;
+        end else begin
+          Bell( BelErr );
+        end;
+      end else begin
+        ReadReqd := Term=KCR;
+        exit( ReadStr );
+      end;
+      C := GetKey( false, Term );
+    end;
+  end else begin
+    ReadReqd := Term=KCR;
+  end;
+end;
+
+{
+function PmtStr( Pmt: pStrTyp; var Ans: StrTyp ):boolean;
+}
+function PmtStr;
+var
+  Term: KeyTyp;
+  i: integer;
+begin
+  TellUsr( Pmt );
+  MsgWinFul := false;
+  PushWindow( PmtWin );
+  ReadStr( Ans, Term );
+  PopWindow;
+  PmtStr := Term=KCR;
+  MsgWInFul := true;
+end;
+
+
+procedure WaitForRtn;
+var C: char;
+    Dum: boolean;
+begin
+  Bell( BelAck );
+  C := ' ';
+  LblsOff;
+  Dum := PmtChr( Msg(MGGENL,2), True, C );
+  LblsOn;
+end;
+
+{
+function PmtChr( Pmt: pStrTyp; Fold: Boolean; var Ans: char ):boolean;
+}
+function PmtChr;
+var
+  Term: KeyTyp;
+  C: char;
+  T: boolean;
+begin
+  TellUsr( Pmt );
+  PushWindow( PmtWin );
+  Ans := UpperCase(Ans);
+  write( Ans, '\8' );
+  MsgWinFul := false;
+  T := BkGrndOK;
+  BkGrndOK := false;
+  C := GetKey( false, Term );
+  If Fold Then C := UpperCase(C);
+  BkGrndOK := T;
+  if Term=KTEXT then begin
+     PmtChr := true;
+     Ans := C;
+     write( C );
+  end else begin
+     PmtChr := Term=KCR;
+     ReadReqd := Term=KCR;
+  end;
+  PopWindow;
+  MsgWinFul := true;
+end;
+
+{
+function Confirm( Pmt: StrTyp; Dft: boolean ) : boolean;
+}
+function Confirm;
+var
+  Ans1, Ans2: char;
+  Term: boolean;
+begin
+  if Dft then begin
+    Ans1 := UpperCase( StrYes[1] );
+    Ans2 := UpperCase( StrNo[1] );
+  end else begin
+    Ans1 := UpperCase( StrNo[1] );
+    Ans2 := UpperCase( StrYes[1] );
+  end;
+
+  LblsOff;
+  Term := PmtChr( Pmt, True, Ans1 );
+  LblsOn;
+
+  if Ans1=Ans2 then begin
+    Confirm := not Dft;
+  end else begin
+    Confirm := Dft;
+  end;
+end;
+
+{
+function PmtInt( Pmt:pStrTyp; var Int: INTEGER ): boolean;
+}
+function PmtInt;
+var
+  Ans: pStrTyp;
+begin
+  Ans := AsStr( Int, 10 );
+  PmtInt := PmtStr( Pmt, Ans^ );
+  Int := AsLong( Ans^ );
+end;
+
+{$S INIT }
+Function FidExists(FName : StrTyp) : Boolean;
+
+Var
+  Raskin : File;
+
+Begin
+  {$I-}
+  Reset(Raskin, FName);
+  {$I+}
+  If IOResult <> 0 Then FidExists := False
+    Else Begin
+      Close(Raskin);
+      FidExists := True
+      End
+End;
+
+
+procedure PreDefWin( var Win: WndRcd; WinNum: integer );
+var iost, WinFlg, hx, hy, w, h, x, y: integer;
+begin
+  WinFlg := WfgCursOn + WfgInvCur + WfgWrap;
+  iost := WinSystem( WinNum );
+  iost := WinStatus( hx, hy, w, h, x, y );
+  iost := WinCreate( Win, 0, 0, w, h, WinFlg );
+end;
+
+(*
+procedure Stipple( var Win: WndRcd );
+var iost, hx, hy, w, h, x, y: integer;
+begin
+  iost := WinSelect( Win );
+  write( '\1BJ\1Bb' );
+  SetOrigin( 0, 0, GrfQgrAbs );
+  FillBox( 0, 0, Win.LngthX, Win.LngthY, -3 );
+end;
+
+
+procedure SysBoxWin( var Win: WndRcd; Mode: integer );
+type str20=string[20];
+var iost: integer;
+begin
+  iost := WinSelect( SysWin );
+  with Win do begin
+    SetOrigin( BaseX-2, SysWin.LngthY-BaseY-LngthY-2, GrfQgrAbs );
+    Box( LngthY+4, 0, 0, LngthX+4, Mode );
+  end;
+  iost := WinSelect( Win );
+end;
+*)
+
+Procedure InitMutes;  { Initialize mute keys array }
+
+Var
+  Counter : Integer;
+
+  Procedure ExitGracefully;
+
+  Begin
+    TellUsr(Msg(MGGENL,28));
+    Bell(BelWrn);
+    Mutes := False;
+    Exit(InitMutes)
+  End;
+
+  Procedure LoadMutes(MuteFile: StrTyp);
+
+  Var
+    Done : Boolean;       { TRUE when all mutes read from file }
+    MF   : Text;
+
+    Procedure GetMute(Var Num : Integer);  { Get one MUTEKEY record }
+
+    Var
+      CurKey : Integer;   { Index into MUTEKEYS array }
+      FakeStr2,
+      FakeStr: String[1];
+      Line1,
+      Line2  : StrTyp;
+
+      Procedure CompressString(Var InpStr : StrTyp);
+
+      { Remove all blank spaces from string }
+      { ...and clobber comments!            }
+
+      Var
+        P : Integer;
+
+      Begin
+        Repeat
+          P := ScanEQ(Length(InpStr),' ',InpStr);
+          If P < Length(InpStr) Then Delete(InpStr,P,1)
+        Until P = Length(InpStr)
+      End;
+
+    Begin                        { GetMute }
+      Repeat
+        ReadLn(MF,Line1);
+      Until (Length(Line1) > 0) Or Eof(MF);
+      If EOF(MF) Then Begin
+        Done := True;
+        Exit(GetMute)
+        End;
+
+      { At start of three line 'record.' Now read the mute symbol... }
+
+      CompressString(Line1);
+      If Length(Line1) <> 1 Then Exit(GetMute); { Not a mute line!}
+      MuteKeys[Num].Symbol := Line1[1];        { Got the mute key }
+
+      { Now, read and compress the lines containing the legal chars and alts
+        for the current mute key }
+
+      ReadLn(MF,Line1);                { Get the legal chars }
+      If EOF(MF) Then ExitGracefully;
+      ReadLn(MF,Line2);                { Get the alt chars   }
+      If EOF(MF) Then ExitGracefully;
+      If (Length(Line1) = 0) Or (Length(Line2) < Length(Line1))
+        Then ExitGracefully;
+      CompressString(Line1);
+      CompressString(Line2);
+      If Length(Line1) <> Length(Line2) Then ExitGracefully;
+
+      MuteKeys[Num].Legal := Line1;
+      MuteKeys[Num].Alts := Line2;
+      Num := Num + 1;
+    End;
+
+  Begin           { LoadMutes }
+    Reset(MF,MuteFile);
+    NumMutes := 1;
+    Done := False;
+    Repeat
+      GetMute(NumMutes)        { Get a complete three line record }
+    Until Done Or (NumMutes = 32);
+    NumMutes := NumMutes - 1;
+    If NumMutes = 0 Then Mutes := False Else Mutes := True
+  End;
+
+
+Begin             { InitMutes }
+  Mutes := False;
+  If FidExists('MuteKeys.Text') Then LoadMutes('MuteKeys.Text')
+    Else If FidExists('!MuteKeys.Text') Then LoadMutes('!MuteKeys.Text');
+
+End;
+
+{
+procedure InitMessages( Nam: StrTyp);
+}
+Procedure InitMessages;
+
+var p      : pStrTyp;
+    Counter: Integer;
+    MP     : pMsgPac;
+    FirstMsg : Boolean;
+    MsgFil : File Of MsgPac;
+
+begin
+  {$I-}
+  reset( MsgFil, Nam );
+  if ioresult<>0 then begin
+    reset( MsgFil, concat( '/ISYS/', Nam ) );
+    if ioresult<>0 then begin
+      reset( MsgFil, concat( '/CCSYS/', Nam ) );
+      if ioresult<>0 then begin
+         writeln( '*** Unable to open system message file WPSYSMSG ***' );
+         halt
+      end
+    end
+  end;
+  {$I+}
+
+  { eAReade@ eAsysteme@ eAmessagese@ eAontoe@ eAthee@ eAheape@ }
+
+  Mark(CurHeapPtr);
+  Counter := 0;
+  Repeat
+    Get(MsgFil);                       { eAGete@ eAmessage...e@ }
+    If Not EOF(MsgFil) Then Begin
+      Counter := Counter + 1;
+      New(MP);
+      MP^ := MsgFil^                   { eAMessagee@ eA-->e@ eAheape@ }
+      End
+  Until Eof(MsgFil);
+
+  (*
+  Mark(CurHeapPtr);
+  Counter := 0;
+  Repeat
+    New(MP);
+    Junk := BlockRead(MsgFil,MB,1);    { Get a block from the file }
+    MBP^ := MB;                        { Move to the heap }
+    MsgPtrAry[Counter] := MBP;         { Update pointer array }
+    Counter := Counter + 1
+  Until EOF(MsgFil);                   { All blocks read }
+  *)
+
+  MsgCount := Counter;                 { eANumbere@ eAofe@ eAmessagese@ eAreade@ eAine@ }
+  NoMsg := '*** NO MESSAGE ***';
+  PrvGrp := -1;
+  TblLoc := 0;
+
+  p := Msg(MGGENL,17);
+  StrYes := p^;
+  p := Msg(MGGENL,18);
+  StrNo := p^;
+end;
+
+Procedure ReleaseMsgs;
+
+Begin
+  Release(CurHeapPtr)
+End;
+
+
+procedure InitWindows;
+var pWin: ^WndRcd;
+    i,iost,WinFlg, hx, hy, w, h, x, y: integer;
+    S: StrTyp;
+begin
+  RtnWin := pOSCurWnd;
+  WinTos := 0;
+  pWin := pointer( PeekL(PeekL(PeekL($180)+$56)) );
+  SysWin := pWin^;
+  pWin := pointer( PeekL(PeekL(PeekL($180)+$56)+$8) );
+  CmdWin := pWin^;
+  PmtWin := CmdWin;
+  pWin := pointer( PeekL(PeekL(PeekL($180)+$56)+$C) );
+  BrkOn := false;
+  UsrWin := pWin^;
+  PreDefWin( ProcWin, WSysCurr );
+  AppWin := ProcWin;
+  iost := WinSelect( AppWin );
+  ClrMsg;
+end;
+
+
+procedure InitUlbls;
+
+begin
+  If FidExists('!Keys.ISYS') Then Reset(LblFrmFID, '!Keys.ISYS')
+    Else Begin
+      TellUsr(Msg(MGGENL,19));
+      Halt
+      End
+End;
+
+
+procedure InitVariables;
+begin
+  BaseDig := '0123456789ABCDEF';
+  BkGrndOK := false;
+  MuteFlag := False;
+  ReadReqd := true;
+  Seed := 9551;
+  CmdKey := false;
+  CBuf := '';
+  CsrWid := 1;
+end;
+
+
+procedure InitMS50;
+begin
+  ms50 := 0;
+  ProcTim := 0;
+  with TmrPrmBlk do begin
+    adr := ord4(@ticker);
+    cnt := 1;
+    flags := 0;
+    Tid := $00FF;
+  end;
+  unitstatus( UnitTmr, TmrPrmBlk, 1 );
+end;
+
+
+procedure TermMS50;
+begin
+  TmrPrmBlk.DelTid := TmrPrmBlk.Tid;
+  unitstatus( UnitTmr, TmrPrmBlk, 2 );
+end;
+
+
+procedure InitUserIO;
+begin
+  ccGrfIOInit;
+  ccWndIOInit;
+  ccLBLIOinit;
+
+  InitVariables;
+  InitUlbls;
+  InitMessages( 'WPSYSMSG' );
+  InitWindows;
+  InitMS50;
+end;
+
+
+procedure TermUserIO;
+type StrTyp=string[80];
+var iost: integer;
+    p: array[1..1] of ^StrTyp;
+    s: StrTyp;
+begin
+  TermMS50;
+
+(*if (ProcWin.Lngthy+16>=UsrWin.LngthY) and
+     (ProcWin.Lngthx+16>=UsrWin.Lngthx) and
+     (ProcWin.Basey=UsrWin.BaseY) and
+     (ProcWin.Basex=UsrWin.Basex)
+  then begin
+    BoxWin( ProcWin, 0 );
+    SysBoxWin( UsrWin, 1 );
+  end;  *)
+  iost := WinSelect( RtnWin^ );
+end;
+
+{$S USERIO}
+{
+procedure LockUserIO( procedure P );
+}
+procedure LockUserIO;
+begin
+   P;
+end;
+
+{
+procedure UserIOInit;
+}
+procedure UserIOInit;
+begin
+  InitUserIO;
+end;
+
+
+procedure UserIOTerm;
+begin
+  TermUserIO;
+end;
+
+
+end.

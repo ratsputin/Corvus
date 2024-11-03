@@ -1,0 +1,348 @@
+{ PIPES.TEXT ----------------------------------------------------------}
+{
+{       PIPES -- Corvus Disk Pipes Unit
+{
+{       Copyright 1982 Corvus Systems, Inc.
+{                      San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  01-08-82  LEF  Original unit (taken from PIPES by PHB)
+{       v 1.1  03-24-82  LEF  Added OMNINET support
+{       v 1.2  06-16-82  DP   Const II mods, clean-up
+{       v 1.3  07-31-82  DP   Changes PIPESINIT parameters to LONGINT
+{
+{----------------------------------------------------------------------}
+
+{!CC} UNIT CCpipes;
+
+INTERFACE
+
+USES
+{!CC} {$U /CCUTIL/CCLIB} CCDefn, CCLngInt,
+{!CC} {$U         C2LIB} CCDrvIO;
+    
+CONST
+    PipesVersion    = '1.3'; {current version number}
+    PnameLen        = 8;     {size of a pipe name}
+
+    {pipe return codes ...}
+    PipeOk          = 0;    {successful return code}
+    PipeEmpty       = -8;   {tried to read an empty pipe}
+    PipeNotOpen     = -9;   {pipe was not open for read or write}
+    PipeFull        = -10;  {tried to  write to a full pipe}
+    PipeOpErr       = -11;  {tried to open (for reading) an open pipe}
+    PipeNotThere    = -12;  {pipe does not exist}
+    PipeNoRoom      = -13;  {the pipe data structures are full, and there
+                             is no room for new pipes at the moment...}
+    PipeBadCmd      = -14;  {illegal command}
+    PipesNotInitted = -15;  {pipes not initialized}
+    {an error code less than -127 is a fatal disk error}
+    PipeDskErr      = -255;
+
+TYPE
+    PNameStr  = STRING[PnameLen];
+
+VAR
+    PipeDebug:   BOOLEAN;
+
+{$P}
+FUNCTION pipestatus (VAR names,ptrs: DrvBlk): INTEGER;
+FUNCTION pipeoprd   (pname: PNameStr): INTEGER;
+FUNCTION pipeopwr   (pname: PNameStr): INTEGER;
+FUNCTION pipeclrd   (npipe: INTEGER): INTEGER;
+FUNCTION pipeclwr   (npipe: INTEGER): INTEGER;
+FUNCTION pipepurge  (npipe: INTEGER): INTEGER;
+FUNCTION piperead   (npipe: INTEGER; VAR info: DrvBlk): INTEGER;
+FUNCTION pipewrite  (npipe,wlen: INTEGER; VAR info: DrvBlk): INTEGER;
+FUNCTION pipesinit  (baddr,bsize: LONGINT): INTEGER;
+PROCEDURE CCpipeinit(Netloc: CDaddr);
+
+IMPLEMENTATION
+
+CONST
+         FiveByte = 26;  {=$1A, indicates a four byte opcode}
+         TenByte  = 27;  {=$1B, ten byte opcode...}
+  
+    {the following constants are used to select the type of request}
+         OpnRd    = 192; {open pipe for read = $C0 }
+         OpnWt    = 128; {open for write     = $80 }
+
+         Rd       = 32;  {=$20, read pipe}
+         Wrt      = 33;  {=$21, write pipe}
+
+         Close    = 64;  {=$40, close read or close write}
+         Status   = 65;  {=$41, pipe status command}
+
+         PInit    = 160; {initialize the pipes... = $A0 }
+    
+    {pipe state constants...}
+         ClsWt    = 254; { Close write = $FE }
+         ClsRd    = 253; { Close read  = $FD }
+         Purge    = 0;
+
+TYPE PipeName = PACKED ARRAY [1..PnameLen] OF CHAR;
+
+VAR  rcode:  INTEGER;
+     pbuf:   SndRcvStr;
+     PipeNetloc: CDaddr;
+     
+{$P}
+FUNCTION result: INTEGER;
+{***************************************************************}
+{ result - sends the command in pbuf to the drive and receives  }
+{ the results.... all pipe or disk errors are negative numbers  }
+{ here....                                                      }
+{ **************************************************************}
+    VAR status: INTEGER;
+    BEGIN
+    WITH pbuf DO BEGIN
+        IF pipedebug THEN WRITE ('req =',b[1]:5,b[2]:5,'   ');
+        CDsend (PipeNetloc, pbuf); CDrecv (PipeNetloc, pbuf);
+        IF pipedebug THEN WRITE ('rec =',b[1]:5,b[2]:5,'   ');
+        IF ord(c[1]) {dcode} > 127
+            THEN status := ord(c[1]) {dcode}
+            ELSE status := ord(c[2])*(-1) {ppcode};
+        IF pipedebug THEN WRITELN ('res =',status:6);
+        result := status;
+        END;
+    END;
+
+{$P}
+PROCEDURE getname (src: PNameStr; dest: INTEGER);
+{****************************************************************}
+{ getname - modifies dest so that it is exactly len chars long.  }
+{ if src is less than len characters long, dest is padded with   }
+{ blanks.  if src is longer than len chars, dest is the first    }
+{ len chars of src.....                                          }
+{****************************************************************}
+    VAR n: INTEGER;
+    BEGIN
+    FOR n := 1 TO PnameLen DO
+        IF n <= LENGTH(src) THEN pbuf.c[dest-1+n] := src[n]
+                            ELSE pbuf.c[dest-1+n] := ' ';
+    END;
+
+FUNCTION pipestatus;
+{****************************************************************}
+{ FUNCTION pipestatus (VAR names,ptrs: DrvBlk  ): INTEGER;        }
+{ pipestatus determines the status of the pipes by reading the   }
+{ name and pointer tables from the disk.  Each table is 512      }
+{ bytes in length, so 1024 data bytes are returned...            }
+{****************************************************************}
+    VAR i: INTEGER; initnames: string[16];
+    BEGIN
+    WITH pbuf DO BEGIN
+        sln  := 5;
+        rln  := 513;
+        b[1] := FiveByte;     {size}
+        b[2] := ord(Status);  {command}
+        b[3] := 1; b[4] := 0; b[5] := 0;
+        END; {WITH}
+    CDsend (PipeNetloc,pbuf); CDrecv (PipeNetloc,pbuf);
+    IF pipedebug THEN BEGIN WRITELN('pipe names');
+       FOR i:= 1 to 33 do write(pbuf.b[i]); writeln; end;
+    rcode := ORD(pbuf.c[1]) {dcode};
+    IF rcode < 128 THEN BEGIN
+       rcode := 0;  {possible soft error, so ignore}
+       MOVELEFT (pbuf.b[2],  names.b[1], DrvBlkSize);
+       IF pbuf.sln<3 THEN rcode := -ORD(pbuf.c[2]) ELSE
+          BEGIN
+          initnames := 'WOOFW00FF00WFOOW';
+          FOR i := 1 TO 8 DO BEGIN
+             IF names.c[i] <> initnames[i] THEN rcode := pipesnotinitted;
+             IF names.c[i+504] <> initnames[i+8] THEN rcode := pipesnotinitted;
+             END;
+          END;
+       END;
+
+    IF rcode=0 THEN BEGIN
+       WITH pbuf DO BEGIN
+          sln  := 5;
+          rln  := 513;
+          b[1] := FiveByte;     {size}
+          b[2] := ord(Status);  {command}
+          b[3] := 2; b[4] := 0; b[5] := 0;
+          END; {WITH}
+       CDsend (PipeNetloc,pbuf); CDrecv (PipeNetloc,pbuf);
+       IF pipedebug THEN BEGIN WRITELN('pipe ptrs'); FOR i:= 1 to 33 do
+       write(pbuf.b[i]); writeln; end;
+       rcode := ORD(pbuf.c[1]) {dcode};
+       IF rcode < 127 THEN BEGIN
+          rcode := 0;  {possible soft error, so ignore}
+          MOVELEFT (pbuf.b[2],ptrs.b[1], DrvBlkSize);
+          IF pbuf.sln<3 THEN rcode := -ORD(pbuf.c[2]);
+          END;
+       END;
+
+    pipestatus := rcode;
+    END; {pipestatus}
+
+{$P}
+FUNCTION pipeoprd;
+{ ************************************************************** }
+{ FUNCTION pipeoprd (pname: STRING): INTEGER                     }
+{ Opens pipe pname for reading.  A pipe may not be open for both }
+{ read and write.  IF spooling is true then the entire pipe list }
+{ searched until the name matches and the pipe is closed for read}
+{ If spooling is false then we only try to open the first one    }
+{ which matches.....                                             }
+{ Returns the pipe number if successful, an error code otherwise.}
+{ ************************************************************** }
+    BEGIN
+    WITH pbuf DO BEGIN
+        sln  := 10;
+        rln  := 12;
+        b[1] := TenByte;      {size}
+        c[2] := CHR(OpnRd);   {command}
+        getname (pname,3);    {pipe name}
+        END; {WITH}
+    rcode := result;
+    IF rcode < 0
+        THEN pipeoprd := rcode
+        ELSE pipeoprd := pbuf.b[3] {pipeno};
+    END; {pipeoprd}
+   
+FUNCTION pipeopwr;
+{ ****************************************************************** }
+{ FUNCTION pipeopwr (pname: STRING): INTEGER;                        }
+{ Open a pipe for writing.  Always allocates a new pipe.             }
+{ Returns the pipe number or an error code...                        }
+{ ****************************************************************** }
+    BEGIN
+    WITH pbuf DO BEGIN
+{$R-}   sln  := 10;
+        rln  := 12;
+        b[1] := TenByte;      {size}
+        c[2] := CHR(OpnWt);   {command}
+        getname (pname,3);    {pipe name}
+{$R+}   END; {WITH}
+    rcode := result;
+    IF rcode < 0
+        THEN pipeopwr := rcode
+        ELSE pipeopwr := pbuf.b[3] {pipeno};
+    END; {pipeopwr}
+
+{$P}
+FUNCTION closeit (npipe: INTEGER; which: BYTE): INTEGER;
+{ ************************************************************ }
+{ closeit closes pipes for read, write, or purge depending on  }
+{ the value of which....                                       }
+{ Returns OkCode if successful, error code otherwise.          }
+{ ************************************************************ }
+    BEGIN
+    WITH pbuf DO BEGIN
+{$R-}   sln  := 5;
+        rln  := 12;
+        b[1] := FiveByte;     {size}
+        b[2] := ord(Close);   {command}
+        b[3] := npipe;        {pipenum}
+        b[4] := ord(which);   {state}
+        b[5] := 0;
+{$R+}   END; {WITH}
+    closeit := result;
+    END;  {closeit}
+
+FUNCTION pipeclrd;
+{ ************************************************************* }
+{ FUNCTION pipeclrd (npipe: INTEGER): INTEGER;                  }
+{ close a pipe for reading.  IF the pipe is empty, it will be   }
+{ deallocated.... Returns an error code.                        }
+{ ************************************************************* }
+    BEGIN pipeclrd := closeit (npipe,ClsRd); END;
+
+FUNCTION pipeclwr;
+{ ************************************************************* }
+{ FUNCTION pipeclwr (npipe: INTEGER): INTEGER;                  }
+{ close a pipe for writing...                                   }
+{ ************************************************************* }
+    BEGIN pipeclwr := closeit (npipe,ClsWt); END;
+   
+FUNCTION pipepurge;
+{ ************************************************************* }
+{ FUNCTION pipepurge (npipe: INTEGER): INTEGER; delete a pipe   }
+{ ************************************************************* }
+    BEGIN pipepurge := closeit (npipe,Purge); END;
+
+{$P}
+FUNCTION pipewrite;
+{ ********************************************************************* }
+{ FUNCTION pipewrite (npipe,wlen: INTEGER; info: DrvBlk): INTEGER;     }
+{ Write wlen bytes to pipe number npipe.  0 < wlen <= 512               }
+{ Returns the number of bytes written or an error code.                 }
+{ ********************************************************************* }
+    BEGIN
+    WITH pbuf DO BEGIN
+        sln  := wlen+5;
+        rln  := 12;
+        b[1] := FiveByte;     {size}
+        b[2] := Wrt;          {command}
+        b[3] := npipe;        {pipenum}
+        b[4] := wlen MOD 256; {len.lo}
+        b[5] := wlen DIV 256; {len.hi}
+        END; {WITH}
+    MOVELEFT (info.b[1],pbuf.b[6],wlen);
+    rcode := result;
+    IF rcode < 0
+        THEN pipewrite := rcode
+        ELSE pipewrite := pbuf.b[4]*256+pbuf.b[3] {len};
+    END; {pipewrite}
+
+FUNCTION piperead;
+{ ********************************************************************* }
+{ FUNCTION piperead (npipe: INTEGER; VAR info: DrvBlk  ): INTEGER;     }
+{ Read upto 512 bytes from pipe npipe.                                  }
+{ Returns number of bytes read or error code.....                       }
+{ ********************************************************************* }
+    BEGIN
+    WITH pbuf DO BEGIN
+        sln  := 5;
+        rln  := 516;
+        b[1] := FiveByte;     {size}
+        b[2] := Rd;           {command}
+        b[3] := npipe;        {pipenum}
+        b[4] := 0;            {len.lo}
+        b[5] := 2;            {len.hi}
+        END; {WITH}
+    rcode := result;
+    IF rcode >= 0 THEN BEGIN
+        rcode := pbuf.b[4]*256+pbuf.b[3] {len};
+        MOVELEFT (pbuf.b[5],info.b[1],rcode);
+        END;
+    piperead := rcode;
+    END; {piperead}
+
+{$P}
+FUNCTION pipesinit;
+{ ***************************************************************** }
+{ FUNCTION pipesinit (baddr,bsize: INTEGER): INTEGER;               }
+{ initialize the pipe data structures.  baddr is the block number   }
+{ of the start of the pipe buffer, bsize is the length in blocks.   }
+{ ***************************************************************** }
+    BEGIN
+    IF ((baddr < 0) OR (bsize < 0)) THEN BEGIN
+        {allow negative numbers if you want to start at > 32k}
+        pipesinit := PipeDskErr;
+        EXIT (pipesinit);
+        END;
+    WITH pbuf DO BEGIN
+{$R-}   sln  := 10;
+        rln  := 12;
+        b[1] := TenByte;       {size}
+        b[2] := ord(PInit);    {command}
+        b[3] := LIntByte(3, baddr);     {addr.lo}
+        b[4] := LIntByte(2, baddr);     {addr.hi}
+        b[5] := LIntByte(3, bsize);     {bufsize.lo}
+        b[6] := LIntByte(2, bsize);     {bufsize.hi}
+{$R+}   END; {WITH}
+    pipesinit := result;
+    END;
+ 
+PROCEDURE CCpipeinit {(Netloc: CDaddr)};
+    BEGIN
+    pipeDebug := FALSE;
+    PipeNetloc := Netloc;
+    END;
+
+END.
+

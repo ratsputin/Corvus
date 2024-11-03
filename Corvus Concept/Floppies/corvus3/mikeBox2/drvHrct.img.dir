@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'drvHrct.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 7 files,  0 to 6 (6), eov 500, size 176, free 7
+
+ 1: DRV.HCRT.G.TEXT Text 21-Apr-83    6-  60(  54), 27648+512= 28160 bytes
+ 2: DRV.HCRT.I.TEXT Text 12-Jul-82   60-  66(   6),  3072+512=  3584 bytes
+ 3: DRV.HCRT.TEXT   Text 27-Apr-83   66- 152(  86), 44032+512= 44544 bytes
+ 4: DRV.VCRT.G.TEXT Text 21-Apr-83  152- 206(  54), 27648+512= 28160 bytes
+ 5: DRV.VCRT.I.TEXT Text 30-Nov-82  206- 216(  10),  5120+512=  5632 bytes
+ 6: DRV.VCRT.TEXT   Text 12-May-83  216- 308(  92), 47104+512= 47616 bytes
+ 7: DRV.XCRT.T.TEXT Text  3-Jan-82  308- 324(  16),  8192+512=  8704 bytes

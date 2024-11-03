@@ -1,0 +1,364 @@
+; File: CC.PROM.KB
+; Date: 15-Nov-83
+; By:   Keith Ball
+;
+; KEYBOARD DRIVER FOR PROM (kb)
+
+;
+; EQUATES FOR ALL KEYBOARD SOFTWARE
+;
+; KEYBOARD DATA AREA DEFINITIONS
+;
+KBBflgs EQU     0               ;FLAG JUST HI ORDER BYTE
+KBBfrnt EQU     KBBflgs+2       ;FRONT PTR SAVE
+KBBrear EQU     KBBfrnt+4       ;REAR PTR SAVE
+KBBsrsv EQU     KBBrear+4       ;STATUS REG SAVE AREA
+KBBbufr EQU     KBBsrsv+2       ;KEYBOARD BUFFER
+KBBlen  EQU     RAMkblen-KBBbufr;NMBR OF BYTES IN BUFFER
+;
+; FLAG BIT DEFINITIONS
+;
+KBFfull EQU     0               ;BUFFER FULL FLAG
+KBFemty EQU     1               ;BUFFER EMPTY FLAG
+KBFclos EQU     2               ;KEY CLOSURE FLAG
+KBFshft EQU     3               ;SHIFT KEY
+KBFcntl EQU     4               ;CONTROL KEY
+KBFlock EQU     5               ;SHIFT LOCK KEY
+;
+; MISCELLANEOUS EQUATES
+;
+KBmsk40 EQU     $1F             ;MASK TO CLEAR D7-D5 (CONTROL CODE)
+;
+; TABLE VALUES FOR PROCESSING CHARACTERS
+;
+KBCqual EQU     $7F             ;QUALIFIER VALUES > THEN THIS
+KBCshft EQU     $FE             ;TABLE VALUE FOR SHIFT
+KBCcntl EQU     $FD             ;TABLE VALUE FOR CONTROL
+KBClock EQU     $FC             ;TABLE VALUE FOR SHIFT LOCK
+KBCnoch EQU     $FF             ;TABLE VALUE FOR NO CHAR CDE
+;
+; SPECIAL ASCII CHARACTERS
+;
+KBClca  EQU     'a'             ;LOWER CASE A
+KBClcz  EQU     'z'             ;LOWER CASE Z
+KBCqmrk EQU     '?'             ;QUESTION MARK
+
+        page
+;
+; COMMAND AND CONTROL REGISTER VALUES
+;
+KBccOff EQU     $02             ;TURN OFF UART (CMD)
+KBcc600 EQU     $17             ;600 BAUD AND 8 BIT XMIT (CTL)
+KBccBrk EQU     $08             ;XMIT A BREAK (CMD)
+KBccGo  EQU     $09             ;TURN ON INTS & UART (CMD)
+;
+KBdsInt EQU     $0700           ;DISABLE 68000 INTERRUPTS
+
+;
+; KBinit - Initialize (reset) keyboard
+;
+;      REGISTER A2 IS USED AS POINTER TO COMMAND REGISTER
+;      REGISTER A3 IS ADDRESS OF KBRD DATA AREA
+;
+KBinit  MOVEM.L D0/A0-A3,-(SP)          ;save registers
+        LEA     RAMkbbuf.W,A3
+        LEA     KBRcmnd.L,A2
+        MOVE.B  #KBccOff,(A2)           ;TURN OFF KBRD
+        LEA     KBBflgs(A3),A0          ;CLEAR INT HANDLER FLAGS
+        CLR.L   (A0)                    ;INCLUDES QUALIFIERS
+        BSET    #KBFemty,(A0)           ;BUFFER IS EMPTY
+        ;
+        ; INITIALIZE FRONT & REAR POINTERS
+        ;
+        LEA     KBBbufr(A3),A0
+        LEA     KBBfrnt(A3),A1
+        MOVE.L  A0,(A1)+
+        MOVE.L  A0,(A1)
+        LEA     KBintr,A0               ;SETUP AUTOVECTOR 6
+        MOVE.L  A0,IVlvl6.W             ;WITH ADDR OF INT HANDLER
+        ;
+        ; TURN ON KEYBOARD UART
+        ;
+        MOVE.B  KBRstat-KBRcmnd(A2),D0  ;RESET UART                  0.8
+        MOVE.B  KBRdata-KBRcmnd(A2),D0  ;CLEAR RECEIVE               0.8
+        MOVE.B  #KBcc600,KBRcntl-KBRcmnd(A2) ;8 BITS, 600 BAUD XMIT  0.8
+        MOVE.B  #KBccBrk,(A2)           ;FORCE BREAK OF KBRD
+        MOVE.W  #33333,D0               ;DELAY FOR UART TO DO BREAK
+KBinit1 DBF     D0,KBinit1              ;NEED MINIMUM OF 33.3 MILLISECS
+        MOVE.B  #KBccGo,(A2)            ;TURN ON UART & INTERRUPTS
+        move.w  #$2500,sr               ;set priority to 6, KYBD intr only
+        MOVEM.L (SP)+,D0/A0-A3          ;restore registers
+        RTS
+
+        page
+;
+; KBintr - Keyboard interrupt service routine
+;
+; BEGIN INTERRUPT SERVICE ROUTINE.  THIS IS THE ENTRY POINT.  IT'S ADDRESS
+; MUST BE PLACED IN AUTO VECTOR INTERRUPT 6 VECTOR BEFORE KEYBOARD INTERRUPT
+; IS TURNED ON.
+;
+; REGISTER USEAGE:  D0 - KEYCODE
+;                   D1 - CHARACTER
+;                   A0 - ADDRESS OF FLAG BYTE
+;                   A2 - BASE ADDRESS OF KBRD DATA AREA
+;
+KBintr  MOVEM.L D0-A6,-(SP)             ;SAVE REGISTERS ON STACK
+        LEA     RAMkbbuf.W,A2           ;BASE ADDR OF KBRD DATA AREA
+        BSR     KBgetky                 ;GET KEYCODE FROM UART DATA PORT
+        ;
+        ; IF BIT 7 OF KEYCODE SET THEN CLOSURE ELSE RELEASE
+        ;
+        LEA     KBBflgs(A2),A0
+        BCLR    #KBFclos,(A0)           ;ASSUME RELEASE
+        BTST    #7,D0                   ;KEYCODE BIT D7 CLEAR?
+        BEQ.S   KBintr1                 ;YES
+        BSET    #KBFclos,(A0)
+        BCLR    #7,D0
+        ;
+        ; GET CHARACTER CODE FOR THIS KEYCODE
+        ;
+KBintr1 LEA     KBstable,A1             ;ASSUME SHIFT TABLE
+        BTST    #KBFshft,(A0)
+        BNE.S   KBintr2                 ;SHIFT BIT SET
+        LEA     KBrtable,A1             ;ELSE USE REGULAR TABLE
+KBintr2 MOVE.B  0(A1,D0.W),D1           ;INDEX TABLE BY KEYCODE
+        ;
+        ; IF CHAR(D1) = $FF THEN IGNORE AND EXIT
+        ;
+        CMPI.B  #KBCnoch,D1
+        BEQ.S   KBintr9
+        BSR.S   KBproky                 ;ELSE PROCESS KEYCODE
+        ;
+        ; EXIT INTERRUPT SERVICE ROUTINE
+        ;
+KBintr9 MOVEM.L (SP)+,D0-A6             ;RESTORE REGISTERS
+        RTE                             ;EXIT INTERRUPT
+
+        page
+;
+; KBgetch - Get a keyboard character
+;
+; Register useage:  A0 = Front pointer
+;                   A1 = address of end of buffer + 1
+;                   A2 = updated front pointer
+;                   A3 = address of front pointer
+;                   A4 = address of flag byte
+;                   A5 = address of keyboard data area
+;                   A6 = address of Status Register save area
+;
+;       Exit:   D0.B - Next character in buffer
+;
+KBgetch MOVEM.L A0-A6,-(SP)             ;save all address registers
+        LEA     RAMkbbuf.W,A5           ;keyboard data area
+        LEA     KBBflgs(A5),A4          ;address of Flag byte
+        tst.b   CPextcrt.w              ;using external CRT?            0.8
+        bon.s   KBgchra                 ;yes, use data comm 0           0.8
+        bsr     SBprom2                 ;debug boot PROM?               0.7
+        bne.s   KBgchr1                 ;no, go on                      0.7
+KBgchra move.l  #KBcPort,a1             ;get UART pointer               0.8
+KBgchr0 btst    #KBrdBit,KBuSt(a1)      ;is char in UART?               0.7
+        boff.s  KBgchr0                 ;no, wait some more             0.7
+        move.b  KBuDa(a1),d0            ;get character                  0.7
+        bra.s   KBgchr9                 ;return                         0.7
+        ;
+        ; Wait for a character in the Buffer.
+        ;
+KBgchr1 BTST    #KBFemty,(A4)           ;while (Buffer_empty) do;
+        BNE.S   KBgchr1                 ;*
+        ;
+        ; have char, check for wrap around before get char
+        ;
+        LEA     KBBfrnt(A5),A3          ;pointer to Front save loc
+        MOVE.L  (A3),A0                 ;Front pointer
+        LEA     KBBbufr+KBBlen(A5),A1   ;end of buffer + 1
+        MOVE.L  A0,A2                   ;
+        ADDQ.L  #1,A2                   ;add one to pointer to get next addr
+        CMPA.L  A1,A2                   ;Front=end of buffer + 1        0.7
+        BNE.S   KBgchr2                 ;No
+        LEA     KBBbufr(A5),A2          ;yes, then wrap back to beginning
+                                        ;
+KBgchr2
+;-----  LEA     KBBsrsv(A5),A6          ;don't need                     0.8
+        MOVE.W  SR,-(SP)                ;put SR on stack                0.8
+        ORI.W   #KBdsInt,SR             ;*** disable interrupts
+        MOVE.B  (A0),D0                 ;get char
+        MOVE.L  A2,(A3)                 ;save new Front value
+        CMPA.L  KBBrear(A5),A2          ;if Front=Rear then
+        BNE.S   KBgchr3                 ;Buffer_empty := true;
+        BSET    #KBFemty,(A4)           ;
+                                        ;
+KBgchr3 MOVE.W  (SP)+,SR                ;*** enable interrupts          0.8
+KBgchr9 MOVEM.L (SP)+,A0-A6             ;restore callers address regs   0.7
+        RTS                             ;return
+
+        page
+;
+; KBgetky - GET KEYCODE (IGNORES ERRORS)
+;
+;     EXIT : (D0) - UART DATA PORT BYTE
+;
+KBgetky CLR.L   D0                      ;MAKE SURE HI 3 BYTES ARE 0
+        ;
+        ; READ STATUS REGISTER TO CLEAR IRQ BIT
+        ; ALWAYS READ DATA PORT SO IF OVERRUN THEN FOR NEXT CHAR
+        ; IT WILL BE CLEARED.
+        ;
+        MOVE.B  KBRstat.L,D1            ;GET STATUS OF RECEIVE
+        MOVE.B  KBRdata.L,D0            ;READ UART DATA PORT
+        RTS
+
+        page
+;
+; KBproky - PROCESS CHARACTER OR QUALIFIER
+;
+;       Enter:  D1 = CHARACTER CODE FROM TABLE
+;               D0 = KEYCODE
+;               A0 = ADDRESS OF FLAGS
+;
+KBproky CMPI.B  #KBCqual,D1             ;IS IT A QUALIFIER
+        BHI.S   KBpro3                  ;YES
+        ;
+        ; IGNORE REST OF KEYS IF NOT CLOSURE
+        ;
+        BTST    #KBFclos,(A0)
+        BEQ.S   KBpro9
+        ;
+        ; TEST FOR CONTROL
+        ;
+        BTST    #KBFcntl,(A0)
+        BEQ.S   KBpro1                  ;NO,TRY SHIFT LOCK
+        CMPI.B  #KBCqmrk,D1
+        BLS.S   KBpro1
+        ANDI.B  #KBmsk40,D1             ;CLEAR BITS D7,D6,D5 OF CHAR
+        BRA.S   KBpro2                  ;PUT CHAR
+        ;
+        ; TEST FOR SHIFT LOCK
+        ;
+KBpro1  BTST    #KBFlock,(A0)
+        BEQ.S   KBpro2                  ;KEY NOT DOWN
+        CMPI.B  #KBClca,D1
+        BCS.S   KBpro2                  ;NOT WITHIN RANGE
+        CMPI.B  #KBClcz,D1
+        BHI.S   KBpro2                  ;NOT WITHIN RANGE
+        LEA     KBstable,A1
+        MOVE.B  0(A1,D0.W),D1           ;INDEX TABLE BY KEYCODE
+        ;
+        ; IF BUFFER NOT FULL PUT CHARACTER
+        ;
+KBpro2  BTST    #KBFfull,(A0)
+        BNE.S   KBpro9
+        BSR.S   KBputch
+        BRA.S   KBpro9
+        ;
+        ; PROCESS A QUALIFIER KEY
+        ;
+KBpro3  BSR.S   KBqual
+KBpro9  RTS
+
+        page
+;
+; KBputch - PUT ONE CHARACTER IN BUFFER
+;
+;       Enter:  D1 = BYTE TO PUT IN BUFFER
+;               A0 = ADDRESS OF FLAGS
+;               A2 = ADDRESS OF KEYBOARD DATA AREA
+;
+        ;
+        ; PUT CHARACTER IN CIRCULAR QUEUE AT REAR
+        ;
+KBputch LEA     KBBrear(A2),A5          ;get pointer to rear pointer
+        MOVE.L  (A5),A3                 ;*
+        MOVE.B  D1,(A3)+                ;UPDATE POINTER ALSO
+        ;
+        ; IF REAR > ENDBUFFER THEN REAR := @BUFFER
+        ;
+        LEA     KBBbufr+KBBlen(A2),A4   ; A4 = end buffer + 1
+        CMPA.L  A4,A3                   ;
+        BNE.S   KBput1                  ;NOT BEYOND BUFFER
+        LEA     KBBbufr(A2),A3          ;
+        ;
+        ; IF FRONT = REAR THEN BUFFER FULL
+        ;
+KBput1  CMPA.L  KBBfrnt(A2),A3          ;
+        BNE.S   KBput2                  ;
+        BSET    #KBFfull,(A0)           ;
+KBput2  MOVE.L  A3,(A5)                 ;UPDATE REAR IN MEMORY
+        BCLR    #KBFemty,(A0)           ;SHOW BUFFER NOT EMPTY
+        RTS                             ;return
+
+        page
+;
+; KBqual - PROCESS QUALIFIER KEYS
+;
+;       Enter:  D1 = CHARACTER CODE FROM TABLE
+;               A0 = ADDRESS OF FLAGS
+;
+KBqual  CMPI.B  #KBCshft,D1             ;IS IT SHIFT?
+        BNE.S   KBqual1                 ;NO
+        MOVEQ   #KBFshft,D2             ;BIT POSITION OF SHIFT
+        BRA.S   KBqual3                 ;CHANGE FLAG
+                                        ;
+KBqual1 CMPI.B  #KBCcntl,D1             ;IS IT CONTROL?
+        BNE.S   KBqual2                 ;NO
+        MOVEQ   #KBFcntl,D2             ;BIT POSITION OF CONTROL
+        BRA.S   KBqual3                 ;CHANGE FLAG
+                                        ;
+KBqual2 CMPI.B  #KBClock,D1             ;IS IT SHIFT LOCK?
+        BNE.S   KBqual9                 ;NO,THEN IT'S GARBAGE
+        MOVEQ   #KBFlock,D2
+        ;
+        ; IF CLOSURE THEN SET FLAG ELSE CLEAR FLAG
+        ;
+KBqual3 BTST    #KBFclos,(A0)
+        BEQ.S   KBqual8
+        BSET    D2,(A0)
+        BRA.S   KBqual9
+KBqual8 BCLR    D2,(A0)
+KBqual9 RTS
+
+        page
+;
+; THE SHIFT TABLE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE ENTRY FOR
+;        THE CORRESPONDING KEYCODE.
+;
+;           0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+KBstable
+  ;        ..   3   9  ..   6   ,   -  cr  ..   1   7  ..   4   8   5   2
+  DATA.B  $FF,$33,$39,$FF,$36,$2C,$2D,$0D,$FF,$31,$37,$FF,$34,$38,$35,$32
+; ;         +  ..   {   |  cr   }  bs  ..   )   ?   P   _   :   ~   "  ..
+; DATA.B  $2B,$FF,$7B,$7C,$0D,$7D,$08,$FF,$29,$3F,$50,$5F,$3A,$7E,$22,$FE
+  ;         +  ..   {  bs  cr   }   |  ..   )   ?   P   _   :   ~   "  .. ;0.6
+  DATA.B  $2B,$FF,$7B,$08,$0D,$7D,$7C,$FF,$29,$3F,$50,$5F,$3A,$7E,$22,$FE ;0.6
+  ;        ..  ..  ..  ..  ..  ..  ..  ..   $   %   R   T   F   G   V   B
+  DATA.B  $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$24,$25,$52,$54,$46,$47,$56,$42
+  ;         @   #   W   E   S   D   X   C esc   !  ..   Q  ..   A  ..   Z
+  DATA.B  $40,$23,$57,$45,$53,$44,$58,$43,$1B,$21,$FF,$51,$FC,$41,$FE,$5A
+  ;         ^   &   Y   U   H   J   N   M  ..  ..  ..  sp  ..   0  ..   .
+  DATA.B  $5E,$26,$59,$55,$48,$4A,$4E,$4D,$FD,$FF,$FF,$20,$FF,$30,$FF,$2E
+  ;         *   (   I   O   K   L   <   >  ..  ..  ..  ..  ..  ..  ..  ..
+  DATA.B  $2A,$28,$49,$4F,$4B,$4C,$3C,$3E,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+
+        page
+;
+; THE REGULAR TABLE - UNSHIFTED OR LOWER CASE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE ENTRY FOR
+;        THE CORRESPONDING KEYCODE.
+;
+;           0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+KBrtable
+  ;        ..   3   9  ..   6   ,   -  cr  ..   1   7  ..   4   8   5   2
+  DATA.B  $FF,$33,$39,$FF,$36,$2C,$2D,$0D,$FF,$31,$37,$FF,$34,$38,$35,$32
+; ;         =  ..   [   \  cr   ]  bs  ..   0   /   p   -   ;   `   ;  ..
+; DATA.B  $3D,$FF,$5B,$5C,$0D,$5D,$08,$FF,$30,$2F,$70,$2D,$3B,$60,$27,$FE
+  ;         =  ..   [  bs  cr   ]   \  ..   0   /   p   -   ;   `   ;  .. ;0.6
+  DATA.B  $3D,$FF,$5B,$08,$0D,$5D,$5C,$FF,$30,$2F,$70,$2D,$3B,$60,$27,$FE ;0.6
+  ;        ..  ..  ..  ..  ..  ..  ..  ..   4   5   r   t   f   g   v   b
+  DATA.B  $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$34,$35,$72,$74,$66,$67,$76,$62
+  ;         2   3   w   e   s   d   x   c esc   1  ..   q  ..   a  ..   z
+  DATA.B  $32,$33,$77,$65,$73,$64,$78,$63,$1B,$31,$FF,$71,$FC,$61,$FE,$7A
+  ;         6   7   y   u   h   j   n   m  ..  ..  ..  sp  ..   0  ..   .
+  DATA.B  $36,$37,$79,$75,$68,$6A,$6E,$6D,$FD,$FF,$FF,$20,$FF,$30,$FF,$2E
+  ;         8   9   i   o   k   l   ,   .  ..  ..  ..  ..  ..  ..  ..  ..
+  DATA.B  $38,$39,$69,$6F,$6B,$6C,$2C,$2E,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF

@@ -1,0 +1,356 @@
+
+file :  dcdsgn.text
+
+date created : 08-11-82  kb
+last modified: 08-16-82  kb
+
+
+This is the specification for an interrupt driven Data Com driver.
+
+1)  Must be able to set and examine following UART states :
+
+        a) Baud rate
+            - 110, 300, 600, 1200, 1800, 2400, 3600, 4800, 9600, 19200
+
+        b) Parity
+            - disabled  (no parity bit transmitted or received)
+
+            - odd
+            - even
+
+            - mark xmit/Parity check disabled
+            - space xmit/Parity check disabled
+
+            - The driver must also do odd and even parity but ignore
+              the parity errors from the UART.
+
+        c) Word size
+            - 7 or 8 bits
+
+        d) echo characters back on UART receive -> do not implement*************
+            - echo is useful only for testing
+            - for all communications use normal mode.
+            - The UART does the transmit automatically when it is in Echo state.
+            - echo or normal
+
+        e) Number of stop bits
+            - Driver must not give user setting access to this state.
+            - Driver assigns this state as follows :
+                  - 1 stop bit for all baud rates except 110.
+                  - 2 stop bits (however chip gives 1 stop bit at this state
+                    if word size = 8 bits and have parity) for 110 baud rate.
+
+2) Driver states the user must be able to find out and (some) change :
+
+        a) The number of free bytes in the driver's transmit buffer.
+                - buffer marked empty by Unitclear.
+
+        b) The number of characters available in the driver's receive buffer.
+                - buffer marked empty by Unitclear.
+
+        c) Input and Output direction:
+            - mode does not have to be settable by user.  It can be determined
+              by protocol selected.
+            - write only
+               - for printer with line busy protocols
+
+            - read/write.
+               - all other protocols
+               - printers that use XON/XOFF or ENQ/ACK protocol can
+                 run in this mode.
+
+        d) handshake protocol :
+            - Available for Receive and Transmit
+               (Means driver may send XON, XOFF, or ACK as well
+                as receive them and send ENQ.)
+            - Types:
+                - No handshake protocol
+                        + sends as fast as can
+                        + must process receive as fast as other end
+                          can send
+
+                - XON/XOFF
+                        + For control of character receiving :
+                           When the Receive Buffer is 75% full, transmit an
+                           XOFF character to inform the other end to stop
+                           transmitting.
+                           When Receive Buffer is 25% full and have already
+                           sent a XOFF character then send a XON character
+                           to inform the other end to resume transmitting.
+
+                        + For control of character transmitting :
+                           When receive an XOFF character Transmit Busy set
+                           to TRUE.  Therefore, cannot transmit characters.
+                           When receive an XON character Transmit Busy set
+                           to FALSE.  Therefore, can transmit characters.
+
+                - ENQ/ACK
+                        + For control of character receiving :
+                           When receive an ENQ character transmit an ACK
+                           character to inform the other end that it is
+                           OK to resume transmitting. Transmission of the
+                           ACK is also dependent on the degree of fullness
+                           of the Receive Buffer.
+
+                        + For control of character transmitting :
+                           After transmitting 80 characters transmit an ENQ
+                           character to find out if the other end is ready
+                           to receive more characters.  Set Transmit Busy
+                           TRUE to stop transmitting.  When receive an ACK
+                           character set Transmit Busy to FALSE.
+
+                - Line busy modes
+                    This type is for printers only and is supported only for
+                    Input to the driver.  The driver does not use the com
+                    control lines to communicate to any external device on the
+                    datacom line it's busy state.
+
+                    The 3 com control lines supported by the Concept hardware
+                    are the CTS, DSR, and DCD lines.  When Line busy mode is
+                    used the state of the selected line determines whether to
+                    set Transmit Busy to TRUE or FALSE.  The line can be normal
+                    (Busy when line = 1) or inverted (Busy when line = 0).
+
+                    Changes of the control line state are monitored by a level
+                    1 interrupt.  Therefore, the driver must have a level 1
+                    interrupt service routine to handle changes in these lines
+                    for the corresponding port.
+
+                    Line busy types :
+                        - CTS/normal
+                        - CTS/inverted
+                        - DSR/normal
+                        - DSR/inverted
+                        - DCD/normal
+                        - DCD/inverted
+
+                - Carrier Detect hangup (if DCD goes low), Clear To Send (CTS),
+                  and Data Set Ready (DSR)
+
+                    Used also as an input from modems or other commmunication
+                    devices to control the drivers transmission to that device.
+
+                    CTS is used to control when the driver can send data out. It
+                    is used for Half Duplex mode to tell the driver that the
+                    other end is ready to receive.  In order not to lose the
+                    carrier it is necessary to start transmission as soon as
+                    possible.
+
+                    DSR informs the driver whether or not the modem has lost
+                    power.  If it does the driver must stop transmitting and
+                    inform the user that the line is lost.  Usually get DCD
+                    high at same time.  Must be treated the same a losing the
+                    carrier signal.
+
+        e) Full or Half Duplex - modem only
+                - user can select Full or Half Duplex Transimission.
+                - Before transmit driver must wait for CTS line to be low,
+                  informing driver that it is Clear To Send.
+
+                - A higher level terminal emulator which uses the driver
+                  must echo characters entered from the Keyboard to the screen
+                  as well as send them to this driver when it is in Half Duplex
+                  mode.
+
+        f) Use of CH line and corresponding Baud Rates for each of it's states.
+                - see below for description of CH.
+                - Command to allow driver to use CH.  Also informs driver of
+                  baud rates to set in UART for the two CH states (high, low).
+                - Command to tell driver which CH line state to use.  Valid only
+                  if use CH command given previously.
+
+        g) Command to turn the modem off
+                - Driver turns the modem off by disabling the receive on the
+                  UART which makes DTR high.  DTR high means "not ready",
+                  which causes the modem to hangup.
+
+3) Must be able to specify that a given port is to be used by 1) a modem or
+   2) some other data com device, e.g. printer, plotter, tablet, digitizer,
+   mouse, robot, another computer, etc.
+        a) Other data com devices will not use the modem defined meanings for
+           the control lines. e.g. CTS, DCD, DSR.  They will use the Line busy
+           protocol with these lines.
+        b) This will change how the Datacom control routines and the transmit
+           and receive routines treat changes in the control lines.
+
+4) One instance of the driver must work for both the DataCom ports (0 and 1).
+   Therefore need 2 state variable areas for each of the ports, e.g. 2 receive
+   buffers, 2 transmit buffers, etc.
+
+        a) port 0 is volume /DTACOM1 and port 1 is volume /DTACOM2.
+        b) printer driver, unit number 6, is assigned to one of the port's unit
+           numbers. For example, assign =30 printer 6.  This uses the port 0
+           datacom (/DTACOM1) for the driver.
+                - the driver must recognize unit number 6 as the printer.
+                - the user must be able to select which port the printer, unit
+                  6, should talk with.
+                - the user configures the printer port via the configuration
+                  routines for the port unit number the printer is associated
+                  with.
+
+5) Has an interrupt process which has three (3) parts :
+
+        1) process transmit buffer empty interrupt; (level 2 and 4 interrupts)
+                a) Get a character from the driver's transmit buffer.
+                b) If the buffer was not empty and the driver is not in
+                   a transmit busy state then put the character in the
+                   UART transmit register.
+                c) If buffer was empty or driver is in a transmit busy
+                   state then turn off the transmit buffer empty interrupt.
+
+        2) process receive buffer full interrupt; (level 2 and 4 interrupts)
+                a) get characters from UART receive register
+                b) put them in driver's receive buffer if it is not full
+                c) If receive a handshake protocol characters, which are
+                   not put in the buffer, change internal driver states
+                   (e.g. busy) accordingly and transmit characters if
+                   necessary.
+                d) If buffer is to full and have not already communicated
+                   this information to the other side and have a handshake
+                   protocol operative on the receive then transmit a busy
+                   signal to the other side.
+                e) If have sent a busy signal to the other side and the
+                   buffer is below or at the busy state off mark then
+                   transmit a not busy signal to the other side.
+
+        3) DCD, CTS, DSR line change interrupt (level 1 interrupt).
+                a) Concept does not connect these external lines to the 6551.
+                   The state of these lines are read at VIA port A.  Changes
+                   to these lines may cause a level 1 interrupt.
+                b) The meaning of these lines for a given port depend on whether
+                   the port is connected to a Modem or another type of DataCom
+                   device.
+                c) Level 1 interrupt is turned off by toggling the IOX bit in
+                   VIA port A.
+                d) For another type of datacom device other than a modem these
+                   lines have meaning only if the device is using one of them
+                   for a Busy line with the Line handshake protocol.  If one
+                   of the lines is being used then a change in its state must
+                   change the state of the transmit busy flag.
+
+   The 6551 will generate only one interrupt if both the recevie buffer full
+   and transmit buffer empty conditions occur together.  If one occurs
+   before the other but the interrupt request has not been acknowledged
+   between the two interrupts then only one interrupt will be generated.
+   Therefore, it is necessary to check for both interrupting conditions
+   whenever an interrupt occurs.
+
+   Unitwrite puts characters sent by user into the driver's transmit buffer.
+   If the buffer was empty before then turn on the tranmit buffer empty interrupt.
+   If the buffer is full then wait until it is not full.
+
+   Unitread gets characters from receive buffer.  If buffer empty then wait for a
+   character to get into driver's receive buffer.
+
+   Unitbusy returns TRUE if and only if characters are available in the driver's
+   receive buffer.
+
+   Unitclear sets the state of the transmit and receive buffers to empty.  It
+   does not change any of the communication states.
+
+   Access to state of UART and Driver functions through Unitstatus. (see list
+   of functions above.)
+
+6) Must also control the DataCom control interrupts at Interrupt level 1.
+   This contains changes in CTS, DCD, and DSR lines.  Make sure not getting an
+   Apple slot interrupt.
+        a) Must periodically poll the DataCom control VIA register to make sure
+           that get changes in the 3 lines when don't get interrupts.
+                - need a timer service routine to check state of lines every
+                  xxxx milliseconds.
+                - routine should inform driver's interrupt and Unit routines
+                  of the change of state.
+
+        b) must keep state to know :
+                - CTS :  low - modem no longer listening; high - is listening.
+                         tells who should be transmitting
+                - DSR :  low - modem is "ready"; high - "not ready".
+                         tells if modem has power
+                - DCD :  low - have carrier; high - lost carrier.
+
+7) Driver must be reentrant.
+
+8) When the driver detects DCD high, therfore the modem has lost the carrier
+   signal, it must report to the user this condition.
+
+        a) DO THIS ->  - return an error code to user informing loss of
+                         carrier and go to a busy state.
+
+        b) if do a busy state then,
+
+              - if DCD high on DCD change interrupt then set busy,
+              - if DCD low on DCD change interrupt then clear busy.
+
+        c) Should use error code return to inform user that lost line.
+           This is necessary in Europe.
+
+        d) This busy state prevents the driver from transmitting.
+
+        e) User is returned the error code while the driver is in Hangup Busy
+           mode whenever it accesses the driver via the Unitread, Unitwrite,
+           Unitbusy and Unitclear commands.
+
+        f) Except for Unitwrite, Unitread and Unitbusy, the commands will
+           function as before.  Unitwrite will just return the error code and
+           return to the caller.  Unitread will return a character if one is
+           available in the buffer.  However, it will not wait if there are no
+           more characters available in the receive buffer.  Unitbusy is always
+           FALSE, therfore no characters available.
+
+QUESTIONS
+
+1) Novation CAT manual says DSR and CTS are ON with CARRIER DETECT.
+   On outputs the cat has a SPACE(ON) with a +10V signal.  The SY6551 data
+   sheet says CTS enable state is low and a low DSR indicates the "ready"
+   state.  Are these compatible?
+
+        a) The answer is :  Yes they are compatible.
+
+2) How should the UART be initialized when driver is installed?
+
+3) How should driver deal with parity, overrun and framing errors?
+
+                a) Normally, it should return an error to the user.
+
+                b) For a special parity state mentioned above, the
+                   driver should ignore all parity errors.
+
+4) What is the bit state (1 or 0) in the VIA port for the datacom control
+   lines when they are low and when they are high?
+
+   with high or low state viewed from 6551 inputs
+        - a low state on the line CTS, DCD, or DSR will be readable as a 0 bit.
+        - a high state on the line CTS, DCD, or DSR will be readable as a 1 bit.
+
+   +3 to +12v on the external CTS line will be seen as a 0 at the VIA port A.
+   -3 to -12v on the external CTS line will be seen as a 1 at the VIA port A.
+   similarly for DSR and DCD.
+
+
+   If the 6551 output is low it is converted to a +3 to +12V signal before
+   it is put on the external line.  Contrary, if the 6551 output is high
+   it is converted to a -3 to -12V signal before it is put on the external
+   line.
+
+5) What is CH?
+
+        a) Rate select
+
+           Some Modems have two Baud rates, a higher Baud rate for normal
+           transmission and a lower rate for noisy conditions e.g. 1200 Baud and
+           600 Baud.  A high level on CH selects one Baud rate and a low level
+           selects the other. Note that the datacomm driver must also change
+           its baud rate to match the modem when the level of CH is changed.
+           The driver must set the UART at the other baud rate after changing
+           the CH state.
+
+           The user must inform the driver of the modems capability to use CH
+           as well as what the two baud rates are and their corresponding CH
+           states.  For example for a particular modem, a CH high means 600 baud
+           and a CH low means 1200 baud.
+
+           CH is output only.  It tells the connected data set what it should
+           do.
+
+6) Should the driver return a BUFFER OVERRUN error code if the driver's
+   Receive Buffer is full and another character arrives in at the UART?

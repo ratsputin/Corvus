@@ -1,0 +1,35 @@
+
+Directory of UCSD disk image file 'logicalc_demo_models.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 27 files,  0 to 6 (6), eov 500, size 185, free 27
+
+ 1: MODEL3.LC       Data 29-Mar-83    6-  22(  16),  8192+512=  8704 bytes
+ 2: MODEL1.LC       Data 29-Mar-83   22-  27(   5),  2560+512=  3072 bytes
+ 3: MODEL2.LC       Data 29-Mar-83   27-  35(   8),  4096+512=  4608 bytes
+ 4: MORAMOR.LC      Data  1-Apr-83   36-  46(  10),  5120+512=  5632 bytes
+ 5: DIRECTORY.TEXT  Text 29-Mar-83   46-  50(   4),  2048+385=  2433 bytes
+ 6: MODEL7.LC       Data  6-Apr-83   50-  83(  33), 16896+512= 17408 bytes
+ 7: MODEL5A.LC      Data  3-Apr-83   83- 104(  21), 10752+512= 11264 bytes
+ 8: MODEL5B.LC      Data  3-Apr-83  104- 116(  12),  6144+512=  6656 bytes
+ 9: MODEL5C.LC      Data  3-Apr-83  116- 130(  14),  7168+512=  7680 bytes
+10: MODEL5D.LC      Data  3-Apr-83  130- 138(   8),  4096+512=  4608 bytes
+11: MODEL9.LC       Data  3-Apr-83  138- 153(  15),  7680+512=  8192 bytes
+12: MODEL14.LC      Data  3-Apr-83  153- 155(   2),  1024+512=  1536 bytes
+13: MODEL5X.LC      Data 26-Nov-83  155- 176(  21), 10752+512= 11264 bytes
+14: MODEL5Y.LC      Data 26-Nov-83  176- 193(  17),  8704+512=  9216 bytes
+15: MODEL15.LC      Data  4-Apr-83  193- 195(   2),  1024+512=  1536 bytes
+16: MODEL16.LC      Data  4-Apr-83  195- 206(  11),  5632+512=  6144 bytes
+17: MODEL17.LC      Data  4-Apr-83  206- 208(   2),  1024+512=  1536 bytes
+18: MODEL4.LC       Data  6-Apr-83  208- 222(  14),  7168+512=  7680 bytes
+19: MODEL5.LC       Data  6-Apr-83  222- 260(  38), 19456+512= 19968 bytes
+20: MODEL8.LC       Data  6-Apr-83  260- 262(   2),  1024+512=  1536 bytes
+21: MODEL10.LC      Data  6-Apr-83  262- 265(   3),  1536+512=  2048 bytes
+22: MODEL11.LC      Ux2005  6-Apr-83  265- 275(  10),  5120+512=  5632 bytes
+23: MODEL12.LC      Data  6-Apr-83  275- 277(   2),  1024+512=  1536 bytes
+24: MODEL13.LC      Data  6-Apr-83  277- 279(   2),  1024+512=  1536 bytes
+25: MODEL21.LC      Data  4-Apr-83  279- 303(  24), 12288+512= 12800 bytes
+26: MODEL20.LC      Data  4-Apr-83  303- 315(  12),  6144+512=  6656 bytes
+27: LOANPAY.LC      Data 22-Jun-83  338- 339(   1),   512+512=  1024 bytes

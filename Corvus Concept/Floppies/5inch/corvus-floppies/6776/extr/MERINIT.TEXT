@@ -1,0 +1,84 @@
+; File: merinit.text
+; Date: 01-Dec-82
+;
+
+        ident   merinit
+        
+        global  %P821201,%_END,%_TERM,%_VERS
+        
+;
+; %P821201 - The initial routine when executing under Merlin
+;
+; Upon entry the stack is:
+;
+; |-----------|
+; | ^ stderr  |
+; |   Argc    |
+; |   Argv    |
+; | ^ output  |
+; |  ^ input  |
+; | Ret. Addr | <-- SP
+; |-----------|
+;
+
+%P821201
+        rts
+
+;
+; Once the main program has done a:
+;
+;       LINK    #xxx,A5
+;
+; the stack will be:
+;
+; |-----------|
+; | ^ Stderr  |    +22
+; |   Argc    |    +20
+; |   Argv    |    +16
+; | ^ Output  |    +12
+; |  ^ Input  |     +8
+; | Ret. Addr |     +4
+; |  Old A5   | <-- A5
+; |-----------|
+; |    ...    |
+; |  Globals  |
+; |    ...    |
+; |-----------| <-- SP
+;
+
+;
+; %_VERS - Return Operating System Version Number
+;
+
+%_VERS
+        clr.w   4(sp)           ; 0 = Merlin
+        rts
+
+;
+; %_TERM - Next to last routine
+;
+
+%_TERM
+        rts
+
+;
+; %_END - The Final Routine
+;
+
+%_END
+        rts
+
+;
+; The resulting stack is:
+;
+; |-----------|
+; |   Argc    |
+; |   Argv    |
+; | ^ output  |
+; |  ^ input  |
+; | Ret. Addr | <-- SP
+; |-----------|
+;
+        
+        END
+

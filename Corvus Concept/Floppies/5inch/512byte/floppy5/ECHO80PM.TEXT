@@ -1,0 +1,554 @@
+unit Echo80Pmgr;
+
+{**********************************************************}
+{                                                          }
+{ Development program for socket $80 protocol manager.     }
+{ file : echo80pm.text                                     }
+{ date : 19-August-1983  kb                                }
+{                                                          }
+{**********************************************************}
+Interface
+
+Uses
+    {$U /CCOS/OS.GLOBALS} Globals,
+    {$U       NETGLOBALS} NetGlobals;
+
+Const
+    {protocol ID}
+    E80pid = $1C0;
+    E80UserData = 256;
+
+    {Dependent procedure's function codes}
+    E80Drtry = 0;  {set send retry count}
+    E80Dhost = 1;  {set send host number}
+    E80Dcntr = 2;  {reset all counters}
+    E80Dclra = 3;  {reset receive active}
+
+    {Status procedure's function codes}
+    E80Serrs = 0;  {return error counters}
+    E80Smsgs = 1;  {return msg type counters}
+    E80Sctrl = 2;  {return control parameters}
+
+Type
+    {Status procedure's error counters record}
+    pE80SerCnt = ^E80SerCnt;
+    E80SerCnt  =  record
+                   SendErrs,
+                   RecvErrs,
+                   CntRetry,
+                   BadFFFF,
+                   BadMsgTypes: Longint;
+                   end;
+
+    {Status procedure's msg type counters record}
+    pE80SmCnt = ^E80SmCnt;
+    E80SmCnt  =  record
+                   Send0000,
+                   SendFFFF,
+                   Recv0000,
+                   RecvFFFF: Longint;
+                   end;
+
+
+    {Status procedure's control parameters record}
+    pE80ScpCnt = ^E80ScpCnt;
+    E80ScpCnt  =  record
+                   ActiveRcv: Boolean;
+                   SendHost : Byte;
+                   RetryCont: Integer;
+                   end;
+
+
+{user interface code to pmgr}
+procedure E80user(MType: Integer; pData: pBytes; DataLen,FncCode: Integer);
+
+{init pmgr procedure - will be main code of pgm}
+procedure E80init;
+{$P}
+Implementation
+
+Const
+    E80vers  = 0;  {version 0.1}
+    E80level = 1;
+    E80maxBuf = 264; {max buf size with protocol header}
+
+    PMnoHOST = -1; {$FF - invalid omninet host number}
+
+    MTeRqst =  0;  {msg type code for echo request}
+    MTeRply = -1;  {msg type code for echo reply}
+
+Type
+    {protocol manager global variables}
+    pE80gbl = ^E80gbl;
+    E80gbl  =  record
+                 RecvActive: Boolean;  {True means user tried receive}
+                 SendHost  : Byte;     {host number to send to}
+                 UserBfCtrl: pPMRcvBuf;{ptr to user buf ctl block}
+                 UserMaxLen,           {max data length for receive}
+                 SndRtryCnt: Integer;  {send retry count}
+                 SendErrors,           {count of send errors}
+                 RecvErrors,           {count of receive errors}
+                 NmbrRtries,           {count of retries}
+                 Sent0000,             {count of msgtype $0000 sent}
+                 SentFFFF,             {count of msgtype $FFFF sent}
+                 Rcvd0000,             {count of msgtype $0000 received}
+                 RcvdFFFF,             {count of msgtype $FFFF received}
+                 InvMsgType,           {cnt of msgs rcvd w/ unknown msg type}
+                 BadCntFFFF: Longint;  {count of invalid $FFFF msgs rcvd}
+                 SendResult: Integer;  {IOresult from send}
+                 SendDone,             {send complete flag}
+                 SendDque  : Boolean;  {send dequed}
+                 ThisHost  : Byte;     {machine running this code host number}
+                 end;
+
+    pE80Buffer = ^E80Buffer;
+    E80Buffer  =  record
+                    case integer of
+                      0: (a: array[1..E80maxBuf] of Byte);
+                      1: (PID,
+                          MsgType: Integer;
+                          EchoSckt,
+                          Source : Byte;
+                          DataLen: Integer;
+                          TheData: array[1..E80UserData] of Byte);
+                    end;
+
+{asm call via system vector to PD}
+function xPDuser(ScktNmbr: TCsockets;   {socket number}
+                 FncCode,               {function code}
+                 PID,                   {protocol id  }
+                 MaxBfSz : Integer;     {max buffer size}
+                 Address : pE80Buffer;  {pointer to int rtn or buffer}
+                 UserData: pE80gbl)     {user data = globals}
+                                   : Integer;  {returns IOresult}
+                 external;
+{$P}
+    function GetPMTentry(var lsyscom: pDEVDATA) : pPMTentry;
+    {param will eventually be pointer to SysCom}
+    Var
+       pPMTbl: pPMtable;
+       i: Integer;
+       pp: pPMTentry;
+
+    begin
+    {get address of protocol mgr table from SysCom}
+    lsyscom := pointer(pPMstuff); {return addr of syscom}
+    pPMTbl := lsyscom^.pPMT;
+
+    pp := Nil;  i := 1;
+    while (i <= PMmaxents) AND (pp = Nil) do
+       if (pPMTbl^[i].PMActive) AND (pPMTbl^[i].PMpid = E80pid) then
+          pp := @pPMTbl^[i]
+       else
+          i := i + 1;
+
+    GetPMTentry := pp;
+    end; {GetPMTentry}
+
+    procedure FillTCmd(var TC   : PDtrnpCMD;
+                           pRslt: pPDresult;
+                           pData: pE80Buffer;
+                           DLen : Integer;
+                           cmd,
+                           host,
+                           sckt : Byte);
+    begin
+    pRslt^.ResultCode := TRCwait;
+    with TC do
+      begin
+      p.RP := pRslt;
+      p.DP := @pData^;
+      p.LN := DLen;
+      p.HL := 0;     {$80 and $90 have no user control}
+      p.Dest := host;
+      a[crOPCD] := cmd;
+      a[crSOCK] := sckt;
+      end; {with}
+    end;  {FillTCmd}
+
+    procedure FillTPBlk(var TPB : PDtranpPB;
+                        pTCmd   : pPDtrnpCMD;
+                        pRtn    : pBytes;
+                        pUD     : pE80gbl);
+    begin
+    with TPB do
+      begin
+      pComd :=  pTCmd;
+      pProc :=  pRtn;
+      pUser :=  ord4(pUD);
+      end; {with}
+    end;  {FillTPBlk}
+{$P}
+    procedure E80sndInt(Dque, Error: Integer;   {dequeue flag & err code}
+                        RsltPtr: pPDresult;     {result array}
+                        BufferPtr: pE80Buffer;  {data buffer}
+                        pGbls: pE80gbl);        {user data= cntrl blk}
+
+    {gets transporter driver send interrupt call}
+    begin
+    if (Dque <> 0) then   {deque operation}
+       begin
+       pGbls^.SendDque   := TRUE;  {show dequed}
+       if (Error <> 0) then {if error then done}
+          with pGbls^ do
+            begin
+            SendDone   := TRUE;
+            SendResult := Error; {save error code}
+            end; {with}
+       {no error then operation continues}
+       end {then}
+    else
+       with pGbls^ do {operation complete}
+         begin
+         SendDone   := TRUE;
+         SendResult := 0;  {no driver error}
+         end; {with}
+    end; {E80sndInt}
+{$P}
+    function DoSend(pGbls: pE80gbl;              {global var ptr}
+                    var SBuf: E80Buffer;         {send buffer}
+                    Sendto,Socket: Byte):        {send host # & socket}
+                                        Integer; {returns error code}
+    Var
+         TPB : PDtranpPB;    {transporter driver param block}
+         TC  : PDtrnpCMD;    {transporter command block}
+         Rslt: PDresult;     {transporter result record}
+         ior: Integer;
+
+    begin
+    with pGbls^ do
+      begin
+      SendDque   := FALSE;
+      SendDone   := FALSE;
+      SendResult := 0;
+      SBuf.Source := ThisHost;
+
+      FillTCmd(TC,@Rslt,@SBuf,(SBuf.DataLen+8),TCsndOP,Socket,Sendto);
+      FillTPBlk(TPB, @TC, @E80sndInt, pGbls);
+
+      UnitStatus( 33, TPB, 0); {call transporter driver}
+      ior := IOresult;
+
+      if (ior = 30) then  {if queue warning wait until dqued}
+         while (NOT SendDque) do ior := 0
+      else
+         SendDque := TRUE;
+
+      if (ior = 0) then {if driver tried send then wait till done}
+         begin
+         while (NOT SendDone) do;
+         DoSend := SendResult; {return result of operation}
+         if (SendResult = 0) AND (Rslt.ResultCode < 0) then
+            DoSend := Rslt.ResultCode; {if transporter failed report it}
+         end
+      else DoSend := ior; {else already done with error}
+      end; {with}
+    end; {DoSend}
+{$P}
+    procedure E80rcvInt(pE80glbls: pE80gbl; var BufCtl: BCentry);
+    {gets protocol dispatcher receive interrupt call}
+    Var
+         pBuf: pE80Buffer;
+         SBuf: E80Buffer;
+         Sendto,Socket: Byte;
+         i,Retry,Error: Integer;
+
+         procedure MoveBuffer;
+         {move data and protocol header from protocol}
+         {dispatcher's buffer to local send buffer.  }
+         {Release protocol dispatcher's buffer.      }
+         Var
+            i,ior: Integer;
+
+         begin
+         {move data from rcv buff to send buffer}
+         for i := 1 to pBuf^.DataLen do
+            SBuf.TheData[i] := pBuf^.TheData[i];
+
+         Sendto := pBuf^.Source;       {get source host number}
+         Socket := pBuf^.EchoSckt;     {get send to socket number]
+         SBuf.DataLen := pBuf^.DataLen;{get data length}
+
+         {Restor Buffer to protocol dispatcher}
+         BufCtl.InUse := FALSE;          {mark buffer free}
+         ior := xPDuser(Sckt80,          {uses socket $80}
+                        PDFCrstr,        {restore buffer function}
+                        E80pid,          {pid = $1C0}
+                        0,               {parameter not used}
+                        pBuf,            {buffer address}
+                        Nil);            {parameter not used}
+         end; {UseBuffer}
+
+    begin  {E80rcvInt}
+    with pE80glbls^ do
+      begin
+      pBuf := @BufCtl.BufferAdr^; {convert ptr to our buffer}
+      if (pBuf^.MsgType = MTeRqst) then
+         begin
+         Rcvd0000 := Rcvd0000 + 1;
+         MoveBuffer; {setup send buffer}
+         SBuf.MsgType := MTeRply;   {echo back reply}
+         SBuf.EchoSckt := 0;        {sending a reply}
+         Retry := 0;
+         repeat
+           Retry := Retry + 1;
+           Error := DoSend(pE80glbls,SBuf,Sendto,Socket);
+           until( (Error = 0) OR (Retry > SndRtryCnt) );
+         {if never get through then just give up}
+         NmbrRtries := NmbrRtries + (Retry - 1);
+         SentFFFF := SentFFFF + Retry;
+         SendErrors := SendErrors + (Retry - 1);
+         end {MTeRqst}
+
+      else if (pBuf^.MsgType = MTeRply) then
+         begin
+         RcvdFFFF := RcvdFFFF + 1;
+         MoveBuffer;
+         if RecvActive then
+            begin
+            RecvActive := FALSE;
+            with UserBfCtrl^ do
+              begin
+              ActualCnt := 0; i := 1;
+              while ( (i <= UserMaxLen) AND (i <= SBuf.DataLen) ) do
+                begin
+                ActualCnt := ActualCnt + 1;
+                pBuffer^[i] := SBuf.TheData[i];
+                i := i + 1;
+                end; {while}
+              DataAvail := TRUE; {tell user data avail in buffer}
+              end; {with}
+            end {RecvActive}
+         else BadCntFFFF := BadCntFFFF + 1; {no recv expected so Bad}
+         end {MTeRply}
+
+       else InvMsgType := InvMsgType + 1; {if wrong msg type then ignore}
+      end; {with}
+    end; {E80rcvInt}
+{$P}
+    procedure E80user{MType: Integer; pData: pBytes; DataLen,FncCode: Integer};
+    {all parameters to procedure are used as globals to PM functions}
+    Var
+         pE80entry: pPMTentry;
+         pE80glbls: pE80gbl;
+         pb: ^Byte;
+         lsyscom: pDEVDATA;  {temp for development- will be syscom ptr}
+
+    function Attach: Integer;
+    {global vars used :  E80user parameters, pE80entry}
+    {                    and pE80glbls.               }
+
+    begin
+    {initialize global variables}
+    fillchar(pE80glbls^,sizeof(E80gbl),chr(0)); {zero record}
+
+    with pE80glbls^ do
+       begin
+       RecvActive := FALSE;
+       SendHost   := PMnoHOST;
+       SndRtryCnt := 1;
+       {put host number of current machine in SysCom}
+       {it is currently in Static Ram for Boot Proms}
+       {CPtprnbr equ    RAMwksta+$00D   ;(70D-70D) OMNINET transporter number}
+       pb := pointer($70D);
+       ThisHost :=  pb^;
+       end; {with}
+
+    {Activate PIDtable entry in protocol dispatcher}
+    Attach := xPDuser(Sckt80,          {uses socket $80}
+                      PDFCactv,        {activate function}
+                      E80pid,          {pid = $1C0}
+                      E80maxBuf,       {max buffer len with header}
+                      @E80rcvInt,      {interrupt routine}
+                      pE80glbls);      {user data is ptr to globals}
+    end; {Attach}
+
+    function Detach: Integer;
+    {global vars used :  E80user parameters, pE80entry}
+    {                    and pE80glbls.               }
+    begin
+    {Deactivate PIDtable entry in protocol dispatcher}
+    Detach := xPDuser(Sckt80,          {uses socket $80}
+                      PDFCdact,        {deactivate function}
+                      E80pid,          {pid = $1C0}
+                      0,               {parameter not used}
+                      Nil,             {parameter not used}
+                      Nil);            {parameter not used}
+    end; {Detach}
+{$P}
+    function Send: Integer;
+    {global vars used :  E80user parameters, pE80entry}
+    {                    and pE80glbls.               }
+    begin
+    end;
+
+    function Receive: Integer;
+    {global vars used :  E80user parameters, pE80entry}
+    {                    and pE80glbls.               }
+    begin
+    end;
+{$P}
+    function Dependent: Integer;
+    {global vars used :  E80user parameters, pE80entry}
+    {                    and pE80glbls.               }
+    Var
+         fc: Integer;
+         pi: ^Integer;
+
+         procedure ResetCounters;
+         {reset all global counters}
+         begin
+         with pE80glbls^ do
+            begin
+            SendErrors := 0;
+            RecvErrors := 0;
+            NmbrRtries := 0;
+            Sent0000   := 0;
+            SentFFFF   := 0;
+            Rcvd0000   := 0;
+            RcvdFFFF   := 0;
+            InvMsgType := 0;
+            BadCntFFFF := 0;
+            end; {with}
+         end; {ResetCounters}
+
+    begin {Dependent}
+    fc := MType;
+    pi := @pData^;
+
+    case fc of
+      E80Drtry: pE80glbls^.SndRtryCnt := pi^;
+      E80Dhost: begin
+                if (pi^ >= 0) AND (pi^ <= 63) then
+                   pE80glbls^.SendHost := pi^
+                else
+                   Dependent := 54; {IOEuiopm}
+                end;
+      E80Dcntr: ResetCounters;
+      E80Dclra: pE80glbls^.RecvActive := FALSE;
+      Otherwise: Dependent := 56; {IOEfnccd}
+      end; {case}
+    end; {Dependent}
+{$P}
+    function Status: Integer;
+    {global vars used :  E80user parameters, pE80entry}
+    {                    and pE80glbls.               }
+    Var
+         pErr : pE80SerCnt;
+         pMsgs: pE80SmCnt;
+         pCtrl: pE80ScpCnt;
+
+    begin
+    case MType of
+      E80Serrs: begin
+                pErr := @pData^;
+                with pE80glbls^ do
+                  begin
+                  pErr^.SendErrs := SendErrors;
+                  pErr^.RecvErrs := RecvErrors;
+                  pErr^.BadMsgTypes := InvMsgType;
+                  pErr^.CntRetry := NmbrRtries;
+                  pErr^.BadFFFF  := BadCntFFFF;
+                  end; {with}
+                end;
+      E80Smsgs: begin
+                pMsgs := @pData^;
+                with pE80glbls^ do
+                  begin
+                  pMsgs^.Send0000 := Sent0000;
+                  pMsgs^.SendFFFF := SentFFFF;
+                  pMsgs^.Recv0000 := Rcvd0000;
+                  pMsgs^.RecvFFFF := RcvdFFFF;
+                  end; {with}
+                end;
+      E80Sctrl: begin
+                pCtrl := @pData^;
+                with pE80glbls^ do
+                  begin
+                  pCtrl^.ActiveRcv := RecvActive;
+                  pCtrl^.SendHost  := SendHost;
+                  pCtrl^.RetryCont := SndRtryCnt;
+                  end; {with}
+                end;
+      Otherwise: Status := 56; {IOEfnccd}
+      end; {case}
+    end; {Status}
+{$P}
+    begin {E80user}
+    {get pointer to this pmgr's table entry}
+    pE80entry := GetPMTentry(lsyscom);
+    if (pE80entry = Nil) then
+       begin
+       lsyscom^.IOres := 50; {IOEtblid - no table entry}
+       exit(E80user);
+       end;
+
+    {get pointer to global data}
+    pE80glbls := @pE80entry^.PMpData^;
+    if (pE80glbls = Nil) then
+       begin
+       lsyscom^.IOres := 3; {IOEioreq - no globals for pmgr}
+       exit(E80user);
+       end;
+
+    case FncCode of
+       PMFCatch: lsyscom^.IOres := Attach;
+       PMFCdtch: lsyscom^.IOres := Detach;
+       PMFCsend: lsyscom^.IOres := Send;
+       PMFCrecv: lsyscom^.IOres := Receive;
+       PMFCdpnd: lsyscom^.IOres := Dependent;
+       PMFCstat: lsyscom^.IOres := Status;
+       Otherwise:  begin
+                   lsyscom^.IOres := 56; {IOEfnccd}
+                   end;
+       end; {case}
+    end; {E80user}
+{$P}
+    procedure E80init;
+    {this procedure will be the main line code of}
+    {the protocol manager when pgm is built for  }
+    {the real system.                            }
+    Var
+         pE80entry: pPMTentry;
+         pE80glbls: pE80gbl;
+         plo,phi: ^longint;
+         l,lo: longint;
+         lsyscom: pDEVDATA;  {temp for development- will be syscom ptr}
+
+    begin
+    {get pointer to this pmgr's table entry}
+    pE80entry := GetPMTentry(lsyscom);
+    if (pE80entry = Nil) then
+       begin
+       lsyscom^.IOres := 50; {IOEtblid - no table entry}
+       exit(E80init);
+       end;
+
+    {allocate global space in driver area}
+    plo := pointer($108); phi := pointer($10C);
+    lo := plo^;
+    l := sizeof(E80gbl);       {global area length}
+    if odd(l) then l := l + 1; {make sure even number}
+
+    {make sure enough room for data space}
+    if ((lo + l) > phi^) then
+       begin                 {not enough}
+       pE80entry^.PMpData := Nil;
+       lsyscom^.IOres := 69; {IOEbszerr - no room for data}
+       exit(E80init);
+       end;
+    plo^ := lo + l; {save new top of driver address}
+
+    {save addr of globals}
+    pE80glbls := pointer(lo);
+
+    with pE80entry^ do {initialize entry}
+       begin
+       PMpData := pointer(lo);  {global data pointer}
+       PMVersion[0] := E80vers; {version word}
+       PMVersion[1] := E80level;
+       PMproc := @E80user;      {procedure pointer}
+       end; {with}
+    end; {E80init}
+
+end.  {Echo80Pmgr}

@@ -1,0 +1,553 @@
+{$S EDIT}
+
+procedure UnLog( var C: char;
+                 var Lin: integer;
+                 var Buf: BA;
+                 var Len: integer );
+var OK: boolean;
+    Tmp: BA;
+    S: StrTyp;
+begin
+  if LogUndo then
+    OK := RecPop( RedoFid, Len, Tmp[1] )
+  else
+    OK := RecPop( UndoFid, Len, Tmp[1] );
+  if OK then begin
+    C := chr( Tmp[1] );
+    BAToStr( Tmp, 2, S );
+    Lin := AsLong( S );
+    Len := max( 0, Len-7);
+    moveleft( Tmp[8], Buf[1], Len );
+    fillchar( Buf[Len+1], MaxLinLen-Len, ' ' );
+  end else begin
+    C := '?';
+  end;
+end;
+
+
+procedure Undo;
+var Done: boolean;
+    C: char;
+    Lin, Len: integer;
+    Buf: BA;
+begin
+  UndoRedo := true;
+  Done := true;
+  repeat
+    UnLog( C, Lin, Buf, Len );
+    UpdtGauge( Lin, LstLin );
+    if C='I' then begin
+      DeleteLine( Lin );
+    end else if C='D' then begin
+      InsertLine( Lin, Buf );
+    end else if C='R' then begin
+      ReplaceLine( XREP, Lin, Buf );
+    end else if C='B' then begin
+      Done := true;
+      EndEvent;
+    end else if C='E' then begin
+      DpyChg := false;
+      Done := false;
+      BeginEvent;
+    end else begin
+      TellUsr( Msg(MGEDIT,5) );
+      Done := true;
+    end;
+  until Done;
+  UndoRedo := false;
+  SetUpNewTxt( CurLin );
+  ShowLine( CurLin );
+end;
+
+
+procedure DoUndo;
+begin
+  FlushNewTxt;
+  TellUsr( Msg(MGEDIT,23) );
+  LogUndo := false;
+  Undo;
+end;
+
+
+procedure DoRedo;
+begin
+  FlushNewTxt;
+  TellUsr( Msg(MGEDIT,24) );
+  LogUndo := true;
+  Undo;
+end;
+
+
+procedure JOIN;
+var
+  TMPTXT: BA;
+  L1, L2, IND: integer;
+begin
+  if WrtOK and (CurLin<LSTLIN) then begin
+    GetLine( TMPTXT, CurLin+1 );
+    L1 := BkSpanNE( NewTxt, MaxLinLen, ' ' ) + 1;
+    L2 := BkSpanNE( TmpTxt, MaxLinLen, ' ' );
+    Ind := FirstNB( TmpTxt ) - 1;
+    if L1 + L2 - IND > MAXLINLEN then begin
+      TellUsr( Msg( MGEDIT, 7 ) );
+    end else begin
+      moveleft( TMPTXT[IND+1], NEWTXT[L1+1], L2-IND );
+      NewTxtMty := false;
+      BeginEvent;
+      FlushNewTxt;
+      DeleteLine( CurLin+1 );
+      SetUpNewTxt( CurLin - 1 );
+      EndEvent;
+    end;
+  end;
+end;
+
+
+procedure NxtWord;
+var Lim: integer;
+begin
+  while (CurCol<MaxLinLen) and
+        (chr(NewTxt[BAColToNdx(CurCol,NewTxt)]) in WrdChr) do
+    CurCol := CurCol + 1;
+  if (CurCol>=MaxLinLen) and (CurLin<LstLin) then begin
+    SetUpNewTxt( CurLin+1 );
+    CurCol := FirstNB(NewTxt);
+  end;
+  Lim := LastNB( NewTxt );
+  while not (chr(NewTxt[BAColToNdx(CurCol,NewTxt)]) in WrdChr) and
+        ((CurLin<LstLin) or (CurCol<Lim)) do
+    if CurCol>Lim then begin
+      SetUpNewTxt( CurLin + 1 );
+      Lim := LastNB( NewTxt );
+      CurCol := 1;
+    end else
+      CurCol := CurCol + 1;
+end;
+
+
+procedure PrvWord;
+var Fnd: boolean;
+begin
+  repeat
+    if CurCol > 1 then
+      CurCol := CurCol - 1
+    else if CurLin > 1 then begin
+      SetUpNewTxt( CurLin - 1 );
+      CurCol := LastNB( NewTxt );
+    end;
+  until ((CurCol=1) and (CurLin=1)) or
+        (chr(NewTxt[BAColToNdx(CurCol,NewTxt)]) in WrdChr);
+  Fnd := false;
+  while not Fnd do begin
+    if CurCol<=1 then begin
+      Fnd := true
+    end else begin
+      if (chr(NewTxt[BAColToNdx(CurCol-1,NewTxt)]) in WrdChr) then
+        CurCol := CurCol - 1
+      else
+        Fnd := true;
+    end;
+  end;
+end;
+
+{$S GOTO}
+
+procedure PrvPage;
+begin
+  CurCol := 1;
+  if CurLin=1 then begin
+    TellUsr( Msg( MGEDIT,8) );
+  end else begin
+    TellUsr( Msg( MGEDIT,26) );
+    if RecFndPrv( TxtFid, '.PG' ) then begin
+      SetUpNewTxt( CurLin );
+    end else begin
+      SetUpNewTxt( 1 );
+    end;
+    Redraw( CurLin );
+    ClrMsg;
+  end;
+end;
+
+
+procedure NxtPage;
+begin
+  CurCol := 1;
+  TellUsr( Msg(MGEDIT,25) );
+  if RecFndNxt( TxtFid, '.PG' ) then begin
+    SetUpNewTxt( CurLin );
+    Redraw( CurLin );
+    ClrMsg;
+  end else if CurLin+ScrPagLen<=LstLin then begin
+    SetUpNewTxt( CurLin+ScrPagLen );
+    Redraw( CurLin );
+    ClrMsg;
+  end else begin
+    TellUsr( Msg(MGEDIT,9) );
+  end;
+end;
+
+(*
+procedure PrvSent;
+var I: integer;
+begin
+  PrvWord;
+  while
+    (CurLin>1) and
+    not (
+      chr( NewTxt[ BAColToNdx(CurCol,NewTxt) ] ) in
+      ['.', ';', '?', '!']
+    )
+  do begin
+    if CurCol>1 then begin
+      CurCol := CurCol - 1;
+    end else begin
+      SetUpNewTxt( CurLin - 1 );
+      CurCol := LastNB( NewTxt );
+    end;
+  end;
+  NxtWord;
+end;
+
+procedure NxtSent;
+var I,L: integer;
+begin
+  L := LastNB( NewTxt );
+  while
+    (CurLin<LstLin) and
+    not (
+      chr( NewTxt[ BAColToNdx(CurCol,NewTxt) ] ) in
+      ['.', ';', '?', '!']
+    )
+  do begin
+    if CurCol<L then begin
+      CurCol := CurCol + 1;
+    end else begin
+      CurCol := 1;
+      SetUpNewTxt( CurLin + 1 );
+      L := LastNB( NewTxt );
+    end;
+  end;
+  NxtWord;
+end;
+*)
+
+procedure GoToTask;
+var I, OCtrRow, OCurLin, OWinRws, Lin, Len, ZipLen: integer;
+    OWinTop: integer;
+    C: char;
+    Done: boolean;
+begin
+  LoadLabels( GotoFrame );
+  OCurLin := CurLin;
+  Done := false;
+  ZipLen := WinRws;
+  Lin := CurLin;
+
+(*
+  OWinTop := WinTop;
+  OCtrRow := CtrRow;
+  CtrRow := 2;
+  WinRws := 4;
+  Redraw( CurLin-1 );
+  GotoXY( 0, 6 );
+  for i := 1 to ScrWid do write( '-' );
+*)
+
+  while not Done do begin
+    UpdtGauge( CurLin, LstLin );
+    NextCmd;
+    case Cmd of
+      KF1: begin
+           if PmtInt( Msg(MGEDIT,10), Lin ) then
+              SetUpNewTxt( max( 1, min( LstLin, Lin ) ) );
+         end;
+      KF2: begin
+           SetUpNewTxt( MarkTop );
+           CurCol := MarkLft;
+         end;
+      KF4: PrvPage;
+      KF5: NxtPage;
+      KSCRU,
+      KF6: begin
+           if CurLin>ZipLen then
+              SetUpNewTxt( CurLin-ZipLen )
+           else begin
+              SetUpNewTxt( 1 );
+           end;
+         end;
+      KSCRD,
+      KF7: begin
+           if CurLin+ZipLen<=LstLin then
+              SetUpNewTxt( CurLin+ZipLen )
+           else begin
+              SetUpNewTxt( LstLin );
+           end;
+         end;
+      KF8: SetUpNewTxt( 1 );
+      KF9: SetUpNewTxt( LstLin );
+      KSCRL,
+      KSCRR: Bell(BelErr);
+      KF19: begin
+            (* WinTop := OWinTop; *)
+               Bell(BelAck);
+               Cmd := KTASK;
+               Key := Chr(TIDEdit);
+               SetUpNewTxt( OCurLin );
+               Done := true
+            end;
+      otherwise:
+        Done := not LocalEdit;
+    end                                { eACasee@ }
+  end;                                 { eAWhilee@ eANote@ eADonee@ }
+
+  (*
+  WinRws := OWinRws;
+  CtrRow := OCtrRow;
+  if (OWinTop<=CurLin) and (CurLin<OWinTop+WinRws) then begin
+     WinTop := OWinTop;
+  end;
+  if WinTop + (WinRws div 2)>LstLin then begin
+     WinTop := max( 1, LstLin - (WinRws div 2) );
+  end;
+  if WinTop=OWinTop then begin
+     WinBot := WinTop+WinRws-1;
+     for i := WinTop to WinTop+4 do ShowLine( i );
+     SetUpNewTxt( OCurLin );
+  end else begin
+     Redraw( WinTop );
+  end;
+  *)
+
+end;
+
+{$S EDIT}
+
+procedure DelChr( L, R: integer );
+var Len: integer;
+begin
+   CvtToNdx( L, R );
+   BADelByt( NewTxt, L, R-L );
+   if DpyChg then Begin
+     ShowLine(CurLin)
+ (*  write( ScrDelChr ); *)
+     End;
+   NewTxtMty := false;
+end;
+
+
+procedure DelLin;
+begin
+   if LstLin=1 then begin
+      NewTxt := BlkStr;
+      NewTxtMty := false;
+      FlushNewTxt;
+      TellUsr( Msg(MGEDIT,11) );
+   end else begin
+      DeleteLine( CurLin );
+      SetUpNewTxt( CurLin );
+   end;
+   CurCol := FirstNB( NewTxt );
+end;
+
+
+procedure Erase( L, R: integer );
+begin
+   CvtToNdx( L, R );
+   fillchar( NewTxt[L], R-L, ' ' );
+   NewTxtMty := false;
+   SetUpNewTxt( CurLin );
+end;
+
+
+Procedure EraseLF(L,R: Integer);
+Begin
+  CvtToNdx(L,R);
+  fillchar(NewTxt[L],R-L,' ');
+  NewTxtMty := False;
+  SetUpNewTxt(CurLin+1)
+End;
+
+
+procedure Indent( L, R: integer );
+begin
+   CvtToNdx( L, R );
+   BAInsByt( NewTxt, L, R-L, BlkStr[1] );
+   NewTxtMty := false;
+end;
+
+
+procedure InsChr;
+begin
+   InsMod := not InsMod;
+   if InsMod then begin
+     write( chr(27), 'u' );
+     TellUsr( Msg(MGEDIT,12) );    { eA"Inserte@ eAmode."e@ }
+   end else begin
+     write( chr(27), 'v' );
+     TellUsr( Msg(MGEDIT,13) );    { eA"Typeovere@ eAmode."e@ }
+   end;
+end;
+
+
+procedure InsLin;
+begin
+  CurCol := max( LftMar, FirstNB( NewTxt ) );
+  if CurCol>RhtMar then CurCol := LftMar;
+  if WrtOk then begin
+    InsMod := true;
+    write( chr(27), 'u' );
+    InsertLine( CurLin, BlkStr );
+    SetUpNewTxt( CurLin );
+  end;
+end;
+
+
+procedure DoMark;
+begin
+  MarkTop := CurLin;
+  MarkLft := CurCol;
+  ShowLine( CurLin );
+  TellUsr( Msg(MGEDWD,4) );
+  Bell( BelAck );
+end;
+
+
+procedure DelWord;
+var i: integer;
+    WrdChr: set of char;
+begin
+   i := BAColToNdx( CurCol, NewTxt );
+
+   WrdChr := ['a'..'z'] + ['A'..'Z'] + ['0'..'9'];
+   if Chr(NewTxt[i]) in WrdChr then
+     while chr(NewTxt[i]) in WrdChr do BADelChr( NewTxt, i, 1 )
+   else BADelChr( NewTxt, i, 1 );
+
+   if i<LastNB(NewTxt) then while chr(NewTxt[i])=' ' do BaDelChr( NewTxt, i, 1 );
+
+   if chr(NewTxt[FirstNB(NewTxt)])=' ' then DelLin
+     else begin
+       NewTxtMty := false;
+       FlushNewTxt;
+       if CurCol>LastNB(NewTxt) then begin
+         SetUpNewTxt( CurLin+1 );
+         CurCol := FirstNB( NewTxt )
+         end;
+       end;
+end;
+
+
+Procedure WrdXpose;
+
+Var
+  Words: BA;
+  Found: Boolean;
+  Col,
+  LinLen,
+  Counter,
+  Wrd1L,
+  Wrd1R,
+  Wrd2L,
+  Wrd2R: Integer;
+  CurChar : Char;
+
+  Procedure CantTranspose;
+
+  Begin
+    Bell(BelWrn);
+    TellUsr(Msg(MGEdit,38));    { eA"Nothinge@ eAtoe@ eAtranspoe!"e@ }
+    Exit(WrdXPose)
+  End;
+
+Begin
+  LinLen := BkSpanNE(NewTxt,MaxLinLen,' ');  { eAGete@ eAlengthe@ eAofe@ eAlinee@ }
+  Col := BAColToNdx(CurCol,NewTxt);
+  If CurCol > LinLen Then CantTranspose;
+  If NewTxt[Col] <> Ord(' ') Then Begin    { eAMuste@ eAbee@ eAon ae@ eAspace!e@ }
+    Bell(BelWrn);
+    TellUsr(Msg(MgEdit,37))            { eA"Muste@ eAbee@ eAone@ eAae@ eAspacee@ eAtoe@ eAxposee@ eAwords!"e@ }
+    End
+  Else Begin
+    Found := False;
+    Counter := Col;
+    While (Counter < LinLen) and Not Found Do Begin
+      If (NewTxt[Counter] <> 32) Then Found := True
+        else Counter := Counter + 1
+      End;
+    If Found Then Wrd2L := Counter Else CantTranspose;
+    Found := False;
+    Counter := Wrd2L;
+    While (Counter < (LinLen+1)) and Not Found Do Begin
+      If (NewTxt[Counter] = 32) Then Begin
+        Found := True;
+        Counter := Counter - 1
+        End
+      Else If (Counter = LinLen) Then Found := True
+        else Counter := Counter + 1
+      End;
+    Wrd2R := Counter;                     { eAThise@ eAteste@ eAcan'te@ eAfaile@ }
+    Found := False;
+    Counter := Col;                       { eAStarte@ eAlookinge@ eAfore@ eAlefte@ eAworde@ }
+    While (Counter > 0) and Not Found Do Begin
+      If (NewTxt[Counter] <> 32) Then Found := True
+        Else Counter := Counter - 1
+      End;
+    If Found Then Wrd1R := Counter Else CantTranspose;
+    Found := False;
+    Counter := Wrd1R;
+    While (Counter > 0) and Not Found Do Begin
+      If (NewTxt[Counter] = 32) Then Begin
+        Found := True;
+        Counter := Counter + 1
+        End
+      Else If (Counter = 1) Then Found := True
+        Else Counter := Counter - 1
+      End;
+    Wrd1L := Counter;                     { eAThise@ eAonee@ eAcan'te@ eAfail,e@ eAeither!e@ }
+    Words := NewTxt;
+    BADelChr(NewTxt,Wrd2L,Wrd2R-Wrd2L+1); { eADeletee@ eAseconde@ eAworde@ }
+    BAInsByt(NewTxt,Wrd2L,Wrd1R-Wrd1L+1,Words[Wrd1L]); { eAInserte@ eAfirste@ }
+    BADelChr(NewTxt,Wrd1L,Wrd1R-Wrd1L+1); { eADeletee@ eAfirste@ eAworde@ }
+    BAInsByt(NewTxt,Wrd1L,Wrd2R-Wrd2L+1,Words[Wrd2L]); { eAInserte@ eAseconde@ }
+    NewTxtMty := false;
+    FlushNewTxt
+  End
+End;
+
+
+procedure EditTask;
+var Done: boolean;
+begin
+   if debug then CodeAvail;
+   PutCursor( CURLIN, CURCOL );
+   Done := false;
+   if TxtFid.Loc<>DirFid.Loc then begin
+      LoadLabels( MainFrame );
+   end else begin
+      LoadLabels( AuxFrame );
+   end;
+   while not Done do begin
+      NextCmd;
+      CASE CMD OF
+         KBAD: Bell( BelErr );
+         KF1 : PrvWord;
+         KF2 : NxtWord;
+         KF3 : DoUndo;
+         KF4 : DoMark;
+         KF5 : InsChr;
+         KF6 : DelChr( CurCol, CurCol );
+         KF7 : DelWord;
+         KF8 : Erase( CurCol, MaxLinLen );
+         KF9 : JOIN;
+         KF11: DoCopy( true, CurLin, CurLin, CurCol, MaxLinLen );
+         KF12: DoPaste( 1 );
+         KF13: DoRedo;
+         KF15: InsLin;
+         KF16: DelLin;
+         KF18: EraseLF(CurCol,MaxLinLen);
+         KF19: WrdXpose;
+         otherwise: Done := not LocalEdit;
+      end;
+   end;
+end;

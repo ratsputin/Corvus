@@ -1,0 +1,4 @@
+echo Configuring DataCom 2 for PRIME
+!cc.setdcp unit=dc2 baud=9600 parity=space charsize=7 handshake=xonxoff
+echo Begin terminal mode
+/ccutil/terminal unit=dc2 rcvalf=off sendalf=on

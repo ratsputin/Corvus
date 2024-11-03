@@ -1,0 +1,159 @@
+{----------------------------------------------------------------------}
+{ Unit:       CVTables                                                 }
+{                                                                      }
+{ Purpose:    The unit contains record declarations for all Constel-   }
+{             lation II tables.                                        }
+{                                                                      }
+{ Updates:    31-Mar-82  Unit created  (CMC)                           }
+{----------------------------------------------------------------------}
+
+
+UNIT CVtables;
+
+INTERFACE
+
+USES    {CVtables public}
+{!BT} {$U /CCOS/OS.GLOBALS.OBJ} globals,
+{!BT} {$U       BT.CVdefn     } CVDefn;
+
+
+
+
+TYPE    {CVtables public}
+
+{$P}
+
+   {-------------------------------------------------------}
+   { Record:     SBTYPE                                    }
+   {                                                       }
+   { Purpose:    System boot table ...                     }
+   {                                                       }
+   { Updates:    03/09/82 -  Record creation (CMC)         }
+   {-------------------------------------------------------}
+
+   SBtype     = RECORD
+                   CASE INTEGER OF
+                      1:  (baddr:     reldiskaddr);
+                      2:  (daddr:     INTEGER);
+                   END;
+
+{$P}
+
+   {----------------------------------------------------}
+   { Record:    NATYPE                                  }
+   {                                                    }
+   { Purpose:   Network Active table....                }
+   {                                                    }
+   { Updates:   03/19/82 -  Record creation (CMC)       }
+   {            04/05/82 -  name/password redef (DSO)   }
+   {----------------------------------------------------}
+
+   NAtype     = PACKED RECORD
+                host:           name;           { Host name                              }
+                hostno:         Byte;           { Host number                            }
+{!BT}           hostkind:       0..10;
+                reserved:       PACKED ARRAY [1..4] OF CHAR;
+                END;
+
+{$P}
+   {-----------------------------------------------------}
+   { Record:    NUTYPE                                   }
+   {                                                     }
+   { Purpose:   Network User Table Entry (NETWORK.USER)  }
+   {                                                     }
+   { Updates:   03/10/82 -  Record creation  (CMC)       }
+   {            04/05/82 -  name/password redef  (DSO)   }
+   {-----------------------------------------------------}
+
+    NUtype    = PACKED RECORD
+                user:           name;           { user name                             }
+                userpass:       psw;            { user password                         }
+                server:         name;           { home disk server name                 }
+                opsys:          RelInt;         { operating system type                 }
+{!BT}           hostkind:       0..10;
+                reserved:       CHAR;
+                END;
+
+{$P}
+   {----------------------------------------------------}
+   { Record:    DUTYPE                                  }
+   {                                                    }
+   { Purpose:   User Name Table Entry  (DRIVE.USER)     }
+   {                                                    }
+   { Updates:   03/09/82 -  Record creation (CMC)       }
+   {            04/05/82 -  name/password redef (DSO)   }
+   {----------------------------------------------------}
+
+   DUtype     = PACKED RECORD
+                user:           name;           { user name                             }
+                userpass:       psw;            { user password                         }
+                userid:         RelInt;         { user identifier                       }
+                mounted:        RelInt;         { user volumes mounted on drive         }
+                access:         RelInt;         {                                       }
+                bootinfo:       RelInt;
+                reserved:       PACKED ARRAY[1..6] OF CHAR;
+                END;
+
+{$P}
+   {----------------------------------------------------}
+   { Record:    DATYPE                                  }
+   {                                                    }
+   { Purpose:   User Access Table Entry  (DRIVE.ACCESS) }
+   {                                                    }
+   { Updates:   03/09/82 -  Record creation (CMC)       }
+   {            03/19/82 -  New disk adree length (CMC) }
+   {            04/05/82 -  name/password redef (DSO)   }
+   {----------------------------------------------------}
+
+   DAtype     = PACKED RECORD
+                userid:         RelInt;         { user identifier                       }
+                voladdr:        absdiskaddr;    { starting block of volume              }
+                mntinfo:        byte;           { OS dependent mount info               }
+                readonly:       0..15;          { user access is READONLY               }
+                bootflag:       0..15;          { User boot volume                      }
+                END;
+
+{$P}
+   {----------------------------------------------------}
+   { Record:    DVTYPE                                  }
+   {                                                    }
+   { Purpose:   Volume Table  (DRIVE.VOLUME)            }
+   {                                                    }
+   { Updates:   03/10/82 -  Record creation (CMC)       }
+   {            03/19/82 -  New disk addr  length (CMC) }
+   {            04/05/82 -  name/password redef (DSO)   }
+   {----------------------------------------------------}
+
+   DVtype     = PACKED RECORD
+                volname:        name;           { volume name                           }
+                startblk:       absdiskaddr;    { first block of volume (abs addr)      }
+                endblk:         absdiskaddr;    { last  block of volume (abs addr)      }
+                voltype:        byte;           { volume type....                       }
+                writeable:      byte;           { volume is writeable                   }
+                glbaccess:      byte;           { global access allowed                 }
+                voloffset:      byte;           { beginning offset of volume            }
+                reserved:       PACKED ARRAY[1..10] OF CHAR;
+                END;
+
+{$P}
+   CVsystbl   = RECORD
+                   CASE INTEGER OF
+                      1:  (DI:     DItype);
+                      2:  (SB:     PACKED ARRAY[1..256] OF SBtype  );
+                      3:  (NU:     PACKED ARRAY[1..16]  OF NUtype  );
+                      4:  (DV:     PACKED ARRAY[1..16]  OF DVtype  );
+                      5:  (DU:     PACKED ARRAY[1..16]  OF DUtype  );
+                      6:  (DA:     PACKED ARRAY[1..64]  OF DAtype  );
+                      7:  (NA:     PACKED ARRAY[1..32]  OF NAtype  );
+                      END;
+
+{$P}
+IMPLEMENTATION
+
+END.    {UNIT CVTABLES}
+
+
+
+
+
+

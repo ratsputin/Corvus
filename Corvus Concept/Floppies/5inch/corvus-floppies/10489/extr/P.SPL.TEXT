@@ -1,0 +1,267 @@
+{ P.SPL.TEXT ----------------------------------------------------------}
+{
+{       SPL -- Pascal Spool Utility Program
+{
+{       (c) Copyright 1983 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 4.0a 06-01-83  LEF  Spool program restructured
+{       v 4.0b 07-06-83  LEF  Minor modifications
+{       v 4.0c 01-06-84  LEF  Minor modifications
+{       v 4.0d 04-02-84  LEF  Add Apple II support
+{       v 4.0e 06-23-84  LEF  Fix Apple II multiple slot support
+{       v 4.0f 09-21-84  LEF  Expand DLE/fix include processing
+{
+{!A2}{ Apple II p-System version
+{!CC}{ Corvus CONCEPT version
+{!CP}{ Corvus CONCEPT p-System version
+{!IB}{ IBM PC p-System version
+{
+{!DB}{ Debug processing
+{----------------------------------------------------------------------}
+      {/SC} {SP} { select SPOOL                                        }
+{!A2} {/SC} {AP} { select generic Apple Pascal                         }
+{!CP} {/SC} {IV} { select generic 4.0/4.1 p-System                     }
+{!IB} {/SC} {IV} { select generic 4.0/4.1 p-System                     }
+{                                                                      }
+{!AP} {/SC} {UC} { select generic p-System                             }
+{!IV} {/SC} {UC} { select generic p-System                             }
+{----------------------------------------------------------------------}
+{!AP} {/SC} {TC} { select ucOTCio processing                           }
+{!CC} {/SC} {TC} { select ccOTCio processing                           }
+{!CP} {/SC} {OC} { select ucOMNio processing                           }
+{!IB} {/SC} {OC} { select ucOMNio processing                           }
+{----------------------------------------------------------------------}
+      {$I-}
+      {$R-}
+
+PROGRAM spl;
+
+USES
+{!A2} {$U *SYSTEM.LIBRARY } AppleStuff,
+{!A2} {$U CORVUS.LIBRARY  } ucDEFN, ucCRTio, ucDRVio, ucOTCio, ucPIPES;
+
+{!CC} {$U /CCUTIL/CCLIB   } ccDEFN,  ccCRTio, ccCLKio, ccLBLio,
+{!CC}                       ccOTCio, ccWNDio,
+{!CC} {$U /CCUTIL/C2LIB   } ccDRVio, ccPIPES;
+
+{!CP} {$U CPSRC1:CPLIB    } ucDEFN, ucCRTio, ucDRVio, ucOMNio, ucPIPES;
+
+{!IV} {$U IBSRC1:IV.LIB   } ucDEFN, ucCRTio, ucDRVio, ucOMNio, ucPIPES;
+
+{$I P.SPL0.TEXT} { Constants, types, and variables }
+
+{$P}
+{ FORWARD and EXTERNAL procedures and functions }
+
+{!CC} FUNCTION  OSaltSlt: integer;                             EXTERNAL;
+{!CC} FUNCTION  OSaltSrv: integer;                             EXTERNAL;
+{!CC} FUNCTION  BrkPress: boolean;                             EXTERNAL;
+
+      PROCEDURE ExitPgm;                                        FORWARD;
+      PROCEDURE RptSplErr (n: integer);                         FORWARD;
+      PROCEDURE SplBug (str: string80);                         FORWARD;
+      PROCEDURE SplErrHandler (reason: string80);               FORWARD;
+      FUNCTION  ESCkeyPressed: boolean;                         FORWARD;
+      PROCEDURE TitleScreen;                                    FORWARD;
+      PROCEDURE wrline;                                         FORWARD;
+      PROCEDURE promptinit  (s: string80);                      FORWARD;
+      PROCEDURE promptline  (optkey: integer;
+                             optlbl,optch: str16;
+                             opttxt: string80);                 FORWARD;
+      PROCEDURE GetReply    (s: string80; var ch: char);        FORWARD;
+      PROCEDURE ChgString   (var st: string80; level: string80;
+                             txt,pmt: string80);                FORWARD;
+      PROCEDURE ChgInteger  (var ival: integer; level: string80;
+                             txt,pmt: string80);                FORWARD;
+      PROCEDURE InitNetInfo (slt,srv: integer);                 FORWARD;
+      PROCEDURE ListPipes;                                      FORWARD;
+{!CC} PROCEDURE CreSplWnd;                                      FORWARD;
+{!CC} PROCEDURE SelSplWnd;                                      FORWARD;
+{!CP} FUNCTION  KeyPress: boolean;                              FORWARD;
+{!IV} FUNCTION  KeyPress: boolean;                              FORWARD;
+
+      {$I P.SPL1.TEXT} { GetParams and InitPgm }
+{!CC} {$I P.SPL2.TEXT} { ProcessCmdLine        }
+
+{$P}
+{!CC} {$S SPL}
+{!UC} SEGMENT
+{ SpoolIt -------------------------------------------------------------}
+{ Send a file (selected by the user) to a pipe.  The file is either
+{ formatted (i.e., converted to the standard print format) by the
+{ spooler, or it is left unformatted, depending on what the user has
+{ specified.  Conversion to the standard print format is handled by
+{ using the Pascal readln procedure, which automatically expands the
+{ DLE and Tab characaters found in TEXT files.
+{
+{ A preamble block is generated prior to spooling which passes infor-
+{ mation to the despooling procedure.
+{ The format of the preamble block is:
+{       block[1] - operating system type
+{       block[2] - length of filename (upto 80 characters)
+{       block[3-82] - filename (string of ASCII characters)
+{       block[83] - length of message (upto 80 characters)
+{       block[84-163] - message (---- a string of ASCII characters)
+{       block[164] - filetype('0':printable , '1':nonprintable
+{       block[165-512] - not used
+{----------------------------------------------------------------------}
+PROCEDURE SpoolIt (fileID: string80);
+
+      var BufPtr,k: integer;  { index to the pipe buffer block         }
+          fileOK:   boolean;  { gbl flag to handle include file error  }
+          ch:       char;
+          st1,st2:  string80;
+          i:        integer;
+
+{ SpoolIt.FindFile ----------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION FindFile: boolean;
+      var iost: integer;
+      begin
+      TempName := Splfname; FindFile := FALSE; iost := 1;
+      if Frmtd then begin
+          if length(TempName) < 6
+              then TempName := concat (TempName,'.TEXT');
+          if pos ('.TEXT',TempName) <> length(TempName)-4
+              then TempName := concat (TempName,'.TEXT');
+          end;
+      RESET (F1,TempName); iost := IORESULT;
+      if iost <> 0 then exit (FindFile);
+      CLOSE (F1); splfname := TempName; FindFile := TRUE;
+      end;
+
+{$P}
+{ SpoolIt.PutPreamble -------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE PutPreamble;
+      var  ln,i,k: integer;
+      begin
+      FILLCHAR (Buf,512,chr(Null));
+      ln := length(splfname);
+      buf.c[2] := chr(ln);
+      for i := 2 to ln + 1 do buf.c[i+1] := splfname[i-1];
+
+      { if frmtd then filetype := printable }
+      {          else filetype := nonprint  }
+
+      buf.c[1] := chr(0);
+      buf.c[164] := filetype;
+      ln := length(mssg);
+      buf.c[83] := chr(ln);
+      for i := 1 to ln do buf.c[i+83] := mssg[i];
+      k := PipeWrite (pnum,DrvBlkSize,buf);
+      CRT (HeartBeat);
+      pblocks := pblocks+1;
+      if k < 0 then begin
+          RptSplErr (k); close (f1); SplErrHandler ('Pipe error');
+          exit (SpoolIt);
+          end;
+      FILLCHAR (Buf,512,chr(Null));
+      end;
+
+{$I P.SPL3.TEXT}
+
+{$P}
+{ SpoolIt -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      TitleScreen; splfname := '';
+      if inclstr[1] = ' '
+          then ifchk := FALSE else ifchk := TRUE;
+      if npgstr[1] = ' '
+          then npchk := FALSE else npchk := TRUE;
+
+      repeat {until FALSE}
+
+      st1 := '';
+      if Frmtd
+          then st2 := 'Enter text file name [.TEXT]'
+          else st2 := 'Enter data file name';
+      if fileID <> ''
+          then begin
+              SplFname := fileID;
+              if NOT FindFile then exit (SpoolIt);
+              end
+          else repeat
+              FileOK := FALSE; SplFname := '';
+              ChgString (SplFname,'',st1,st2);
+              if cst <> Normal then exit (SpoolIt);
+              if length(splfname) <= 0 then exit (SpoolIt);
+              if FindFile
+                  then FileOK := TRUE
+                  else begin
+                      st1 := concat ('File ',TempName,' not found');
+                      SplFname := ''; write (beep);
+                      end;
+              until FileOK;
+      TitleScreen; promptinit ('');
+      pblocks := 0; pnum := PipeOpWr (pname);
+      if pnum < 0 then begin RptSplErr (pnum); ExitPgm; end;
+      pnamenum := '--';
+      pnamenum[1] := chr((pnum div 10) + ord('0'));
+      pnamenum[2] := chr((pnum mod 10) + ord('0'));
+      if pnamenum[1] = '0' then delete (pnamenum,1,1);
+      pnamenum := concat (pname,' [',pnamenum,']');
+      write ('Spooling file ',SplFname,' to pipe ',pnamenum);
+      CRT (Startbeat);
+
+{!CC} writeln; CreSplWnd; SelSplWnd;
+{$P}
+      BufPtr := 1;
+{!CC} FILLCHAR (Buf.b[BufPtr],DrvBlkSize,chr(Null));
+{!UC} FILLCHAR (Buf.c[BufPtr],DrvBlkSize,chr(Null));
+      if frmtd then filetype := printable else filetype := nonprint;
+      if ESCkeyPressed then;
+      if filetype = nonprint
+          then putblocks (splfname)
+          else begin
+              PutPreamble;
+              level := 0;  { initially, recursive level is 0 }
+              PutText (splfname);
+              end;
+      if pnum > 0 then begin
+          if pblocks > 1
+              then begin
+                  k := PipeClWr (pnum);
+                  if k < 0 then begin RptSplErr (k); ExitPgm; end;
+                  end
+              else k := PipePurge (pnum);  { nothing in pipe }
+          end;
+      writeln;
+      writeln (pblocks:1,' blocks written to pipe ',pnamenum);
+
+{!CC} ws := WinSystem (WsysCurr);
+      if fileID <> '' then exit (SpoolIt);
+      {repeat} until FALSE;
+
+      end;
+{!CC} {$S}
+
+{$I P.SPL4.TEXT}
+
+
+{ Spool program -------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      InitPgm;
+{!CC} if argc <> 0 then begin
+{!CC}     ProcessCmdLine;
+{!CC}     if FIDlist <> NIL then begin
+{!CC}         FIDcur := FIDlist;
+{!CC}         while FIDcur <> NIL do begin
+{!CC}             spoolit (FIDcur^.fid);
+{!CC}             FIDcur := FIDcur^.ptr;
+{!CC}             end;
+{!CC}         ExitPgm;
+{!CC}         end;
+{!CC}     end;
+      repeat
+          getparams;
+          if not globalexit then spoolit ('');
+          until globalexit;
+      ExitPgm;
+      end.
+

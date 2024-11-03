@@ -1,0 +1,11 @@
+
+Directory of UCSD disk image file 'fpascl2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FPASCL2 has 3 files,  0 to 6 (6), eov 500, size 307, free 3
+
+ 1: PASCTERRS.TEXT  Text 21-Jul-82    6-  20(  14),  7168+512=  7680 bytes
+ 2: CCLIB.OBJ       Data 21-Jul-82   20- 136( 116), 59392+512= 59904 bytes
+ 3: C2LIB.OBJ       Data 21-Jul-82  136- 193(  57), 29184+512= 29696 bytes

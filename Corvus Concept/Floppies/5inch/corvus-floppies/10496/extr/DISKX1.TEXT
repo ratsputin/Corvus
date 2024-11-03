@@ -1,0 +1,94 @@
+{$I-}
+program diskx;
+
+const nblk  = 40;
+      fname = 'JUNK.DATA';
+
+type  buffer= record case integer of
+                 1: (b: packed array [0..1023] of char);
+                 2: (s1,s2,s3,s4,
+                     s5,s6,s7,s8: packed array [1..128] of char);
+               end;
+
+var   f: file;
+      pass,err,i,k: integer;
+      buf1,buf2: buffer;
+
+procedure chkIO;
+    var i: integer; ch: char;
+    begin
+    i := ioresult;
+    if i <> 0 then begin
+        writeln;
+        write ('**** I/O error ',i:1,', continue? [Y/N]: ');
+        read (ch); writeln;
+        if (ch = 'N') or (ch = 'n') then begin
+            close (f,lock); exit (diskx); end;
+        end;
+    end;
+
+procedure fillbuff (p,b: integer);
+    var i,n: integer;
+    begin
+    n := p+b;
+    for i := 0 to 511 do begin
+        buf1.b[i] := chr(ord(n)); n := n+1; end;
+
+    n := p+b+1;
+    for i := 512 to 1023 do begin
+        buf1.b[i] := chr(ord(n)); n := n+1; end;
+    end;
+
+begin (* diskx *)
+pass := 0; err := 0;
+while true do begin
+    write ('O');
+    rewrite (f,fname); chkIO;
+    i := 0;
+    while (i < nblk) do
+        begin
+        fillbuff (pass,i);
+        write ('W');
+        k := blockwrite (f,buf1,2,i);
+        chkIO;
+        if k <> 2 then begin writeln;
+            writeln ('**** Insufficient room on volume');
+            close (f,lock);
+            exit (diskx); end;
+        i := i + 2;
+        end;
+
+    write ('C');
+    close (f,crunch); chkIO;
+    write ('o');
+    reset (f,fname); chkIO;
+    i := 0;
+    while (i < nblk) do
+        begin
+        fillbuff (pass,i);
+        write ('r');
+        k := blockread (f,buf2,2,i); chkIO;
+        if (buf1.s1 <> buf2.s1) or
+           (buf1.s2 <> buf2.s2) or
+           (buf1.s3 <> buf2.s3) or
+           (buf1.s4 <> buf2.s4) then begin
+            err := err+1; writeln;
+            writeln ('Error on block: ',i:1); end;
+        if (buf1.s5 <> buf2.s5) or
+           (buf1.s6 <> buf2.s6) or
+           (buf1.s7 <> buf2.s7) or
+           (buf1.s8 <> buf2.s8) then begin
+            err := err+1; writeln;
+            writeln ('Error on block: ',(i+1):1); end;
+        i := i + 2;
+        end;
+    write ('c');
+    close (f,crunch); chkIO;
+    writeln;
+    pass := pass+1;
+    writeln ('pass = ',pass:1,'  error = ',err:1);
+    if unitbusy (1) then exit (diskx);
+    end;
+writeln;
+unitclear (1);
+end.

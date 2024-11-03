@@ -1,0 +1,18 @@
+clrwnd
+;
+; File ID: /FGATE/SYSTEM.UPDATE
+;
+; This SYSTEM.UPDATE assumes the volume /GATE exists and
+; is mounted with read/write access.
+;
+pause Continue
+;
+setvol /GATE
+delfil -q nas nas_parm.file z80drvr drvr68k startup.text
+krunch -q /GATE
+setvol /FGATE
+cpyfil -q -vGATE startup.text nas nas_parm.file z80drvr drvr68k
+krunch -q /GATE
+;
+; SYSTEM.UPDATE complete
+;

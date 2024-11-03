@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'fpascal.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FPASCAL has 7 files,  0 to 6 (6), eov 500, size 4, free 7
+
+ 1: PASCAL          Data  4-Feb-83    6- 203( 197), 100864+512= 101376 bytes
+ 2: PASCTERRS.TEXT  Text  4-Feb-83  203- 217(  14),  7168+512=  7680 bytes
+ 3: SYSTEM.UPDATE   Text  4-Feb-83  217- 221(   4),  2048+512=  2560 bytes
+ 4: LC              Data 22-Mar-83  221- 389( 168), 86016+512= 86528 bytes
+ 5: LCUKEYS.TEXT    Text 22-Mar-83  389- 399(  10),  5120+512=  5632 bytes
+ 6: CSK.DVORAK      Data 15-Mar-83  399- 401(   2),  1024+512=  1536 bytes
+ 7: VOLUTIL         Data 23-Jan-83  401- 496(  95), 48640+512= 49152 bytes

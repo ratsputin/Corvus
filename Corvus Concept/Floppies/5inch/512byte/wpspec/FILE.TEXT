@@ -1,0 +1,703 @@
+{$S FILETASK }
+{$I-}
+{
+.PG
+}
+procedure FileTask;
+var i: integer;
+    Done: boolean;
+    DN: integer;
+    E,
+    D, F: FilId;
+    Typ, Nam: StrTyp;
+
+
+{
+procedure PullFile;
+}
+procedure PullFile;
+var Term: KeyTyp;
+    PathNam: StrTyp;
+begin
+  if (CurLin<=LstLin) and (CurLin>=DEParent) and
+     (DirFid.Loc=TxtFid.Loc) then begin
+    SetUpNewTxt( CurLin );
+    BAToStr( NewTxt, 1, PathNam );
+  end else begin
+    PathNam := PrevTxtPad;
+  end;
+  if PmtStr( Msg(MGWKSP,61), PathNam ) then begin
+    If Length(PathNam) > 0 Then View( PathNam );
+  end;
+end;
+
+{
+.PG
+}
+procedure NewFile( Typ: StrTyp );
+var Nam: StrTyp;
+    Fid: FilId;
+    DE: BA;
+    Rec, L: integer;
+    Term: KeyTyp;
+    Pmt: pStrTyp;
+    Title: StrTyp;
+begin
+   Nam := '';
+   Title := '';
+   if Typ='DIR' then
+      Pmt := Msg(MGWKSP,62)
+   else
+      Pmt := Msg(MGWKSP,63);
+   if PmtStr( Pmt, Nam ) then begin
+      UpShift( Nam );
+      if FindDE( DirFid, concat(Nam,' '), DENam, DE, Rec ) then begin
+         Bell( BelErr );
+         TellUsr( Msg(MGWKSP,65) );
+      end else if PmtStr( Msg(MGWKSP,64), Title ) then begin
+         Title := copy( Title, 1, min(length(Title),36) );
+         if (Nam<>'ROOT') and (Nam<>'') and (length(Nam)+1<DETtl) then begin
+            if FilCreate( Fid ) and
+               FilOpen( Fid ) and
+               AddDE( Nam, Typ, Fid, Title )
+            then begin
+               if Typ='DIR' then begin
+                  if not InitDir( Fid, DirFid ) then
+                     warn( Msg(MGWKSP,66) );
+               end else begin
+                (*
+                  if FilNumRecs( DirFid, L ) then begin
+                     Sort( DirFid, DESelf+1, L, DESav, 20, true, 500 );
+                  end;
+                *)
+               end;
+               View( Nam );
+            end;
+         end else begin
+            Bell(BelErr);
+            TellUsr( Msg(MGWKSP,67));
+         end;
+      end;
+   end;
+end;
+
+{
+.PG
+}
+procedure ListDir( DirNam: StrTyp );
+type
+  DatRec = packed record
+    Month: 0..12;
+    Day: 0..31;
+    Year: 0..100;
+  end;
+
+  VOLDES = RECORD
+    FBlk: integer;
+    LBlk: integer;
+    FType: integer;
+    VNAME: STRING[ 7 ];
+    NBLKS: INTEGER;
+    NFils: array [1..2] of byte;
+    D1: INTEGER;
+    DATE: DATREC;
+    D2: ARRAY[0..1] OF INTEGER;
+  END;
+
+  FILDES = RECORD
+    Fst: integer;
+    Lst: integer;
+    Typ: integer;
+    NAM: STRING[ 15 ];
+    SIZLST: INTEGER;
+    DAT: DATREC;
+  END;
+
+VAR
+  DIR: RECORD
+    CASE BOOLEAN OF
+      TRUE: ( BUF: PACKED ARRAY[ 1..2048 ] OF CHAR );
+      FALSE: ( VOL: VOLDES; FIL: ARRAY[ 1..77 ] OF FILDES );
+    END;
+
+  S: record case integer of 1:(a:longint);0:(v:pStrTyp); end;
+  Dum: KeyTyp;
+  Small: integer;
+  NDX, K, Fls, I, J: INTEGER;
+  BKS: INTEGER;
+
+BEGIN
+  if length( DirNam )<=1 then begin
+    S.A := $9FFBE;
+    DirNam := S.V^;
+  end;
+  RESET( RNMFID, DIRNAM );
+  IF IORESULT=0 THEN BEGIN
+    gotoxy( 0, TxtTop );
+    write( ClrEos );
+    BKS := BLOCKREAD( RNMFID, DIR.BUF, 4, 2 );
+    IF (BKS=4) AND (IORESULT = 0) THEN BEGIN
+      Fls := Dir.Vol.NFils[1];
+      if (Fls<=0) or (Fls>77) then
+        Fls := Dir.Vol.NFils[2];
+      WRITELN( DIR.VOL.VNAME );
+      I := 0;
+      for K := 1 TO Fls do begin
+        Small := 1;
+        for NDX := 1 to Fls do
+          if Dir.Fil[Ndx].Nam<Dir.Fil[Small].Nam then
+            Small := Ndx;
+        with Dir.Fil[Small] do begin
+          J := POS( '.TEXT', NAM );
+          IF J <> 0 THEN BEGIN
+            DELETE( NAM, J, 5 );
+            WRITE( NAM:15 );
+            I := I + 1;
+            IF (I MOD 4)=0 THEN WRITELN;
+          END;
+          Nam := '~~~~~~~~~~~~~~';
+        END;
+      END;
+    END;
+    CLOSE( RNMFID, LOCK );
+    writeln;
+    while UserIdle do begin end;
+    Redraw( WinTop );
+  end else begin
+    Bell(BelErr);
+    TellUsr( Subst(@DirNam,Msg(MGCCOS,3)) );
+  end;
+END;
+
+{
+.PG
+}
+function OpenTextFile: BOOLEAN;
+
+{ Reads a text file into the current workpad. Returns TRUE if read was suc-
+  cessful, FALSE otherwise... }
+
+VAR
+  FLine : TxtString;           { Line read from the file }
+  FFID  : TXTFile;             { File to open }
+  FBlk  : TXTcb;               { Control block for file }
+  Raskin: pByte;
+  I, Len, BKS: INTEGER;
+
+BEGIN
+  TXTsetCB(FBlk,UnKnown,True);
+  OpenTextFile := FALSE;
+  TXTrdOPEN(FBlk,FFID,TNam);
+
+  if FBLK.Status<>0 then begin                { Error opening file }
+    Bell(BelErr);
+    TellUsr(Subst(@TNam,Msg(MGCCOS,2)));
+    exit( OpenTextFile );
+  end;
+
+  TellUsr( Msg(MGCCOS,4) );                { 'Reading file...' }
+  if not (FilClear( TxtFid ) and
+          FilClear( UndoFid ) and
+          FilClear( RedoFid )) then begin
+    PrntWkSpErr;                           { Workspace error }
+    exit( OpenTextFile )
+  end;
+
+  i := 1;                                  { Gauge position }
+  TXTRead(FBlk,FFID,FLine);                { Read initial line from the file }
+  While Not(FBlk.eofflg) Do Begin
+    Raskin := Pointer(Ord4(@Fline)+1);
+    If Not RecQ(TxtFid,Length(FLine),Raskin^) Then Begin
+      PrntWkspErr;                         { Workspace error of some sort }
+      Bks := 0
+      End;
+    if i mod 5=0 then UpdtGauge( i, 1000 );
+    i := (i mod 1000) + 1;
+    TXTRead(FBlk,FFID,FLine)
+    End;                                   { File read in at this point }
+
+  LinNewTxt := 0;
+  NewTxtMty := true;
+  SetUpNewTxt(1);
+  InitTxtFid;
+  Refresh;
+  TXTclose( FBlk, FFid );
+  TellUsr(Msg(MGGENL,10));                 { 'File read.' }
+  OpenTextFile := TRUE                     { Successful read }
+END;
+
+{
+.PG
+}
+function OpenFile( FNam: StrTyp ): boolean;
+var
+  StrPos,
+  I: integer;
+
+begin
+  TxtInit;
+  UPSHIFT( FNAM );
+  If Pos('\\',FNam) = 0 Then Begin
+    STRPOS := POS( '.TEXT', FNAM );
+    IF STRPOS<>0 THEN FNAM := COPY( FNAM, 1, STRPOS-1 );
+    TNAM := CONCAT( FNAM, '.TEXT' )
+    End
+  Else
+    TNam := FNam;
+  OpenFile := OpenTextFile
+END;
+
+
+function WriteFile( Nam: StrTyp; Top, Bot: integer ): boolean;
+var
+  OFCB  : TXTCB;
+  SFID  : TXTFile;
+  NewBuf: BA;
+  TLine : TXTString;
+  L,
+  Lin   : Integer;
+
+BEGIN                 { eAWritefilee@ }
+  TXTInit;
+  WRITEFILE := FALSE;
+  TXTsetCB(OFCB,UnKnown,True);
+  TXTWrOpen( OFCB, SFID, Nam );
+  if OFCB.Status<>0 then begin
+    Bell( BelWrn );
+    TellUsr( Subst( @Nam, Msg(MGCCOS,10)));    { eA"Unablee@ eAtoe@ eAcreatee@ eAfile.eA"e@ }
+    exit( WriteFile )
+    end;
+  LIN := TOP;
+
+  TellUsr(Msg(MGCCOS,7));                 { eA"Savinge@ eAfile..."e@ }
+  WHILE (LIN<=BOT) DO BEGIN
+    If Brkpress Then Begin
+      Bell(BelAck);
+      TellUsr(Msg(MGCCOs,20));            { eA"Filee@ eAsavee@ eAaborted..."e@ }
+      Close(SFID,Purge);
+      Exit(WriteFile)
+      End;
+
+    GetLine(NewBuf,Lin);
+    if Lin mod 5=0 then UpdtGauge( Lin-Top+1, Bot-Top+1 );
+    L := BkSpanNE(NewBuf,MaxLinLen,' ');        { Get length of BA, and ... }
+    SpecBAToStr(NewBuf,L,TLine);
+    TXTWrite(OFCB,SFID,TLine);
+    If OFCB.Status <> 0 Then Begin
+      Bell(BelErr);
+      TellUsr(Msg(MGCCOS,11));    { eA"Noe@ eAmoree@ eAroome@ eAine@ eAvolume..."e@ }
+      Close(SFID,Purge);
+      Exit(WriteFile)
+      End;
+    Lin := Lin + 1
+    End;
+
+  FBlk.opnflg := True;                          { Hack to fix bug in CS.VSIUTXT }
+  TXTClose(OFCB,SFID);
+
+  if OFCB.Status<>0 then begin
+    Bell(BelWrn);
+    TellUsr(Subst(@Nam,Msg(MGCCOS,15)))      {eA"Unablee@ eAtoe@ eAsavee@ eAfile..."e@ }
+    end
+  else begin
+    TellUsr(Subst(@Nam,Msg(MGCCOS,16)));     { eA"savede@ eAtoe@ eAfile..."e@ }
+    WriteFile := true
+    end;
+END;
+
+{
+.PG
+}
+function SaveFile: boolean;
+var Buf: BA;
+    Len, I : integer;
+    OCurLin: integer;
+    OFNam: StrTyp;
+    Ask: StrTyp;
+    SFid: text;
+    Term: KeyTyp;
+begin
+  SaveFile := true;
+  FlushNewTxt;
+
+  OFNam := FNam;
+  if PmtStr(Msg(MGCCOS,6),FNam) then begin  { eA"Savee@ eAtoe@ eAwhiche@ eAfile?eA"e@ }
+    UpShift( FNam );
+    if pos( '.TEXT', FNam )<>0 then begin
+      TNam := FNam;
+    end else begin
+      TNam := concat( FNam, '.TEXT' );
+    end;
+
+    if OFNam<>FNam then begin
+      Reset(SFID,TNam);
+      If IORESULT = 0 Then Begin
+        Close(SFID);
+        if not Confirm(Subst(@TNam,Msg(MGCCOS,17)), false) then begin
+          FNam := OFNam;
+          SaveFile := false;
+          exit( SaveFile );
+        end;
+      end;
+    end;
+
+    OCurLin := CurLin;
+    if not WriteFile( TNam, 1, LstLin ) then begin
+      SaveFile := false;
+      FNam := OFNam;
+    end else begin
+      for i := 1 to length(FNam) do
+         if FNam[i] in ['A'..'Z'] then
+            FNam[i] := chr(ord(FNam[i])+32);
+      Saved := true;
+    end;
+    UpdtDE( CurDE, DESav, FNam );
+    SetUpNewTxt( OCurLin );
+  end else begin
+    FNam := OFNam;
+  end;
+end;
+
+
+procedure GetFile;
+var
+  SlshCnt: integer;
+  I: integer;
+  OFNam : StrTyp;
+begin
+  if WrtOK then begin
+     WinTop := 1;
+     WinBot := 0;
+     OFNam := FNam;
+     if (PmtStr(Msg(MGCCOS,5),FNam)) and (FNam<>'') then begin
+        if not Saved then begin
+           Bell(BelWrn);
+           Saved := Confirm( Msg(MGWKSP,69), false );
+        end;
+        if Saved then begin
+           SlshCnt := 0;
+           for I := 1 to length(FNam) do
+              if FNam[I]='/' then SlshCnt := SlshCnt+1;
+           if SlshCnt=1 then begin
+              ListDir( FNam );
+           end else begin
+              for i := 1 to length(FNam) do
+                 if FNam[i] in ['A'..'Z'] then
+                    FNam[i] := chr(ord(FNam[i])+32);
+              UpdtDE( CurDE, DESav, FNam );
+              if OpenFile( FNam ) then OFNam := FNam;
+           end;
+        end;
+     end;
+     FNam := OFNam;
+   end;
+end;
+
+{
+.PG
+}
+procedure DelPad;
+
+var
+  Dum : boolean;
+  Size: Integer;
+
+begin
+  DirFlg := False;                             { Set to TRUE for a subdir }
+
+  if DirFid.Loc<>TxtFid.Loc then
+    View( 'CURDIR' );                 { eAShowe@ eAdire@ eAife@ eAwe'ree@ eAin ae@ eATXTe@ eApade@ }
+
+  BAToStr( NewTxt, DETyp, Typ );
+  BAtoStr( NewTxt, DENam, Nam );
+  If (Nam = 'MOMDIR') Or (Nam = 'CURDIR') Then Begin
+    Bell(BelWrn);                     { eATrape@ eAattempte@ eAtoe@ eAdeletee@ eAsomethinge@ eAwierde@ }
+    TellUsr(Msg(MGWKSP,91));
+    Exit(DelPad)
+    End
+  else if (Typ<>'TXT') and (Typ <> 'DIR') then Begin
+    Bell(BelWrn);
+    TellUsr(Msg(MGWKSP,70))
+    End
+  else begin                          { eALegale@ eAdeletione@ }
+    If Typ = 'DIR' Then DirFlg := True; { eAWe'ree@ eAdeletinge@ eAae@ eAsubdir!e@ }
+    BAtoStr( NewTxt, DENam, Nam );
+    Bell(BelAck);
+    if GetFID( Nam, D, F, DN ) then begin
+      PutCursor( DN, 1 );
+      write( '\1BZ', chr(ScrWid) );
+      if Confirm( Subst(@Nam,Msg(MGWKSP,71)), false) then begin
+        If Typ = 'DIR' Then Begin              { Delete a subdirectory? }
+          Dum := FilNumRecs(F,Size);           { Check the size }
+          if size > 7 Then Begin               { Directory not empty!!! }
+            PutCursor( DN, 1 );
+            write( '\1BZ', chr(ScrWid) );
+            Bell(BelAck);                      { Get his attention }
+            TellUsr(Msg(MGWKSP,90));           { eAChastisee@ eAstupide@ eAusere@ }
+            Exit(DelPad)
+            End
+          End;
+        if FilDelete( F ) then begin           { eADeletee@ eAthee@ eAworkpade@ }
+          DeleteLine( DN );                    { eADeletee@ eAthee@ eAdirectorye@ eAentrye@ }
+          If Not(DirFlg) Then TellUsr(Subst(@Nam,Msg(MGWKSP,68)))
+            Else TellUsr(SubSt(@Nam,Msg(MGWKSP,92)));
+          Dum := FilClear( UndoFid );          { eACleare@ eAthee@ eAUNDOe@ eAfide@ }
+          SetUpNewTxt( DN )                    { eARedisplaye@ eAdirectorye@ }
+          end
+      end else begin
+        SetUpNewTxt( DN );
+        PutCursor( DN, 1 );
+        write( '\1BZ', chr(ScrWid) )
+      end
+    end
+  end
+end;
+
+{
+.pg
+}
+procedure ClrPad;
+begin
+   if DirFid.Loc<>TxtFid.Loc then begin
+      Bell(BelAck);
+      if Confirm( Msg(MGWKSP,72), false ) then begin
+         FlushNewTxt;
+         UpdtDE( CurDE, DESav, '                    ' );
+         Saved := true;
+         if FilClear( TxtFid ) and
+            FilClear( UndoFid ) and
+            FilClear( RedoFid ) then begin end;
+         if RecPush( TxtFid, 0, BlkStr[1] ) then begin end;
+         SetUpNewTxt(1);
+
+         Refresh;
+      end;
+   end else begin
+      TellUsr(Msg(MGWKSP,74));
+   end;
+end;
+
+{
+.PG
+}
+procedure InsFile;
+
+Type
+  LS = TXTString;
+
+var FNam: StrTyp;
+    FLine : TxtString;           { Line read from the file }
+    FFID  : TXTFile;             { File to open }
+    FBlk  : TXTcb;               { Control block for file }
+    BlankLine : Boolean;
+    FC: Char;
+    FCO: Integer;
+    S: LS;
+    i, L: integer;
+    Fid: text;
+    LinImg: BA;
+    p: ^byte;
+    OKSet : Set Of Char;
+    CCount: Integer;
+
+  Procedure FixTabs(Var S: LS);
+
+  { Expand ASCII tabs characters (09 decimal) to appropriate
+    number of spaces, i.e. however many spaces are need to
+    reach the next left tab character. If no tabs are set in
+    the workpad, expand to next position that's an even mul-
+    tiple of 8. }
+
+  Const
+    TabOrd = 9;                { ASCII tab character }
+
+  Var
+    Counter,
+    YACntr,
+    TACntr : Integer;          { NOT 'tits & ass' counter! }
+
+  Begin
+    For Counter := 1 To Length(S) Do Begin
+      If Ord(S[Counter]) = TabOrd Then Begin
+        Delete(S,Counter,1);   { Delete the tab char }
+        YACntr := Counter MOD 8;
+        If Counter - ((Counter MOD 8) * 8) > 0
+          Then YACntr := YACntr + 1;
+        YACntr := YACntr * 8;
+        If YACntr > 0 Then For TACntr := Counter To YACntr Do
+          Insert(' ',S,Counter)
+        End
+    End
+  End;
+
+
+  Procedure FixLine(Var S: LS);
+
+  { Remove all ASCII control chars EXCEPT legitimate EdWord
+    escape sequences! This is a multiple step process:
+
+        1. Identify a control char (ASCII code < 32).
+           If it's NOT an ESC, zap it.
+        2. If it IS an ESC, is it followed by an 'e',
+           'O', or 'P'? If not, zap it.
+        3. If it does fall into one of these three classes,
+           it's still only provisionally legal. In the case
+           of 'e', there must be at least one more character
+           before the end of the line; 'O' and 'P' require
+           2 more characters for a total of four.
+        4. If the ESC sequence fails any of these provisions,
+           zap the ESC. }
+
+  Var
+    OC,                        { ORD of current char }
+    Counter,                   { Char position in line }
+    Lng     : Integer;         { Length of line }
+    C       : Char;            { Current char in line }
+    OK      : Boolean;         { TRUE for legal ESC sequence }
+
+    Procedure ZapChar(CP : Integer);
+
+    { Delete a character at position C in string S }
+
+    Begin
+      Delete(S,CP,1)
+    End;
+
+
+  Begin
+    Lng := Length(S);
+    For Counter := 1 To Lng Do Begin
+      OC := Ord(S[Counter]);         { Extract a char }
+      If (OC < 32) Then
+        If OC = 27 Then Begin        { ESC found... }
+          OK := False;               { Assume the worst... }
+          If Counter < Lng Then Begin
+            C := S[Counter+1];           { Get next char after ESC }
+            If C In ['e','O','P'] Then Begin  { Possible EdWord enhanced? }
+              Case C Of 'e': If Counter+1 < Lng Then OK := True;
+                   'O','P' : If Counter+2 < Lng Then OK := True
+                   End;
+              If Not(OK) Then ZapChar(Counter)
+              End
+            Else ZapChar(Counter)        { Too few chars }
+            End
+          Else ZapChar(Counter)          { Not proper ESC sequence }
+          End
+      Else ZapChar(Counter)              { Not an ESC }
+      End
+  End;
+
+begin                        { Insert mainline }
+  if WrtOk then begin
+    FNam := '';
+    if PmtStr(Msg(MGWKSP,75), FNam ) then begin
+      UpShift( FNam );
+      TNam := FNam;
+      i := pos( '.TEXT', FNam );
+      if i=0 then TNam := concat( FNam, '.TEXT' );
+      TXTInit;
+      TXTsetCB(FBlk,UnKnown,True);
+      TXTrdOPEN(FBlk,FFID,TNam);
+
+      if FBLK.Status<>0 then begin                { Error opening file }
+        Bell(BelErr);
+        TellUsr(Subst(@TNam,Msg(MGCCOS,2)));
+        exit( InsFile);
+        end
+      else begin
+        TellUsr(Msg(MGWKSP,89) );    { eA"Inserting eAfile..."e@ }
+        L := CurLin;
+        FlushNewTxt;
+        DpyChg := false;
+        BeginEvent;
+        p := pointer( ord4(@S)+1 );
+        while not eof(Fid) do begin
+
+             (*
+             CCount := 0;           { # of chars we've read }
+             S := '';               { Set to 0 initially    }
+             If BlankLine Then BlankLine := False
+             Else Repeat
+               Read(Fid,FC);          { Get a char }
+               CCount := CCount + 1;
+               S[CCount] := FC            { Put char in string }
+             Until (CCount = 251) or (EOLN(Fid));
+             If EOLN(Fid) Then Read(Fid,FC);  { Throw away C/R! }
+               If EOLN(Fid) Then BlankLine := TRUE
+                 Else BlankLine := False;
+             S[0] := Chr(CCount);
+             *)
+
+        TXTRead(FBlk,FFID,S);
+        If Length(S) > 1 Then Begin
+          FixTabs(S);            { Expand tabs }
+          FixLine(S)             { Strip control chars }
+          End;
+        LinImg := BlkStr;
+        moveleft( p^, LinImg, length(S) );
+        InsertLine( L, LinImg );
+        L := L + 1;
+        if L mod 10 = 0 then UpDtGauge( L, 1000 )
+        end;                   { while not eof(Fid_ }
+      EndEvent;
+      TXTClose(FBLK,FFID);
+      TellUsr(Msg(MGGENL,10));   { eA"Done."e@ }
+      SetUpNewTxt( CurLin )
+      end
+    end
+  end
+end;
+
+{
+.PG
+}
+procedure ListVol;
+var S: StrTyp;
+    Term: KeyTyp;
+begin
+   S := CurVol;
+   if (PmtStr( Msg(MGCCOS,18), S)) and (S<>'') then begin
+      if pos( '/', S )<>1 then
+        S := concat( '/', S );
+      ListDir( S );
+  end;
+end;
+
+{
+.pg
+procedure FileTask *MAIN*
+}
+BEGIN
+  LoadLabels( WkPdFrame );
+
+  Done := false;
+  while not Done do begin
+    NextCmd;
+    case Cmd of
+      KF1:  GetFile;
+      KF3:  ClrPad;
+      KF5:  if SaveFile then begin end;
+      KF6:  NewFile( 'TXT');
+      KF7:  InsFile;
+      KF8:  begin
+              if DirFid.Loc = TxtFid.Loc then
+                View( 'MOMDIR' )
+              else
+                View( 'CURDIR' )
+            end;
+      KF9:  PullFile;
+      KF10: Done := true;
+      KF13: DelPad;
+      KF16: NewFile( 'DIR' );
+      KF18: ListVol;
+      KBS:  Bell(BelErr);
+      KTEXT: Begin
+               PushCBuf(Key);
+               Cmd := KTASK;
+               Key := Chr(TIDEdit);
+               Done := True
+               End;
+      otherwise: Done := not LocalEdit;
+    end;
+  end;
+end;

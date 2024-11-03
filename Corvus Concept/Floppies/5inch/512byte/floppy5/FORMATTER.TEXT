@@ -1,0 +1,205 @@
+{$R-}
+{$I-}
+
+program Formatter;
+
+uses {$U /ccos/OS.GLOBALS} globals,
+     {$U /cclib/CCLIB    } CCwndIO;
+
+const DATE = '11-May-82';
+      MAXFLOPBLKS = 500;
+
+      {msg numbers}
+      GETUN     =  0;
+      INVUN     =  1;
+      TOBIGUN   =  2;
+      NOTFLOP   =  3;
+      CANTFMT   =  4;
+      CANTWRIT  =  5;
+      OKFRMT    =  6;
+      DOFORMAT  =  7;
+      NOWNDERR  =  8;
+      INITONLY  =  9;
+      INITDIR   = 10;
+      VERIFDSK  = 11;
+
+      {Confirm error types}
+      DOIT      =  0;
+      DONTFRMT  =  1;
+      BADDIR    =  2;
+      CANTREAD  =  3;
+
+type string20 = string[20];
+     
+var f : file;
+    dir : directory;
+    devno : integer;
+    devname : string20;
+    i,Iores : integer;
+    gsyscom : psyscom;
+    p : ^psyscom;
+    
+FUNCTION Format( unitno : integer; verf : boolean ) : integer;
+  {format floppy at unitno, returns result code.}
+  EXTERNAL;
+
+PROCEDURE DispMsg( msgno : integer; str : string20; err: integer );
+  {display msg in window currently selected}
+  const
+    ClrScrn  =  '\1BJ'; {clear screen and home cursor Escape sequence}
+
+  procedure dh;
+  begin
+    writeln('Corvus Concept 8" Floppy Diskette Formatter  ',DATE);
+  end; {dh}
+
+  Begin
+    write( ClrScrn );
+
+    case msgno of
+      GETUN    :   BEGIN dh; write('Format which Unit Number : #'); END;
+      INVUN    :   write('Invalid Unit Number : ',str);
+      TOBIGUN  :   write('Unit Number #',str,' is greater than Max Device Number.');
+      NOTFLOP  :   write('Unit Number #',str,' is not a Floppy Diskette Drive.');
+      CANTFMT  :   write('Cannot Format Diskette - Unit Number #',str,'.  Error: ',err:1);
+      CANTWRIT :   write('Cannot write directory on Formatted Diskette.  Error: ',err:1);
+      OKFRMT   :   BEGIN dh; write('Is it ok to Format volume ',str,'? '); END;
+      DOFORMAT :   BEGIN dh; write('Formatting the Diskette.'); END;
+      NOWNDERR :   write('Failed in acquiring Command window access.');
+      INITONLY :   BEGIN dh; write('Do you want to Initialize the diskette only? (Y/N)  '); END;
+      INITDIR  :   BEGIN dh; write('Initializing the directory.'); END;
+      VERIFDSK :   BEGIN dh; write('Do you want to Verify the FORMAT? (Y/N)  '); END;
+    end;
+  End; {DispMsg}
+
+FUNCTION Confirm(var fdir: directory): integer;
+  {read dir see if is valid directory or if user says ok to clobber.}
+  {returns if ok to clobber.}
+  var
+    ch : char;
+    str : string20;
+
+  Begin
+    with fdir[0] do begin
+      if (length(dvid) > 0) and (length(dvid) <= 7) then begin
+        str := dvid;
+        DispMsg( OKFRMT,str,0 );
+        readln(ch);
+        if (ch = 'Y') or (ch = 'y') then Confirm := DOIT
+                                    else Confirm := DONTFRMT;
+      end else Confirm := BADDIR;
+    end;
+  End; {Confirm}
+
+FUNCTION IsFloppyDrvr( unitno : integer ) : boolean;
+{is unit number a Floppy driver, not a hard disk or network or}
+{other blocked device driver.}
+  Begin
+    with gsyscom^.sysdevtab^.dt[unitno] do                    {chk tracks/side and sectors}
+      IsFloppyDrvr := ( devtps = $4D ) and ( devspt = $1A );  {per track.  temp ********}
+  End; {IsFloppyDrvr}
+
+FUNCTION Init( res : integer ) : boolean;
+{ if disk is readable - has format already - then ask user }
+{ if only want to initialize directory only.               }
+  var a : char;
+  Begin
+    if res <> CANTREAD then begin
+      DispMsg( INITONLY,'',0 );
+      readln( a );
+      Init := (a = 'Y') or (a = 'y');
+    end else Init := FALSE; {disk has no format so can't just init dir}
+  End; {Init}
+
+FUNCTION WantVerify : boolean;
+  var a : char;
+  Begin
+    DispMsg( VERIFDSK,'',0 );
+    readln( a );
+    WantVerify := (a = 'Y') or (a = 'y');
+  End;
+
+PROCEDURE MakeDir( var fdir : directory );
+{make fdir into a empty directory. zero all the file entries.}
+  Begin
+
+    fillchar( fdir,sizeof(directory),chr(0) );  {zero out all entries}
+
+    with fdir[0] do begin       {init directory entry}
+      firstblock := 0;
+      nextblock := 6;
+      MarkBit := FALSE;
+      filler := 0;
+      fkind := UNTYPEDFILE;
+      dvid := 'FLOPPY';
+      deovblock := MAXFLOPBLKS;
+      dnumfiles := 0;
+      dloadtime := 0;
+      dlastboot := gsyscom^.today;
+      MemFlipped := FALSE;
+      DskFlipped := FALSE;
+    end;
+  End; {MakeDir}
+
+PROCEDURE FormatIt(devname : string20);
+  var unitno,i,Result,confrmd : integer;
+      error,verify : boolean;
+  Begin
+    unitno := 0;  error := FALSE; i := 1;
+
+    while i <= length(devname) do {convert devname to a unitno}
+       if (devname[i] >= '0') and (devname[i] <= '9') then begin
+         unitno := unitno*10 + ord(devname[i]) - ord('0');
+         i := i + 1;
+       end else begin
+         i := 999;
+         error := TRUE;
+       end;
+
+    if NOT error then     {valid number}
+      if unitno <= gsyscom^.sysdevtab^.maxdevno then {within range}
+        if gsyscom^.sysdevtab^.dt[unitno].Blocked then begin
+          if IsFloppyDrvr(unitno) then begin    {verify is floppy}
+            unitread(unitno,dir,sizeof(directory),2); {unit is floppy try see if have valid dir}
+            Result := ioresult;
+            if Result = 0 then          {floppy is formatted}
+              confrmd := Confirm(dir)   {see if proper dir or if user says ok to format}
+            else confrmd := CANTREAD;   {cant read diskette}
+            if confrmd <> DONTFRMT then begin {format diskette and write dir}
+              if Init( confrmd ) then Result := 0  {if user wants to init only}
+              else begin
+                verify := WantVerify;      {ask user if want to verify format}
+                DispMsg( DOFORMAT,'',0 );
+                Result := Format( unitno, verify );
+              end;
+              if Result = 0 then begin {if format good then write dir}
+                DispMsg( INITDIR,'',0 );
+                MakeDir( dir );
+                unitwrite(unitno,dir,sizeof(directory),2);
+                if ioresult <> 0 then DispMsg( CANTWRIT,devname,ioresult );
+              end else DispMsg( CANTFMT,devname,Result );
+            end;
+          end else DispMsg( NOTFLOP,devname,0 )
+
+        end else DispMsg( NOTFLOP,devname,0 ) {not blocked device}
+      else DispMsg( TOBIGUN,devname,0 )       {unit number > then max device number}
+    else DispMsg( INVUN,devname,0 );          {invalid unit number}
+  End; {FormatIt}
+
+BEGIN {Formatter}
+  p := pointer(SYSCOMPLOC); gsyscom := p^;
+  CCwndIOinit;
+  Iores := WinSystem( WsysCmd );
+  if Iores = 0 then
+     if argc = 0 then begin
+       DispMsg( GETUN,'',0 ); {get unit number msg}
+       readln(devname);
+       if LENGTH( devname ) <> 0 then FormatIt(devname);
+     end else
+       for i := 1 to argc do
+          FormatIt(argv[i]^)
+  else
+    DispMsg( NOWNDERR,'',0 );
+  Iores := WinSystem( WsysCurr );
+END. {Formatter}
+

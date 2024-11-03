@@ -1,0 +1,185 @@
+unit NetGlobals;
+
+{**********************************************************}
+{                                                          }
+{ Unit contains all the constants and types for the network}
+{ software, ie. protocol dispatcher  and protocol manager. }
+{                                                          }
+{ file : netglobals.text                                   }
+{ date : 19-August-1983  kb                                }
+{                                                          }
+{**********************************************************}
+Interface
+
+Uses
+    {$U /CCOS/OS.GLOBALS} Globals;
+
+Const
+
+ {development temps}
+    pPMstuff = $1B4; {address of global data pointers}
+    pSysVec  = $1BA; {temp system vector pointer}
+
+ {**** Protocol Manager Consts ****}
+    PMmaxents = 20;   {max number of entries in PMGR table}
+
+    {protocol manager function codes}
+    PMFCatch = 0;  {attach}
+    PMFCdtch = 1;  {detach}
+    PMFCsend = 2;  {send}
+    PMFCrecv = 3;  {receive}
+    PMFCdpnd = 4;  {dependent}
+    PMFCstat = 5;  {status}
+
+ {**** Protocol Dispatcher Consts ****}
+    PDmaxBuffs = 3;    {number of buffers}
+    PD80BfSz = 384;    {max buffer size allowable}
+    PD90BfSz = 384;    {max buffer size allowable}
+
+    MAXPIDentries = 20;
+
+    {protocol dispatcher function codes}
+    PDFCactv = 0;  {activate}
+    PDFCdact = 1;  {deactivate}
+    PDFCrstr = 2;  {restore buffer}
+
+    {offsets into transporter cmd blk for byte fields}
+    crOPCD =  1;   {op code index}
+    crSOCK =  5;   {socket number index}
+    crDEST = 12;   {send dest host # index}
+{$P}
+    {socket numbers - byte compatible}
+    TC80 = -128;  {$80}
+    TC90 = -112;  {$90}
+    TCA0 =  -96;  {$A0}
+    TCB0 =  -80;  {$B0}
+
+    {transporter op codes - byte compatible}
+    TCrcvOP =  -16;  {$F0}
+    TCendOP =   16;  {$10}
+    TCsndOP =   64;  {$40}
+
+    {transporter result codes - byte compatible}
+    TRCwait   =   -1;   {$FF}
+    TRCrcvset =   -2;   {$FE}
+    TRCinuse  = -123;   {$85}
+{$P}
+Type
+
+ {**** Protocol Manager Types ****}
+    vrsnArray = array[0..1] of Byte;
+
+    {an entry in the protocol manager table}
+    pPMTentry = ^PMTentry;
+    PMTentry  =  record
+                   PMpid    : Integer;      {protocol ID}
+                   PMproc   : pBytes;       {pmgr proc addr}
+                   PMpData  : pBytes;       {pmgr global data ptr}
+                   PMVersion: vrsnArray;    {version word}
+                   PMActive : Boolean;      {active entry flag}
+                   PMtype   : Byte;         {bit flags}
+                   end;
+
+    pPMtable = ^PMtable;
+    PMtable  = array[1..PMmaxents] of PMTentry;
+
+    {buffer control block for receive pmgr procedure}
+    pPMRcvBuf = ^PMRcvBuf;
+    PMRcvBuf  =  record
+                   pBuffer  : pBytes;  {pointer to user's buffer}
+                   ActualCnt: Integer; {actual number of bytes in buffer}
+                   DataAvail: Boolean; {true means data for user in buffer}
+                   end;
+
+    {development temps}
+    pDEVDATA = ^DEVDATA;
+    DEVDATA  =  record
+                   IOres: Integer;
+                   pPMT: pPMtable;
+                   end;
+
+ {**** Protocol Dispatcher Types ****}
+    TCsockets = (Sckt80, Sckt90, ScktA0, ScktB0);
+
+    {buffers}
+    pPD1Buffer = ^PD1Buffer;
+    PD1Buffer = array[1..192] of Integer;  {buffer is 384 bytes}
+
+    PDBufList = array[1..PDmaxBuffs] of PD1Buffer;
+
+    {dispatcher protocol manager control table}
+    PIDentry = record
+                   Active     : Boolean;
+                   SocketNum  : TCsockets;
+                   ProtoID,
+                   MaxBufSize : Integer;
+                   PMgrData,
+                   PMgrRcvRtn,
+                   RegA4,
+                   RegA5      : Longint;
+                   end;
+
+    PIDtbl   = array[1..MAXPIDentries] of PIDentry;
+{$P}
+    {transporter result vector}
+    pPDresult = ^PDresult;
+    PDresult = record
+                   ResultCode : Byte;
+                   SourceHost : Byte;
+                   DataLength : Integer;
+                 { UCdata     : array[0..255] of Byte; not used by $80 & $90 }
+                   end;
+
+    {buffer control block}
+    BCentry  = record
+                   BufAttached,
+                   InUse        : Boolean;
+                   BufferAdr    : pPD1Buffer;
+                   Result       : PDresult;
+                   end;
+
+    pPDBufCtl = ^PDBufCtl;
+    PDBufCtl = record
+                   IntrptRtn   : pBytes; {address of interrupt rtn}
+                   MaxBufSize,
+                   CurrentBuff : Integer;    {range of 1..PDmaxBuffs}
+                   BC : array[1..PDmaxBuffs] of BCentry;
+                   end;
+
+    {protocol dispatcher control table}
+    pPDCtlBlk = ^PDCtlBlk;
+    PDCtlBlk = record
+                   PIDtable : PIDtbl;
+                   PD80Ctl  : PDBufCtl;
+                   PD90Ctl  : PDBufCtl;
+                   end;
+
+ {**** Transporter driver types ****}
+    {transporter command block}
+    pPDtrnpCMD = ^PDtrnpCMD;
+    PDtrnpCMD = record case integer of
+                   1: (p: record
+                             RP: pPDresult;
+                             DP: pPD1Buffer;
+                             LN: Integer; {data length}
+                             HL: Byte;    {user control length}
+                             Dest: Byte;  {used with Send only}
+                             end);
+                   2: (a: array[1..12] of Byte);
+                   end;
+
+    {transporter driver parameter block}
+    PDtranpPB = record
+                   pComd: pPDtrnpCMD;  {ptr to transporte cmd blk}
+                   pProc: pBytes;      {ptr to interrupt routine}
+                   pUser: Longint;     {user data}
+                   end;
+
+Implementation
+
+end.  {NetGlobals}
+
+
+
+
+

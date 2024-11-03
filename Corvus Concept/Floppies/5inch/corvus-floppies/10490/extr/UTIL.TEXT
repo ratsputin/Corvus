@@ -1,0 +1,276 @@
+{$S MAIN }
+unit UTIL;
+
+interface
+
+uses {$U /ccutil/cclib} ccdefn, ccwndio, ccgrfio, cclblio,
+     {$U userio } userio;
+
+VAR
+  DevDisp, DevTimr: integer;
+  BreakPoint: set of 0..2000;
+  singlestep: boolean;
+  ProcStack: array [1..100] of integer;
+  ProcTos: integer;
+  Debug: boolean;
+  XGauge, YGauge, CurGauge: integer;
+
+{.IX interface procedures}
+  procedure DrawRange( Lo, Hi: integer );
+  procedure DrawGauge( X, Y: integer );
+  procedure Gauge( val: integer );
+  function CnvBI( B: Byte ): integer;
+  function CnvIB( I: integer ): Byte;
+  function PeekB( Adr: longint ): Byte;
+  procedure PokeB( Adr: longint; Val: Byte );
+  procedure breakproc( pnum: integer );
+  procedure pinit;
+  procedure pexit;
+  procedure pcall( pnum: integer );
+  procedure LockDebug( procedure P  );
+
+(*$P*)
+implementation
+
+CONST
+      SysTerm = 2;
+
+function CnvBI;
+begin
+  if B<0 then CnvBI := ord(B) + 256 else CnvBI := B;
+end;
+
+function CnvIB;
+begin
+  if I>127 then CnvIB := I-256 else CnvIB := I;
+end;
+
+{$S DEBUGGER }
+{.IX} function PeekB;
+var P: record case integer of 0:(A:longint);1:(V:^Byte); end;
+begin
+  P.A := Adr;
+  PeekB := P.V^;
+end;
+
+{.IX} procedure PokeB;
+var P: record case integer of 0:(A:longint);1:(V:^Byte); end;
+begin
+  P.A := Adr;
+  P.V^ := Val;
+end;
+
+{.IX} procedure dumpmarkstack( adr: longint );
+var l, n: ^longint;
+    w: ^integer;
+    c: char;
+    tim: integer;
+begin
+  l := pointer( adr );
+  l := pointer( l^ );
+  n := pointer( l^ );
+  writeln( ord4(l), ':', ' ':8,l^:12, ' Link          ' );
+  l := pointer( ord4( l ) + 4 );
+  writeln( ord4(l), ':', ' ':8,l^:12, ' return PC     ' );
+  l := pointer( ord4( l ) + 4 );
+  w := pointer( ord4(l) );
+  tim := 0;
+  while (ord4(l)<>ord4(n)) and (tim<13) do begin
+    writeln( ord4(l), ':', w^,l^:12, ' Arg N-',tim:1,'/Local ' );
+    l := pointer( ord4( l ) + 2 );
+    w := pointer( ord4( l ) );
+    tim := tim + 1;
+  end;
+  write( 'more?' );
+  read( c ); if eoln then readln;
+  writeln;
+  write( chr(27), 'A' );
+  if ord4(l)<>ord4(n) then writeln( '  . . .   ' );
+  l := pointer( adr );
+  if c in ['y', 'Y'] then dumpmarkstack( l^ );
+end;
+
+(*$P*)
+{.IX} procedure dumpmem;
+var HexTbl: StrTyp;
+    I,J,K: integer;
+    num: StrTyp;
+    adr: longint;
+    b: ^byte;
+    Buf: array [0..511] of byte;
+begin
+  write( 'address? ' );
+  readln( num );
+  adr := AsLong( num );
+  writeln( adr );
+  b := pointer( adr );
+  moveleft( b^, buf[0], 512 );
+  HexTbl := '0123456789ABCDEF';
+  writeln;
+  for I := 0 to 191 do begin
+    if Buf[I]<0 then J := Buf[I] + 256 else J := Buf[I];
+    write( HexTbl[ (J div 16) + 1 ] );
+    write( HexTbl[ (J mod 16) + 1 ] );
+    if I mod 2 = 1 then write( ' ' );
+    if I mod 8 = 7 then write( ' ' );
+    if I mod 16 = 15 then begin
+      write( ' :' );
+      for K := I-15 to I do
+        if chr( Buf[K] ) in [' '..'~'] then
+          write( chr( Buf[K] ) )
+        else
+          write( '~' );
+      writeln(':');
+    end;
+    if I mod 64 = 63 then writeln;
+  end;
+  writeln;
+end;
+
+{.IX} procedure BreakProc;
+var i: integer;
+    l: ^longint;
+    c: char;
+    b : -128..127;
+    cmd: StrTyp;
+begin
+  singlestep :=false;
+  write( '\1Bc' ); {cursor on}
+  write( '?', PNum:4,' ', chr(8), chr(8),chr(8), chr(8), chr(8), chr(8) );
+  c := '.';
+  while not (c in ['n', 'N', 'g','G'] ) do begin
+    write('?');
+    unitread( 1, b, 1 );
+    c := chr(b);
+    case c of
+      'd', 'D': begin
+          dumpmem;
+        end;
+      's','S': begin
+          writeln;
+          l := pointer( ord4( @pnum ) - 8 );
+          dumpmarkstack( l^ );
+        end;
+      'n','N': begin
+          singlestep := true;
+          write( chr(8), chr(8) );
+        end;
+      'B','b': begin
+          readln( cmd );
+          if cmd='' then begin
+            writeln( 'breakpoints' );
+            for i := 0 to 2000 do
+              if i in breakpoint then
+                writeln( I, '  ' );
+          end else begin
+            i := AsLong(cmd);
+            writeln( 'break at ', i );
+            breakpoint := breakpoint + [i];
+          end;
+        end;
+      'g','G':begin
+          write( chr(8), chr(8) );
+        end;
+      'C','c': begin
+          readln( cmd );
+          if cmd='' then begin
+            writeln( 'clear all breaks' );
+            breakpoint := [];
+          end else begin
+            i := AsLong(cmd);
+            writeln( 'clear break ', i );
+            breakpoint := breakpoint - [i];
+          end;
+        end;
+      'P','p':begin
+          writeln( 'ProcStack (bottom) ProcTos =', procTos );
+          if proctos>100 then proctos := 100;
+          for i := 1 to ProcTos do
+            writeln( I:3, ':', ProcStack[I]:1 );
+        end;
+      otherwise:begin
+          writeln;
+          writeln( 'D(umpmem S(tack N(ext B(reak C(lear G(o H(elp');
+          writeln( 'P(rocstack' );
+        end;
+    end;
+  end;
+end;
+
+{.IX} procedure pinit;
+begin
+  Debug := true;
+  BreakPoint := [];
+  singlestep := false;
+  fillchar( ProcStack, sizeof( ProcStack ), chr(0) );
+  ProcTos := 0;
+end;
+
+{.IX} procedure pcall;
+begin
+  ProcTos := ProcTos + 1;
+  ProcStack[ ProcTos ] := Pnum;
+  if singlestep or (pnum in BreakPoint) then BreakProc( Pnum );
+end;
+
+{.IX} procedure pexit;
+begin
+  if singlestep or (ProcStack[ProcTos] in BreakPoint) then
+    BreakProc( -ProcStack[ProcTos] );
+  if ProcTos>0 then
+    ProcTos := ProcTos - 1
+  else
+    writeln( '*** pexit underflow ***' );
+end;
+
+{
+.PG
+}
+procedure LockDebug;
+begin
+  P;
+end;
+
+
+{$S MAIN }
+{
+.PG
+procedure DrawRange( Lo, Hi: integer );
+}
+procedure DrawRange;
+begin
+  DrawLine( XGauge+1, YGauge, XGauge+1, YGauge-100, 0 );
+  DrawLine( XGauge-1, YGauge, XGauge-1, YGauge-100, 0 );
+  DrawLine( XGauge+1, YGauge-Lo, XGauge+1, YGauge-Hi, 1 );
+  DrawLine( XGauge-1, YGauge-Lo, XGauge-1, YGauge-Hi, 1 );
+end;
+
+{.IX} procedure Arrow( Val, V: integer );
+begin
+  Val := YGauge - Val;
+  PlotPoint( XGauge+3, Val, V );
+  DrawLine( XGauge+4, Val+1, XGauge+4, Val-1, V );
+  DrawLine( XGauge+5, Val+2, XGauge+5, Val-2, V );
+  DrawLine( XGauge+6, Val+3, XGauge+6, Val-3, V );
+end;
+
+{.IX} procedure DrawGauge;
+begin
+  XGauge := X;
+  YGauge := Y;
+  drawline( xgauge, ygauge, xgauge, ygauge-100,  1 );
+  Arrow( 0,  1);
+  CurGauge := 0;
+end;
+
+{.IX} procedure Gauge;
+begin
+  Arrow( CurGauge,  0);
+  Arrow( val,  1);
+  CurGauge := Val;
+end;
+
+end.
+
+
+

@@ -1,0 +1,147 @@
+This release supports the Atari 800 interface with 6, 10 and 20
+MB drives.  THIS SOFTWARE WORKS ON FLAT CABLE ONLY.  OMNINET IS NOT
+SUPPORTED ON ATARI.
+
+There are two floppies in this release.  The contents of each are 
+listed below.
+
+Testing
+-------
+
+This release has been tested with 6 and 20mb drives with and without
+mirrors.  It has been tested on an Atari 800 computer with 48k of memory,
+a Basic cartridge, and one 810 disk drive.
+
+Known problems
+--------------
+
+Only single-drive systems are supported.  There is no support for 
+add-on drives.
+
+Files changed in this release
+-----------------------------
+
+File additions and changes are made to volume 2 of 2 only.
+
+Additions:
+
+(CWRTBOOT.OBJ ??  ??-???-?? 007.)
+
+Changed files:
+
+(UTILS.COR 1.0B 31-MAR-82 001) to (UTILS.COR 1.0C 16-JUN-82.)
+
+(R033182.COR 1.0B 31-MAR-82 001) to (R061682.COR 1.0C 16-JUN-82.)
+
+$P
+
+To copy floppies
+----------------
+
+1. Initialization.
+
+Use SYSGEN to initialize a 5MB drive.
+
+Put vol 1 of 2 in diskette drive and use DOS, J option to copy
+8 to 5.
+
+Put vol 2 of 2 in diskette drive and use DOS, J option to copy
+8 to 6.
+
+2. Formatting.
+
+Put blank diskette in drive and use I option.
+
+3. Copying.
+
+Vol 1 of 2:
+
+Put formatted diskette in drive and use J option to copy 5 to 8.
+
+Vol 2 of 2:
+
+Put formatted diskette in drive and use J option to copy 6 to 8.
+
+$P
+
+
+AT Utilities ( 5 1/4" soft-sectored media - 104/1D - #801187 )
+
+Contents of the Atari utilities floppies:
+    Sysgen utilities - vol 1 of 2
+        DOS    .SYS          Corvus A2.0D 4-25-81      047
+        DUP    .SYS          ??         ??-???-??      042
+        AUTORUN.SYS          ??         ??-???-??      001
+        SYSGEN .COR          1.0B       31-MAR-82      001
+        R033182.COR          1.0B       31-MAR-82      001
+        BCI.OBJ              ??         ??-???-??      004
+        CORDOS .OBJ          ??         ??-???-??      070
+        CORBOOT.OBJ          ??         ??-???-??      011
+        ATARIO .OBJ          ??         ??-???-??      001
+        SYSGEN               1.0D       31-MAR-82      076
+        DIAG173.DAT          17.3       20-NOV-81      005
+        
+                                                       448 free
+        
+    Corvus utilities - vol 2 of 2
+        DOS    .SYS             Atari 2.0S   1980      039
+        DUP    .SYS             ??      ??-???-??      042
+        UTILS  .COR             1.0C    16-Jun-82      002
+        R061682.COR             1.0C    16-Jun-82      002
+        BCI    .OBJ             ??      ??-???-??      004
+        DIAG173.DAT             17.3    20-NOV-81      005
+        DIAG                    5.1     11-MAR-82      125
+        CF173  .DAT             17.3    20-NOV-81      246
+        MIRROR                  4.3A    31-MAR-82      090
+        MOUNT                   1.0     10-FEB-82      059
+        WRITBOOT.OBJ            ??      ??-???-??      011
+        ATARIO .OBJ             ??      ??-???-??      001
+        CWRTBOOT.OBJ            ??      ??-???-??      007
+
+                                                        74 free
+
+
+
+The floppy label looks like this:
+
+                +-------------------------------+
+                |                               |
+                |    AT Utilities - vol 2 of 2  |
+                |    for Atari DOS 2.0          |
+                |    Release date:  16-Jun-82   |
+                |    Corvus Utilities           |
+                |                               | = 74 Free
+                +-------------------------------+
+
+
+
+$P
+
+Previous Releases
+-----------------
+
+31-Mar-82.  New release.
+
+Labels for 31-Mar-82 release look like this.
+
+                +-------------------------------+
+                |                               |
+                |    AT Utilities - vol 1 of 2  |
+                |    for Atari DOS 2.0          |
+                |    Release date:  31-Mar-82   |
+                |    Sysgen Utilities           |
+                |    P/N: 8100-08560            | = 448 Free
+                +-------------------------------+
+
+                +-------------------------------+
+                |                               |
+                |   AT Utilities - vol 2 of 2   |
+                |   for Atari DOS 2.0           |
+                |   Release date:  31-Mar-82    |
+                |   Corvus Utilities            |
+                |   P/N: 8100-08561             |  = 83 Free
+                +-------------------------------+
+
+$P
+
+

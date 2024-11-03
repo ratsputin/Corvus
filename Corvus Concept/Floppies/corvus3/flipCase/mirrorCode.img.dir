@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'mirrorCode.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 13 files,  0 to 6 (6), eov 500, size 66, free 13
+
+ 1: AMIRROR.CODE    Code  7-Jun-82    6-  49(  43), 22016+512= 22528 bytes
+ 2: AMIRROR.TEXT    Text  7-Jun-82   49-  61(  12),  6144+512=  6656 bytes
+ 3: DISKCHK.DATA    Data  7-Oct-81   61- 101(  40), 20480+512= 20992 bytes
+ 4: FILE22.TEXT     Text 17-Jan-88  101- 123(  22), 11264+512= 11776 bytes
+ 5: FILE48.TEXT     Data 17-Jan-88  123- 171(  48), 24576+512= 25088 bytes
+ 6: MBACKUP.CODE    Code  7-Jun-82  171- 186(  15),  7680+512=  8192 bytes
+ 7: MBACKUP.TEXT    Text  7-Jun-82  186- 222(  36), 18432+512= 18944 bytes
+ 8: MIRR0.TEXT      Text 26-Oct-81  222- 246(  24), 12288+512= 12800 bytes
+ 9: MIRR1.TEXT      Text 12-Apr-82  246- 268(  22), 11264+512= 11776 bytes
+10: MIRR2.TEXT      Text  6-Oct-81  268- 296(  28), 14336+512= 14848 bytes
+11: MIRRB.TEXT      Text 23-Sep-81  296- 304(   8),  4096+512=  4608 bytes
+12: MIRRP.TEXT      Text 23-Sep-81  304- 318(  14),  7168+512=  7680 bytes
+13: MONITORS        Data 27-Jun-88  318- 434( 116), 59392+512= 59904 bytes

@@ -1,0 +1,471 @@
+{-----------------------------------------------------------------------------}
+{ Program : Analog CLock V.I                                                  }
+{ Author  : David Ramsey                                                      }
+{ Date    : 8/31/82                                                           }
+{-----------------------------------------------------------------------------}
+{ Revision: 1.1                                                               }
+{ Author  : David Ramsey                                                      }
+{ Date    : 10/10/82                                                          }
+{ Mods    : Added calendar display                                            }
+{-----------------------------------------------------------------------------}
+{ Revision: 1.2                                                               }
+{ Author  : David Ramsey                                                      }
+{ Date    : 03/16/83                                                          }
+{ Mods    : Added dual screen orientation adjustment                          }
+{-----------------------------------------------------------------------------}
+{                                 Comments                                    }
+{                                                                             }
+{ An unrefined example....or, you TOO can have a $12,000 desk clock.          }
+{                                                                             }
+{ Currently designed to be used with the screen in vertical orientation ONLY! }
+{ (But will be recoded to orient objects according to screen position if there}
+{  is sufficient demand.)                                                     }
+{                                                                             }
+{ Corvus Systems, Inc. may modify, distribute, sell, etc. this program on a   }
+{ nonexclusive basis.                                                         }
+{-----------------------------------------------------------------------------}
+
+Program Aclock1;
+
+Uses {$U /ccutil/CCLIB}
+  CCdefn,
+  CCgrfIO,                      { Graphics routines }
+  CCcrtIO,                      { Display routines }
+  CCwndIO,
+  CCclkIO;                      { Clock "routines" }
+
+Const
+  VXCenter = 270;                { Horizontal centering of clock face }
+  VYCenter = 400;                { Vertical centering of clock face }
+  HXCenter = 435;
+  HYCenter = 242;               { For horizontal screens }
+  KeyBoard = 2;                 { Keyboard unit number }
+  DayWidth = 24;                { Width of day on calendar }
+  DayHeight = 30;               { Height of day on calendar }
+
+Type                            { Co-ordinate system for clock face tics }
+  Co_Ordinates = Record
+                   XCo,
+                   YCo  : Integer
+                 End;
+  S9 = String[9];               { Used for literal months and days }
+
+Var
+  ClkInfo : ClkPB;
+  Face    : Array[0..179] of Co_Ordinates;
+  Initial : Boolean;            { Set to TRUE for initial time displays }
+  OldWindow : LongInt;          { eAPointere@ eAtoe@ eAolde@ eAwindowe@ eAree@ceAorde@ }
+  OldScreen: pBytes;            { eAOlde@ eAscreene@ eAimagee@ }
+  OldWndRcd: WndRcd;            { Old window record }
+  X,
+  OldSec,
+  OldHour,
+  OldDay,
+  OldMonth: Integer;
+
+{--------------------------- Global Routines --------------------------------}
+
+Procedure ClockFace; Forward;
+
+
+Function OSvrtcrt : Boolean; External;
+
+Function BrkPress : Boolean; External;
+
+Function StartDay(DayOfWeek,Day : Integer) : Integer;
+
+{ Return day of week (0-6) that day 1 of a given month falls on. }
+
+Var
+  D : Integer;
+
+Begin
+  D := DayOfWeek - (Day Mod 7);
+  If D < 0 Then D := D + 7;
+  StartDay := D
+End;
+
+
+Procedure GO;   { Get the ball rolling! }
+
+Var
+  IOst : Integer;
+
+Begin
+  CCwndIOInit;
+  IOst := WinSystem(WSysRoot);         { eASelecte@ eAfulle@ eAscreene@ }
+  ws := WinSelect (OrigScn);
+  SetOrigin (0,0,GrfQgrAbs);
+  if AloGrfPic (OrigScn.lngthX+1,OrigScn.lngthY+1,0)
+    then OPTsave := RdDisp (GrfPicPtr,0,0,
+                OrigScn.lngthX+1,
+                OrigScn.lngthY+1) = 0
+    else OPTsave := FALSE
+  CWin := pOSCurWnd;                   { eAGete@ eApointere@ eAtoe@ eAwindowe@ eArecorde@ }
+  Ht :=
+  If AloGrfPic(
+  ClockFace;
+  Initial := True;
+  ClkRead(ClkInfo);
+  OldSec := ClkInfo.Secs;
+  OldDay := ClkInfo.Day;
+  OldMonth := ClkInfo.Month
+End;
+
+{------------------------ End of global routines ------------------------------}
+
+Procedure Calendar(Month,Day,DayOfWeek,Year : Integer);
+
+{ Draw a calendar for the given month and year }
+
+Var
+  X,
+  Y     : Integer;
+  Days  : String[21];
+  D1    : Integer;
+  MS    : S9;
+
+  Procedure LitMonth(M : Integer; Var Month : S9);
+
+  Begin
+    Case M Of 1 : Month := 'January';
+              2 : Month := 'February';
+              3 : Month := 'March';
+              4 : Month := 'April';
+              5 : Month := 'May';
+              6 : Month := 'June';
+              7 : Month := 'July';
+              8 : Month := 'August';
+              9 : Month := 'September';
+              10: Month := 'October';
+              11: Month := 'November';
+              12:  Month := 'December'
+            End
+  End;
+
+  Function NumOfDays(Month,Year : Integer) : Integer;
+
+  Begin
+    Case Month Of 1,3,5,7,8,10,12 : NumOfDays := 31;
+                  4,6,9,11        : NumOfDays := 30;
+                  2               : If (Year Mod 4) = 0
+                                      Then NumOfDays := 29
+                                      Else NumOfDays := 28
+    End
+  End;
+
+
+  Procedure Grid;               { Draw calendar grid }
+
+  Var
+    Counter : Integer;
+
+    Procedure Days;             { Label day columns }
+
+    Var
+      Dy      : String[21];
+      Counter : Integer;
+
+    Begin
+      Dy := 'SunMonTueWedThuFriSat';
+      For Counter := 0 To 6 Do
+        Begin
+          GotoXY(Counter*4+3,63);
+          Write(Copy(Dy,Counter*3+1,3))
+        End
+    End;
+
+  Begin         { Grid }
+    Days;
+    For Counter := 0 To 7 Do
+        DrawLine(Counter * DayWidth + 13,1,Counter * DayWidth + 13,181,-1);
+    For Counter := 0 To 6 Do
+        DrawLine(13,Counter*DayHeight+1,181,Counter*DayHeight+1,-1);
+    DrawLine(13,11,181,11,-1)
+  End;
+
+
+  Begin  { Calendar }
+    D1 := StartDay(DayOfWeek,Day);
+    For X := 1 to NumOfDays(Month,Year) Do Begin
+      If OSvrtcrt Then Begin
+        GotoXY((D1 Mod 7)*4+3,46+((D1 Div 7)*3));
+        If X < 10 Then Write(X:1) Else Write(X:2)
+        End
+      Else Begin
+        GotoXY((D1 Mod 7)*4+3,30+((D1 Div 7)*3));
+        If X < 10 Then Write(X:1) Else Write(X:2)
+        End;
+      D1 := D1+1
+      End;
+    LitMonth(Month,MS);
+    If OSvrtcrt Then GotoXY(3,45) Else GotoXY(3,29);
+    Write(MS,', ',Year:4);              { ClkInfo.Year contains trash! }
+    Grid
+  End;
+
+{------------------------------------------------------------------------------}
+
+Procedure ClockFace;
+
+Var
+  X : Integer;
+  I : Real;
+
+  Procedure Initialize;     {Generate clock face}
+
+  Var
+    X: Integer;
+
+    Procedure Gen_Coords(XCent, YCent, Array_Pos : Integer);
+
+    Var
+      Counter : Integer;
+
+    Begin
+      I := -3.14159;
+      For Counter := Array_Pos to Array_Pos+59 Do Begin
+         If OSvrtcrt Then Begin
+           Face[Counter].XCO := Round(VXCenter + XCent * Sin(I));
+           Face[Counter].YCO := Round(VYCenter + YCent * Cos(I))
+          End
+         Else Begin
+           Face[Counter].XCO := Round(HXCenter + XCent * Sin(I));
+           Face[Counter].YCO := Round(HYCenter + YCent * Cos(I))
+           End;
+         write('.');
+         I := I + 0.10472
+         End
+    end;
+
+
+    Procedure Box(Tic : Integer);       { Box in tics to highlight hours }
+
+    Begin
+      DrawLine(Face[X].XCo-2,Face[X].YCo+2,Face[X].XCo+3,Face[X].YCo+2,-1);
+      DrawLine(Face[X].XCo+3,Face[X].YCo+2,Face[X].XCo+3,Face[X].YCo-3,-1);
+      DrawLine(Face[X].XCo+3,Face[X].YCo-3,Face[X].XCo-2,Face[X].YCo-3,-1);
+      DrawLine(Face[X].XCo-2,Face[X].YCo-3,Face[X].XCo-2,Face[X].YCo+2,-1)
+    End;
+
+
+  Begin                         { Initialize }
+    CrtAction(EraseAll);
+    Write('Generating clock face co-ordinates');
+
+    Gen_Coords(250,225,0);      { Generate minute tics - second & minute hand use these }
+    Gen_Coords(120,108,60);     { Generate hour tics - hour hand uses but not displayed }
+    Gen_Coords(20,18,120);      { Generate inner circle for hand base positioning }
+
+    CCgrfIOinit;
+    CrtAction(EraseAll);
+    For X := 0 to 59 do begin
+                          PlotPoint(Face[X].XCo,Face[X].YCo,-1);
+                          PlotPoint(Face[X].XCo+1,Face[X].Yco,-1);
+                          PlotPoint(Face[X].XCo,Face[X].YCo-1,-1);
+                          PlotPoint(Face[X].XCo+1,Face[X].YCo-1,-1);
+                          If (X Mod 5) = 0 Then Box(X)
+                        end;
+    For X := 120 to 179 do PlotPoint(Face[X].XCo, Face[X].YCo,-1)
+  end;
+
+  Procedure Title;
+
+  Var
+    Msg : String[20];
+
+  Begin
+    Msg := 'Corvus CONCEPT';
+    If OSvrtcrt Then GotoXY(45-(Length(Msg) div 2),12)
+      Else GotoXY(73 - (Length(Msg) div 2),12);
+    Write(Msg);
+    CrtAction(CursorOff)
+  End;
+
+
+  Begin { ClockFace }
+    Initialize;
+    ClkRead(ClkInfo);
+    With ClkInfo Do Calendar(Month,Day,DayOfWeek,1900+Year);
+    Title
+  End;
+
+{------------------------------------------------------------------------------}
+
+Procedure ShowTime; { Called to display analog and digitial times }
+
+
+  Function ValidTime(TimeRec : ClkPB) : Boolean;
+
+  { The Concept clock driver will return values even when the clock digits
+    are rolling over!! Thus, we must check to make sure that the time re-
+    ceived is a valid one, lest the program become confused. }
+
+  Begin
+    If TimeRec.Secs > 0 Then
+      If (TimeRec.Secs = (oldsec+1)) Then ValidTime := True
+                                      Else ValidTime := False
+                        Else If Oldsec = 59 Then ValidTime := True
+                                             Else ValidTime := False
+  End;
+
+
+  Procedure AnalogTime(H,M,S : Integer);        { Draw hour, minute, & second hands }
+
+    Function Adjust(Val : Integer) : Integer;
+
+    Begin
+      Val := Val + 30;
+      If Val > 59 Then Adjust := Val - 60
+                  Else Adjust := Val
+    End;
+
+
+    Procedure DrawBigHand(Min, Offset : Integer);
+
+    { Used to draw hour and minute hands. Min points to tic (0-59). The offset
+      is an index into the face co-ordinates array, and is 0 if we're drawing
+      a minute hand, and 60 if we're drawing an hour hand. }
+
+    Var
+      Pt1,
+      Pt2  : Integer;
+
+    Begin
+      Pt1 := Adjust(Min - 15) + 120;
+      Pt2 := Adjust(Min + 15) + 120;
+      Min := Adjust(Min);
+      DrawLine(Face[Pt1].XCo, Face[Pt1].YCo,
+        Face[Min + Offset].XCo, Face[Min + Offset].YCo,-1);
+      DrawLine(Face[Min + Offset].XCo, Face[Min + Offset].YCo,
+        Face[Pt2].XCo, Face[Pt2].YCo,-1)
+    End;
+
+
+    Function LastComp(Parm : Integer) : Integer;
+
+    Begin
+      If Parm > 0 Then LastComp := Parm - 1
+                  Else LastComp := 59
+    End;
+
+
+    Procedure MinuteHand(Mint : Integer);
+
+    Var
+      LastMin : Integer;
+
+    Begin
+      LastMin := LastComp(Mint);
+      DrawBigHand(LastMin,0);
+      DrawBigHand(Mint,0)
+    End;
+
+
+    Procedure HourHand(Hr,Min : Integer);
+
+    Var
+      LastHr : Integer;
+
+    Begin
+      Hr := (Hr MOD 12)*5 + (M Div 12);   { This calculation moves the hour hand }
+      If OldHour <> Hr Then Begin         { one tic for every 12 minutes that pass }
+                              OldHour := Hr;
+                              LastHr := LastComp(Hr);
+                              DrawBigHand(LastHr,60);
+                              DrawBigHand(Hr,60);
+                              OldHour := Hr
+                            End
+    End;
+
+
+    Procedure DrawSecHand(Sc : Integer);
+
+    Var
+      NewSec : Integer;
+
+    Begin
+      NewSec := Adjust(Sc);
+      If OSvrtcrt Then
+        DrawLine(VXCenter,VYCenter,Face[NewSec].XCo,Face[NewSec].YCo,-1)
+      Else
+        DrawLine(HXCenter,HYCenter,Face[NewSec].XCo,Face[NewSec].YCo,-1)
+    End;
+
+
+    Procedure SecondHand(Second : Integer);
+
+    Var
+      LastSec : Integer;
+
+    Begin
+      LastSec := LastComp(Second);
+      DrawSecHand(LastSec);
+      DrawSecHand(Second)
+    End;
+
+  Begin                        {    AnalogTime      }
+    If Initial Then Begin
+                      ClkRead(ClkInfo); OldSec := ClkInfo.Secs;
+                      OldHour := (H MOD 12)*5+(M div 12);
+                      DrawSecHand(S);
+                      DrawBigHand(M,0);
+                      DrawBigHand((H MOD 12)*5+(M Div 12),60);
+                      Initial := False
+                    End
+                Else Begin
+                       SecondHand(S);
+                       If S=0 Then Begin
+                                     MinuteHand(M);
+                                     HourHand(H,M)
+                                   End
+                     End
+  End;
+
+  {----------------------------------------------------------------------------}
+
+  Procedure MarkDay(DayOfWeek,Day : Integer);
+
+  { Invert the current date in the calendar display }
+
+  Var
+    Counter,
+    Dy   : Integer;
+
+  Begin
+    Dy := StartDay(DayOfWeek,Day)+Day-1;
+    For Counter := 1 To DayHeight -1 Do
+        DrawLine((Dy Mod 7)*DayWidth+13,181-((Dy Div 7)*DayHeight+Counter),
+                 (Dy Mod 7)*DayWidth+DayWidth+13, 181-((Dy Div 7)*DayHeight
+                  +Counter),-1)
+  End;
+
+  {----------------------------------------------------------------------------}
+
+  Begin                        {     ShowTime       }
+    Repeat
+      Repeat
+        ClkRead(ClkInfo);
+      Until ClkInfo.Secs <> OldSec
+    Until ValidTime(ClkInfo);  { This SHOULD be done in the clock driver!!! }
+    OldSec := ClkInfo.Secs;
+    If Initial then MarkDay(ClkInfo.DayOfWeek,ClkInfo.Day);
+    With ClkInfo Do Begin
+                      AnalogTime(Hour,Mins,Secs);
+                      If OldDay <> ClkInfo.Day Then GO
+                    End
+  End;
+
+
+{-----------------------------------------------------------------------------}
+
+
+Begin                          {      Mainline      }
+  CCcrtIOinit;
+  GO;
+  Repeat ShowTime Until BrkPress;
+  UnitClear(Keyboard);
+  CrtAction(CursorOn)
+End.
+
+

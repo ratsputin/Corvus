@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'blt.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 6 files,  0 to 6 (6), eov 500, size 122, free 6
+
+ 1: BLT             Data 23-Sep-83    6- 212( 206), 105472+512= 105984 bytes
+ 2: SPLOT           Data 20-Sep-83  212- 348( 136), 69632+512= 70144 bytes
+ 3: BLTINIT.TEXT    Text 28-Sep-83  348- 362(  14),  7168+512=  7680 bytes
+ 4: INV_EX.TEXT     Text 11-Jul-83  362- 366(   4),  2048+512=  2560 bytes
+ 5: LCH_EX.TEXT     Text 22-Jul-83  366- 372(   6),  3072+512=  3584 bytes
+ 6: MC14518.TEXT    Text 27-Sep-83  372- 378(   6),  3072+512=  3584 bytes

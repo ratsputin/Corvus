@@ -1,0 +1,465 @@
+{ file Mirr2  }
+  
+{$P}{*********************************************************************}
+{                                                                     }
+{       list -- list the tape directory                               }
+{                                                                     }
+{*********************************************************************}
+
+  procedure list;
+  var  i,size,cnt : INTEGER;
+  
+    procedure listent;
+    begin
+    write(Direc[i].name,Direc[i].len:8,'    ');
+    dt2str(Direc[i].dt,AString);
+    writeln(AString);
+    cnt:=cnt+1;
+    size:=size+Direc[i].len div 10;
+    end;
+    
+    procedure summary;
+    begin
+    if size=0 then
+        writeln(cnt,'/31 images used; 0 blocks used; '
+               ,Direc[0].len,'0 blocks remaining')
+     else
+        write(cnt,'/31 images used; ',size,'0 blocks used; '
+               ,Direc[0].len-size,'0 blocks remaining');
+    end;
+    
+  
+  begin
+  readdir;
+  if NoDir then 
+    begin
+    writeln; writeln; writeln('       *** No Directory ***');
+    end
+   else
+    begin
+    
+    size:=0; cnt:=0;
+    AString:='              ';
+    for i:=1 to 12 do AString[i]:=Direc[0].name[i];
+    if AString[1]<>' ' then
+      while AString[length(AString)]=' ' do delete(AString,length(AString),1);
+    write(AString,':');
+    dt2str(Direc[0].dt,AString);
+    writeln('          (created ',AString,')');
+    
+    for i:=1 to 21 do
+      if Direc[i].len<>0 then listent;
+    
+    if Direc[22].len<>0 then
+      begin
+      write('Type <space> to continue');
+      if getbyte=' ' then
+        begin
+        for i:=22 to 31 do if Direc[i].len<>0 then listent;
+        summary;
+        end;
+      end
+     else summary;
+    
+    end;
+  end;
+
+  
+{$P}{*********************************************************************}
+{                                                                     }
+{      PURGE -- delete the last image from the directory              }
+{                                                                     }
+{*********************************************************************}
+
+  procedure purge;
+  var  i : INTEGER;
+  
+  begin
+    readdir;
+    if NoDir then 
+      begin writeln; writeln; 
+      writeln(beep,'  *** Tape must be formatted first ***');
+      exit(purge);
+      end;
+    ImID:=0;
+    i:=1;
+    while (ImID=0) and (i<32) do
+      begin
+      if Direc[i].len=0 then ImID:=i;
+      i:=i+1;
+      end;
+    ImID:=ImID-1;
+    if ImID=0 then 
+      begin
+      writeln(beep,'*** Tape is empty ***');
+      exit(purge);
+      end;
+    
+    with Direc[ImID] do
+      begin
+      writeln;write('OK to purge ',Name,'? N',chr(8));
+      if getbyte<>'Y' then exit(purge);
+      for i:=1 to 12 do Name[i]:=' ';
+      Dt:=Today;
+      Len:=0;
+      end;
+    
+    writedir(FALSE);
+    end;
+
+{$P}{*********************************************************************}
+{                                           !                         }
+{      used to prevent duplicate image names                          }
+{                                                                     }
+{*********************************************************************}
+
+        
+      function find(IName: ImageName):integer;
+      var i:integer;
+      begin
+      Find:=0;
+      for i:=1 to 31 do
+        if IName=Direc[i].name then Find:=i;
+      end;
+    
+
+{$P}{*********************************************************************}
+{                                                                     }
+{      BACKUP  -- copy a portion of the disk to an image on tape      }
+{                                                                     }
+{*********************************************************************}
+
+  procedure backup;
+  var  i : INTEGER;
+       WStr : STRING;
+       ImStrt,ImSize: INTEGER;
+       xName: ImageName;
+       Mode: ImageMode;                                 {2.0}
+  
+    procedure getinfo;
+    begin
+    SetSize('Backup a:',Drive,i,ImStrt,ImSize, aBackup);
+    writeln; writeln; writeln;
+    with Header do
+      begin
+      for i:=1 to 16 do 
+        if i>length(ThisSystem) then System[i]:=' ' 
+       else
+        System[i]:=ThisSystem[i];
+      write('     Date: ');
+      if getdate(Today)<>normal then exit(dispatch);
+      Dt2Str(Today,WStr);
+      for i:=1 to 16 do 
+        if i>length(WStr) then dt[i]:=' ' else dt[i]:=WStr[i];
+      write('     Time: ');
+      if getstring(WStr)<>normal then exit(dispatch);
+      time:='                ';
+      for i:=1 to length(WStr) do if i<17 then time[i]:=WStr[i];
+      write('     Name: ');
+      if getstring(WStr)<>normal then exit(dispatch);
+      name:='                ';
+      for i:=1 to length(WStr) do if i<17 then name[i]:=WStr[i];
+      write('  Comment: ');
+      if getstring(WStr)<>normal then exit(dispatch);
+      for i:=1 to 80 do 
+        if i>length(WStr) then comment[i]:=' ' else comment[i]:=WStr[i];
+      end;
+    
+    { get mode -- all images quad redundant for now }
+    mode := MirNormal;                                       {2.0}
+    end;
+    
+    
+  begin
+  getinfo;
+  if manual then
+    prompt('Record')
+   else
+    begin
+    readdir;
+    if NoDir then 
+      begin writeln; writeln; 
+      writeln(beep,'  *** Tape must be formatted first ***');
+      exit(backup);
+      end;
+    ImID:=0;
+    i:=1;
+    while (ImID=0) and (i<32) do
+      begin
+      if Direc[i].len=0 then ImID:=i;
+      i:=i+1;
+      end;
+    if ImID=0 then 
+      begin
+      writeln(beep,'*** No room on tape ***');
+      exit(backup);
+      end;
+    
+    for i:=1 to 12 do xName[i]:=Header.name[i];
+    if find(xName)<>0 then 
+      begin
+      writeln; writeln(beep,'*** Duplicate Image Name ***');
+      exit(backup);
+      end;
+    
+    with Direc[ImID] do
+      begin
+      for i:=1 to 12 do Name[i]:=Header.name[i];
+      Dt:=Today;
+      Len:=ImSize;
+      end;
+    
+    if ImID>1 then 
+      begin
+      writedir(FALSE);
+      findEOF(ImID-1,STOP);
+      end
+     else writedir(TRUE);
+          { the tail is used as a buffer between the directory and first image }
+    
+    wait(29);                     { allow mechanism to settle }
+    end;
+  
+  { mirror backup command                                                  }
+  {    = 8, drive, ID, length(LSB), length(MSB), source(LSB), sourc(MSB)   }
+  {           format (0= dual, 1= quad record), header[512 bytes]          }
+  {                                     header = image comments            }
+  XCV.len:=520;
+  XCV.int[1]:=8; XCV.int[2]:=Drive; XCV.int[3]:=ImID; 
+  XCV.int[4]:=lsb(ImSize); XCV.int[5]:=msb(ImSize);
+  XCV.int[6]:=lsb(ImStrt); XCV.int[7]:=msb(ImStrt);
+  XCV.int[8]:=Mode;     { all images quad redundant }           {2.0}
+  
+  moveleft(Header,XCV.int[9],512);
+  Send(XCV);
+  writeln('Backup in Progress ...');
+  Recv(XCV);
+  writeln('Backup Finished',beep);
+  MirCHK;
+  ReportErr(aBackup);
+  push(REW);
+  end;
+
+  {$P}{**************************************************************}
+  {                                                             }
+  {     WhichImage -- pick an image ID out of the directory     }
+  {                                                             }
+  {*************************************************************}
+  
+    procedure WhichImage(Comment: String);
+    var i:integer;
+        IName: ImageName;
+        IStrng: string;
+      
+    begin
+    readdir;    
+    if NoDir then 
+      ImID:=1 
+     else
+      begin
+      write(Comment,' which Image? ');
+      if getstring(IStrng)<>normal then exit(dispatch);
+      if length(IStrng)=0 then exit(dispatch);
+      for i:=1 to 12 do 
+        if i>length(IStrng) then IName[i]:=' ' else IName[i]:=IStrng[i];
+      ImID:=find(IName);
+      
+      if ImID=0 then 
+        begin
+        writeln(beep,'*** Image not found ***');
+        exit(dispatch);
+        end;
+      end;
+    end;
+    
+
+{$P}{*********************************************************************}
+{                                                                     }
+{      IDENTIFY -- read the image header from tape                    }
+{                                                                     }
+{*********************************************************************}
+
+  procedure identify;
+  var seiz: integer[5];
+  begin
+  writeln('Identify selected.');
+  if manual then
+    prompt('Playback')
+   else
+    begin
+    WhichImage('Read Header of');
+    findEOF(ImID-1,PLAY);
+    end;
+    
+  writeln('Searching for Image Header...');
+  ReadID;
+  moveleft(XCV.int[5],Header,512);
+  
+  crt(eraseall);
+  writeln;
+  if not manual then writeln('ID info for ',Direc[ImID].name);
+  writeln;
+  writeln('        Image ID    :  ',XCV.int[2]);
+  Seiz:=XCV.int[4];  Seiz := Seiz*256+XCV.int[3];               {2.0}
+  writeln('        Size        :  ',Seiz);
+  with Header do
+    begin
+    writeln('        Generated on:  ',system);
+    writeln('        Date        :  ',dt);
+    writeln('        Time        :  ',time);
+    writeln('        Name        :  ',name);
+    writeln('        Comment     :  ',comment);
+    end;
+  end;
+  
+  {$P}{*****************************************************************}
+{                                                                     }
+{    DoRETRY -- issue mirror commands to attempt to recover lost data }
+{                                                                     }
+{*********************************************************************}
+
+  procedure DoRetry(optype: ops);
+  var  ThisErr,pass : INTEGER;
+  
+  begin
+  writeln; write('Retry Pass Needed: R(etry or <ESC> to exit ');
+  if getbyte='!' then exit(dispatch);
+  
+  pass:=0;
+  while (BadBlocks>0) and (pass<maxpass) do
+    begin
+    if manual then prompt('Playback');
+    
+    ThisErr:=LastErr;
+    
+    {  retry for restore :   12, Drive, 0, ChkSum }
+    {  retry for verify  :   10, 6, ImID, 0       }
+    
+    XCV.len:=4;
+    case optype of
+      aRestore: begin XCV.int[1]:=12; XCV.int[2]:=Drive;
+                XCV.int[3]:=0; XCV.int[4]:=256-12-Drive; end;
+      aVerify:  begin XCV.int[1]:=10; XCV.int[2]:=6;
+                XCV.int[3]:=ImID; XCV.int[4]:=0; end;
+     end;
+    Send(XCV);
+    Recv(XCV);
+    
+    pass:=pass+1;
+    ReportErr(aRetry);
+    if not manual then findEOF(IMID-1,STOP);
+    wait(27);
+    end;
+  
+  end;
+
+{$P}{*********************************************************************}
+{                                                                     }
+{      RESTORE -- copy an image on tape to part/all of the disk       }
+{                                                                     }
+{*********************************************************************}
+
+  procedure restore;
+  var  i,sum : INTEGER;
+       DrStrt,ImSize,ImStrt: INTEGER;
+  
+  begin
+  SetSize('Restore a:',Drive,ImStrt,DrStrt,ImSize, aRestore);
+  if manual then
+    prompt('Playback')
+   else
+    begin
+    writeln;
+    WhichImage('    Using');
+    findEOF(ImID-1,PLAY);
+    end;
+    
+  if ImStrt<>-1 then
+    begin
+    if manual then ReadID 
+      else if ImStrt>1000 then 
+        begin
+        FastForward(fudge(ImStrt) + 2);
+        wait(28);
+        end;
+    
+    { mirror extract command                                                 }
+    {    =13, drive, ID, length(LSB), length(MSB), dest(LSB), dest(MSB)      }
+    {        ,offset(LSB), offset(MSB)  [offset into the image]              }
+    {           checksum  (= 256 - [sum of first 9 bytes] mod 256)           }
+    
+    XCV.len:=10;
+    XCV.int[1]:=13; XCV.int[2]:=Drive; XCV.int[3]:=ImID; 
+    XCV.int[4]:=lsb(ImSize); XCV.int[5]:=msb(ImSize);
+    XCV.int[6]:=lsb(DrStrt); XCV.int[7]:=msb(DrStrt);
+    XCV.int[8]:=lsb(ImStrt); XCV.int[9]:=msb(ImStrt);
+    sum:=0;
+    for i:=1 to 9 do sum:=sum+XCV.int[i];
+    XCV.int[10]:=(256 - sum mod 256) mod 256;
+    end
+   else
+    begin
+    { mirror restore command                                                 }
+    {    = 9, drive, ID, length(LSB), length(MSB), dest(LSB), dest(MSB)      }
+    {           checksum  (= 256 - [sum of first 7 bytes] mod 256)           }
+    
+    XCV.len:=8;
+    XCV.int[1]:=9; XCV.int[2]:=Drive; XCV.int[3]:=ImID; 
+    XCV.int[4]:=lsb(ImSize); XCV.int[5]:=msb(ImSize);
+    XCV.int[6]:=lsb(DrStrt); XCV.int[7]:=msb(DrStrt);
+    sum:=0;
+    for i:=1 to 7 do sum:=sum+XCV.int[i];
+    XCV.int[8]:=(256 - sum mod 256) mod 256;
+    end;
+    
+  Send(XCV);
+  writeln('Restore in progress...');
+  Recv(XCV);
+  MirCHK;
+  ReportErr(aRestore);
+  if BadBlocks>0 then
+    begin
+    if not manual then findEOF(ImID-1,STOP);
+    doretry(aRestore);
+    end;
+    
+  end;
+
+{$P}{*********************************************************************}
+{                                                                     }
+{       VERIFY -- check an image on tape for errors                   }
+{                                                                     }
+{*********************************************************************}
+
+  procedure verify;
+  
+  begin
+  writeln('Verify selected.');
+  if manual then
+    prompt('Playback')
+   else
+    begin
+    WhichImage('Verify');
+    findEOF(ImID-1,PLAY);
+    end;
+  
+  { mirror verify command                 }
+  {    = 10, 1, ID, 0                     }
+  
+  Drive:=1;     { Verify commands always handled by drive # 1 }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=1; XCV.int[3]:=ImID; XCV.int[4]:=0;
+  Send(XCV);
+  writeln('Verify in Progress ...');
+  Recv(XCV);
+  MirCHK;
+  ReportErr(aVerify);
+  if BadBlocks>0 then
+    begin
+    if not manual then findEOF(ImID-1,STOP);
+    doretry(aVerify);
+    end;
+    
+  end;
+    

@@ -1,0 +1,9 @@
+
+Directory of UCSD disk image file '1spice.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume BACKUP1 has 1 files,  0 to 6 (6), eov 500, size 0, free 1
+
+ 1: 1SPICE          Data 17-Jan-84    6- 500( 494), 252928+512= 253440 bytes

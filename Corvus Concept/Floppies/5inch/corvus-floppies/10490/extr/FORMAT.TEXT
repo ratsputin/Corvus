@@ -1,0 +1,405 @@
+{$S FORMAT }
+procedure FormatTask;
+var Done: boolean;
+
+{
+.PG
+}
+procedure InsCmd( S: StrTyp );
+var LinImg: BA;
+    L: integer;
+begin
+  FlushNewTxt;
+  L := CurLin;
+  LinImg := BlkStr;
+  StrToBA( LinImg, 1, S );
+  InsertLine( L, LinImg );
+  SetUpNewTxt( L+1 );
+end;
+
+{
+.PG
+}
+procedure DoTitleLen;
+var I: integer;
+    S: pStrTyp;
+begin
+  I := 1;
+  if PmtInt( Msg(MGPRNT,65), I ) then begin
+     S := AsStr(I,10);
+     InsCmd( concat( '.TL ', S^ ) );
+  end;
+end;
+
+{
+.PG
+}
+procedure DoFooter;
+var Tmp, LF, RF, CF: StrTyp;
+    Term: KeyTyp;
+begin
+   LF := '';
+   RF := '';
+   CF := '';
+   if Confirm( Msg(MGPRNT,2), false ) then begin
+      if PmtStr( Msg(MGPRNT, 4), LF ) then
+      if PmtStr( Msg(MGPRNT, 3), CF ) then
+      if PmtStr( Msg(MGPRNT, 5), RF ) then begin
+         InsCmd( concat( '.FTO ''', LF, '''', CF, '''', RF, '''' ) );
+         Tmp := RF;
+         RF := LF;
+         LF := Tmp;
+         if PmtStr( Msg(MGPRNT, 7), LF ) then
+         if PmtStr( Msg(MGPRNT, 6), CF ) then
+         if PmtStr( Msg(MGPRNT, 8), RF ) then begin
+            InsCmd( concat( '.FTE ''', LF, '''', CF, '''', RF, '''' ) );
+            DoTitleLen;
+         end;
+      end;
+   end else begin
+      if PmtStr( Msg(MGPRNT, 9), LF ) then
+      if PmtStr( Msg(MGPRNT,10), CF ) then
+      if PmtStr( Msg(MGPRNT,11), RF ) then begin
+         InsCmd( concat( '.FT ''', LF, '''', CF, '''', RF, '''' ) );
+         DoTitleLen;
+      end;
+   end;
+end;
+
+{
+.PG
+}
+procedure DoLinSpcng;
+var I: integer;
+    S: pStrTyp;
+begin
+  I := 1;
+  if PmtInt( Msg(MGPRNT,15), I ) then begin
+     S := AsStr(I,10);
+     InsCmd( concat( '.LS ', S^ ) );
+  end;
+end;
+
+{
+.PG
+}
+procedure DoFill;
+begin
+  if Confirm( Msg(MGPRNT,16), true ) then
+    InsCmd( '.FI' )
+  else
+    InsCmd( '.NF' );
+end;
+
+{
+.PG
+}
+procedure DoMargins;
+var TM, BM, LM, RM: integer;
+    S: pStrTyp;
+begin
+  LM := 1;
+  RM := 65;
+  TM := 3;
+  BM := 3;
+  if PmtInt( Msg(MGPRNT,17), LM ) then
+  if PmtInt( Msg(MGPRNT,18), RM ) then
+  if PmtInt( Msg(MGPRNT,19), TM ) then
+  if PmtInt( Msg(MGPRNT,20), BM ) then begin
+     S := AsStr( LM, 10 );
+     InsCmd( concat( '.LM ', S^) );
+     S := AsStr( RM, 10 );
+     InsCmd( concat( '.RM ', S^) );
+     S := AsStr( TM, 10 );
+     InsCmd( concat( '.TM ', S^) );
+     S := AsStr( BM, 10 );
+     InsCmd( concat( '.BM ', S^) );
+  end;
+end;
+
+{
+.PG
+}
+procedure DoNewPage;
+var I: integer;
+    S: pStrTyp;
+begin
+   if Confirm(Msg(MGPRNT,21),false ) then begin
+      I := 1;
+      if PmtInt(Msg(MGPRNT,22),I) then begin
+         S := AsStr( I, 10 );
+         InsCmd( concat( '.PG ', S^ ) );
+      end;
+   end else begin
+      InsCmd( '.PG' );
+   end;
+end;
+
+{
+.PG
+}
+procedure DoSkipLine;
+var I: integer;
+    S: pStrTyp;
+begin
+  I := 1;
+  if PmtInt( Msg(MGPRNT,23), I ) then begin
+     S := AsStr( I, 10 );
+     InsCmd( concat( '.SK ', S^ ) );
+  end;
+end;
+
+{
+.PG
+}
+procedure DoCenter;
+var I: integer;
+begin
+  I := 1;
+  if PmtInt( Msg(MGPRNT,24), I ) then begin
+     if I>0 then begin
+        InsCmd( '.CE' );
+        SetUpNewTxt( CurLin+I );
+        InsCmd( '.EC' );
+     end;
+  end;
+end;
+
+{
+.PG
+}
+procedure DoPageOff;
+var I,J: integer;
+    S: pStrTyp;
+begin
+   I := 0;
+   if Confirm( Msg(MGPRNT,25), false ) then begin
+      if PmtInt( Msg(MGPRNT,26), i ) then begin
+         j := i;
+         if PmtInt( Msg(MGPRNT,27), j ) then begin
+            S := AsStr( I, 10 );
+            InsCmd( concat( '.OPO ', S^ ) );
+            S := AsStr( J, 10 );
+            InsCmd( concat( '.EPO ', S^ ) );
+         end;
+      end;
+   end else begin
+      if PmtInt( Msg(MGPRNT,28), I ) then begin
+         S := AsStr( I, 10 );
+         InsCmd( concat( '.PO ', S^ ) );
+      end;
+   end;
+end;
+
+{
+.PG
+}
+procedure DoComment;
+var S: StrTyp;
+begin
+  S := '';
+  if PmtStr( Msg(MGPRNT,29), S ) then begin
+     InsCmd( concat( '.. ', S ));
+  end;
+end;
+
+{
+.PG
+}
+procedure DoHeader;
+var Tmp, LH, CH, RH: StrTyp;
+begin
+   LH := '';
+   RH := 'Page %';
+   CH := '';
+   if Confirm( Msg(MGPRNT,56), false ) then begin
+      if PmtStr( Msg(MGPRNT,57), LH ) then
+      if PmtStr( Msg(MGPRNT,58), CH ) then
+      if PmtStr( Msg(MGPRNT,59), RH ) then begin
+         InsCmd( concat( '.HDO ''', LH, '''', CH, '''', RH, '''' ) );
+         Tmp := RH;
+         RH := LH;
+         LH := Tmp;
+         if PmtStr( Msg(MGPRNT,60), LH ) then
+         if PmtStr( Msg(MGPRNT,61), CH ) then
+         if PmtStr( Msg(MGPRNT,62), RH ) then begin
+            InsCmd( concat( '.HDE ''', LH, '''', CH, '''', RH, '''' ) );
+            DoTitleLen;
+         end;
+      end;
+   end else begin
+      if PmtStr( Msg(MGPRNT,12), LH ) then
+      if PmtStr( Msg(MGPRNT,14), CH ) then
+      if PmtStr( Msg(MGPRNT,13), RH ) then begin
+         InsCmd( concat( '.HD ''', LH, '''', CH, '''', RH, '''' ) );
+         DoTitleLen;
+      end;
+   end;
+end;
+
+{
+.PG
+}
+procedure DoJustify;
+begin
+  if Confirm( Msg(MGPRNT,30), true ) then
+    InsCmd( '.JT' )
+  else
+    InsCmd( '.NJ' );
+end;
+
+{
+.PG
+}
+procedure DoNoBreak;
+var I: integer;
+    S: pStrTyp;
+begin
+   I := 1;
+   if PmtInt( Msg(MGPRNT,31), I ) then begin
+      S := AsStr( I, 10 );
+      if I>0 then begin
+         InsCmd( concat( '.NE ', S^ ) );
+      end;
+   end;
+end;
+
+{
+.PG
+}
+procedure DoFigSpace;
+var I: integer;
+    S:  StrTyp;
+    p: pStrTyp;
+begin
+  I := 1;
+  if PmtInt( Msg(MGPRNT,32), I ) then begin
+     p := AsStr( I, 10 );
+     S := p^;
+     if I>0 then begin
+        InsCmd( concat( '.NE ', S ) );
+        InsCmd( concat( '.SK ', S ) );
+     end;
+  end;
+end;
+
+{
+.PG
+}
+procedure DoPageLen;
+var I: integer;
+    S: pStrTyp;
+begin
+  I := 62;
+  if PmtInt( Msg(MGPRNT,33), I ) then begin
+     S := AsStr( I, 10 );
+     if I>0 then begin
+       InsCmd( concat( '.PL ', S^ ) );
+     end else begin
+       TellUsr( Msg(MGPRNT,34) );
+     end;
+  end;
+end;
+
+{
+.PG
+}
+procedure DoAscii;
+var S: StrTyp;
+    pS: pStrTyp;
+    T: KeyTyp;
+    i, Cod: integer;
+begin
+  S := '';
+  if PmtStr( Msg(MGPRNT,35), S ) then begin
+     S := concat( S, ' ' );
+     for i := 1 to length(S) do begin
+       if S[i] in ['a'..'z'] then
+         S[i] := chr( ord(S[i]) - 32 );
+     end;
+     if pos( 'NUL', S )>0 then  Cod := 0
+     else if pos( 'SOH', S )>0 then Cod := 1
+     else if pos( 'STX', S )>0 then Cod := 2
+     else if pos( 'ETX', S )>0 then Cod := 3
+     else if pos( 'EOT', S )>0 then Cod := 4
+     else if pos( 'ENQ', S )>0 then Cod := 5
+     else if pos( 'ACK', S )>0 then Cod := 6
+     else if pos( 'BEL', S )>0 then Cod := 7
+     else if pos( 'BS', S )>0 then Cod := 8
+     else if pos( 'HT', S )>0 then Cod := 9
+     else if pos( 'LF', S )>0 then Cod := 10
+     else if pos( 'VT', S )>0 then Cod := 11
+     else if pos( 'FF', S )>0 then Cod := 12
+     else if pos( 'CR', S )>0 then Cod := 13
+     else if pos( 'SO', S )>0 then Cod := 14
+     else if pos( 'SI', S )>0 then Cod := 15
+     else if pos( 'DLE', S )>0 then Cod := 16
+     else if pos( 'DC1', S )>0 then Cod := 17
+     else if pos( 'DC2', S )>0 then Cod := 18
+     else if pos( 'DC3', S )>0 then Cod := 19
+     else if pos( 'DC4', S )>0 then Cod := 20
+     else if pos( 'NAK', S )>0 then Cod := 21
+     else if pos( 'SYN', S )>0 then Cod := 22
+     else if pos( 'ETB', S )>0 then Cod := 23
+     else if pos( 'CAN', S )>0 then Cod := 24
+     else if pos( 'EM', S )>0 then Cod := 25
+     else if pos( 'SUB', S )>0 then Cod := 26
+     else if pos( 'ESC', S )>0 then Cod := 27
+     else if pos( 'FS', S )>0 then Cod := 28
+     else if pos( 'GS', S )>0 then Cod := 29
+     else if pos( 'RS', S )>0 then Cod := 30
+     else if pos( 'US', S )>0 then Cod := 31
+     else begin
+       Cod := AsLong( S );
+     end;
+  end;
+  pS := AsStr( Cod, 10 );
+  InsMod := true;
+  write( '\1Bu' );
+  pS^ := concat( '\\', pS^ );
+  for i := 1 to length(pS^) do begin
+    PutCursor( CurLin, CurCol );
+    PutChar( pS^[i] );
+  end;
+  FlushNewTxt;
+end;
+
+{
+.PG
+procedure FormatTask; *MAIN*
+}
+begin
+   LoadLabels( FrmtFrame );
+   Done := false;
+   while not Done do begin
+      NextCmd;
+      case Cmd of
+         KF1 : DoFooter;
+         KF2 : DoLinSpcng;
+         KF3 : DoFill;
+         KF4 : DoMargins;
+         KF5 : DoNewPage;
+         KF6 : DoSkipLine;
+         KF7 : DoCenter;
+         KF8 : DoPageOff;
+         KF9 : DoComment;
+         KF10: Done := true;
+         KF11: DoHeader;
+         KF13: DoJustify;
+         KF15: DoNoBreak;
+         KF16: DoFigSpace;
+         KF18: DoPageLen;
+         KF19: DoAscii;
+         otherwise: Done := not LocalEdit;
+      end;
+   end;
+end;
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,88 @@
+{$S PRGRMR}
+procedure PascalTask;
+begin
+   if PmtStr( Msg(MGPrgm,2), CmdPas ) then begin
+      if SetUpCallWin then begin
+         CallProg( concat( '!PASCAL ', CmdPas ) );
+         SetUpSuspWin;
+      end;
+      Cmd := KF10;
+   end else begin
+      NextCmd;
+   end;
+end;
+
+{
+.PG
+}
+procedure AsmblrTask;
+begin
+   if PmtStr( Msg(MGPrgm,3), CmdAsm ) then begin
+      if SetUpCallWin then begin
+         CallProg( concat( '!ASM68K ', CmdAsm ) );
+         SetUpSuspWin;
+      end;
+      Cmd := KF10;
+   end else begin
+      NextCmd;
+   end;
+end;
+
+{
+.PG
+}
+procedure LinkerTask;
+begin
+   if PmtStr( Msg(MGPrgm,4), CmdLnk ) then begin
+      if SetUpCallWin then begin
+         CallProg( concat( '!LINKER ', CmdLnk ) );
+         SetUpSuspWin;
+      end;
+      Cmd := KF10;
+   end else begin
+      NextCmd;
+   end;
+end;
+
+{
+.PG
+}
+procedure FilMgrTask;
+begin
+   if SetUpCallWin then begin
+      CallProg( '!CC.FILMGR' );
+      SetUpSuspWin;
+   end;
+   Cmd := KF10;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

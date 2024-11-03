@@ -1,0 +1,298 @@
+
+From: Denise Pitsch                             February 15, 1982
+
+  To: Distribution
+      R&D Staff
+
+Subject:  Proposal for Constellation II software
+
+This document is an update to the one dated January 22, 1982.  Changes
+are marked in the margin.
+
+(*$P permanent*)
+                   PROPOSAL FOR CONSTELLATION SOFTWARE
+
+We at Corvus have long been planning to implement "Constellation
+software" on all of the systems that we support.  By "Constellation
+software", we mean the set of programs which support multiple computers
+sharing a Corvus system.  Currently, this set of programs has only
+been implemented on the Apple.
+
+I feel that the current way of doing volume and user management is fine:
+its conceptually easy to understand and use.  However, I would like to
+briefly describe two other schemes which were considered.
+
+In the first scheme, all volumes are assigned two passwords when they
+are created:  a read password and a write password.  The user must
+supply the proper password whenever he/she runs the mount program.  The
+advantages of this scheme are 1) the system manager does not have to
+individually grant volume access to a bunch of users when a volume is
+created.  The disadvantages are 1) a user may have to remember several
+passwords; 2) every user sees every volume during the list function of
+the mount program.
+
+In the second scheme, each volume is assigned an owner when it is
+created.  Each owner is a user who belongs to a group.  The owner of a
+volume can specify group and system access to the volume.  For example,
+if I, user DENISE, own volume DENISE, and I belong to the RD group, I
+can specify that everyone in the RD group has read access to volume
+DENISE.  The advantage of this scheme is 1) the system manager does not
+have to individually grant volume access to a bunch of users when a
+volume is created.  The disadvantage is 1) users and volumes can belong
+to only one group, so a user will still have difficulty accessing a
+volume which is not in his/her particular group.
+
+I have rejected both of these alternatives, and have instead chosen to
+stay with the known problems of our current scheme.  To address the
+problem of gaining temporary access to another user's volume, a
+secured/released flag has been added at the user level.  Each user may
+specify for each volume in his/her access table whether that volume is
+secured or released.  Any other user may mount any volume which is
+released, as long as the user can specify a valid user name and the
+volume name.  For instance, suppose PHIL has a volume in his access
+table called PHILB, and that PHILB is released.  As user DENISE, I can
+specify that I want to mount PHILB(PHIL).  This mount cannot be made
+permanent and read-only access is the only access allowed.
+
+
+Before implementing Constellation II software, we should consider the
+shortcoming of the current Constellation software, as well as the
+implications of supporting multiple operating systems on one network.
+
+Assumptions
+
+1)  No more single-user systems will be supported.
+
+2)  Any disks currently in use must be upgradeable to the new layout
+    without loss of data.  (This doesn't mean that the upgrade will
+    be painless.)
+
+Inadequacies of the current system:
+
+1)  Maximum 16MB drive.  We should be able to support at least a 40MB
+    drive, and preferably a 200MB (i.e., the Bank) drive.  The virtual
+    drive table now in use was implemented because current software
+    could only handle 16MB drives.  Its use is very confusing to our
+    users, and it should be dropped.  The current drive firmware
+    supports a 20-bit address (256k 128-byte sectors, or a 128MB drive).
+    The mirror commands can handle 64k blocks maximum (a 32MB drive), so
+    the program to backup/restore an entire drive becomes more
+    complicated.
+
+2)  Maximum 16MB per volume.  This should be equal to the maximum drive
+    size.  Note that a given operating system may impose some lesser
+    limit on volume size.
+
+3)  Maximum 63 volumes per drive.  This number should be increased, and
+    left variable, if possible.  If it is not possible to make it
+    variable, then 512 is probably a reasonable limitation.  This would
+    allow volumes of approximately 150 kbytes on an 80MB drive.
+
+4)  Four character user name, and 2 character password.  These numbers
+    should be upped to at least ten and seven, respectively.  Also, all
+    names should be encrypted when stored on the drive to prevent
+    unscrupulous users from reading them easily.
+
+5)  Complicated installation procedure.  The installation procedure
+    should be made as turnkey as possible.
+
+6)  Maximum 128 users.  Many of our educational installations complain
+    that this number is much too small.  Ideally, this number could
+    be variable, but at least greater than 255.
+
+7)  User and volume tables cannot be backed up and restored.  This can
+    be fixed by making a Corvus volume, which can then be backed up and
+    restored with the MIRROR program, or by a program which writes the
+    various tables to a file.
+
+Implications of supporting multiple processor types
+
+1)  A boot area is needed for each processor type.  The firmware
+    "boot command" needs to be modified to support this capability.
+
+Implications of supporting multiple operating systems
+
+1)  Volume information must include a Corvus volume name (independent
+    of any operating system volume name), and operating system
+    dependent information.
+
+2)  The boot code for each processor must be able to decide which
+    operating system to boot.  For instance, the Apple II boot must
+    know whether to boot DOS, Pascal, or CP/M.
+
+OMNINET implications
+
+1)  Multiple disk servers on one network are possible.  Therefore,
+    the operating system drivers should include support for a
+    disk server number in the mount table, and there must be a way to
+    mount a volume located on a system other that the default.
+
+2)  There must be a convention for a processor to choose which system
+    to get its boot code and user table from.
+
+3)  User names must be unique across the network, which is another
+    reason to increase the limit on the numbe of user names.
+
+4)  It is possible to detect whether a user is still active on
+    OMNINET.  We could use this feature to try and do something
+    about the problem of two people trying to access the same
+    area at the same time.
+
+Other wish lists
+
+1)  Unattended boot.  If a user name is not entered within a certain
+    amount of time, some default user will automatically be booted.
+    On OMNINET, the default chosen could be based on transporter
+    number.
+
+
+Definition of terms used
+
+   network - an OMNINET network, with 1 or more disk servers
+
+   system - a set of daisy-chained drives, with a disk server or MUX
+
+   drive - one drive in a set of daisy-chained drives
+
+   volume - a contiguous area on a drive
+
+   mount - associate a volume with a driver in the host operating system
+
+   unmount - clear any association with a driver
+
+The operating system types for users are:
+(*$I c2ostypes *)
+
+The directory types for volumes are:
+(*$I c2dirtypes *)
+
+The processor names for boot files are:
+(*$I c2boots *)
+(*$P permanent*)
+OVERVIEW OF CONSTELLATION II PROGRAMS
+
+  1.  Installation program
+      Initializes drive 1.  Writes a default system password.  Writes
+      any boot information necessary.  After running the installation
+      program, the system should be usable by one user.
+
+  2.  Drive Manager - system password required
+      a.  Initialize drive.  Formats drive directory.
+      b.  List drives on line. List the drive number and capacity of all
+          drives on line.  Indicate if they are not initialized.
+          Indicate controller ROM version and firmware version.
+      c.  List volumes.  List the name, address, length, and operating
+          system type of all volumes on the specified drive.  Also list
+          all the unused spaces on the drive.
+      d.  Add a volume to a drive.
+      e.  Remove a volume from a drive.
+      f.  List freespace. The unused space on all drives is displayed.
+      g.  Protect.  Specify system-wide access:
+          none/read-only/read-write.
+
+  3.  User Manager -- requires system password (user information is
+      updated on all systems, but transparently)
+      a.  List user information including user name, password,
+          boot operating system type, and home system.
+      b.  Remove user from user directory.
+      c.  Add user to user directory.
+      d.  Change user information.
+
+  4.  Access Manager - requires system password
+      a.  Specify user access to several volumes.
+      b.  Specify volume access for several users.
+
+  5.  Boot manager -- requires system password.
+      a.  List filenames and cpu types of all boot files.
+      b.  Add boot file to volume.
+      c.  Remove boot file from volume.
+
+  6.  Mount Manager
+      a.  List drives on line.  Same as Drive Manager function.
+      b.  List volumes.  Lists volumes accessible to this user.
+      c.  Mount volume.  Mounts a volume.
+      d.  Unmount volume.  Unmounts a volume.
+      e.  Save mount table.  Saves current mount table as default.
+      f.  Change password.  Changes user's password.
+      g.  Protect.  Specify individual access: read-only/read-write
+      h.  Security.  Specify secure/release.
+
+  7.  Library procedures
+      a.  Mount/unmount a volume.
+      b.  Get user name.
+
+  8.  Recovery programs
+      a.  Backup to a file the volume information, user information,
+          boot information.
+      b.  Restore from a file the volume information, user information,
+          boot information.
+      c.  Rewrite system name and password.
+(*$P permanent*)
+  GENERAL USER INTERFACE CONSIDERATIONS
+
+    1.  User will be able to press the <ESC> key at any time when he is
+        prompted for input. This will cause an immediate exit to the
+        current menu.
+
+    2.  When user is prompted for a single character response, the user
+        must press only those keys which correspond to correct input,
+        return if there is a default, or <ESC>.
+
+    3.  When user is prompted for a numeric input the first character
+        may be a '+', '-', '!', '$', or a digit. The '!' or '$' signals
+        that the input will be in hex (base 16).  The backspace key may
+        be used. The input must be terminated with a return, return with
+        no input for the default, or <ESC>. Any characters typed by the
+        user that are not valid for the current character position will
+        be ignored. Result will be converted to an integer and truncated
+        to +/- maxint if neccessary.
+
+    4.  When the user is prompted for a string input, the backspace key
+        may be used. Any characters in the string not in the required
+        set will be ignored. Input must be terminated by return, return
+        with no input for default, or <ESC>.
+
+
+Boot/link sequence
+
+In order to gain access to the network, the user must either boot
+directly from the Corvus, or run a link program.  In either case, the
+user must specify a user name and password.  The user name determines
+where the user's boot system is and which operating system will be
+booted/linked to.
+
+  Example
+
+  Enter your user name: <enter response>
+
+  Enter your password: <enter response-NOT echoed>
+
+  ERROR***
+    User <name> was not found.  Reboot.
+    Incorrect password.  Reboot.
+
+  Home system is <name>.
+  Operating system type is <type>.
+(*$P permanent*)
+(*$I c2drvmgr *)
+
+(*$P permanent*)
+(*$I c2usermgr *)
+
+(*$P permanent*)
+(*$I c2accmgr *)
+
+(*$P permanent*)
+(*$I c2bootmgr *)
+
+(*$P permanent*)
+(*$I c2mount *)
+
+(*$P permanent*)
+LIMITATIONS
+
+There are certain functions which are not provided by the scheme described
+here.  These are:
+
+1)  Users cannot jump from OS to OS (as they can now from Apple Pascal to
+Apple DOS).  A user who wants to access two OS's must have 2 user id's.  

@@ -1,0 +1,4 @@
+c:
+c:mtplus $1:spool.src #p$1r$1t$1
+c:linkmt $1:spool=$1:spool,$1:pipes,$1:cpmio,randomio/s,paslib/s
+

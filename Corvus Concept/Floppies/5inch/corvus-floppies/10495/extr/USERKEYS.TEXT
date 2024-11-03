@@ -1,0 +1,56 @@
+; File: USERKEYS.TEXT
+;
+; This file defines user keys for the Dispatcher.  User keys are
+; active if USERKEYS.TEXT is in the volume mounted on unit 5.
+;
+; ";" records are comments.
+; Blank lines are ignored.
+;
+; User key definitions are:
+;
+;   <level> <keynmbr> <keylabel>
+;   <command>
+;   [<command>]
+;   [ ....    ]
+;
+; <level>    is Dispatcher level number from 1 to 9.
+; <keynmbr>  is key number from 0 to 39
+;               (9,19 and 29 used by Dispatcher).
+; <keylabel> is the function key label text.
+; <command>  is the command to be executed when the function key
+;               is selected.  Multiple commands are acceptable.
+;
+; After editing file USERKEYS.TEXT, execute program CC.DISPAT
+; to check out the file before rebooting.
+;
+
+;
+; Define level 1
+;
+1 0 Asm68K
+!ASM68K
+
+1 1 Pascal
+!PASCAL
+
+1 2 AXREF z-
+/CCUTIL/ASMXREF i+ z-
+
+1 3 AXREF z+
+/CCUTIL/ASMXREF i+ z+
+
+1 4 ListLIST
+!CC.FILMGR LSTVOL /LIST
+
+1 5 Del LIST
+!CC.FILMGR DELFIL -Q /LIST/*
+
+1 6 isys
+!isys /drvwork/w
+
+1 7 Format
+/CCUTIL/FUTIL
+
+1 8 PANIC
+/KB/DONTPANIC
+

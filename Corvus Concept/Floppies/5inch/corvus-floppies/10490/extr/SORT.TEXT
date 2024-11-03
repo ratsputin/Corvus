@@ -1,0 +1,501 @@
+{--------------------------------------------------------------}
+{ Program: IPC file sort procedure                             }
+{ Author : David Ramsey                                        }
+{ Date   : 24 Aug 1983                                         }
+{--------------------------------------------------------------}
+{ Revision:                                                    }
+{ Author :                                                     }
+{ Date   :                                                     }
+{ Reason :                                                     }
+{--------------------------------------------------------------}
+
+{$ sort}
+Procedure Sort(Top,Bot,KeyCol,KeyLen: Integer; SuprBlnks,Ascending: Boolean);
+
+Type
+ PtrStr = ^TXTString;
+
+Var
+  TF1CB,                     { Temp file #1 control block }
+  TF2CB     : TXTcb;         { Temp file #2 control block }
+  RecBA     : BA;
+  RecLen    : Integer;
+  MFileName3,
+  MFileName1,
+  MFileName2: String[20];    { Strings containing the name of our merge files }
+  RecordLength,              { Length of file record PLUS key field! }
+  KeyFieldLength,            { Length of key field }
+  KeyFieldOffSet: Integer;   { Offset of key field into file }
+  PtrArray  : Array[1..2000]
+               Of PtrStr;    { Our array of pointers to the strings in memory }
+  HeapPtr1  : ^LongInt;      { Storage for heap pointer before we mess it up }
+  SPtr1     : PtrStr;        { Our string pointers! }
+(*Time      : ClkPB;         { Time record }  *)
+  TTotal,
+  Time1,                     { Start time for memory sort }
+  Time2,                     { End time for memory sort }
+  STime,                     { Start time for total sort }
+  ETime     : LongInt;       { End time for total sort }
+  Total,                     { Total # of records in the file }
+  Diff      : Integer;       { Difference between actual record length and 251 }
+  PreviousData,              { TRUE if data waiting in a merge file... }
+  Finished,
+  MoreData,                  { TRUE if there's more data in the original file }
+  Final     : Boolean;
+  Raskin,
+  Counter,                   { Misc stuff }
+  HowMany   : Integer;
+
+{---------------------------------------------------------------------------}
+{              S O R T    G L O B A L    R O U T I N E S                    }
+{---------------------------------------------------------------------------}
+(*----------------------------------------------------------------
+  Procedure DET(StartTime: LongInt);   { Display elapsed time }
+
+  Var
+   M,
+   S,
+   T : Integer;
+
+    Procedure DisplayTime(M,S,T : Integer);
+
+    Begin
+      If M < 10 Then Write('0',M:1,':')
+        Else Write(M:2,':');
+      If S < 10 Then Write('0',S:1,'.')
+        Else Write(S:2,'.');
+      Write(T:1,'  ')
+    End;
+
+  Begin
+    ClkRead(Time);
+    With Time Do Time2 := (Hour*3600+Mins*60+Secs)*10+Tenths;
+    Time2 := Time2 - StartTime;
+    M := (Time2 DIV 600);
+    S := (Time2-M*600) DIV 10;
+    T := Time2 MOD 10;
+    DisplayTime(M,S,T)
+  End;
+
+  Function Digits(Num : Integer) : Integer;    { Returns # of digits in an integer }
+
+  Begin
+    If Num = 0 Then Num := 1;
+    Digits := 1 + Trunc((Ln(Num)/Ln(10)))
+  End;
+
+ ----------------------------------------------------------------*)
+
+  Function Compare(Var P1,P2 : TXTString) : Boolean;
+
+  Begin
+    If Ascending Then Begin
+      If P1 > P2 Then Compare := True Else Compare := False
+      End
+    Else If P1 < P2 Then Compare := True Else Compare := False
+  End;
+
+
+  Procedure GetData;
+
+  { Reads as much of SortFile into memory as will fit... }
+
+  Type
+    Page = Array[0..1023] of Byte;
+
+  Var
+    KeyField,
+    TempStr   : TXTstring;      { String from block built here }
+    DiddleHeap: ^LongInt;
+    CurRec,
+    Counter   : Integer;
+    Full      : Boolean;        { TRUE if the heap fills up }
+
+
+   Procedure GetKeyField(Var KF : TXTString);
+
+   { Extract the key field from the record. If SuprBlnks is TRUE, we compress
+     out all the blanks in the key field. }
+
+   Var
+     TempKey : TXTString;
+     Counter,
+     Ptr   : Integer;
+
+   Begin
+     TempKey := Copy(TempStr,KeyFieldOffSet,KeyFieldLength);
+     If SuprBlnks Then Begin                   { Supress blanks? }
+       Ptr := 0;
+       For Counter := 1 To Length(TempKey) Do
+         If TempKey[Counter] <> ' ' Then Begin
+           Ptr := Ptr + 1;
+           KF[Ptr] := TempKey[Counter]
+           End;
+       KF[0] := Chr(Ptr)                       { Set string length byte }
+       End
+     Else KF := TempKey;
+     If Length(KF) < KeyFieldLength Then
+       For Counter := 1 To KeyFieldLength - Length(KF) Do KF := Concat(KF,' ')
+   End;
+
+   Procedure FixRecord(Var Str: TXTString);
+
+   { If a record is sorted on the last field, it might not have enough char-
+     acters. This proc pads short records with blanks. }
+
+   Var
+     Needed,
+     Counter : Integer;
+
+   Begin
+     Needed := (KeyFieldOffSet+KeyFieldLength-1) - Length(Str);
+     For Counter := 1 To Needed Do Str := Concat(Str,' ')
+   End;
+
+
+  Begin                  { GetData mainline }
+    If KeepCnt > 0 Then Begin
+      Release(DictHeapPtr);  { eAFreee@ eAupe@ eAspacee@ eAtakene@ eAbye@ eAdicte@ eAwordse@ }
+      KeepCnt := 0
+      End;
+    Full := False;
+    HowMany := 0;
+    CurRec := Top;
+
+    Repeat
+      GetLine(RecBA,CurRec);
+      UpdtGauge( CurRec, Bot );
+      SpecBAToStr(RecBA,BkSpanNE(RecBA,MaxLinLen,' '),TempStr);
+      If Length(TempStr) < (KeyFieldOffSet + KeyFieldLength - 1) Then
+        FixRecord(TempStr);
+      HowMany := HowMany + 1;      { Update count of strings in memory }
+      CurRec := CurRec + 1;
+      GetKeyField(KeyField);
+      TempStr := Concat(KeyField,TempStr);
+      For Counter := 1 To KeyFieldLength Do
+        TempStr[Counter] := UpperCase(TempStr[Counter]);
+      New(SPtr1);                  { Allocate new string space on the heap }
+      SPtr1^ := TempStr;           { Set pointer to the new string }
+      PtrArray[HowMany] := SPtr1;  { Move actual string data to the heap }
+
+      Mark(DiddleHeap);            { Get current heap pointer }
+      Counter := Length(TempStr)+KeyFieldLength;          { Figure out string length }
+      If Odd(Counter) Then Counter := Counter + 1;       { Always an even # of chars }
+      Diff := 256 - Counter;                             { Figure out spare space }
+
+      DiddleHeap := Pointer(Ord4(DiddleHeap) - Diff);
+      Release(DiddleHeap);         { EFFICIENT use of heap space! }
+      If (MemAvail < 2800) or ((HowMany - Top) > 1999) Then Full := TRUE
+    Until (CurRec > Bot) or Full;
+    If Full then Begin
+      Bell(BelWrn);
+      TellUsr(Msg(MGSort,8));   { eA"Tooe@ eAbige@ eAtoe@ eAsorte@ eAine@ eAmemory!"e@ }
+      Release(HeapPtr1);
+      LblsOn;
+      Exit(Sort)
+      End;
+    If (CurRec > Bot) Then Begin
+      MoreData := False;
+      Final := True
+      End;
+    Total := Total + HowMany;
+  End;
+
+
+  Procedure StripKey(Var ST : TXTString);
+
+  { Strip the key field from the front of the string...normally only done when
+    we're writing to the final file. }
+
+  Begin
+    ST := Copy(ST,KeyFieldLength+1,Length(ST))
+  End;
+
+
+  Procedure SaveData;
+
+{ eAPute@ eAdatae@ eAone@ eAthee@ eAheape@ eAbacke@ eAintoe@ eAthee@ eAfile.e@ eAOnlye@ eAcallede@ eAwhene@ eAentiree@ eAsortede@ }
+{ eAareae@ eAwille@ eAfite@ eAintoe@ eAmemory.e@ }
+
+  Var
+    Str1   : TXTString;
+    RecNum,
+    Counter: Integer;
+    TBA    : BA;
+    Glotzy : Boolean;
+
+  Begin
+    Final := True;
+    TellUsr(Msg(MGSort,6));
+    For Counter := 1 To Total Do Begin { Set up our counter... }
+      Str1 := PtrArray[Counter]^;        { Heap data to temp string }
+      If Final Then StripKey(Str1);      { Final write? Strip the key! }
+      LongStrToBA(TBA,1,Str1);
+      RecNum := Counter + Top - 1;
+      Glotzy := RecPut(TxtFID,RecNum,Length(Str1),TBA[1]);
+      UpdtGauge( RecNum, Bot )
+      End
+  End;
+
+
+(*
+  Procedure Merge(File1,File2 : String[20]);
+
+  { Merge strings in RAM with File1 to File2. If FINAL is true, then we're
+    writing the finished file and should strip the prefixed key field. }
+
+  Var
+    F1,
+    F2      : TXTFile;            { Files }
+    FCB1,
+    FCB2    : TXTcb;              { File control blocks }
+    Result,
+    Str2,
+    Str1    : TXTstring;          { String read from FCB1 }
+    FileEmpty,                    { TRUE if no data left in the file }
+    HeapEmpty: Boolean;           { TRUE if no data left on the heap }
+    FileCtr,
+    Counter : Integer;            { Counter for current RAM string }
+
+
+
+    Procedure GetFileLine(Var Str: TXTString);
+
+    Begin
+      If (Length(Str) = 0) And Not(FileEmpty) Then Begin
+        TXTRead(FCB1,F1,Str);
+        If FCB1.eofflg Then Begin
+          FileEmpty := True;
+          Str := ''
+          End
+        Else FileCtr := FileCtr + 1;
+        End
+    End;
+
+
+    Procedure GetHeapLine(Var Str: TXTString);
+
+    Begin
+      If Counter > HowMany Then Begin
+        HeapEmpty := True;
+        Str := ''
+        End
+      Else If (Length(Str) = 0) Then Begin
+        Str := PtrArray[Counter]^;
+        Counter := Counter + 1
+        End
+    End;
+
+
+  Begin
+    Str1 := '';
+    Str2 := '';
+    FileCtr := 0;
+    FileEmpty := False;
+    HeapEmpty :=False;
+    FCB1.opnflg := False;      { Neither file... }
+    FCB2.opnflg := False;      { ...is open!     }
+    TXTrdOpen(FCB1,F1,File1);  { Open previously-saved-data file }
+    If IORESULT <> 0 Then Begin
+      Release(HeapPtr1);
+      Exit(Sort)
+      End;
+    TXTwrOpen(FCB2,F2,File2);  { Open merge file }
+    If IORESULT <> 0 Then Begin
+      Release(HeapPtr1);
+      Exit(Sort)
+      End;
+    If Final Then Begin        { Write IPC header records }
+      TXTWrite(FCB2,F2,FieldPos);
+      TXTWrite(FCB2,F2,FieldNames)
+      End;
+    Counter := 1;
+
+    GetFileLine(Str1);
+    GetHeapLine(Str2);
+    Repeat
+      If Not(Compare(Str1,Str2)) Then Begin
+          Result := Str1;
+          Str1 := ''
+          End
+        Else Begin
+          Result := Str2;
+          Str2 := ''
+          End;
+
+      If Final Then StripKey(Result);
+      TXTWrite(FCB2,F2,Result);
+      GetFileLine(Str1);
+      GetHeapLine(Str2)
+    Until FileEmpty Or HeapEmpty;
+
+    If HeapEmpty Then Begin             { Heap is empty, flush file }
+      If Not(FileEmpty) Then Repeat
+          If Final Then StripKey(Str1);
+          TXTWrite(FCB2,F2,Str1);
+          Str1 := '';
+          GetFileLine(Str1)
+        Until FileEmpty
+      End
+    Else Begin                          { File is empty, flush heap }
+      If Not(HeapEmpty) Then Repeat
+        If Final Then StripKey(Str2);
+        TXTWrite(FCB2,F2,Str2);
+        Str2 := '';
+        GetHeapLine(Str2)
+      Until HeapEmpty
+    End;
+
+    FCB1.Mode := TXTPurge;              { Clobber the file when we're done! }
+    FCB2.mode := TXToutput;             { But save this file! }
+    TXTClose(FCB1,F1);
+    TXTClose(FCB2,F2)
+  End;
+
+  *)
+
+
+  Procedure SortMem(Num : Integer);     { Sort the array on the heap... }
+
+  Var
+    Incr, I,
+    J, K    : Integer;
+
+  Begin
+    Incr := Num DIV 2;
+    While Incr > 0 Do Begin
+      For I := Incr+1 To Num Do Begin
+        J := I - Incr;
+        While J > 0 Do Begin
+          K := J + Incr;
+          If Compare(PtrArray[J]^, PtrArray[K]^) Then Begin
+            SPtr1 := PtrArray[K];
+            PtrArray[K] := PtrArray[J];
+            PtrArray[J] := SPtr1;
+            J := J - Incr
+            End
+          Else J := 0
+          End
+        End;
+      Incr := Incr DIV 2
+      End;
+  End;
+
+
+{-------------------------------------------------------------------}
+{                        S O R T    M A I N L I N E                 }
+{-------------------------------------------------------------------}
+
+  Begin                  { Sort }
+
+(*  TXTInit;             { Set up the VSI text file unit }
+    SFCB.OpnFlg := False;
+    TF1CB.OpnFlg := False;
+    TF2CB.OpnFlg := False;
+    MFileName1 := 'Merge1.TEXT';       { Temp merge file }
+    ClkRead(Time);                     { Timestamp start of sort }
+    With Time Do TTotal := (Hour*3600+Mins*60+Secs)*10+Tenths;
+    MFileName2 := 'Merge2.TEXT';   *)
+
+    KeyFieldOffSet := KeyCol;
+    KeyFieldLength := KeyLen;
+    Finished := False;
+    PreviousData := False;
+    MoreData := True;
+    Final := False;
+    Total := 0;
+    Repeat
+      Mark(HeapPtr1);
+      TellUsr(Msg(MGSort,5));
+      LblsOff;
+      GetData;                          { Get the data }
+      SortMem(HowMany);                 { Sort the data }
+(*    If PreviousData Then
+        If Not(MoreData) Then Begin
+          Merge(MFileName1,OutFile);    { This is the last step on multimerges }
+          Release(HeapPtr1);
+          Finished := True
+          End
+        Else Begin
+          Merge(MFileName1,MFileName2); { This is an intermediate step in multimerges }
+          Release(HeapPtr1);
+          MFileName3 := MFileName1;
+          MfileName1 := MFileName2;
+          MFileName2 := MFileName2
+          End
+      Else If MoreData Then Begin       { This is a first step in multimerges }
+        PreviousData := True;
+        SaveData(MFileName1);
+        Release(HeapPtr1)
+        End
+      Else Begin                        { This occurs when the whole file will fit in memory }
+        Bell(BelAck);
+        SaveData;
+        Release(HeapPtr1);
+        Finished := True
+        End
+*)
+        SaveData;
+        Bell(BelAck);
+        Release(HeapPtr1);
+        LblsOn;
+        TellUsr(Msg(MGGenl,10));
+        Finished := True
+
+    Until Finished;
+  End;
+
+Procedure SortTask(Top,Bot,KeyCol,KeyLen : Integer);
+
+Var
+  Ign,
+  Ans,
+  Field,
+  FName1,
+  FName : Str80;
+  Counter,
+  Stat  : Integer;
+  Done,
+  Ascending,
+  SuprBlnks : Boolean;             { TRUE to ignore blanks in key field }
+
+
+  procedure DefSortKey;
+  var Dum: boolean;
+  begin
+     KeyCol := CurCol;
+     if PmtInt( Msg(MGSORT,2), KeyCol ) then begin
+        KeyCol := max( 1, min( MaxLinLen, KeyCol ));
+        KeyLen := min( KeyLen, MaxLinLen-KeyCol+1 );
+        Dum := PmtInt( Msg(MGSORT,3), KeyLen );
+        KeyLen := max( 1, min( MaxLinLen-KeyCol+1, KeyLen ));
+        SuprBlnks := Confirm(Msg(MGSort,4),True)
+     end;
+  end;
+
+begin                                  { eASortTaske@ }
+  if WrtOK then begin
+     LoadLabels( SortFrame );
+     Ascending := true;
+     SuprBlnks := False;
+     CurCol := KeyCol;
+
+     Done := false;
+     while not Done do begin
+        NextCmd;
+        case Cmd of
+           KF1:  DefSortKey;
+           KF2:  Ascending := Confirm( Msg(MGSORT,7), Ascending );
+           KF6:  Begin
+                   Sort(Top,Bot,KeyCol,KeyLen,SuprBlnks,Ascending);
+                   SetUpNewTxt(Bot);
+                   ReDraw(WinTop)
+                   End;
+           KF10: Done := true;
+           KTEXT:Bell(BelErr);
+           KBS  :Bell(BelErr);
+           otherwise: Done := not LocalEdit
+        end
+     end
+  end
+end;

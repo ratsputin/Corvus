@@ -1,0 +1,108 @@
+Program FindStr;
+
+{ Given a string and a volume, prints the name of all text files which
+    the given string occuts in }
+
+Uses {$U /ccutil/cclib}
+  ccDefn,
+  ccCRTio,
+  ccDIRio,
+     {$U /ccutil/cs.vsiutxt}
+  vsiUtxt;
+
+Var
+  Dir     : Directory;
+  DirE    : DirEntry;
+  OldFNam : Str80;
+  DevNo,
+  Cntr    : Integer;
+  VNam,
+  SStr    : TxtString;
+  Blocked,
+  Valid   : Boolean;
+
+
+  Function BrkPress: Boolean; EXTERNAL;
+
+  Procedure TUpShift( var S: TXTString );
+
+  Var
+    i: integer;
+
+  Begin
+    For i := 1 to length( S ) do
+      if S[i] in ['a'..'z'] then S[i] := chr( ord(S[i]) - 32 )
+  End;
+
+
+  Procedure SearchEntry(Entr: DirEntry; SS: TxtString);
+
+  Var
+    IFil : TxtFile;
+    IFCB : TxtCB;
+    ILin : TxtString;
+    FNam : Str80;
+    Done : Boolean;
+
+  Begin
+    Done := False;
+    FNam := Entr.DTid;
+    If FNam <> OldFNam Then If Pos('.TEXT',FNam) > 0 Then Begin
+      FNam := Concat('/',VNam,'/',FNam);
+      TXTSetCB(IFCB,Unknown,True);
+      {$I-}
+      TXTrdOPEN(IFCB,IFil,FNam);
+      {$I+}
+      If IOResult <> 0 Then Begin
+        WriteLn('Can''t open "',FNam,'"');
+        Exit(SearchEntry)
+        End;
+      Write('Searching file ',FNam,'. . .');
+      Repeat
+        If BrkPress Then Begin
+          WriteLn;
+          WriteLn('Program aborted by user...');
+          Exit(FindStr)
+          End;
+        TxtRead(IFCB,IFil,ILin);
+        If Not(IFCB.eofflg) Then Begin
+          TUpShift(ILin);
+          If Pos(SS,ILin) <> 0 Then Begin
+            Done := True;
+            WriteLn('string found.')
+            End
+          End
+      Until IFCB.eofflg Or Done;
+      IFCB.mode := TxtInput;
+      TXTClose(IFCB,IFil);
+      OldFNam := FNam;
+      If IFCB.eofflg Then writeln
+    End
+  End;
+
+Begin
+  ccCRTioInit;
+  ccDIRioInit;
+  OldFNam := '';
+  CrtAction(EraseAll);
+  CrtTPgm := 'FindStr';
+  CrttCpy := 'Copyright(C) 1983 Corvus Systems, Inc.';
+  CrtTvrs := '1.0';
+  CrtTitle('Find all text files containing a given string');
+  WriteLn; WriteLn;
+  Write('Enter name of volume to search: ');
+  ReadLn(VNam);
+  TUpShift(VNam);
+  Write('Enter string to search for: ');
+  ReadLn(SStr);
+  TUpShift(SStr);
+  WriteLn;
+  WriteLn('Reading directory...');
+  GetVolDir(VNam,Dir,Blocked,DevNo,Valid);
+  If Not Valid Then Begin
+    WriteLn; WriteLn;
+    WriteLn('\07Invalid volume name or damaged directory.');
+    Exit(FindStr)
+    End;
+  For Cntr := 1 To 77 Do SearchEntry(Dir[Cntr],SStr)
+End.

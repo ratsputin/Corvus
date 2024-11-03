@@ -1,0 +1,165 @@
+
+
+         file: const2.doc.text
+         date: 14 Nov 1983
+         author: Keith Ball
+                 Denise Pitsch
+
+         Direction for Constellation 2
+
+
+         Operating systems considered :
+
+               a)  CCOS
+               b)  MSDOS
+               c)  P-system  IV.0
+               d)  CP/M 86
+               e)  Apple DOS
+               f)  Apple SOS
+
+         Computers :
+
+                   IBM       TI        DEC Rainbow
+                   Z100      Concept   Apple 2
+                   Apple 3   S100 CP/M 86 systems
+
+         Not supporting :
+
+               a) TRS systems          c) CP/M 80
+               b) Atari                d) UBT
+
+
+         P-system IV.0 must run on top of MSDOS 2.0
+               Distribute the interpreter with our version of
+                   the bios without the rest of the system
+                   (filer, compiler, editor, etc.).  We cannot
+                   be responsible for supporting the p-system
+                   except for our bios.
+               P-system support for Const II for 8086 systems is
+                   on top of MSDOS and CP/M 86.  The CP/M 86
+                   version of the P-system is already working.
+                   It is running on the Rainbow.
+               Uses MSDOS 2.0 drivers for it's bios.  Needs only
+                   a glue to call drivers.
+               Make it so can boot directly or run from MSDOS
+                   command line.
+         Const 2 boot and Logon- direct if possible
+               Logon determines if MSDOS 2.0 or UCSD p-sys or
+                   CP/M 86 from user name and loads correct
+                   system.  Can CP/M be changed while booting or
+                   is CLINK only method?  Talk to Bruce K.
+               IBM saves logon info in transporter buffer which
+                   attachable driver picks to build mount table
+                   during INIT process.
+               Can we boot direct on IBM PC?
+                   Requires new roms with pattern for recognition
+                   by newer XT bios roms.
+                   Take over Load boot vector (only XT proms).
+                   Make a system device driver for MSDOS boot
+                   which the MSDOS talks to instead of floppy.
+                   How does XT and Davong boot on PC.
+               Can we get TI and DEC to have direct omninet boot
+                   in their boot roms?
+         Const 2 disk driver
+               Make all disk command I/O go through the driver,
+                   no special unit or routine to call rom.
+               Make all drivers of same OS similar and one source
+                   with conditional assembly, if possible.
+               Read/write block interface to OS
+               Generic disk commands.
+               Multilple disk servers
+               Fix in disk driver for 8A transporter useage
+                   necessary for any setup recv/send/recv msg
+                   arrangement.
+               Timeouts and extra support for Banks in disk drivers
+               Suppport the new disk server protocol.  This
+                   should be done on top of transporter driver
+                   and net mgt. pgm so other software can use
+                   sockets $80 and $B0.
+         Const 2 utilities - system manager and user
+               Multilple disk servers - affects mount table
+               Change to support timeouts and device type fields
+                   in device/volume table.  Involves format and
+                   mirror programs changing timeout for their
+                   special commands.
+               spooler and mountmanager - command line execution.
+               Speed-up the p-system version of the system
+                   manager utilities.
+         Interrupt Transporters
+               Needed for PC share and net mgt/transporter
+                   driver.
+               DEC Rainbow
+               Concept
+               S100 -> Z100  -- add extra rom for 9B
+               IBM and TI - new interrupt transporter
+                   Can this replace old as shipped device?
+                   This has extra rom for turning 8A into 9B.
+                   Change rom code?
+         Transporter driver w/ buffer mgt for buffered
+               transporters - like Concept but better.
+               Get version from PC share people used for IBM.
+               Build unit/module to link to hi level code which
+                   talks to driver, TRANSCMD.
+         Volume locking
+               When to lock - on first write
+               When to unlock - when exit program, have special
+                   program to unlock volume for user, system
+                   manager program to unlock volumes
+               Track opening and closing of files on a volume.
+                   Possible in MSDOS (?)
+               Boot mounts volume with whatever access user has
+                   RW or RO (global or user)
+               When try first write to volume check if locked.
+                   If is NOT locked then lock it on drive and
+                   record it in mount table.  If is locked then
+                   make the volume READ ONLY (RO). Return with
+                   write protect error.
+               Run mountmgr to change volume from RO to RW.
+                   Only change if not locked.  Verify user still
+                   active if locked.  If isn't unlock and change
+                   or mount.
+               Lock flag in block 0 or 1 of every volume. Use
+                   test and set operation to test if volume
+                   locked.  Must have old drive firmware change
+                   to support new test and set/clear operation.
+               Locked volume has user's number for drive in
+                   volume table entery for locked volume.
+                   Locking host writes.
+               Unlock clears lock flag and clears number from
+                   volume table entry.
+         Spool driver - single printer/single file
+               open first write
+               close call to driver
+                   unitstatus, iocontrol
+               close on program exit or file close
+                   MSDOS ??
+               pipe errors - close or purge?
+               Concept - get data from DRV.EPRNT like DRV.APIO
+                   Mary wrote.
+         Unitclose/Unitopen on Concept - spool and vol lock
+         Net mgt software - permanent mgrs on socket 80 and 90
+               to manage asynch packet receipt.  Do Const 2
+               protocol name receipt and response.
+               Need interrupting transporters.
+               Requires transporter driver.
+         New transporter cards have 9B transporters by using
+               extra 2716/2732 and 8A 6801.
+         Network OS's
+               Softech's Liaison
+                   We have a working version of the system.  It
+                   works with our disk server.  We must find out
+                   if Constellation 2 drive management works with
+                   the their system.
+               MSDOS 3.0
+                   When will Microsoft do dos 3.
+                   How can we influence them to do what we want
+                   with our net?  Can we work directly with them?
+                   Can we get their newest design specs and a
+                   version of the system when they have it
+                   running?
+
+         Futures :
+
+         Speed up read/writes on drives
+               read whole track for sequential I/O
+         ECC on Bank

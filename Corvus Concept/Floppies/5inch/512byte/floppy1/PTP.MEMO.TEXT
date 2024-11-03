@@ -1,0 +1,41 @@
+
+
+         To:   Distribution
+         From: Keith Ball
+         date: 8-February-1984
+
+         Re:   Physical transporter driver specification
+
+         Attached is a preliminary version of the physical transporter
+         driver specification.  A couple of the sections are not
+         completely filled out.  However, it contains most everything
+         I wanted to say.
+
+         Some paragraphs are marked with "****" or "????".   These
+         indicate ideas that I have been considering or were proposed
+         that are contrary to the specification.  They mainly involve
+         setup receive interrupts.  I feel it is better to have the
+         driver only call the user for a receive indication and not
+         for a setup complete.  If you have an opinion and a
+         justification for it I would appreciate it with your written
+         comments.
+
+         Please, return your comments to me as soon as possible.
+
+         Distribution
+
+         Phil Belanger
+         Sean Findley
+         Bruce Kendall
+         Jim Lieb
+         Keith Odom
+         Denise Pitsch
+         Steve Schwartz
+         Steve Stovall
+         Robin Yonash
+         Bob Wohnoutka
+
+
+
+
+

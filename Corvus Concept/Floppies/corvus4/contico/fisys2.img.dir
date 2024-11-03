@@ -1,0 +1,12 @@
+
+Directory of UCSD disk image file 'fisys2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FISYS2 has 4 files,  0 to 6 (6), eov 500, size 34, free 4
+
+ 1: CC.WP           Data  1-Feb-84    6- 396( 390), 199680+512= 200192 bytes
+ 2: KEYS.ISYS       Data  1-Feb-84  405- 438(  33), 16896+512= 17408 bytes
+ 3: SYSMSG          Data  1-Feb-84  438- 471(  33), 16896+397= 17293 bytes
+ 4: SYSTEM.UPDATE   Text  1-Feb-84  471- 475(   4),  2048+512=  2560 bytes

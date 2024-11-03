@@ -1,0 +1,20 @@
+
+Directory of UCSD disk image file 'bandsawPromSrc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 12 files,  0 to 6 (6), eov 500, size 0, free 12
+
+ 1: CC.PROM.AD.TEXT Text  3-Sep-82    6-  94(  88), 45056+512= 45568 bytes
+ 2: CC.PROM.DS.TEXT Text 20-Oct-82   94- 144(  50), 25600+512= 26112 bytes
+ 3: CC.PROM.EQ.TEXT Text  6-Jan-83  144- 166(  22), 11264+512= 11776 bytes
+ 4: CC.PROM.FD.TEXT Text 19-Jun-82  166- 248(  82), 41984+512= 42496 bytes
+ 5: CC.PROM.LD.TEXT Text 29-Jun-82  248- 274(  26), 13312+512= 13824 bytes
+ 6: CC.PROM.MB.TEXT Text 26-Jun-82  274- 296(  22), 11264+512= 11776 bytes
+ 7: CC.PROM.OD.TEXT Text 29-Jun-82  296- 340(  44), 22528+512= 23040 bytes
+ 8: PC.PROM.KB.TEXT Text  2-Feb-83  340- 370(  30), 15360+512= 15872 bytes
+ 9: PC.PROM.TEXT    Text  6-Jan-83  370- 436(  66), 33792+512= 34304 bytes
+10: PC.PROM         Data  6-Jan-83  436- 452(  16),  8192+512=  8704 bytes
+11: IOSLOTS.TEXT    Text  6-Jan-83  452- 486(  34), 17408+512= 17920 bytes
+12: IONOTES.TEXT    Text  6-Jan-83  486- 500(  14),  7168+512=  7680 bytes

@@ -1,0 +1,12 @@
+
+Directory of UCSD disk image file 'ccutil#4.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 4 files,  0 to 6 (6), eov 500, size 15, free 4
+
+ 1: ACCMGR          Data 20-Sep-83    6- 123( 117), 59904+512= 60416 bytes
+ 2: DRIVEMGR        Data 20-Sep-83  123- 256( 133), 68096+512= 68608 bytes
+ 3: PARMGR          Data 20-Sep-83  256- 358( 102), 52224+512= 52736 bytes
+ 4: USERMGR         Data 20-Sep-83  358- 485( 127), 65024+512= 65536 bytes

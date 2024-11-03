@@ -1,0 +1,447 @@
+
+{---------------------------------------------------------------------------------------}
+{ UNIT:         CVTutils: Corvus Volume table utilities                                 }
+{                                                                                       }
+{ Copyright 1982 by Corvus Systems, Inc.                                                }
+{                                                                                       }
+{ AUTHOR:       Donna Ono                                                               }
+{                                                                                       }
+{ PURPOSE:      Provides the user interface level with access to the Corvus Volume      }
+{               tables.                                                                 }
+{                                                                                       }
+{ RESTRICTIONS: PROCEDURE CVTinit must be invoked before any other procedures in this   }
+{               unit may be called.                                                     }
+{                                                                                       }
+{               The user interface must lock the semaphore on all of the Corvus Volume  }
+{               tables (see SysMgrSem in unit SysDefs) immediately upon successful      }
+{               return from CVTinit.  If a semaphore was already locked an the previous }
+{               slot, it must be unlocked before a semaphore is locked on the new slot. }
+{                                                                                       }
+{ REVISION HISTORY:                                                                     }
+{               24-May-82       DSO     Unit created.                                   }
+{               24-May-82       DSO     Changed to use units in /CCLIB/CClib.OBJ.       }
+{               03-Jun-82       DSO     Changed to use units in /CCDECLS.               }
+{               09-Jun-82       DSO     Added name and password encryption.             }
+{               10-Jun-82       DSO     Added multiple disk server support.             }
+{---------------------------------------------------------------------------------------}
+
+UNIT CVTutils;
+
+INTERFACE
+
+USES    {CVTutils public}
+   {$U /CCLIB/CClib.OBJ       } CCdefn,         { general type declarations             }
+   {$U /CCDECLS/ERRORS.OBJ    } ERRORS,         { error codes                           }
+   {$U /CCDECLS/CCdrvIO.OBJ   } CCdrvIO,        { drive I/O utilities                   }
+   {$U /CCDECLS/CCdrvU1.OBJ   } CCdrvU1,        { miscellaneous drive utilities         }
+   {$U /CCDECLS/CVtables.OBJ  } CVtables,       { Corvus Volume table declarations      }
+   {$U /CCDECLS/CVsystab.OBJ  } CVsystab,       { Corvus Volume table declarations      }
+   {$U /CCDECLS/NIutil.OBJ    } NIutil,         { network info utilities                }
+   {$U /CCDECLS/CVcrypt.OBJ   } CVcrypt,        { Name & Password encryption/decryption }
+   {$U /CCDECLS/CCtblrtn.OBJ  } CCtblrtn,       { Corvus Volume table primitives        }
+   {$U /CCDECLS/SysDefs.OBJ   } SysDefs;        { Constellation II definitions          }
+
+CONST   {CVTutils public}
+   CVTrev       = '1.0';
+
+PROCEDURE CVTinit       {CVTutils public}
+   ( {input}      SltNum:       INTEGER;
+                  Debug:        BOOLEAN;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE SelectDrive   {CVTutils public}
+   ( {input}      DrvNum:       INTEGER;
+     {output} VAR RetCod:       INTEGER
+   );
+
+FUNCTION  CountDrive    {CVTutils public}
+     {input}
+     {output}
+     {result}           :       INTEGER;
+
+PROCEDURE GetNetLoc     {CVTutils public}
+   ( {input}
+     {output} VAR NetLoc:       CDaddr
+   );
+
+PROCEDURE NAlstrec      {CVTutils public}
+   ( {input}      BegRec:       INTEGER;
+     {output} VAR RetCod:       INTEGER;
+              VAR RecCnt:       INTEGER;
+              VAR NAbuf:        CVsystbl
+   );
+
+PROCEDURE NAgetrec      {CVTutils public}
+   ( {in/out}     NArec:        NAtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE NUlstrec      {CVTutils public}
+   ( {input}      BegRec:       INTEGER;
+     {output} VAR RetCod:       INTEGER;
+              VAR RecCnt:       INTEGER;
+              VAR NUbuf:        CVsystbl
+   );
+
+PROCEDURE NUgetrec      {CVTutils public}
+   ( {in/out} VAR NUrec:        NUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE NUputrec      {CVTUTILS public}
+   ( {input}      NUrec:        NUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE NUdelrec      {CVTutils public}
+   ( {input}      NUrec:        NUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE NUaddrec      {CVTutils public}
+   ( {input}      NUrec:        NUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DUlstrec      {CVTutils public}
+   ( {input}      BegRec:       INTEGER;
+     {output} VAR RetCod:       INTEGER;
+              VAR RecCnt:       INTEGER;
+              VAR DUbuf:        CVsystbl
+   );
+
+PROCEDURE DUgetrec      {CVTutils public}
+   ( {in/out} VAR DUrec:        DUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DUputrec      {CVTUTILS public}
+   ( {input}      DUrec:        DUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DUdelrec      {CVTutils public}
+   ( {input}      DUrec:        DUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DUaddrec      {CVTutils public}
+   ( {input}      DUrec:        DUtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DAlstrec      {CVTutils public}
+   ( {input}      BegRec:       INTEGER;
+     {output} VAR RetCod:       INTEGER;
+              VAR RecCnt:       INTEGER;
+              VAR DAbuf:        CVsystbl
+   );
+
+PROCEDURE DAgetrec      {CVTutils public}
+   ( {in/out} VAR DArec:        DAtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DAputrec      {CVTUTILS public}
+   ( {input}      DArec:        DAtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DAdelrec      {CVTutils public}
+   ( {input}      DArec:        DAtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DAaddrec      {CVTutils public}
+   ( {input}      DArec:        DAtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DVlstrec      {CVTutils public}
+   ( {input}      BegRec:       INTEGER;
+     {output} VAR RetCod:       INTEGER;
+              VAR RecCnt:       INTEGER;
+              VAR DVbuf:        CVsystbl
+   );
+
+PROCEDURE DVgetrec      {CVTutils public}
+   ( {in/out} VAR DVrec:        DVtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DVputrec      {CVTUTILS public}
+   ( {input}      DVrec:        DVtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DVdelrec      {CVTutils public}
+   ( {input}      DVrec:        DVtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+PROCEDURE DVaddrec      {CVTutils public}
+   ( {input}      DVrec:        DVtype;
+     {output} VAR RetCod:       INTEGER
+   );
+
+{$P}
+IMPLEMENTATION
+
+TYPE    {private}
+   ADSrec       = RECORD
+                     HostNo:    Byte;
+                     ConDrvCnt: INTEGER;
+                     END;
+
+   ADStype      = PACKED ARRAY[1..64] OF ADSrec;
+
+VAR     {private}
+   CVTdebug:    BOOLEAN;        { enables debug statements in CVTinit                   }
+   CurNetLoc:   CDaddr;         { current network address (READ-ONLY template)          }
+   ADScnt:      INTEGER;        { number of active disk servers                         }
+   ADSinfo:     ADStype;        { host number and drive count of all active disk servers}
+                                {    (i.e., of all active stations of type file_server) }
+   CnvBuf:      CVsystbl;       { for converting from NAtype to SndRcvStr               }
+                                {    and from NU, DU, DA, and DVtype to TBLvarbuf       }
+   NAreclen:    INTEGER;        { length of a NA record in bytes                        }
+   NAbufsiz:    INTEGER;        { NAbuf size in NA records (for NAlstrec)               }
+   NUinfo:      TBLtype;        { NU table info needed by TblRtn primitives             }
+   NUreclen:    INTEGER;        { length of a NU record in bytes                        }
+   NUbufsiz:    INTEGER;        { NUbuf size in NU records (for NUlstrec)               }
+   DUinfo:      TBLtype;        { DU table info needed by TblRtn primitives             }
+   DUreclen:    INTEGER;        { length of a DU record in bytes                        }
+   DUbufsiz:    INTEGER;        { DUbuf size in DU records (for DUlstrec)               }
+   DAinfo:      TBLtype;        { DA table info needed by TblRtn primitives             }
+   DAreclen:    INTEGER;        { length of a DA record in bytes                        }
+   DAbufsiz:    INTEGER;        { DAbuf size in DA records (for DAlstrec)               }
+   DVinfo:      TBLtype;        { DV table info needed by TblRtn primitives             }
+   DVreclen:    INTEGER;        { length of a DV record in bytes                        }
+   DVbufsiz:    INTEGER;        { DVbuf size in DV records (for DVlstrec)               }
+
+   DADUinfo:    TBLtype;        { DAdelUSR uses a different key field than the others   }
+   DADVinfo:    TBLtype;        { DAdelVOL uses a different key field than the others   }
+   DVGRinfo:    TBLtype;        { DVgetrec uses a different key field than the others   }
+
+   Random:      BOOLEAN;        { directs PROCEDURE TBLsearch to scan till end of table }
+   Ordered:     BOOLEAN;        { directs PROCEDURE TBLsearch to scan till larger value }
+   DEcrypt:     CVprivate;                      { used to pass decrypted Name or Psw    }
+   ENcrypt:     CVprivate;                      { used to pass encrypted Name or Psw    }
+
+FUNCTION  OSactsrv      {private}
+    : INTEGER;          EXTERNAL;
+
+PROCEDURE NAinit        {private}
+   ( {input}
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+
+PROCEDURE NUinit        {private}
+   ( {input}
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+
+PROCEDURE DUinit        {private}
+   ( {input}
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+
+PROCEDURE DAinit        {private}
+   ( {input}
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+
+PROCEDURE DVinit        {private}
+   ( {input}
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+
+PROCEDURE DAdelUSR      {private}
+   ( {input}      DArec:        DAtype;
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+
+PROCEDURE DAdelVOL      {private}
+   ( {input}      DArec:        DAtype;
+     {output} VAR RetCod:       INTEGER
+   );                   FORWARD;
+(*
+PROCEDURE DumpTBLtype   {private}
+   ( {input}      AdrNam:       String80;
+                  RecAdr:       TBLtype
+     {output}
+   );                   FORWARD;
+*)
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CVTinit                                                                 }
+{                                                                                       }
+{ INPUT:        SltNum:         INTEGER                                                 }
+{               Debug:          BOOLEAN (for debug only)                                }
+{                                                                                       }
+{ OUTPUT:       RetCod:         INTEGER (OK, SlotIOerror, CVTnotfound, CDread codes)    }
+{                  SlotIOerror => slot number SltNum                                    }
+{                                 does not contain an LocalDisk or OmninetDisk interface}
+{                  DriveError  => primary drive on slot number SltNum                   }
+{                                 is not connected to a Corvus drive                    }
+{                  CVTnotfound => primary drive on slot number SltNum                   }
+{                                 is connected to an uninitialized Corvus drive         }
+{                                                                                       }
+{ DESCRIPTION:  Initializes private variables for slot number SltNum.  Initializes the  }
+{               private variables for the NETWORK.ACTIVE and NETWORK.USER tables.       }
+{               Initializes the private variables for the DRIVE.USER, DRIVE.ACCESS, and }
+{               DRIVE.VOLUME tables on drive 1 via public PROCEDURE SelectDrive.        }
+{               Initializes the CCtblrtn and CVcrypt units.                             }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CVTinit;      {public}
+
+VAR
+   SAVEcnl:     CDaddr;         { saves value of CurNetLoc while we futz w/CVT variables}
+   NAreccnt:    INTEGER;        { returned by NIgetstation                              }
+   NAbuf:       NAarray;        { returned by NIgetstation                              }
+   DRreccnt:    INTEGER;        { returned by NIgetdrive                                }
+   DRbuf:       DRarray;        { returned by NIgetdrive (currently unused)             }
+   NArecnum:    INTEGER;        { index into NAbuf                                      }
+   ADSnum:      INTEGER;        { index into ADSinfo                                    }
+
+BEGIN   {PROCEDURE CVTinit}
+
+CVTdebug := Debug;
+                      { IF CVTdebug THEN                       }
+                      {    WRITELN(OUTPUT,'CVTinit: ',SltNum); }
+
+{-------------------------------------------------------------------------------------}
+{ Initialize all network address fields (except DriveNo and BlkNo) in CurNetLoc.      }
+{ Make sure that slot #SltNum contains an interface of type LocalDisk or OmninetDisk. }
+{-------------------------------------------------------------------------------------}
+
+CurNetLoc.SlotNo    := SltNum;
+CurNetLoc.Kind      := CDslotinfo(SltNum);
+CurNetLoc.NetNo     := 1;               { currently unused }
+CASE CurNetLoc.Kind OF
+   LocalDisk:
+      CurNetLoc.StationNo := -127;
+   OmninetDisk:
+      CurNetLoc.StationNo := OSactsrv{*};
+   OTHERWISE:
+      BEGIN
+      RetCod := SlotIOerror;
+      EXIT(CVTinit);
+      END;
+   END;
+CurNetLoc.DriveNo   := 1;       { no drive was selected yet }
+CurNetLoc.BlkNo     := 0;       { to avoid range errors   }
+
+{---------------------------------------------------------------------------------------}
+{ All CurNetLoc fields are current except for BlkNo, which is different for each table. }
+{ Save a copy of CurNetLoc while computing ADScnt and ADSinfo[1..ADScnt].               }
+{---------------------------------------------------------------------------------------}
+
+SAVEcnl := CurNetLoc;
+
+{----------------------------------------}
+{ Compute ADScnt and ADSinfo[1..ADScnt]. }
+{----------------------------------------}
+                      { IF CVTdebug THEN                                                     }
+                      {    WRITELN(OUTPUT,'CVTinit: compute ADScnt and ADSinfo[1..ADScnt]'); }
+
+IF CurNetLoc.Kind = LocalDisk THEN
+   BEGIN  { flat cable only supports 1 disk server }
+   ADScnt := 1;
+   ADSinfo[ADScnt].HostNo := CurNetLoc.StationNo;
+   RetCod := NIgetdrive(CurNetLoc,
+                        DRreccnt,DRbuf);
+   IF RetCod < 0 THEN
+      EXIT(CVTinit);
+   ADSinfo[ADScnt].ConDrvCnt := DRreccnt;
+   END    { flat cable only supports 1 disk server }
+ELSE
+   BEGIN  { get disk server/drive configuration }
+   RetCod := NIgetstation(SltNum,File_Server,
+                          NAreccnt,NAbuf);
+   IF RetCod < 0 THEN
+      EXIT(CVTinit);
+
+   ADScnt := 0;
+
+   FOR NArecnum := 1 TO NAreccnt DO
+      IF NAbuf[NArecnum].HostType = file_server THEN
+         BEGIN  { see if next NArec returned by NIgetstation represents a disk server }
+         ADScnt := ADScnt + 1;
+         ADSinfo[ADScnt].HostNo := NAbuf[NArecnum].HostNo;
+         CurNetLoc.StationNo    := NAbuf[NArecnum].HostNo;
+         RetCod := NIgetdrive(CurNetLoc,
+                              DRreccnt,DRbuf);
+         IF RetCod < 0 THEN
+            EXIT(CVTinit);
+         ADSinfo[ADScnt].ConDrvCnt := DRreccnt;
+         END;   { see if next NArec returned by NIgetstation represents a disk server }
+   END;   { get disk server/drive configuration }
+
+                       { IF CVTdebug THEN                                               }
+                       {    BEGIN                                                       }
+                       {    WRITELN(OUTPUT,'CVTINIT: ADScnt = ',ADScnt);                }
+                       {    WRITELN(OUTPUT,'       host #       drive count');          }
+                       {    FOR ADSnum := 1 TO ADScnt DO                                }
+                       {       WITH ADSinfo[ADSnum] DO                                  }
+                       {          WRITELN(OUTPUT,ADSnum:2,'   ',HostNo,'   ',ConDrvCnt); }
+                       {    END;                                                        }
+
+{------------------------------------------------------------------------------}
+{ Check that the primary drive of each active disk server (except the current) }
+{ has been initialized with the necessary Corvus Volume tables.                }
+{------------------------------------------------------------------------------}
+
+CurNetLoc := SAVEcnl;
+
+FOR ADSnum := 1 TO ADScnt DO
+   BEGIN
+   CurNetLoc.StationNo := ADSinfo[ADSnum].HostNo;
+   IF CurNetLoc.StationNo <> SAVEcnl.StationNo THEN
+      BEGIN
+
+      {-----------------------------------------------------------}
+      { For each Corvus Volume table XX duplicated on the primary }
+      { drive of each disk server, call private procedure XXinit  }
+      { to perform the following:                                 }
+      {    XXinfo.NetInfo       := NetLoc;                        }
+      {    XXinfo.NetInfo.BlkNo := appropriate block number;      }
+      {    XXinfo.TblSize       := XX table size in blocks;       }
+      {-----------------------------------------------------------}
+
+      NUinit(
+             RetCod);
+                                        { IF CVTdebug THEN                 }
+                                        {    DumpTBLtype('NUinfo',NUinfo); }
+      IF RetCod <> OK THEN
+         EXIT(CVTinit);
+
+      {---------------------------------------------------------------}
+      { Call public procedure SelectDrive to set CurNetLoc.DriveNo to }
+      { 1, indicating the primary drive on the current disk server.   }
+      {                                                               }
+      { For each drive-specific Corvus Volume table XX, SelectDrive   }
+      { calls private procedure XXinit to perform the following:      }
+      {    XXinfo.NetInfo       := CurNetLoc;                         }
+      {    XXinfo.NetInfo.BlkNo := appropriate block number;          }
+      {    XXinfo.TblSize       := XX table size in blocks;           }
+      {---------------------------------------------------------------}
+
+      CurNetLoc.DriveNo := 0;   { if CurNetLoc.DriveNo = 1, SelectDrive(1) = no-op }
+                      { IF CVTdebug THEN                                   }
+                      {    WRITELN(OUTPUT,'CVTinit: call SelectDrive(1)'); }
+      SelectDrive(1,
+                  RetCod);
+                      { IF CVTdebug THEN                                            }
+                      {    WRITELN(OUTPUT,'CVTinit: SelectDrive RetCod = ',RetCod); }
+      IF RetCod <> OK THEN
+         EXIT(CVTinit);
+      END;
+   END;
+
+CurNetLoc := SAVEcnl;
+
+{------------------------------------------------------------------------------------}
+{ In checking that the primary drive of each active disk server (except the current) }

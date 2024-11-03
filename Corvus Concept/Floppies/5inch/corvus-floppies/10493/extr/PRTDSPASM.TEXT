@@ -1,0 +1,90 @@
+;
+; file : prtdspasm.text
+; date : 04-August-1983 kb
+;
+
+; Data structure definitions
+;
+PIDentry EQU       0                   ;Protocol table entry
+Active   EQU       PIDentry            ;byte - active entry boolean
+ScktNum  EQU       Active+1            ;byte - socket number (0=$80,1=$90,etc.)
+ProtoID  EQU       ScktNum+1           ;word - protocol ID
+MaxBfSiz EQU       ProtoID+2           ;word - max. buf size used by protocol
+UserData EQU       MaxBfSiz+2          ;lint - user defined data to return to pmgr
+RcvRtn   EQU       UserData+4          ;lint - entry to proto mgr rcv int routine
+RegA4    EQU       RcvRtn+4            ;lint - proto mgr A4 register
+RegA5    EQU       RegA4+4             ;lint - proto mgr A5 register
+PIDElen  EQU       RegA5+4             ;length of Protocol table entry
+
+ResltVec EQU       0                   ;Transporter cmd blk result vector
+RsltCode EQU       ResltVec            ;byte - transporter result code
+SrcHost  EQU       RsltCode+1          ;byte - net source host number
+DtaLen   EQU       SrcHost+1           ;word - buffer data length
+;;;UCdata EQU DtaLen+2 ;array[0..255] of Byte; not used by $80 & $90 }
+RsltLen  EQU       DtaLen+2            ;length of result vector
+
+BCentry  EQU       0                   ;Buffer Control Block entry
+GotBuff  EQU       BCentry             ;byte - buffer attached boolean
+InUse    EQU       GotBuff+1           ;byte - buffer in use boolean
+BuffrAdr EQU       InUse+1             ;lint - address of buffer
+Result   EQU       BuffrAdr+4          ;array - result vector
+BCElen   EQU       Result+RsltLen      ;length of entry
+    page
+; function and procedures
+;
+         GLOBAL    getA4A5, CallUserInt, DisInts, EnbInts
+
+;
+; getA4A5 - returns the values in registers A4 and A5
+;
+;   procedure getA4A5(var RegA4,RegA5: Longint);
+;
+getA4A5  MOVEM.L   (SP)+, A0-A2        ;get return address, ptr RegA5, ptr RegA4
+         MOVE.L    A4, (A2)            ;save A4 in RegA4
+         MOVE.L    A5, (A1)            ;save A5 in RegA5
+         JMP       (A0)                ;return
+;
+; CallUserInt - call protocol mgr's recv interrupt procedure
+;
+;   procedure CallUserInt(var PIDent: PIDentry; var BCtl: BCentry);
+;
+CallUserInt
+         MOVEM.L   (SP)+, A0-A2        ;get return addr, ptr BCtl, ptr PIDent
+         MOVE.L    A0, -(SP)           ;restore return address
+         MOVEA.L   RegA4(A2), A4       ;interrupt rtn does not use A4
+         MOVEA.L   RegA5(A2), A5       ;   and A5
+         MOVEA.L   RcvRtn(A2), A0      ;protocol mgr rtn address
+         MOVE.L    UserData(A2), -(SP) ;parameters are userdata
+         MOVE.L    A1, -(SP)           ;   and buffer ctrl blk entry
+         JMP       (A0)                ;call user user and then return
+;
+; DisInts - disable interrupts if current level is less than value passed
+;           Returns the old SR if disabled else returns 0.
+;
+; function DisInts(SR: integer) : integer;
+;
+DisInts  MOVE.L    (SP)+, A0           ;get return address
+         MOVE.W    (SP)+, D0           ;get new SR
+         MOVE.W    D0, D2              ;save for setting
+         MOVE.W    SR, D1              ;get current SR
+         CLR.W     (SP)                ;assume is higher
+         ANDI.W    #$0700, D0          ;remove other SR info
+         ANDI.W    #$0700, D1          ;remove other SR info
+         CMP.W     D0, D1              ;should disable?
+         BHI.S     DITexit             ;no, higher don't enable other ints
+         MOVE.W    SR, (SP)            ;return old SR
+         MOVE.W    D2, SR              ;disable interrupts at specified level
+DITexit  RTS
+    page
+;
+; EnbInts - put parameter into SR if it is not 0
+;
+; procedure EnbInts(SR: integer);
+;
+EnbInts  MOVE.L    (SP)+, A0           ;get return address
+         MOVE.W    (SP)+, D0           ;get new SR
+         BEQ.S     EITexit             ;if zero then exit
+         MOVE.W    D0, SR              ;else restore saved SR
+EITexit  RTS
+
+         END

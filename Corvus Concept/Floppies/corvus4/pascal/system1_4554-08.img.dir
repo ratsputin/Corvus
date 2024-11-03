@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'system1_4554-08.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume SYSTEM1 has 13 files,  0 to 6 (6), eov 500, size 151, free 13
+
+ 1: SYSTEM.PASCAL   Data 15-Nov-82    6- 128( 122), 62464+512= 62976 bytes
+ 2: SYSTEM.MISCINFO Data  6-Jan-83  128- 129(   1),   512+226=   738 bytes
+ 3: SYSTEM.INTERP   Data  9-Feb-83  129- 153(  24), 12288+512= 12800 bytes
+ 4: SYSTEM.LIBRARY  Data  7-Jan-83  153- 160(   7),  3584+512=  4096 bytes
+ 5: SYSTEM.EDITOR   Code  7-Jun-82  160- 207(  47), 24064+512= 24576 bytes
+ 6: SYSTEM.FILER    Code  7-Jun-82  207- 245(  38), 19456+512= 19968 bytes
+ 7: SYSTEM.LINKER   Code  1-Apr-82  245- 272(  27), 13824+512= 14336 bytes
+ 8: LIBRARY.CODE    Code  1-Apr-82  272- 285(  13),  6656+512=  7168 bytes
+ 9: SAMPLEGOTO.TEXT Text 22-Jun-82  285- 291(   6),  3072+512=  3584 bytes
+10: PATCH.CODE      Code 18-May-82  291- 330(  39), 19968+512= 20480 bytes
+11: DISKSIZE.CODE   Code 18-May-82  330- 333(   3),  1536+512=  2048 bytes
+12: SCREENTEST.CODE Code  7-Jun-82  333- 346(  13),  6656+512=  7168 bytes
+13: ERRORHANDL.CODE Code  7-Jun-82  346- 349(   3),  1536+512=  2048 bytes

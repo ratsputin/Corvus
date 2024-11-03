@@ -1,0 +1,42 @@
+unit PrtclMgr;
+
+{**********************************************************}
+{                                                          }
+{ Development program for Protocol Manager interface.      }
+{ file : pmgrunit.text                                     }
+{ date : 17-August-1983  kb                                }
+{                                                          }
+{ PROBLEMS :                                               }
+{                                                          }
+{**********************************************************}
+Interface
+
+Uses
+    {$U /CCOS/OS.GLOBALS} Globals,
+    {$U       NETGLOBALS} NetGlobals;
+
+{initialization}
+procedure PMgrInit;
+
+Implementation
+
+Var
+    PrtMgrTbl: PMtable;
+
+procedure PMgrInit;
+    Var
+        pPM: pDEVDATA;
+        i: Integer;
+
+    begin
+    {init table to empty}
+    for i := 1 to PMmaxents do
+        PrtMgrTbl[i].PMActive := FALSE;
+
+    {put address of table in SysCom}
+    pPM := pointer( pPMstuff );
+    pPM^.IOres := 0;  {for development}
+    pPM^.pPMT := @PrtMgrTbl;
+    end; {PMgrInit}
+
+end.  {PrtclMgr}

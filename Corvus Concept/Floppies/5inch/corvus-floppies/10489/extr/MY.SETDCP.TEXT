@@ -1,0 +1,1204 @@
+{ CC.SETDCP.TEXT ------------------------------------------------------}
+{
+{       CC.SETDCP -- Set printer and datacom characteristics program
+{
+{       Copyright 1983 Corvus Systems, Inc.
+{                      San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  03-01-82  MB   Original program
+{       v 1.1  07-10-82  LEF  CC.SETPRT
+{       v 2.0  12-13-82  KB   made for datacom also
+{       v 2.1  04-08-83  KB   increased size of ALT table string list
+{       v 3.0  11-29-83  MEB  modified ALT table
+{
+{----------------------------------------------------------------------}
+
+program CCsetDCP;
+
+USES
+{$U /CCUTIL/CCLIB} CCdefn, CCdcpIO, CCwndIO, CClblIO,
+                   CClngInt, CCcrtIO,
+{$U    BLDALT.EQU} BldAltEQU,
+{$U    BLDACT.EQU} BldActEQU;
+
+const ESC = $1B;
+      MAXSETFNCS = 10;
+      LBLSMAIN   = 0;
+      LBLSBAUD   = 1;
+      LBLSPRTY   = 2;
+      LBLSPORT   = 3;
+      LBLSCHSZ   = 4;
+      LBLSHNDS   = 5;
+      LBLSPTYP   = 6;
+      LBLSLINE   = 7;
+      LBLSUNIT   = 8;
+      LBLSTEST   = 9;
+      LBLSPRNT   = 10;
+
+      TYPEALT    =  0;   {printer table type codes}
+      TYPEACT    =  1;
+
+      TenCPI     =  1;
+      TwelveCPI  =  0;
+
+      SixLPI     =  1;
+      EightLPI   =  0;
+
+      ON         =  TRUE;
+      OFF        =  FALSE;
+
+type  Labels = record
+         LBL : array[1..10] of LblKeyStr; { labels }
+         FNC : array[1..10] of LblRtnStr; { return strings }
+         end;
+
+      stringtable = array[1..10] of pstring64;
+
+var   ch : char;
+      baudrate,parity,port,charsize,handshake,unittype : integer;
+      IOrc : integer;
+      LB : array[LBLSMAIN..MAXSETFNCS] of Labels;
+      quit : boolean;
+      kybd : interactive;
+      argno: integer; parm: string64;
+      haveEpson,haveCItoh,haveNEC,haveIDS: boolean;
+      CpiState, LpiState: integer;
+      ALFstate: boolean;
+
+function  pOSdevNam(unt: integer): pString80; EXTERNAL;
+procedure LoadACT(parm: string64); FORWARD;
+procedure LoadALT(parm: string64); FORWARD;
+
+
+FUNCTION GetCurALF: BOOLEAN;
+    var ws : WrBufStatus; ior : INTEGER;
+    BEGIN
+    ior := DCPWrStatus(ws);
+    GetCurALF := ws.AutoLinFeed;
+    END; {GetCurALF}
+
+procedure uprcase (pstring: pstring64);
+    var i: integer;
+    begin
+    for i := 1 to length(pstring^) do
+        if (pstring^[i] >= 'a') and (pstring^[i] <= 'z')
+           then pstring^[i] := chr(ord(pstring^[i]) - 32);
+    end; {uprcase}
+
+procedure DispError(err : integer);
+    begin
+    if err <> 0 then begin
+        case err of
+           IOEinvdev{02}: writeln('Invalid unit number/invalid device');
+           IOEioreq {03}: writeln('Invalid I/O request');
+
+           IOEnodtc {46}: writeln('DataComm driver not available');
+
+           IOEtblid {50}: writeln('Invalid table entry ID');
+           IOEtblfl {51}: writeln('Table full');
+           IOEtbliu {52}: writeln('Table entry in use');
+           IOEuiopm {54}: writeln('Invalid unit I/O parameter');
+           IOEprmln {55}: writeln('Invalid parameter block length');
+           IOEfnccd {56}: writeln('Invalid function code');
+
+           IOEirdsbl{60}: writeln('Input to read buffer disabled');
+           IOEordsbl{61}: writeln('Output to read buffer disabled');
+           IOEiwdsbl{62}: writeln('Input to write buffer disabled');
+           IOEowdsbl{63}: writeln('Output to write buffer disabled');
+           IOEbszerr{64}: writeln('Buffer size error');
+           IOEwszerr{65}: writeln('Write size error');
+           IOErszerr{66}: writeln('Read size error');
+           IOEuarter{67}: writeln('UART hardware error');
+           IOEpaderr{68}: writeln('Proportional spacing error');
+           Otherwise:     writeln('IORESULT =',err:4);
+           end; { case }
+        quit := true;
+        end;
+    end;
+
+procedure LoadDriver(unitno: integer);
+    var i: integer; p: pString80;
+        s1,s2,s3: string64; st: stringtable;
+    begin
+    st[1] := @s1; st[2] := @s2; st[3] := @s3;
+    case unitno of
+       PRINTERUNIT: begin
+                    p := pOSdevNam (PRT); p^ := '';
+                    s1 := '!DRV.EPRNT'; s2 := 'PRINTER';
+                    s3 := '6';
+                    end;
+       DTACOM1UNIT: begin
+                    p := pOSdevNam (DC1); p^ := '';
+                    s1 := '!DRV.DTACOM'; s2 := 'DTACOM1';
+                    s3 := '31';
+                    end;
+       DTACOM2UNIT: begin
+                    p := pOSdevNam (DC2); p^ := '';
+                    s1 := '=31'; s2 := 'DTACOM2';
+                    s3 := '32';
+                    end;
+       end;
+    i := call ('!ASSIGN',input,output,st,3);
+    CCdcpIOinit;
+    end;
+
+procedure TurnOn(lset : integer);
+var j : integer;
+begin
+   if lset in [LBLSMAIN..MAXSETFNCS] then begin
+      LblsInit;
+      for j := 1 to 10 do begin
+         with LB[lset] do
+             IOrc := LblSet (j-1,LBL[j],FNC[j]);
+         if IOrc <> 0 then begin
+            writeln(chr(7),'Error ',IOrc:1,' setting label ',j:1);
+            quit := true; end;
+         end;
+      if not quit then LblsOn;
+      end;
+end;  { Turn On label set }
+
+procedure GetStatus;
+type str24 = string[24];
+var baudst,parst,dcst,chszst,protst,unitst : str24;
+
+   procedure TransParms(var baudst,parst,dcst,chszst,protst,unitst : str24);
+     { translate status values into strings }
+   begin
+      baudst := ''; parst := ''; dcst := ''; chszst := '';
+      protst := ''; unitst := '';
+      case baudrate of
+         BAUD300 : baudst := '300';
+         BAUD600 : baudst := '600';
+         BAUD1200: baudst := '1200';
+         BAUD2400: baudst := '2400';
+         BAUD4800: baudst := '4800';
+         BAUD9600: baudst := '9600';
+         BAUD19200: baudst := '19200';
+         end;
+      case parity of
+         PARDISABLED: parst := 'Disabled';
+         PARODD     : parst := 'Odd';
+         PAREVEN    : parst := 'Even';
+         PARMARKXNR : parst := 'Mark Xmit/Ignore Rcv';
+         PARSPACEXNR: parst := 'Space Xmit/Ignore Rcv';
+         end;
+      case port of
+         PORT1 : dcst := '1';
+         PORT2 : dcst := '2';
+         end;
+      case charsize of
+         CHARSZ8 : chszst := '8 bits';
+         CHARSZ7 : chszst := '7 bits';
+         end;
+      case handshake of
+         LINECTSINVERTED: protst := 'Line/CTS/Inverted';
+         LINECTSNORMAL  : protst := 'Line/CTS/Normal';
+         LINEDSRINVERTED: protst := 'Line/DSR/Inverted';
+         LINEDSRNORMAL  : protst := 'Line/DSR/Normal';
+         LINEDCDINVERTED: protst := 'Line/DCD/Inverted';
+         LINEDCDNORMAL  : protst := 'Line/DCD/Normal';
+         XONXOFF        : protst := 'XON/XOFF';
+         ENQACK         : protst := 'ENQ/ACK';
+         ETXACK         : protst := 'ETX/ACK';
+         NOPROTOCOL     : protst := 'Protocols disabled';
+         end;
+      case unittype of
+         PRINTERUNIT : unitst := 'Printer';
+         DTACOM1UNIT : unitst := 'DataComm 1';
+         DTACOM2UNIT : unitst := 'DataComm 2';
+         end;
+   end;  { Trans Parms }
+
+begin
+   CrtAction(EraseALL);
+   IOrc := DCPStatus(baudrate,parity,port,charsize,handshake);
+   if IOrc <> 0
+       then DispError (IOrc)
+       else begin  { show on screen }
+          TransParms(baudst,parst,dcst,chszst,protst,unitst);
+          write ('  Baud rate: ',baudst, '  Parity: ',parst);
+          if unittype = PRINTERUNIT then write('  Port: ',dcst);
+          writeln;
+          write ('  Char size: ',chszst, '  Protocol: ',protst,
+                 '  Unit: ',unitst);
+          end;
+   writeln;
+   TurnOn(LBLSMAIN);
+end;  { Get Status }
+
+procedure SetupLabels;
+    var j,k: integer;
+        s: string[10];
+    begin
+    with LB[LBLSMAIN] do begin  { primary labels }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'BaudRate'; LBL[2] := 'Parity  ';
+                             LBL[4] := 'CharSize';
+       LBL[5] := 'Protocol'; LBL[6] := 'Unit    ';
+                             LBL[8] := 'TestMode';
+                             LBL[10] := 'Exit    ';
+       s := 'BPxCHUxMxE';
+       if (unittype = PRINTERUNIT) or (unittype = -1) then begin
+            LBL[3] := 'Port    '; s[3] := 'D';
+            LBL[7] := 'PrtrFunc'; s[7] := 'F';
+            LBL[9] := 'PrtrType'; s[9] := 'T';
+            end;
+       for j := 1 to 10 do begin  { set return strings }
+          FNC[j] := ' ';
+          FNC[j,1] := s[j]; end;
+       end;
+    with LB[LBLSBAUD] do begin  { Baud Rate labels }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := '300';      LBL[2]  := '600';
+       LBL[3] := '1200';     LBL[4]  := '2400';
+       LBL[5] := '4800';     LBL[6]  := '9600';
+       LBL[7] := '19200';
+                             LBL[10]  := 'NoChange';
+       end;
+    with LB[LBLSPRTY] do begin  { Parity labels }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'Disable '; LBL[2]  := 'Odd     ';
+       LBL[3] := 'Even    '; LBL[4]  := 'MrkX/NRc';
+       LBL[5] := 'SpcX/NRc';
+                             LBL[10] := 'NoChange';
+       end;
+    with LB[LBLSPORT] do begin  { Port labels }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'Port 1';   LBL[2]  := 'Port 2';
+                             LBL[10] := 'NoChange';
+       end;
+    with LB[LBLSCHSZ] do begin  { Charsize labels }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := '8 bits';   LBL[2]  := '7 bits';
+                             LBL[10] := 'NoChange';
+       if haveIDS then begin
+           LBL[6] := '10 CPI';
+           LBL[7] := '12 CPI';
+           LBL[8] := '16 CPI';
+           end;
+       end;
+    with LB[LBLSHNDS] do begin  { Handshake labels }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'Line    '; LBL[2]  := 'Xon/Xoff';
+       LBL[3] := 'Enq/Ack '; LBL[4]  := 'Etx/Ack ';
+       LBL[5] := 'NoProto ';
+                             LBL[10] := 'NoChange';
+       end;
+    with LB[LBLSPTYP] do begin  { Printer type }
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'Epson   '; LBL[2]  := 'NEC     ';
+       LBL[3] := 'IDS     '; LBL[4]  := 'C.Itoh  ';
+                             LBL[10] := 'NoChange';
+       end;
+    with LB[LBLSLINE] do begin  { Line Handshake labels}
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'CTSinver'; LBL[2]  := 'CTSnorml';
+       LBL[3] := 'DSRinver'; LBL[4]  := 'DSRnorml';
+       LBL[5] := 'DCDinver'; LBL[6]  := 'DCDnorml';
+                             LBL[10] := 'NoChange';
+       end;
+    with LB[LBLSUNIT] do begin  { Unit type labels}
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'Printer '; LBL[3]  := 'DataCom1';
+       LBL[5] := 'DataCom2';
+                             LBL[10] := 'NoChange';
+       end;
+    with LB[LBLSTEST] do begin  { Test mode labels}
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := 'Send    '; LBL[5]  := 'Receive ';
+                             LBL[10] := 'Exit    ';
+       end;
+
+    with LB[LBLSPRNT] do begin  { Printer state labels}
+       for j := 1 to 10 do LBL[j] := '';
+       LBL[1] := '10 CPI  '; LBL[2]  := '12 CPI  ';
+       LBL[3] := '6 LPI   '; LBL[4]  := '8 LPI   ';
+       LBL[5] := 'LdAction'; LBL[6]  := 'LdAltChr';
+       LBL[7] := 'LF on   '; LBL[8]  := 'LF off  ';
+                             LBL[10] := 'Exit    ';
+       end;
+
+    s := '0123456789';
+    for k := 1 to MAXSETFNCS do
+      for j := 1 to 10 do begin  { set return strings }
+       LB[k].FNC[j] := ' ';
+       LB[k].FNC[j,1] := s[j]; end;
+    end;  { Setup Labels }
+
+procedure ParmEpson;
+    begin
+    baudrate  := BAUD4800;
+    parity    := PARDISABLED;
+    port      := PORT2;
+    charsize  := CHARSZ8;
+    handshake := LINEDSRNORMAL;
+    haveEpson := TRUE;
+    SetupLabels;
+    end;
+
+procedure ParmCItoh;
+    begin
+    baudrate  := BAUD4800;
+    parity    := PAREVEN;
+    port      := PORT2;
+    charsize  := CHARSZ8;
+    handshake := XONXOFF;
+    haveCItoh := TRUE;
+    SetupLabels;
+    end;
+
+procedure ParmNEC;
+    begin
+    baudrate  := BAUD1200;
+    parity    := PARSPACEXNR;
+    port      := PORT2;
+    charsize  := CHARSZ7;
+    handshake := XONXOFF;
+    haveNEC   := TRUE;
+    SetupLabels;
+    end;
+
+procedure ParmIDS;
+    begin
+    baudrate  := BAUD9600;
+    parity    := PARDISABLED;
+    port      := PORT2;
+    charsize  := CHARSZ8;
+    handshake := XONXOFF;
+    haveIDS   := TRUE;
+    SetupLabels;
+    end;
+
+procedure SetBaudRate;
+var ex: boolean;
+begin
+   TurnOn(LBLSBAUD);  { turn on baud rate labels }
+   ex := false;
+   repeat
+     read(kybd,ch);
+     case ch of
+        '0': baudrate := BAUD300;
+        '1': baudrate := BAUD600;
+        '2': baudrate := BAUD1200;
+        '3': baudrate := BAUD2400;
+        '4': baudrate := BAUD4800;
+        '5': baudrate := BAUD9600;
+        '6': baudrate := BAUD19200;
+        '9': ex := true;
+        end;
+     if baudrate >= 0 then ex := true;
+     until ex;
+end;
+
+procedure SetParity;
+var ex: boolean;
+begin
+   TurnOn(LBLSPRTY);  { turn on parity labels }
+   ex := false;
+   repeat
+      read(kybd,ch);
+      case ch of
+         '0': parity := PARDISABLED;
+         '1': parity := PARODD;
+         '2': parity := PAREVEN;
+         '3': parity := PARMARKXNR;
+         '4': parity := PARSPACEXNR;
+         '9': ex := true;
+         end;
+      if parity >= 0 then ex := true;
+      until ex;
+end;
+
+procedure SetDataCom;
+var ex: boolean;
+begin
+   TurnOn(LBLSPORT);  { turn on datacom labels }
+   ex := false;
+   repeat
+     read(kybd,ch);
+     case ch of
+        '0': port := PORT1;
+        '1': port := PORT2;
+        '9': ex := true;
+        end;
+     if port >= 0 then ex := true;
+     until ex;
+end;
+
+procedure SetCharSize;
+var ex: boolean; buf: array [1..4] of byte;
+begin
+   TurnOn(LBLSCHSZ);  { turn on datacom labels }
+   ex := false;
+   repeat
+      read(kybd,ch);
+      case ch of
+         '0': charsize := CHARSZ8;
+         '1': charsize := CHARSZ7;
+         '5': if haveIDS then begin
+                  buf[1] := 29; unitwrite (PRT,buf,1); ex := true; end;
+         '6': if haveIDS then begin
+                  buf[1] := 30; unitwrite (PRT,buf,1); ex := true; end;
+         '7': if haveIDS then begin
+                  buf[1] := 31; unitwrite (PRT,buf,1); ex := true; end;
+         '9': ex := true;
+         end;
+      if charsize >= 0 then ex := true;
+      until ex;
+end;
+
+procedure SetHandShake;
+var ex: boolean;
+
+   procedure SetLine;
+   begin
+     TurnOn(LBLSLINE);  { turn on Line handshake labels }
+     ex := false;
+     repeat
+        read(kybd,ch);
+        case ch of
+           '0': handshake := LINECTSINVERTED;
+           '1': handshake := LINECTSNORMAL;
+           '2': handshake := LINEDSRINVERTED;
+           '3': handshake := LINEDSRNORMAL;
+           '4': handshake := LINEDCDINVERTED;
+           '5': handshake := LINEDCDNORMAL;
+           '9': ex := true;
+           end;
+        if handshake >= 0 then ex := true;
+        until ex;
+   end;
+
+begin
+   TurnOn(LBLSHNDS);  { turn on main handshake labels }
+   ex := false;
+   repeat
+      read(kybd,ch);
+      case ch of
+         '0': SetLine;
+         '1': handshake := XONXOFF;
+         '2': handshake := ENQACK;
+         '3': handshake := ETXACK;
+         '4': handshake := NOPROTOCOL;
+         '9': ex := true;
+         end;
+      if handshake >= 0 then ex := true;
+      until ex;
+end;
+
+procedure SetPrtrType;
+var ex: boolean;
+begin
+   TurnOn(LBLSPTYP);  { turn on printer type labels }
+   ex := false;
+   repeat
+       read(kybd,ch);
+       case ch of
+{Epson}   '0': begin ParmEpson; ex := true; end;
+{NEC}     '1': begin ParmNEC;   ex := true; end;
+{IDS}     '2': begin ParmIDS;   ex := true; end;
+{CItoh}   '3': begin ParmCItoh; ex := true; end;
+          '9': ex := true;
+          end;
+       until ex;
+end;
+
+procedure MakeUnitCurrent;
+var Iorc: integer;
+begin
+  if DCPSetUnitNo(unittype) <> 0 then begin
+        if (unittype = DTACOM2UNIT) and (not DC1avail) then
+              LoadDriver(DTACOM1UNIT);
+        if (unittype = PRINTERUNIT) and (not DC1avail) then begin
+              LoadDriver(DTACOM1UNIT);
+              LoadDriver(DTACOM2UNIT); end;
+        LoadDriver(unittype);
+        if (unittype = DTACOM1UNIT) then
+              LoadDriver(DTACOM2UNIT);
+        Iorc := DCPSetUnitNo(unittype);
+        end;
+end;
+
+procedure SetUnitNo;
+var ex: boolean;
+    ior: integer;
+begin
+   CrtAction(EraseALL);
+   TurnOn(LBLSUNIT);  { turn on select unit labels }
+   writeln; write('Select unit: ');
+   ex := false;
+   repeat
+      read(kybd,ch);
+      case ch of
+         '0': unittype := PRINTERUNIT;
+         '2': unittype := DTACOM1UNIT;
+         '4': unittype := DTACOM2UNIT;
+         '9': ex := true;
+         end;
+      if unittype >= 0 then ex := true;
+      until ex;
+
+   if unittype = -1 then exit(setunitno);
+
+   MakeUnitCurrent; SetupLabels;
+   ALFstate := GetCurALF;
+   if unittype = PRINTERUNIT then
+      ior := PrtTblStatus(CpiState,LpiState);
+end;
+
+procedure TestMode;
+var ex, lbloff: boolean;
+    unitno, Iorc: integer;
+
+   procedure SRsetup;
+      begin
+        CrtAction(EraseALL);
+        Iorc := WinSystem(WsysCurr);
+        CrtAction(EraseALL); writeln;
+        lbloff := true;
+        LblsOff;
+      end;
+   procedure SendChars;
+      var count, i: integer;
+          b,b1: Byte;
+      begin
+        SRsetup;
+        write('Enter number of characters to send: ');
+        readln(count);
+        writeln('Enter characters to send: '); writeln;
+        for i := 1 to count do begin
+           unitread(1,b,1);
+           if b = Esc then begin
+              unitread(1,b1,1);
+              if b1 <> Esc then begin
+                 unitwrite(unitno,b,1);
+                 b := b1;
+                 end;
+              end;
+           unitwrite(unitno,b,1);
+           end;
+        writeln;
+        writeln('Send complete');
+        Iorc := WinSystem(WsysCmd);
+      end;
+
+   procedure RcvChars;
+      var count, ich, i: integer;
+          b: Byte;
+          Stop: boolean;
+      begin
+        SRsetup;
+        if unittype = PRINTERUNIT then begin
+           writeln(chr(7),'Cannot receive from the Printer');
+           ex := true;
+           end
+        else begin
+           write('Enter number of characters to receive: ');
+           readln(count);
+           writeln('Begin sending characters to receive: ');
+           writeln;   i := 1; Stop := false;
+           while (i <= count) and (NOT Stop) do begin
+              unitread(unitno,b,1); Iorc := IORESULT;
+              if Iorc <> 0 then begin
+                 writeln;
+                 writeln(chr(7),'Error in reading character - check parameters');
+                 Stop := true;
+                 end
+              else begin
+                 Byte2Int(ich,0,b);
+                 write(chr(ich));
+                 i := i+1;
+                 end;
+              end;
+           writeln;
+           writeln('Receive complete');
+           end;
+        Iorc := WinSystem(WsysCmd);
+      end;
+
+begin {testmode}
+   case unittype of
+      PRINTERUNIT: unitno := PRT;
+      DTACOM1UNIT: unitno := DC1;
+      DTACOM2UNIT: unitno := DC2;
+      end;
+
+   ex := false; lbloff := true;
+   repeat
+      if lbloff then begin
+         CrtAction(EraseALL);
+         writeln; write('Select Send or Receive: ');
+         TurnOn(LBLSTEST);  { turn on test mode labels }
+         lbloff := false;
+         end;
+      read(kybd,ch);
+      case ch of
+         '0': SendChars;
+         '4': RcvChars;
+         '9': ex := true;
+         end;
+      until ex;
+end; {testmode}
+
+procedure SetCPI(cpi: integer);
+   begin
+   if unittype = PRINTERUNIT then
+      begin
+      UnitStatus(PRT,cpi,FCSLCTPITCH);
+      if IORESULT = 0 then CpiState := cpi;
+      end;
+   end;
+
+procedure SetLPI(lpi: integer);
+   begin
+   if unittype = PRINTERUNIT then
+      begin
+      UnitStatus(PRT,lpi,FCSLCTINCH);
+      if IORESULT = 0 then LpiState := lpi;
+      end;
+   end;
+
+procedure SetALF(alf: boolean);
+   var ior: integer;
+   begin
+   IF alf <> GetCurALF THEN ior := DCPAutoLF;
+   ALFstate := GetCurALF;
+   end;
+
+procedure SetPrtrFunc;
+var ex, redisp: boolean;
+    ch: char;
+
+    procedure SetActionTbl;
+       var fname: String64;
+           s: String80;
+           IORc: integer;
+       begin
+       CrtAction(EraseALL); s := '';
+       write('Enter file name of Action Table: ');
+       if GetString(s) <> Escape then
+          begin
+          fname := s;
+          IOrc := WinSystem (WsysCurr);
+          LoadACT(fname);
+          IOrc := WinSystem (WsysCmd);
+          end;
+       end;
+
+    procedure SetAltCharTbl;
+       var fname: String64;
+           s: String80;
+           IORc: integer;
+       begin
+       CrtAction(EraseALL); s := '';
+       write('Enter file name of Alternate Character Table: ');
+       if GetString(s) <> Escape then
+          begin
+          fname := s;
+          IOrc := WinSystem (WsysCurr);
+          LoadALT(fname);
+          IOrc := WinSystem (WsysCmd);
+          end;
+       end;
+
+    procedure GetPrtStat;
+       begin
+       CrtAction(EraseALL);
+       write('  Characters per inch (CPI): ');
+       if CpiState = TenCPI then write('10')
+                            else write('12');
+       write('     Lines per inch (LPI): ');
+       if LpiState = SixLPI then writeln('6')
+                            else writeln('8');
+       write('  Auto Line Feed (LF): ');
+       if ALFstate then write('ON')
+                   else write('OFF');
+       writeln;
+       end;
+
+    begin
+    TurnOn(LBLSPRNT);  { turn on printer state labels }
+    ex := false; redisp := true;
+    repeat
+       if redisp then GetPrtStat;
+       redisp := true;
+       read(kybd,ch);
+       case ch of
+          '0': SetCPI(TenCPI);
+          '1': SetCPI(TwelveCPI);
+          '2': SetLPI(SixLPI);
+          '3': SetLPI(EightLPI);
+          '4': SetActionTbl;
+          '5': SetAltCharTbl;
+          '6': SetALF(ON);
+          '7': SetALF(OFF);
+          '9': ex := true;
+          otherwise: redisp := false;
+          end;
+       until ex;
+    end;
+
+procedure UpdPrtrParms;
+    begin
+    if baudrate >= 0 then begin
+       IOrc := DCPBaudRate(baudrate); DispError(IOrc); end;
+    if parity >= 0 then begin
+       IOrc := DCPParity(parity); DispError(IOrc); end;
+    if port >= 0 then begin
+       IOrc := PrtDatacom(port); DispError(IOrc); end;
+    if charsize >= 0 then begin
+       IOrc := DCPCharSize(charsize); DispError(IOrc); end;
+    if handshake >= 0 then begin
+       IOrc := DCPHandShake(handshake); DispError(IOrc); end;
+    end;
+
+procedure initialize;
+    var IOrc: integer;
+    begin  { initialize }
+      IOrc := WinSystem (WsysCmd);
+      CrtAction(EraseALL);
+      unittype := -1;
+      reset (kybd,'/SYSTERM');
+      SetupLabels;
+      quit := false;
+      if not PrtAvail then begin
+          SetUnitNo;
+          if unittype = -1 then quit := true;
+          end
+      else unittype := DCPGetUnitNo;
+      ALFstate := GetCurALF;
+      if unittype = PRINTERUNIT then
+         IOrc := PrtTblStatus(CpiState,LpiState);
+    end;
+
+procedure DoInteractive;
+    begin
+    initialize; if quit then exit(CCsetDCP);
+    GetStatus;  if quit then exit(CCsetDCP);
+    repeat
+        baudrate  := -1;
+        parity    := -1;
+        port      := -1;
+        charsize  := -1;
+        handshake := -1;
+        read(kybd,ch);
+        case ch of
+            'B': SetBaudRate;
+            'P': SetParity;
+            'D': SetDataCom;
+            'C': SetCharSize;
+            'H': SetHandShake;
+            'T': SetPrtrType;
+            'U': SetUnitNo;
+            'F': SetPrtrFunc;
+            'M': TestMode;
+            'E': quit := true;
+            end;
+        if not quit then begin
+            UpdPrtrParms; GetStatus; end;
+        until quit {or eof};
+    CrtAction(EraseALL);
+    end;
+
+procedure ChkBaudRate(parm: string64);
+    begin
+    case parm[1] of
+       '1': begin
+            if LENGTH(parm) < 2 then exit(ChkBaudRate);
+            if parm[2] = '2' then baudrate := BAUD1200
+                             else baudrate := BAUD19200;
+            end;
+       '2': baudrate := BAUD2400;
+       '3': baudrate := BAUD300;
+       '4': baudrate := BAUD4800;
+       '6': baudrate := BAUD600;
+       '9': baudrate := BAUD9600;
+       end;
+    end;
+
+procedure ChkParity(parm: string64);
+    begin
+    case parm[1] of
+       'D': parity := PARDISABLED;
+       'O': parity := PARODD;
+       'E': parity := PAREVEN;
+       'M': parity := PARMARKXNR;
+       'S': parity := PARSPACEXNR;
+       end;
+    end;
+
+procedure ChkDataCom(parm: string64);
+    begin
+    if unittype <> PRINTERUNIT then exit(ChkDataCom);
+    case parm[1] of
+       '1': port := PORT1;
+       '2': port := PORT2;
+       end;
+    end;
+
+procedure ChkCharSize(parm: string64);
+    begin
+    case parm[1] of
+       '7': charsize := CHARSZ7;
+       '8': charsize := CHARSZ8;
+       end;
+    end;
+
+procedure ChkHandShake(parm: string64);
+
+   procedure ChkLineType;
+      var cpos: integer;
+          tmp:  string64;
+      begin
+      cpos := POS('/',parm);
+      if (cpos <> 0) and (cpos < LENGTH(parm)) then begin
+          parm := COPY(parm, cpos+1, (LENGTH(parm)-cpos) );
+          tmp := parm;              {keep line name}
+          cpos := POS('/',parm);
+          if (cpos <> 0) and (cpos < LENGTH(parm)) then begin
+              parm := COPY(parm, cpos+1, (LENGTH(parm)-cpos) );
+              case tmp[1] of
+                'C': if parm[1] = 'I' then       {CTS}
+                          handshake := LINECTSINVERTED
+                     else handshake := LINECTSNORMAL;
+                'D': begin
+                     if LENGTH(tmp) < 2 then exit(ChkLineType);
+                     if tmp[2] = 'S' then begin
+                        if parm[1] = 'I' then    {DSR}
+                             handshake := LINEDSRINVERTED
+                        else handshake := LINEDSRNORMAL;
+                        end
+                     else
+                        if parm[1] = 'I' then    {DCD}
+                             handshake := LINEDCDINVERTED
+                        else handshake := LINEDCDNORMAL;
+                     end;
+                end;{case}
+              end;{2nd if}
+          end;{1st if}
+      end;{procedure}
+
+   procedure ChkETXENQ;
+      begin
+      if LENGTH(parm) < 2 then exit(ChkETXENQ);
+      if parm[2] = 'T' then handshake := ETXACK
+                       else handshake := ENQACK;
+      end;
+
+    begin
+    case parm[1] of
+       'L': ChkLineType;
+       'X': handshake := XONXOFF;
+       'E': ChkETXENQ;
+       'N': handshake := NOPROTOCOL;
+       end;
+    end;
+
+procedure ChkUnitNo(parm: string64);
+    var ior : integer;
+    begin
+    case parm[1] of
+       'P': unittype := PRINTERUNIT;
+       'D': begin
+            if LENGTH(parm) < 3 then exit(ChkUnitNo);
+            if parm[3] = '1' then unittype := DTACOM1UNIT
+                             else unittype := DTACOM2UNIT;
+            end;
+       end;
+    if unittype = -1 then exit(ChkUnitNo);
+    MakeUnitCurrent;  ALFstate := GetCurALF;
+    if unittype = PRINTERUNIT then
+       ior := PrtTblStatus(CpiState,LpiState);
+    end;
+
+{------------------------------------------------------------------}
+function TblSpace(tlen: longint): pBytes; {*112983*}
+{ if there are tlen bytes in code space, take it, return address }
+var save108,save10C:  ^pBytes;
+    topdrvrs,botmcode: pBytes;
+    l: longint;
+begin
+   TblSpace := NIL;
+   save108  := pointer($108); save10C  := pointer($10C);
+   topdrvrs := save108^;      botmcode := save10C^;
+   l := ord4(botmcode)-ord4(topdrvrs); { #free bytes }
+   if odd(tlen) then tlen := tlen+1;
+   if l>tlen then begin { there's room for table }
+      TblSpace := topdrvrs;   { start address }
+      save108^ := pointer(ord4(topdrvrs)+tlen); { update pointer }
+      end;
+end; { tbl space }
+
+procedure RemovTbl(tlen: longint);  {*112983*}
+var topdrvrs, botmcode : pBytes;
+    save108, save10C : ^pBytes;
+begin
+  save108 := pointer($108); topdrvrs := save108^;
+  save10C := pointer($10C); botmcode := save10C^;
+  if odd(tlen) then tlen := tlen + 1;
+  save108^ := pointer(ord4(topdrvrs) - tlen);
+end; { remov tbl }
+
+{------------------------------------------------------------------}
+{*** procedure LoadTables split into LoadACT and LoadALT 112983 ***}
+{------------------------------------------------------------------}
+
+procedure LoadALT{parm: string64}; { *112983* }
+type   pAltTbl = ^AltTbl;
+var    len:       integer; { table length in bytes }
+       AltTable:  AltTbl;
+       pAltTable: pAltTbl;
+       Falt:      file;
+       blks:      longint;
+
+    function TblFile(fname: String64): boolean;
+    begin
+      TblFile := False;
+      {$I-} Reset(Falt, fname); {$I+}
+      if IORESULT<>0 then begin
+          writeln('\07Error: Cannot open file');
+          exit(TblFile);
+          end;
+
+      blks := BlockRead(Falt,AltTable,1); { read 1st block }
+      if blks=1 then TblFile := True
+      else begin { couldn't read it }
+         writeln('\07Error: Cannot read file');
+         {$I-} Close(Falt); {$I+}
+         end;
+    end; {TblFile}
+
+    function ValidAlt: BOOLEAN;
+    {check if table is valid }
+    var strofs: integer; OK: boolean;
+    begin
+      OK := True;
+      with AltTable do begin
+         len := TblLength;    { total table length in bytes }
+         strofs := StrOffset; { offset of String Table }
+         if strofs mod 4 <> 0 then OK := False { must be multiple of 4 }
+         else
+            if strofs<512 then { string table is in memory }
+               if (b[strofs]<>0) or (b[strofs+1]<>0)
+                  then OK := False;
+         end; { with }
+      ValidAlt := OK;
+      if not OK then writeln('\07Error: Invalid AltChar table');
+    end; {ValidAlt}
+
+    function MoveALT(var altaddr: pAltTbl): boolean;
+    { load alt table into memory }
+    var q: pBytes; l,m: integer; err: boolean;
+    begin
+       MoveALT := True; altaddr := NIL;
+       q := TblSpace(ord4(len)); { len was set in ValidAlt }
+       if q=NIL then begin
+          MoveALT := False;
+          writeln('\07Error: no room for table');
+          exit(movealt);
+          end;
+
+       { q contains destination for table }
+       altaddr := pointer(ord4(q)); { destination }
+       l := len; err := false;
+       repeat
+          if l>512 then m := 512 else m := l; { m := minim(l,512) }
+          MoveLeft(AltTable,q^,m); { copy into memory }
+          l := l-m; { l = bytes left to move }
+          if l>0 then begin { read another block }
+             blks := BlockRead(Falt,AltTable,1);
+             if blks<>1 then err := True
+                        else q := pointer(ord4(q)+512);
+             end;
+       until (l<=0) or (err);
+       {$I-} Close(Falt); {$I+}
+
+       if err then begin { error reading file }
+          MoveALT := False;
+          writeln('\07Error: Cannot read file');
+          RemovTbl(ord4(len)); { remove partially read table }
+          end;
+    end; { move ALT }
+
+    procedure InstalALT(tbladr: pAltTbl);
+    {if moved to driver space then make unitstatus call to driver}
+    begin
+      UnitStatus( PRT, tbladr^, FCINSTALT );
+      if IORESULT <> 0 then begin
+         writeln('\07Error: Failed to install AltChar table');
+         RemovTbl(ord4(len));
+         end;
+    end; {InstalAlt}
+
+   begin { LoadALT }
+     if TblFile(parm) then
+        if ValidALT then
+           if MoveALT(pAltTable) then
+              InstalALT(pAltTable);
+   end;  { Load ALT }
+
+{-------------------------------------------------------------------}
+procedure LoadACT{parm: string64}; { *121383* }
+var    ActTblLen: longint;
+       ActTbl:    ActBuffer;
+       pActTbl:   pActBuffer;
+       Fact:      file;
+
+    procedure InstalAct(tbladr: pActBuffer);
+    {if moved to driver space then make unitstatus call to driver}
+    begin
+      UnitStatus( PRT, tbladr^, FCINSTACT );
+      if IORESULT <> 0 then begin
+         writeln('\07Error: Failed to install Action table');
+         RemovTbl(ActTblLen);
+         end;
+    end; {InstalAct}
+
+    function MoveACT(var actaddr: pActBuffer): boolean;
+    {if valid then move into driver space if room}
+    var q: pBytes;
+    begin
+      q := TblSpace(ActTblLen);
+      if q=NIL then begin { no room }
+         MoveACT := False; actaddr := NIL;
+         writeln('\07Error: No room for table');
+         end
+      else begin  { space allocated, q points to it }
+         MoveACT := True;
+         actaddr := Pointer(ord4(q)); { destination }
+         MoveLeft(ActTbl,q^,ActTblLen);         { copy table }
+         end;
+    end; {Move ACT }
+
+    function TblFile(fname: String64): boolean;
+    var blks: longint;
+    begin
+      tblfile := False;
+      {$I-} Reset(Fact, fname); {$I+}
+      if IORESULT <> 0 then begin
+          writeln('\07Error: Cannot open file');
+          exit(TblFile);
+          end;
+
+      blks := BlockRead(Fact,ActTbl,2); { try to read 2 blocks }
+      {$I-} Close(Fact); {$I+}
+      if blks=0 then writeln('\07Error: Cannot read file')
+                else tblfile := True;
+    end; {TblFile}
+
+    function ValidACT: boolean;
+      {check if table is valid  - all strings length less = to 7}
+      var p: ^ActStrg; last,n,i,j: integer;
+
+        procedure BadTbl; { error found in data }
+        begin
+           writeln('\07Error: Invalid Action table');
+           exit(validact);
+        end;
+
+      begin
+        ValidAct := False; last := 0;
+        for n := 0 to ACTLAST do begin
+           i := ActTbl.PrntIndx[n]; { index }
+           if (i<0) or (i>1023) then BadTbl;
+           if i>0 then begin { there is a string }
+              j := ActTbl.b[i]; { length of string }
+              if (j<1) or (j>ACTSTRLEN) then BadTbl;
+              if i>last then last := i; { find index of last string }
+              end;
+           end;
+        i := ActTbl.b[last]; { length of last string }
+        n := last + i + 1;   { total table length }
+        ActTblLen := n;
+        ValidAct := true;
+      end; {ValidAct}
+
+    begin { LoadACT }
+      if TblFile(parm) then
+         if ValidACT then
+            if MoveACT(pActTbl) then
+               InstalAct(pActTbl);
+    end;  { Load ACT }
+
+
+procedure ChkCPI(parm: string64);
+    begin
+    if (LENGTH(parm) < 2) and (parm[1] <> '1') then exit(ChkCPI);
+    if parm[2] = '0' then SetCPI(TenCPI);
+    if parm[2] = '2' then SetCPI(TwelveCPI);
+    end;
+
+procedure ChkLPI(parm: string64);
+    begin
+    if parm[1] = '6' then SetLPI(SixLPI);
+    if parm[1] = '8' then SetLPI(EightLPI);
+    end;
+
+procedure ChkALF(parm: string64);
+    begin
+    if (LENGTH(parm) < 2) and (parm[1] <> 'O') then exit(ChkALF);
+    if parm[2] = 'N' then SetALF(ON);
+    if parm[2] = 'F' then SetALF(OFF);
+    end;
+
+procedure parser(parm: string64);
+    var cpos: integer;
+        ch,ch2: char;
+    begin
+    cpos := POS('=',parm);
+
+    if (cpos <> 0) and (cpos < LENGTH(parm)) then begin
+       ch := parm[1]; ch2 := parm[2];  {2nd char may be "="}
+       parm := COPY(parm, cpos+1, (LENGTH(parm)-cpos) );
+       case ch of
+          'A': CASE ch2 OF
+                 'C' : LoadACT(parm);  {*112983*}
+                 'L' : LoadALT(parm);  {*112983*}
+                 'U' : ChkALF(parm);
+                 END;
+          'B': ChkBaudRate(parm);
+          'C': CASE ch2 OF
+                 'H' : ChkCharSize(parm);
+                 'P' : ChkCPI(parm);
+                 END;
+          'D': ChkDataCom(parm);
+          'H': ChkHandShake(parm);
+          'L': ChkLPI(parm);
+          'P': ChkParity(parm);
+          'U': ChkUnitNo(parm);
+          end;
+       end;
+    end;
+
+
+begin
+CCdcpIOinit;
+CCwndIOinit;
+CClblIOinit;
+CCcrtIOinit;
+haveEpson := FALSE; haveCItoh := FALSE;
+haveNEC := FALSE;   haveIDS := FALSE;
+if argc = 0 then       {interactive mode}
+    DoInteractive
+else begin {non-interactive mode}
+    unittype  := -1;
+    for argno := 1 to argc do begin
+        baudrate  := -1;
+        parity    := -1;
+        port      := -1;
+        charsize  := -1;
+        handshake := -1;
+
+        parm := argv[argno]^;
+        uprcase (@parm);
+
+        parser(parm);
+
+        UpdPrtrParms;
+        end;
+    end;
+end.
+

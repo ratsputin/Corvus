@@ -1,0 +1,22 @@
+;
+;    Duplicate Master programs
+;
+;    Do you have enough formatted 8" floppies...
+pause  Press [Y] if you do OR [N] to stop.
+
+;    Deleting all the files in volume /COPY
+makfil  /COPY/abc000zyx999zzz[0] >/NULL
+delfil  -q /COPY/* <%   >/NULL
+Y
+
+;
+;    Making copy of master in volume /COPY
+copymaster
+;
+;    Did the master copying work correctly...
+pause If it WORKED, press [Y].  If it FAILED, press [N] to stop.
+;    Making DUPLCATES of master from volume /COPY
+dupmaster
+;
+;    FINISHED
+

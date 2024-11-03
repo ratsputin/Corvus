@@ -1,0 +1,718 @@
+
+UNIT Ocs;
+
+INTERFACE
+
+USES {$U /ccUTIL/ccLIB} ccDEFN, ccLBLio, ccWNDio;
+
+Type
+   Str=String[80];
+   Lstr=STRING[255];
+   OCSdtf = Record
+              C,R,L : INTEGER;
+            END;
+    OCShpost=RECORD
+             Case integer of
+             1: (Tegn: Packed Array[1..512] of char);
+             2: (Did : String[9];
+                 Dant: Integer;
+                 Dt  : Array[1..41] of
+                       RECORD
+                         dn:string[7];
+                         dpb,dpt:integer;
+                        END;
+                 Dl  : string[7]);
+              END;
+
+VAR
+OCSretur:(NOTHING,ALFA,CURSright,CURSleft,
+        CURSUP,CURSDown,CURShome,ERASE,RETURN);
+OCStf   : Array[1..256] of OCSdtf;
+OCSform : Text;
+PFkey   : INTEGER;
+OCShfile:file;
+OCShjelp:Boolean;
+
+Procedure OCSkey(C1,C2,C3,C4:Char);
+Procedure GETtekst(C,R,L : INTEGER; VAR TXT : Str);
+Procedure GETkar(VAR KAR : CHAR);
+Procedure GOTOcr(C,R : INTEGER);
+Procedure Invert;
+Procedure Cursor(VAR C,R : Integer);
+Procedure Clear;
+Procedure cleareol;
+Procedure MOVEcurs(VAR c,r: integer);
+Procedure GETkey;
+Procedure OCSut(i:Integer; Var txt: str);
+Procedure OCSinn(i:integer; var txt: str);
+Procedure OCSskriv(c,r,i:integer;Txt:str);
+Procedure OCSerase(i:integer;Txt:str);
+Procedure OCSti(text:str;var tall: integer);
+Procedure OCSit(tall:integer; var text:str);
+Procedure FORMinit(FORMfil:str);
+Procedure GETfelt(n:Integer;VAR Txt:Str);
+Procedure SKRIVfelt(n:INTEGER;TXT:Str);
+Procedure GETlfelt(O,n:Integer;VAR Txt:Str);
+Procedure SKRIVlfelt(O,n:INTEGER;TXT:Str);
+Procedure SHJELP(Fil,Document:Str);
+
+IMPLEMENTATION
+
+Procedure cleareol;
+BEGIN
+    WRITE('\1B\4B');
+END;
+
+
+Procedure ocshles(bp:integer;VAR io:ocshpost);
+var retur:integer;
+BEGIN
+    Retur:=BLOCKread(OCShfile,io,1,bp);
+    if retur = 0 then
+       OCShjelp:=False;
+END;
+
+Procedure ocshkar(VAR bp,tp:integer;var kar:char;var io:ocshpost);
+BEGIN
+  kar:=' ';
+  REPEAT
+    if tp > 512 then
+       begin
+       bp:=bp+1;
+       ocshles(bp,io);
+       tp:=1
+       end;
+     if OCShjelp then
+       begin
+       kar:=io.tegn[tp];
+       tp:=tp+1
+       end;
+   UNTIL (NOT OCShjelp) or (kar <> '\00');
+END;
+
+Procedure ocshlinje(var bp,tp,s:integer;var text:Lstr;var io:ocshpost);
+VAR kar  : CHAR;
+    p    : Integer;
+BEGIN
+    kar:=' ';
+    S:=0;
+    repeat
+       ocshkar(bp,tp,kar,io);
+       s:=s+1;
+       text[s]:=kar;
+    until (not OCShjelp) or (kar = '\0D') or (s > 128);
+    text[0]:=chr(s);
+    if OCShjelp then
+       BEGIN
+       p:=POS('/END',text);
+       if p>0 then
+          begin
+          s:=0;
+          OCShjelp:=False;
+          end;
+       END;
+END;
+
+
+Procedure SHJELP;
+VAR io: ocshpost;
+    bp,tp,l,s,retur,ts : integer;
+    text     : lstr;
+    tant : integer;
+    t : Array[1..128] of RECORD bp,tp:Integer; END;
+Begin
+   OCShjelp:=True;
+   bp:=1;
+   l:=0;
+   tp:=1;
+   RESET(OCShfile,FIL);
+   ocshles(0,io);
+   IF (io.did = 'DOCUMENT') then
+      FOR s:=1 to io.Dant do
+         begin
+         Retur:=POS(document,io.dt[s].dn);
+         if retur > 0 then
+            begin
+            bp:=io.dt[s].dpb;
+            tp:=io.dt[s].dpt;
+            s:=io.Dant+1
+            end;
+         end;
+   tant:=1;
+   t[tant].bp:=bp;
+   t[tant].tp:=tp;
+   WHILE OCShjelp DO
+     BEGIN
+       OCShjelp:=True;
+       Clear;
+       CClblioinit;
+       LBLsinit;
+       S:=LBLset(0,'SclBck','\0D');
+       S:=LBLset(1,'SclFwd','\0D');
+       S:=LBLset(10,'First','\0D');
+       S:=LBLset(9,'Exit','\0D');
+       LBLson;
+       L:=2;
+       bp:=t[tant].bp;
+       tp:=t[tant].tp;
+       ocshles(bp,io);
+       REPEAT
+         GOTOcr(2,l);
+         cleareol;
+         ocshlinje(bp,tp,ts,text,io);
+         FOR s:=1 to ts do
+            write(text[s]);
+         l:=l+1;
+        UNTIL (l > 60) or (NOT OCShjelp);
+        Repeat
+          GETkey;
+          CASE PFkey of
+          1: Begin
+             OCShjelp:=true;
+             pfkey:=0;
+             if tant > 1 then
+                tant:=tant-1;
+             end;
+          2: BEGIN
+             OCShjelp:=true;
+             pfkey:=0;
+             if (tant < 128) and (OCShjelp) then
+                begin
+                tant:=tant+1;
+                t[tant].bp:=bp;
+                t[tant].tp:=tp
+                end;
+             end;
+          11: Begin
+              OCShjelp:=True;
+              PFkey:=0;
+              tant:=1
+              end;
+          10: Begin
+              OCShjelp:=False;
+              PFkey:=0
+              End;
+          OTHERWISE:PFkey:=99;
+          End;
+        UNTIL PFkey = 0;
+     END;
+     CLOSE(OCShfile);
+END;
+
+
+Procedure OCSti;
+var mt,s : Integer;
+BEGIN
+    mt:=1;
+    tall:=0;
+    s:=0;
+    Repeat
+     s:=s+1;
+    UNTIL (s > length(text)) or (TEXT[s] <> '0');
+    FOR s:=s to LENGTH(text) do
+      BEGIN
+         Begin
+         If (text[s] >= '0') and (Text[s] <= '9') then
+            BEGIN
+            tall:=Tall*mt+(ORD(text[s])-48);
+            mt:=10;
+            END
+         Else
+            S:=999;
+         End;
+      END;
+END;
+
+Procedure OCSit;
+Var s,x : integer;
+BEGIN
+    text:='0  ';
+    s:=0;
+    While tall > 0 do
+       BEGIN
+       FOR x:=s downto  1 do
+            text[x+1]:=text[x];
+       text[1]:=CHR((tall mod 10)+48);
+       tall:=tall div 10;
+       s:=s+1
+       END;
+End;
+
+Procedure OCSut;
+var s   : integer;
+    x   : integer;
+begin
+    s:=length(txt);
+    for x:=i to s-1 do
+       txt[x]:=txt[x+1];
+     txt[x+1]:=' ';
+end;
+
+
+Procedure OCSerase;
+var s   : integer;
+    x   : integer;
+begin
+    s:=length(txt);
+    for x:=i to s do
+       txt[x]:=' ';
+end;
+
+
+
+procedure OCSinn;
+var s   : integer;
+    x   : integer;
+begin
+    s:=length(txt);
+    for x:=s Downto i do
+       txt[x+1]:=txt[x];
+    txt[i]:=' ';
+end;
+
+
+Procedure OCSskriv;
+Var s,l : integer;
+Begin
+   l:=Length(Txt);
+   gotocr(c,r);
+   For s:=i TO l do
+       WRITE(Txt[s]);
+END;
+
+
+Procedure OCSkey;
+var wpfkey:Integer;
+BEGIN
+         wpfkey:=pfkey;
+         if (c3 = '0') or (c3 = '1') or (c3 = '2') then
+            begin
+            wpfkey:= (ORD(c3) - 48) * 16;
+            if (c4 >= '0') and (c4 <= '9') then
+               wpfkey:=wpfkey + (ORD(c4) - 47)
+            else
+               if (c4 >= 'A') and (c4 <= 'F') then
+                  wpfkey:=wpfkey + (ORD(c4) - 64)
+               else wpfkey:=pfkey;
+            end;
+         pfkey:=wpfkey;
+END;
+
+
+Procedure GETkar;
+Var  KYBD : Interactive;
+     C1,C2,C3,C4 : Char;
+     Ac    : Integer;
+BEGIN
+   Kar:=' ';
+   pfkey:=0;
+   OCSretur:=NOTHING;
+   RESET(KYBD,'/KYBD');
+   REPEAT
+     Repeat Until UNITBUSY(35);
+     Get(KYBD);
+     C1:=KYBD^;
+     Ac:=1;
+     if not UNITBUSY(35) then
+        if EOLN(kybd) then
+           begin
+           OCSretur:=RETURN;
+           c1:=CHR(13)
+           End;
+     IF UNITBUSY(35) then
+        BEGIN
+        Get(KYBD);
+        C2:=KYBD^;
+        Ac:=2
+        END;
+     IF UNITBUSY(35) then
+        BEGIN
+        Get(KYBD);
+        C3:=KYBD^;
+        Ac:=3
+        END;
+     IF UNITBUSY(35) then
+        BEGIN
+        Get(KYBD);
+        C4:=KYBD^;
+        Ac:=4
+        END;
+     UNITclear(35);
+     IF Ac = 1 then
+        Case C1 of
+          '\08' : OCSretur:=CURSleft;
+          '\1B' : OCSretur:=RETURN;
+          '\0D' : OCSretur:=RETURN;
+          OTHERWISE : BEGIN
+                     kar:=C1;
+                     if OCSretur = NOTHING then
+                      OCSretur:=ALFA;
+                     END;
+          END;
+     IF (Ac = 2) and (C1 = '\1B') then
+        CASE c2 of
+          'A'  : OCSretur:=CURSup;
+          'B'  : OCSretur:=CURSdown;
+          'C'  : OCSretur:=CURSright;
+          'D'  : OCSretur:=CURSleft;
+          'H'  : OCSretur:=CURShome
+          END;
+     IF (Ac = 4) and (C1 = '\1B') and (C2='\23') THEN
+        BEGIN
+        OCSkey(C1,C2,C3,C4);
+        if pfkey>0 then
+           OCSretur:=RETURN;
+        END;
+   UNTIL OCSretur <> NOTHING;
+   Close(KYBD);
+END;
+
+
+
+
+Procedure GETtekst;
+var i : integer;
+    kar : char;
+    x,y,s : integer;
+    EXIT : Boolean;
+begin
+  pfkey:=0;
+  gotocr(c,r);
+  S:=Length(Txt);
+  Txt[0]:=CHR(l);
+  for i:=1 to l do
+     if i <= s then
+     write(txt[i])
+     ELSE BEGIN
+          Txt[i]:=' ';
+          write(' ')
+          END;
+  i:=1;
+  EXIT:=False;
+  c:=c-1;
+  REPEAT
+     BEGIN
+     s:=c+i;
+     gotocr(s,r);
+     GETkar(kar);
+     CASE OCSretur of
+     ALFA    : Begin
+               gotocr(s,r);
+               Write(kar);
+               Txt[i]:=kar;
+               If i < l then
+                  i:=i+1
+               End;
+     CURSleft : Begin
+                If i > 1 then
+                 i:=i-1
+                END;
+     CURSright: Begin
+                If i < l then
+                  i:=i+1
+                END;
+     CURShome : I:=1;
+     CURSup   : BEGIN
+                OCSinn(i,Txt);
+                OCSskriv(s,r,i,Txt)
+                End;
+     CURSdown : BEGIN
+                OCSut(i,Txt);
+                OCSskriv(s,r,i,Txt)
+                End;
+     ERASE    : BEGIN
+                OCSerase(i,TXT);
+                OCSskriv(s,r,i,Txt)
+                END;
+     RETURN   : EXIT:=True;
+     End;
+    END;
+  UNTIL EXIT;
+  x:=0;
+  y:=length(txt);
+  For s:=1 to y do
+      begin
+        if txt[s] <> ' ' then
+           x:=0
+        else
+           if X = 0 then
+              x:=s;
+       end;
+   if x > 0 then
+      DELEte(txt,x,80);
+END;
+
+procedure GOTOcr;
+BEGIN
+    WRITE('\1B=',CHR( c ), CHR( r) );
+END;
+
+Procedure Invert;
+BEGIN
+    WRITE('\1Bz')
+END;
+
+Procedure Clear;
+Begin
+    Write('\1BJ')
+END;
+
+Procedure Cursor;
+Var pos : Record
+          pc,pr: Integer
+          END;
+BEGIN
+    UNITSTATUS(1,pos,0);
+    c:=pos.pc;
+    r:=pos.pr
+END;
+
+
+Procedure MOVEcurs;
+var kybd : interactive;
+    C1,C2,C3,c4 : Char;
+    Ac          : Integer;
+BEGIN
+  RESET(kybd,'/KYBD');
+  pfkey:=9999;
+  REPEAT
+    REPEAT until UNITBUSY(35);
+    get(kybd);
+    C1:=kybd^;
+    Ac:=1;
+    IF not UNITBUSY(35) then
+       if EOLN(kybd) then
+          begin
+          pfkey:=0;
+          C1:=CHR(13)
+          End;
+    IF UNITBUSY(35) then
+       BEGIN
+       get(kybd);
+       Ac:=2;
+       C2:=kybd^
+       END;
+    IF UNITBUSY(35) then
+       BEGIN
+       get(kybd);
+       Ac:=3;
+       C3:=kybd^
+       END;
+    IF UNITBUSY(35) then
+       BEGIN
+       get(kybd);
+       Ac:=4;
+       C4:=kybd^
+       END;
+    UNITclear(35);
+    Cursor(c,r);
+    IF AC = 1 then
+       CASE C1 of
+       '\8' : BEGIN
+               if c>1 then
+                c:=c-1
+               else begin
+                  c:=79;
+                  r:=r-1
+                  end;
+               gotocr(c,r)
+               END;
+       '\0D' : pfkey:=0;
+       '\1B' : pfkey:=99;
+       END;
+    if (Ac = 2) and (C1 = '\1B') then
+      CASE C2 OF
+      'A' : begin
+          r:=r-1;
+          gotocr(c,r)
+          END;
+      'B' : begin
+          r:=r+1;
+          gotocr(c,r)
+          END;
+      'C' : begin
+          if c < 79 then
+            c:=c+1
+          else begin
+            c:=0;
+            r:=r+1
+            end;
+          gotocr(c,r)
+          END;
+       'D' : begin
+           if c>1 then
+            c:=c-1
+           else begin
+              c:=79;
+              r:=r-1
+              end;
+           gotocr(c,r)
+           END;
+       'H' : begin
+            c:=0;
+            r:=0;
+            gotocr(c,r)
+            end
+       END;
+     if (Ac = 4) and (C1 = '\1B') and (C2 = '\23') then
+        OCSkey(C1,C2,C3,C4);
+  UNTIL pfkey < 9999;
+  Close(kybd)
+END;
+
+Procedure GETkey;
+var kybd : interactive;
+    C1,C2,C3,c4 : Char;
+    Ac          : Integer;
+BEGIN
+  WRITE('\1B\62');
+  RESET(kybd,'/KYBD');
+  pfkey:=9999;
+  REPEAT
+    REPEAT until UNITBUSY(35);
+    get(kybd);
+    C1:=kybd^;
+    Ac:=1;
+    IF not UNITBUSY(35) then
+       if EOLN(kybd) then
+          begin
+          pfkey:=0;
+          C1:=CHR(13)
+          End;
+    IF UNITBUSY(35) then
+       BEGIN
+       get(kybd);
+       Ac:=2;
+       C2:=kybd^
+       END;
+    IF UNITBUSY(35) then
+       BEGIN
+       get(kybd);
+       Ac:=3;
+       C3:=kybd^
+       END;
+    IF UNITBUSY(35) then
+       BEGIN
+       get(kybd);
+       Ac:=4;
+       C4:=kybd^
+       END;
+    UNITclear(35);
+    IF AC = 1 then
+       CASE C1 of
+       '\0D' : pfkey:=0;
+       '\1B' : pfkey:=99;
+       END;
+     if (Ac = 4) and (C1 = '\1B') and (C2 = '\23') then
+        OCSkey(C1,C2,C3,C4);
+  UNTIL pfkey < 9999;
+  Close(kybd);
+  WRITE('\1B\63');
+END;
+
+PROCEDURE FORMinit;
+Var TXT     : String[255];
+    C,R,L,N : Integer;
+    Chr     : Char;
+    s       : Integer;
+    lbl     : Boolean;
+Begin
+    FOR s:=1 to 256 do
+        begin
+          OCStf[s].c:=0;
+          OCStf[s].r:=0;
+          OCStf[s].l:=0
+        end;
+    lbl:=False;
+    Reset(OCSform,FORMfil);
+    Repeat
+       Readln(OCSform,Chr);
+       CASE Chr  of
+        'T': BEGIN
+              Readln(OCSform,C);
+              Readln(OCSform,R);
+              gotocr(C,R);
+              Readln(OCSform,txt);
+              Writeln(txt)
+             END;
+        'F': BEGIN
+               Readln(OCSform,N);
+               Readln(OCSform,C);
+               Readln(OCSform,R);
+               Readln(OCSform,L);
+               IF (N>0) and (N<=256) and (L>0) then
+                  begin
+                  OCStf[N].c:=C;
+                  OCStf[N].r:=R;
+                  OCStf[N].l:=L
+                  end;
+             End;
+         'K' : BEGIN
+                 If not lbl then
+                    begin
+                    lbl:=True;
+                    ccLBLioinit;
+                    LBLsinit
+                    End;
+                 Readln(OCSform,N);
+                 Readln(OCSform,txt);
+                 s:=LBLset(N,txt,'\0D')
+               END;
+          'W' : BEGIN
+                 CCwndioinit;
+                 Clear;
+                 Readln(OCSform,N);
+                 S:=WINSYSTEM(n)
+               END;
+         END;
+    UNTIL EOF(OCSform);
+    if lbl then
+       LBLson;
+    Close(OCSform);
+END;
+
+Procedure GETfelt;
+Begin
+    if  (n <= 256) and (OCstf[n].l>0) then
+        begin
+        GETtekst(OCStf[n].c,OCStf[n].r,OCStf[n].l,txt)
+        end;
+
+END;
+
+Procedure GETlfelt;
+Begin
+    if  (n <= 256) and (OCstf[n].l>0) then
+        begin
+        GETtekst(OCStf[n].c,OCStf[n].r+O,OCStf[n].l,txt)
+        end;
+
+END;
+
+Procedure SKRIVfelt;
+Var x,l : integer;
+BEGIN
+   IF (n <= 256) and (OCStf[n].l>0) then
+      begin
+      GOTOcr(OCStf[n].c,OCStf[n].r);
+      l:=OCStf[n].L;
+      FOR x:=1 TO l do
+          Write(TXT[x]);
+      End;
+END;
+
+Procedure SKRIVlfelt;
+Var x,l : integer;
+BEGIN
+   IF (n <= 256) and (OCStf[n].l>0) then
+      begin
+      GOTOcr(OCStf[n].c,OCStf[n].r+O);
+      l:=OCStf[n].L;
+      FOR x:=1 TO l do
+          Write(TXT[x]);
+      End;
+END;
+
+END.
+
+

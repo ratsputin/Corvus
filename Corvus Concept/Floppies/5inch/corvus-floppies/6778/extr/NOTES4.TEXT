@@ -1,0 +1,276 @@
+       Notes on Math Software for MC68000
+       Copyright 1981 by Richard E. James III
+                                             Revision 0
+
+Numbers are represented internally as follows:
+Single Precision:
+          0   1-8          9 - 31
+          ++-------+----------------------+
+          ||       |                      |
+          ++-------+----------------------+
+           |   |       |
+           |   |       Mantissa (23+1 bits)
+           |   Exponent, biased by 127
+           Sign
+
+   Layout in memory:
+          ++-------+----------------------+
+          |  low word     |  high word    |
+          ++-------+----------------------+
+
+Double Precision:
+     0   1-11                12 - 63
+     ++----------+---------------------------------------------------+
+     ||          |                                                   |
+     ++----------+---------------------------------------------------+
+      |    |            |
+      |    |            Mantissa (52+1 bits)
+      |    Exponent, biased by 1023
+      Sign
+
+   Layout in memory:
+     ++----------+---------------------------------------------------+
+     |  word #0      |  word #2      |  word #4      |  word #6      |
+     ++----------+---------------------------------------------------+
+
+Parts of a number:
+       Sign:  1 iff negative.
+       Exponent:  Biased, all zeros and all ones are reserved.
+       Mantissa:  Normalized, with the high order 1 bit "hidden".
+       The number is
+                       2**(exponent-bias) * 1.f
+         where f is the bits in the mantissa.
+
+Extreme numbers:
+       Zero (signed) is represented by Exponent=0, Mantissa=0:
+       Denormalized numbers (as a product of "Gradual Underflow")
+         are non-zero numbers with an Exponent=0.  The formula for
+         their values is
+                       2**(exponent-bias+1) * 0.f
+       Infinity (signed, i.e., "Affine") is represented by the 
+         largest exponent (all 1's) and a zero mantissa.
+       Not-a-Number (NaN) is represented by the largest exponent
+         and a non-zero mantissa.  The sign is generally ignored.
+
+                                                  Page 1
+
+
+
+Hex representation of selected numbers:
+           Number = Single   / Double
+           ------   --------   ----------------
+               +0 = 00000000 / 0000000000000000
+               -0 = 80000000 / 8000000000000000
+             +1.0 = 3F800000 / 3FF0000000000000
+             -1.0 = BF800000 / BFF0000000000000
+             +2.0 = 40000000 / 4000000000000000
+             +3.0 = 40400000 / 4008000000000000
+        +Infinity = 7F800000 / 7FF0000000000000
+        -Infinity = FF800000 / FFF0000000000000
+              NaN = 7F8xxxxx / 7FFxxxxxxxxxxxxx
+
+To discover whether a number is an extreme, a pair of internal
+  routines are available.  The split a number into several pieces,
+  one of which is a code indicating:
+       1 for zero,
+       2 for denormalized,
+       3 for ordinary,
+       4 for infinity,
+       5 for NaN.
+  For single precison, JSR to %F_UNPK with the number in D1.
+  For double, use %D_UNPK with the number in D0/D1 (D0=upper part).
+  The output is in  
+       D0/D1:  64 bit integer;
+       D2.W:   Exponent;
+       D3.W:   negative if number was negative;
+       D3.B:   the type code, as described above.
+
+  The Pascal-callable equivalent routines are 
+       TYPE
+           longint = {32-bit quantity};
+           integer = {16-bit integer};
+           dble = array [1..2] of longint;
+           unp = record
+                   upper: longint;
+                   lower: longint;
+                   exp: integer;
+                   sgn: -128..127;
+                   typ: 1..5;
+                 end;
+       PROCEDURE %fp_unpk (     x: real;  var u: unp );  external;
+       PROCEDURE %dp_unpk ( var x: dble;  var u: unp );  external;
+
+  (There are "pack" routines corresponding to the "unpk" routines.)
+
+                                                  Page 2
+
+
+The basic operations yield the following results when given
+  extreme inputs.  No traps or other exception action is taken.
+  (All inputs assumed positive; overflow, underflow, and   
+  cancellation assumed not to occur.  First operand is on left.)
+
+Addition & Subtraction:
+              0  Den num Inf NaN
+             --- --- --- --- ---
+        0     0  Den num Inf NaN
+       Den   Den Den num Inf NaN
+       num   num num num Inf NaN
+       Inf   Inf Inf Inf  -> NaN      Inf+Inf=Inf; Inf-Inf=NaN
+       NaN   NaN NaN NaN NaN NaN
+
+Multiplication:
+              0  Den num Inf NaN 
+             --- --- --- --- ---
+        0     0   0   0  NaN NaN 
+       Den    0   0  Den Inf NaN 
+       num    0  Den num Inf NaN 
+       Inf   NaN Inf Inf Inf NaN 
+       NaN   NaN NaN NaN NaN NaN 
+
+Division:     0  Den num Inf NaN 
+             --- --- --- --- ---
+        0    NaN  0   0   0  NaN 
+       Den   Inf NaN Den  0  NaN 
+       num   Inf NaN num  0  NaN 
+       Inf   Inf Inf Inf NaN NaN 
+       NaN   NaN NaN NaN NaN NaN 
+
+Comparison:   0  Den num Inf NaN 
+             --- --- --- --- ---
+        0     =   <   <   <  uno       also, +0 = -0
+       Den    >       <   <  uno 
+       num    >   >       <  uno 
+       Inf    >   >   >      uno 
+       NaN   uno uno uno uno uno       uno means "unordered" and not =
+
+Max:          0  Den num Inf NaN 
+             --- --- --- --- ---
+        0     0  Den num Inf NaN 
+       Den   Den Den num Inf NaN 
+       num   num num num Inf NaN 
+       Inf   Inf Inf Inf Inf NaN 
+       NaN   NaN NaN NaN NaN NaN 
+
+Min:          0  Den num Inf NaN 
+             --- --- --- --- ---
+        0     0   0   0   0  NaN 
+       Den    0  Den Den Den NaN 
+       num    0  Den num num NaN 
+       Inf    0  Den num Inf NaN 
+       NaN   NaN NaN NaN NaN NaN 
+
+                                                  Page 3
+
+
+The transcendentals call an error routine, written in Pascal.
+  It is called  report_error, and has the following parameters.
+  ...
+  The routine is found in the deck GUR; and should be replaced by 
+  whatever you what.  The transcendentals do not produce meaningful
+  results if execution is continued after a call to the routine.
+
+The calling sequences come in two categories.
+  1.  Some routines are intended to be called with the arguments
+    pushed on the stack; they return the result on the stack.
+    The calling sequence can go something like this:
+             MOVE.L   arg1,-(SP)
+             MOVE.L   arg2,-(SP)
+             JSR      %xxxx
+             MOVE.L   (SP)+,result
+    Push the least significant part of a double precision number first;
+    pop the most significant part first.
+    These routines are
+
+      Basic arithemtic (two arguments).
+      function:           add     sub-    multi-  divide 
+                                  tract   ply
+                          ------- ------- ------- -------
+      single entry point: %_add   %_sub   %_mul   %_div  
+                in deck:  ADD     ADD     MUL     DIV    
+      double entry point: %_add   %_sub   %_mul   %_div  
+                in deck:  DADD    DADD    DMUL    DVMD   
+      Note:
+
+      Comparison (two arguments).
+      function:           maximum minimum compare
+                          ------- ------- -------
+      single entry point: %f_max  %f_min  %f_cmp  (all in deck CMP)
+      double entry point: %d_max  %d_min  %d_cmp  (all in deck DCMP)
+      Note:
+        Max and Min return a NaN if either argument is a NaN.
+        Compare does not return anything on the stack; instead, it 
+          returns the condition codes as if an integer compare had
+          just been done.  However, if either operand is a NaN, the
+          condition codes have the carry flag set and the zero flag
+          not set.  This setting lets you check for NaN and makes a
+          NaN not equal to anything, not even itself.
+
+      Conversion between number representations (1 argument).
+      from:             single  integer double  integer single  double
+      to:               integer single  integer double  double  single
+                        ------- ------- ------- ------- ------- -------
+      entry point:      %f_2_i  %i_2_f  %d_2_i  %i_2_d  %f_2_d  %d_2_f
+      in deck:          IPK     IPK     DPK     DPK     DPK     DPK
+      Notes: 
+        Integers are 32-bits.
+        Converting to integer truncates toward zero.
+        Converting double to single rounds.
+        Converting too large a number to integer produces a large
+          negative number.
+        Converting too large a double to single produces Infinity.
+
+
+                                                  Page 4
+
+
+      Absolute value (one argument).
+      precision:          single  double
+                          ------- -------
+      entry point:        %f_abs  %d_abs  (both in deck ABS)
+      Note:
+        These could be done more efficiently with an in-line BCLR.
+        
+      Convert single precision to integer (one argument).
+      function:           round   truncate
+                                  toward 0
+                          ------- -------
+      entry point:        %_round %_trunc (both in deck FRT)
+      Note:
+        This routine is the same as %i_nint and %f_2_i, except for
+          the calling sequence.
+  
+  2.  Other routines are intended to be called by a high level language
+    with the addresses, not values pushed on the stack, and room left
+    ... ??? ...
+    on the stack for the answer.  These routines are
+
+      Rounding to nearest integer (one argument).
+      from:               single  double
+                          ------- -------
+      entry point:        %i_nint %i_idnin
+      in deck:            IPK     DPK     
+      Note:
+        See %_round.
+        
+      Transcendentals (one argument each).
+      function:           square  expo-   logarithm:
+                          root    nential natural common
+                          ------- ------- ------- -------
+      single entry point: %_sqrt  %_exp   %_log   %_LOG10
+             in deck:     GPASC   GPASC   GPASC   LOG10
+      double entry point: %_dsqt  %_dexp  %_dlog  %_DL10
+             in deck:     DP      DP      DP      LOG10
+      erroneous argument: <0      too big <=0     <=0     (or Inf, NaN)
+        
+      function:           sine    cosine  tangent arc
+                                                  tangent
+                          ------- ------- ------- -------
+      single entry point: %_sin   %_cos   %_tan   %_atan
+             in deck:     GPASC   GPASC   TAN     GPASC
+      double entry point: %_dsin  %_dcos  %_dtan  %_datn
+             in deck:     DP      DP      TAN     DP
+      erroneous argument: too big too big too big         (or Inf, NaN)
+
+
+                                                  Page 5

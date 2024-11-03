@@ -1,0 +1,845 @@
+program BldAct;
+
+{**************************************************************}
+{                                                              }
+{ BldAct - Build a Printer driver Action Table.                }
+{                                                              }
+{ Used by person to build a table and save on disk.            }
+{                                                              }
+{                                                              }
+{**************************************************************}
+
+USES {$U /CCUTIL/CCLIB } CCdefn, CClblIO, CCcrtIO,
+                         CCwndIO, CChexOut,
+     {$U BLDACT.EQU    } BldActEQU;
+
+CONST
+       pgmVERSION      =   '1.0b';
+       pgmNAME         =   'BLDACT';
+       pgmTITLE        =   'Build Printer Action Table';
+
+       KEYBOARD        =       2;      {Systerm unit to read keyboard}
+
+       {FUNCTION KEY NUMBERS}
+       F1              =       0;
+       F2              =       1;
+       F3              =       2;
+       F4              =       3;
+       F5              =       4;
+       F6              =       5;
+       F7              =       6;
+       F8              =       7;
+       F9              =       8;
+       F10             =       9;
+
+       NUL             =       '\00';
+       EOT             =       '\04';
+       BEL             =       '\07';
+       BS              =       '\08';
+       CR              =       '\0D';
+       ESC             =       '\1B';
+       SPACE           =       ' ';
+       DEL             =       '\7F';
+
+       {character display strings}
+       EscString    =    'ESCAPE ';
+       RtrnString   =    'RETURN ';
+       BkSpString   =    'BACKSPACE ';
+       SpcStrng     =    'SPACE ';
+       DELString    =    'DEL ';
+       CntrlString  =    'CONTROL ';
+
+       {display control}
+       FIRSTDESC       =      20;
+       SECNDDESC       =      34;
+       THIRDDESC       =      34;
+
+       {Field numbers}
+       ULON            =       0;      ATESSFA         =       9;
+       ULOFF           =       1;      TENNSP          =      10;
+       BLDON           =       2;      TENM1SP         =      11;
+       BLDOFF          =       3;      TENM2SP         =      12;
+       RVRSLF          =       4;      TENM3SP         =      13;
+       BCKSP           =       5;      TWLNSP          =      14;
+       SIXNFA          =       6;      TWLM1SP         =      15;
+       SIXSSFA         =       7;      TWLM2SP         =      16;
+       ATENFA          =       8;      TWLM3SP         =      17;
+
+       {Display row and columns}
+       FIRSTCOL        =       1;
+       FIRSTROW        =       3;
+
+       ULONSCOL        =       10;     ULOFSCOL        =       10;
+       ULONSROW        =        5;     ULOFSROW        =        6;
+       ULONDCOL        =       30;     ULOFDCOL        =       30;
+       ULONDROW        =        5;     ULOFDROW        =        6;
+
+       BDONSCOL        =       10;     BDOFSCOL        =       10;
+       BDONSROW        =        7;     BDOFSROW        =        8;
+       BDONDCOL        =       30;     BDOFDCOL        =       30;
+       BDONDROW        =        7;     BDOFDROW        =        8;
+
+       RVLFSCOL        =       10;     BKSPSCOL        =       10;
+       RVLFSROW        =        9;     BKSPSROW        =       10;
+       RVLFDCOL        =       30;     BKSPDCOL        =       30;
+       RVLFDROW        =        9;     BKSPDROW        =       10;
+
+       SECNDCOL        =        1;
+       SECNDROW        =       12;
+       SIXCOL          =        1;
+       SIXROW          =       14;
+       EIGHTCOL        =        1;
+       EIGHTROW        =       17;
+
+       SNFASCOL        =       10;     SSFASCOL        =       10;
+       SNFASROW        =       14;     SSFASROW        =       15;
+       SNFADCOL        =       44;     SSFADCOL        =       44;
+       SNFADROW        =       14;     SSFADROW        =       15;
+
+       ENFASCOL        =       10;     ESFASCOL        =       10;
+       ENFASROW        =       17;     ESFASROW        =       18;
+       ENFADCOL        =       44;     ESFADCOL        =       44;
+       ENFADROW        =       17;     ESFADROW        =       18;
+
+       THIRDCOL        =       1;
+       THIRDROW        =      20;
+       TENCOL          =       1;
+       TENROW          =      22;
+       TWLVECOL        =       1;
+       TWLVEROW        =      27;
+
+       TNNSSCOL        =       10;     TNM1SCOL        =       10;
+       TNNSSROW        =       22;     TNM1SROW        =       23;
+       TNNSDCOL        =       44;     TNM1DCOL        =       44;
+       TNNSDROW        =       22;     TNM1DROW        =       23;
+
+       TNM2SCOL        =       10;     TNM3SCOL        =       10;
+       TNM2SROW        =       24;     TNM3SROW        =       25;
+       TNM2DCOL        =       44;     TNM3DCOL        =       44;
+       TNM2DROW        =       24;     TNM3DROW        =       25;
+
+       TWNSSCOL        =       10;     TWM1SCOL        =       10;
+       TWNSSROW        =       27;     TWM1SROW        =       28;
+       TWNSDCOL        =       44;     TWM1DCOL        =       44;
+       TWNSDROW        =       27;     TWM1DROW        =       28;
+
+       TWM2SCOL        =       10;     TWM3SCOL        =       10;
+       TWM2SROW        =       29;     TWM3SROW        =       30;
+       TWM2DCOL        =       44;     TWM3DCOL        =       44;
+       TWM2DROW        =       29;     TWM3DROW        =       30;
+
+VAR
+     ch : CHAR;
+     ior, i, j, KbrdUnit, SendRaw : INTEGER;
+     Quit, Saved : BOOLEAN;
+     CurrStr : ActStrg;
+     CurrPos, CurrField : INTEGER;
+     FilName : String80;
+     F : FILE OF ActionTable;
+     ActTbl :  ActionTable;
+
+  FUNCTION OSkybdDv : INTEGER; EXTERNAL;
+
+  FUNCTION GetNextCh : CHAR;
+  VAR b  : Byte;
+      i  : INTEGER;
+  BEGIN
+    UNITREAD(KEYBOARD, b, 1);
+    IF b < 0 THEN i := 256 + b
+             ELSE i := b;
+    GetNextCh := chr(i);
+  END; {GetNextCh}
+
+  PROCEDURE InitTbl;
+
+    PROCEDURE InitInch( VAR rec : InchRcrd);
+       BEGIN
+         WITH rec DO
+            BEGIN
+            SubsprFormAdv := '';
+            NrmlFormAdv := '';
+            END;
+       END; {InitInch}
+
+    PROCEDURE InitPitch( VAR rec : PitchRcrd);
+       BEGIN
+         WITH rec DO
+            BEGIN
+            NrmlSpacing := '';
+            Micro1Extra := '';
+            Micro2Extra := '';
+            Micro3Extra := '';
+            END;
+       END; {InitInch}
+
+  BEGIN
+    WITH ActTbl DO
+       BEGIN
+       ULineOn  := '';
+       ULineOff := '';
+       BoldOn   := '';
+       BoldOff  := '';
+       RevrsLF  := '';
+       BackSP   := '';
+       InitInch(SixLnInch);
+       InitInch(EightLnIn);
+       InitPitch(Pitch10);
+       InitPitch(Pitch12);
+       END; {WITH}
+  END; {InitTbl}
+
+  PROCEDURE dspASCII( a : CHAR);
+  BEGIN
+    CASE a OF
+       ESC       : WRITE(EscString);
+       CR        : WRITE(RtrnString);
+       BS        : WRITE(BkSpString);
+       SPACE     : WRITE(SpcStrng);
+       DEL       : WRITE(DELString);
+       OTHERWISE : IF (a < SPACE) THEN
+                     WRITE(CntrlString,CHR( ORD(a) + $40 ),' ' )
+                   ELSE
+                     WRITE('"',a,'" ');
+       END;
+  END; {dspASCII}
+
+  PROCEDURE DispField(s : ActStrg; col,row : INTEGER);
+  VAR i : INTEGER;
+  BEGIN
+    GOTOXY(col, row); CrtAction(ErasEOL);
+    FOR i := 1 TO LENGTH(s) DO dspASCII(s[i]);
+  END; {DispField}
+
+  PROCEDURE MvFieldCursor(dcol,drow : INTEGER);
+  VAR i, P, L : INTEGER;
+
+    FUNCTION DspLength(ch : CHAR) : INTEGER;
+    VAR i : INTEGER;
+    BEGIN
+      CASE ch OF
+         ESC       : i := LENGTH(EscString);
+         CR        : i := LENGTH(RtrnString);
+         BS        : i := LENGTH(BkSpString);
+         SPACE     : i := LENGTH(SpcStrng);
+         DEL       : i := LENGTH(DELString);
+         OTHERWISE : IF (ch < SPACE) THEN
+                       i := LENGTH(CONCAT(CntrlString,'x '))
+                     ELSE
+                       i := LENGTH('"x" ');
+         END;
+      DspLength := i;
+    END; {DspLength}
+
+  BEGIN
+    DispField(CurrStr, dcol, drow);
+    L := LENGTH(CurrStr);
+    IF CurrPos > L THEN P := L
+                   ELSE P := CurrPos-1;
+    FOR i := 1 TO P DO
+         dcol := dcol + DspLength( CurrStr[i] );
+
+    CrtAction(VdoInv);
+    IF CurrPos > L THEN
+         BEGIN
+         GOTOXY(dcol + ((CurrPos - L) - 1), drow);
+         WRITE(SPACE);
+         END
+    ELSE BEGIN
+         GOTOXY( dcol, drow);
+         dspASCII(CurrStr[CurrPos]);
+         END;
+    CrtAction(VdoNor);
+  END; {MvFieldCursor}
+
+  PROCEDURE SaveStr;
+  BEGIN
+    WITH ActTbl DO
+      CASE CurrField OF
+         ULON    :  ULineOn  := CurrStr;
+         ULOFF   :  ULineOff := CurrStr;
+         BLDON   :  BoldOn   := CurrStr;
+         BLDOFF  :  BoldOff  := CurrStr;
+         RVRSLF  :  RevrsLF  := CurrStr;
+         BCKSP   :  BackSP   := CurrStr;
+         SIXNFA  :  SixLnInch.NrmlFormAdv   := CurrStr;
+         SIXSSFA :  SixLnInch.SubSprFormAdv := CurrStr;
+         ATENFA  :  EightLnIn.NrmlFormAdv   := CurrStr;
+         ATESSFA :  EightLnIn.SubSprFormAdv := CurrStr;
+         TENNSP  :  Pitch10.NrmlSpacing := CurrStr;
+         TENM1SP :  Pitch10.Micro1Extra := CurrStr;
+         TENM2SP :  Pitch10.Micro2Extra := CurrStr;
+         TENM3SP :  Pitch10.Micro3Extra := CurrStr;
+         TWLNSP  :  Pitch12.NrmlSpacing := CurrStr;
+         TWLM1SP :  Pitch12.Micro1Extra := CurrStr;
+         TWLM2SP :  Pitch12.Micro2Extra := CurrStr;
+         TWLM3SP :  Pitch12.Micro3Extra := CurrStr;
+         END;{CASE}
+  END; {SaveStr}
+
+  PROCEDURE GetCurrStr;
+  BEGIN
+    WITH ActTbl DO
+      CASE CurrField OF
+         ULON    : CurrStr := ULineOn;
+         ULOFF   : CurrStr := ULineOff;
+         BLDON   : CurrStr := BoldOn;
+         BLDOFF  : CurrStr := BoldOff;
+         RVRSLF  : CurrStr := RevrsLF;
+         BCKSP   : CurrStr := BackSP;
+         SIXNFA  : CurrStr := SixLnInch.NrmlFormAdv;
+         SIXSSFA : CurrStr := SixLnInch.SubSprFormAdv;
+         ATENFA  : CurrStr := EightLnIn.NrmlFormAdv;
+         ATESSFA : CurrStr := EightLnIn.SubSprFormAdv;
+         TENNSP  : CurrStr := Pitch10.NrmlSpacing;
+         TENM1SP : CurrStr := Pitch10.Micro1Extra;
+         TENM2SP : CurrStr := Pitch10.Micro2Extra;
+         TENM3SP : CurrStr := Pitch10.Micro3Extra;
+         TWLNSP  : CurrStr := Pitch12.NrmlSpacing;
+         TWLM1SP : CurrStr := Pitch12.Micro1Extra;
+         TWLM2SP : CurrStr := Pitch12.Micro2Extra;
+         TWLM3SP : CurrStr := Pitch12.Micro3Extra;
+         END;{CASE}
+  END; {GetCurrStr}
+
+  PROCEDURE GetRowCols(Fieldno : INTEGER; VAR scol,srow,dcol,drow : INTEGER);
+  BEGIN
+    CASE Fieldno OF
+       ULON    : BEGIN scol := ULONSCOL;      {underline on field}
+                 srow := ULONSROW;
+                 dcol := ULONDCOL;
+                 drow := ULONDROW; END;
+
+       ULOFF   : BEGIN scol := ULOFSCOL;      {underline off field}
+                 srow := ULOFSROW;
+                 dcol := ULOFDCOL;
+                 drow := ULOFDROW; END;
+
+       BLDON   : BEGIN scol := BDONSCOL;      {bold on field}
+                 srow := BDONSROW;
+                 dcol := BDONDCOL;
+                 drow := BDONDROW; END;
+
+       BLDOFF  : BEGIN scol := BDOFSCOL;      {bold off field}
+                 srow := BDOFSROW;
+                 dcol := BDOFDCOL;
+                 drow := BDOFDROW; END;
+
+       RVRSLF  : BEGIN scol := RVLFSCOL;      {reverse line feed field}
+                 srow := RVLFSROW;
+                 dcol := RVLFDCOL;
+                 drow := RVLFDROW; END;
+       BCKSP   : BEGIN scol := BKSPSCOL;      {reverse line feed field}
+                 srow := BKSPSROW;
+                 dcol := BKSPDCOL;
+                 drow := BKSPDROW; END;
+                                           {six lines per inch fields}
+                                           {six lines per inch fields}
+       SIXNFA  : BEGIN scol := SNFASCOL;       {normal form advance field}
+                 srow := SNFASROW;
+                 dcol := SNFADCOL;
+                 drow := SNFADROW; END;
+
+       SIXSSFA : BEGIN scol := SSFASCOL;       {sub and superscript form advance}
+                 srow := SSFASROW;
+                 dcol := SSFADCOL;
+                 drow := SSFADROW; END;
+                                           {eight lines per inch fields}
+       ATENFA  : BEGIN scol := ENFASCOL;       {normal form advance field}
+                 srow := ENFASROW;
+                 dcol := ENFADCOL;
+                 drow := ENFADROW; END;
+
+       ATESSFA : BEGIN scol := ESFASCOL;       {sub and superscript form advance}
+                 srow := ESFASROW;
+                 dcol := ESFADCOL;
+                 drow := ESFADROW; END;
+                                           {ten pitch fields}
+       TENNSP  : BEGIN scol := TNNSSCOL;       {normal char spacing field}
+                 srow := TNNSSROW;
+                 dcol := TNNSDCOL;
+                 drow := TNNSDROW; END;
+
+       TENM1SP : BEGIN scol := TNM1SCOL;       {plus 1 micro spacing field}
+                 srow := TNM1SROW;
+                 dcol := TNM1DCOL;
+                 drow := TNM1DROW; END;
+
+       TENM2SP : BEGIN scol := TNM2SCOL;       {plus 2 micro spacing field}
+                 srow := TNM2SROW;
+                 dcol := TNM2DCOL;
+                 drow := TNM2DROW; END;
+
+       TENM3SP : BEGIN scol := TNM3SCOL;       {plus 3 micro spacing field}
+                 srow := TNM3SROW;
+                 dcol := TNM3DCOL;
+                 drow := TNM3DROW; END;
+                                           {ten pitch fields}
+       TWLNSP  : BEGIN scol := TWNSSCOL;       {normal char spacing field}
+                 srow := TWNSSROW;
+                 dcol := TWNSDCOL;
+                 drow := TWNSDROW; END;
+
+       TWLM1SP : BEGIN scol := TWM1SCOL;       {plus 1 micro spacing field}
+                 srow := TWM1SROW;
+                 dcol := TWM1DCOL;
+                 drow := TWM1DROW; END;
+
+       TWLM2SP : BEGIN scol := TWM2SCOL;       {plus 2 micro spacing field}
+                 srow := TWM2SROW;
+                 dcol := TWM2DCOL;
+                 drow := TWM2DROW; END;
+
+       TWLM3SP : BEGIN scol := TWM3SCOL;       {plus 3 micro spacing field}
+                 srow := TWM3SROW;
+                 dcol := TWM3DCOL;
+                 drow := TWM3DROW; END;
+       END;{CASE}
+  END; {GetRowCols}
+
+  PROCEDURE DrawFirst(Fieldno, FieldLen : INTEGER; Desc : String64; FieldVal : ActStrg);
+  VAR scol,srow,dcol,drow,i,l : INTEGER;
+     descstr : String64;
+  BEGIN
+    descstr := '';
+    FOR i := 1 TO FieldLen DO descstr := CONCAT(descstr,'.');
+    l := LENGTH(Desc); IF l > FieldLen THEN l := FieldLen;
+    FOR i := 1 TO l DO descstr[i] := Desc[i];
+
+    GetRowCols(Fieldno, scol, srow, dcol, drow);
+
+    GOTOXY(scol, srow); WRITE(descstr);
+    DispField(FieldVal,dcol, drow);
+  END; {DrawFirst}
+
+  PROCEDURE DrawFields;
+  VAR scol,srow,dcol,drow : INTEGER;
+
+    PROCEDURE AllFirst;
+    BEGIN
+      WITH ActTbl DO
+         BEGIN
+         GOTOXY(FIRSTCOL, FIRSTROW); CrtAction(VdoNorUnd);
+         WRITE('Character sequences to perform :');
+         CrtAction(VdoNor);
+         DrawFirst(ULON,  FIRSTDESC,'UnderLine On',     ULineOn);
+         DrawFirst(ULOFF, FIRSTDESC,'UnderLine Off',    ULineOff);
+         DrawFirst(BLDON, FIRSTDESC,'Bold On',          BoldOn);
+         DrawFirst(BLDOFF,FIRSTDESC,'Bold Off',         BoldOff);
+         DrawFirst(RVRSLF,FIRSTDESC,'Reverse Line Feed',RevrsLF);
+         DrawFirst(BCKSP, FIRSTDESC,'Back Space',       BackSP);
+         END;
+    END; {AllFirst}
+
+    PROCEDURE AllSecond;
+    VAR s1,s2 : String64;
+    BEGIN
+      WITH ActTbl DO
+         BEGIN
+         GOTOXY(SECNDCOL, SECNDROW); CrtAction(VdoNorUnd);
+         WRITE('Subscript and Superscript control sequences');
+         CrtAction(VdoNor); GOTOXY(SIXCOL,SIXROW);
+         s1 := 'Normal Form Advance Distance';
+         s2 := 'Sub and Superscript Form Advance';
+         WRITE('6 LPI :');
+         WITH SixLnInch DO
+            BEGIN
+            DrawFirst(SIXNFA,  SECNDDESC, s1, NrmlFormAdv);
+            DrawFirst(SIXSSFA, SECNDDESC, s2, SubSprFormAdv);
+            END;
+         GOTOXY(EIGHTCOL,EIGHTROW);
+         WRITE('8 LPI :');
+         WITH EightLnIn DO
+            BEGIN
+            DrawFirst(ATENFA,  SECNDDESC, s1, NrmlFormAdv);
+            DrawFirst(ATESSFA, SECNDDESC, s2, SubSprFormAdv);
+            END;
+         END;
+    END; {AllSecond}
+
+    PROCEDURE AllThird;
+    VAR s1,s2,s3,s4 : String64;
+    BEGIN
+      WITH ActTbl DO
+         BEGIN
+         GOTOXY(THIRDCOL, THIRDROW); CrtAction(VdoNorUnd);
+         WRITE('Proportional spacing control sequences');
+         CrtAction(VdoNor); GOTOXY(TENCOL,TENROW);
+         s1 := 'Normal character spacing';
+         s2 := 'Plus 1/120th of an inch spacing';
+         s3 := 'Plus 2/120th of an inch spacing';
+         s4 := 'Plus 3/120th of an inch spacing';
+         WRITE('10 CPI :');
+         WITH Pitch10 DO
+            BEGIN
+            DrawFirst(TENNSP,  THIRDDESC, s1,NrmlSpacing);
+            DrawFirst(TENM1SP, THIRDDESC, s2,Micro1Extra);
+            DrawFirst(TENM2SP, THIRDDESC, s3,Micro2Extra);
+            DrawFirst(TENM3SP, THIRDDESC, s4,Micro3Extra);
+            END;
+         GOTOXY(TWLVECOL,TWLVEROW);
+         WRITE('12 CPI :');
+         WITH Pitch12 DO
+            BEGIN
+            DrawFirst(TWLNSP,  THIRDDESC, s1,NrmlSpacing);
+            DrawFirst(TWLM1SP, THIRDDESC, s2,Micro1Extra);
+            DrawFirst(TWLM2SP, THIRDDESC, s3,Micro2Extra);
+            DrawFirst(TWLM3SP, THIRDDESC, s4,Micro3Extra);
+            END;
+         END;
+    END; {AllThird}
+
+  BEGIN {DrawFields}
+    ior := WinSystem(WsysCurr);
+    CrtTitle(pgmTITLE);
+    AllFirst;
+    AllSecond;
+    AllThird;
+    CurrPos := 1; CurrField := ULON; GetCurrStr;
+    GetRowCols(CurrField, scol, srow, dcol, drow);
+    MvFieldCursor(dcol,drow);
+  END;
+
+  PROCEDURE MainInit;
+  BEGIN {MainInit}
+    CCcrtIOinit;
+    CClblIOinit;
+    CCwndIOinit;
+    CChexInit;
+
+    CrtTpgm := pgmNAME;
+    CrtTvrs := pgmVERSION;
+    CrtAction(UcaseOff);
+    CrtAction(EchoOff);
+    CrtAction(DefStrOn);
+    ior := WinSystem(WsysCurr);
+    CrtAction(CursorOff);
+
+    KbrdUnit := OSkybdDv; SendRaw := 1;
+    UNITSTATUS(KbrdUnit,SendRaw,0); {sendraw}
+    Quit := FALSE;
+    Saved := FALSE;
+    FilName := '';
+    InitTbl;
+    DrawFields;
+  END; {MainInit}
+
+  FUNCTION MainLbls : INTEGER;
+  VAR  ior  : INTEGER;
+  BEGIN {MainLbls}
+    LblsInit;
+
+    ior := LblSet( F1, 'Prev', '\1BA' );
+    MainLbls := ior;
+    IF ior <> 0 THEN EXIT(MainLbls);
+    ior := LblSet( F2, 'Next', '\1BB' );
+
+    ior := LblSet( F4, 'Del Char', '\FFD' );
+    ior := LblSet( F5, 'ClrField', '\FFC' );
+
+    ior := LblSet( F6, 'ReadFile', '\FFR' );
+    ior := LblSet( F8, 'WritFile', '\FFW' );
+
+    ior := LblSet( F10, 'EXIT', '\FFE' );
+
+    LblsOn;
+  END; {MainLbls}
+
+  PROCEDURE MainPrompt;
+  BEGIN
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    WRITELN; WRITELN('Enter character or select function.');
+    ior := WinSystem(WsysCurr);
+  END;
+
+  FUNCTION GetFile : INTEGER;
+  VAR ior : INTEGER;
+
+  BEGIN
+    {$I-} RESET(F, FilName); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE('  Cannot open file....IORESULT = ',ior:1);
+        GetFile := ior;
+        EXIT(GetFile);
+        END;
+
+    {$I-} READ(F, ActTbl); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE('  Cannot write file....IORESULT = ',ior:1);
+        GetFile := ior;
+        {$I-} CLOSE(F); {$I+}
+        EXIT(GetFile);
+        END;
+
+    {$I-} CLOSE(F, LOCK); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE('  Cannot close file....IORESULT = ',ior:1);
+        GetFile := ior;
+        EXIT(GetFile);
+        END;
+
+    GetFile := ior;
+    Saved := FALSE;
+  END; {GetFile}
+
+  PROCEDURE ReadFile;
+  VAR ior : INTEGER;
+      c : CHAR;
+      st : CrtStatus;
+
+  BEGIN {ReadFile}
+    LblsOff;
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    c := 'N';
+    WRITE('Do you want to load a new file? [Y/N] N',BS);
+    READLN(c); c := UpperCase(c);
+    IF c='Y' THEN
+       BEGIN
+       CrtAction(EraseALL);
+       WRITE('Enter file name : ');
+       CrtAction(EchoOn);
+       st := GetString(FilName);
+       CrtAction(EchoOff);
+       IF (st <> Escape) OR (LENGTH(FilName) <> 0) THEN ior := GetFile;
+       END;
+    DrawFields;
+    LblsOn;
+  END; {ReadFile}
+
+  FUNCTION WriteFile : INTEGER;
+  VAR ior : INTEGER;
+
+  BEGIN
+    {$I-} REWRITE(F, FilName); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE('  Cannot open file....IORESULT = ',ior:1);
+        WriteFile := ior;
+        EXIT(WriteFile);
+        END;
+
+    {$I-} WRITE(F, ActTbl); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE('  Cannot write file....IORESULT = ',ior:1);
+        WriteFile := ior;
+        {$I-} CLOSE(F, PURGE); {$I+}
+        EXIT(WriteFile);
+        END;
+
+    {$I-} CLOSE(F, LOCK); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE('  Cannot close file....IORESULT = ',ior:1);
+        WriteFile := ior;
+        {$I-} CLOSE(F, PURGE); {$I+}
+        EXIT(WriteFile);
+        END;
+
+    WriteFile := ior;
+    Saved := TRUE;
+  END; {WriteFile}
+
+  PROCEDURE SaveFile;
+  VAR ior : INTEGER;
+      c : CHAR;
+      st : CrtStatus;
+  BEGIN
+    LblsOff;
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    c := 'N';
+    WRITE('Do you want to save this table? [Y/N] N',BS);
+    READLN(c); c := UpperCase(c);
+    IF c='Y' THEN
+       BEGIN
+       CrtAction(EraseALL);
+       WRITE('Enter file name : ');
+       CrtAction(EchoOn);
+       st := GetString(FilName);
+       CrtAction(EchoOff);
+       IF (st <> Escape) OR (LENGTH(FilName) <> 0) THEN
+            BEGIN
+            SaveStr;
+            ior := WriteFile;
+            END;
+       END;
+    LblsOn;
+  END; {SaveFile}
+
+  PROCEDURE DelChar;
+  {only delete if current pos is in string}
+  VAR L, scol,srow,dcol,drow : INTEGER;
+  BEGIN
+    Saved := FALSE;
+    L := LENGTH(CurrStr);
+    IF CurrPos <= L THEN
+       BEGIN
+       DELETE(CurrStr,CurrPos,1);
+       IF CurrPos = L THEN
+          IF LENGTH(CurrStr) = 0 THEN CurrPos := 1
+                                 ELSE CurrPos := CurrPos-1;
+       GetRowCols( CurrField, scol,srow,dcol,drow);
+       MvFieldCursor(dcol,drow);
+       END;
+  END; {DelChar}
+
+  PROCEDURE ClearString;
+  VAR scol,srow,dcol,drow : INTEGER;
+  BEGIN
+    Saved := FALSE;
+    CurrStr := ''; CurrPos := 1;
+    GetRowCols( CurrField, scol,srow,dcol,drow);
+    MvFieldCursor(dcol,drow);
+  END; {ClearString}
+
+  PROCEDURE ChkExit;
+  VAR ch : CHAR;
+  BEGIN {ChkExit}
+    Quit := TRUE;
+    IF (NOT Saved) THEN SaveFile;
+    SendRaw := 0;
+    UNITSTATUS(KbrdUnit,SendRaw,0); {normal}
+    ior := WinSystem(WsysCurr);
+    CrtAction(CursorOn);
+  END; {ChkExit}
+
+  PROCEDURE ProcFncKey;
+  VAR ch : CHAR;
+      Redisp : BOOLEAN;
+  BEGIN {ProcFncKey}
+    Redisp := TRUE;
+    ch := GetNextCh;
+
+    CASE ch OF
+       'C' :  ClearString;
+       'D' :  DelChar;
+       'R' :  ReadFile;
+       'W' :  SaveFile;
+       'E' :  ChkExit;
+       OTHERWISE : Redisp := FALSE;
+       END;{CASE}
+    IF Redisp THEN MainPrompt;
+  END; {ProcFncKey}
+
+  PROCEDURE NewChar(ch : CHAR);
+  VAR L, i, scol,srow,dcol,drow : INTEGER;
+  BEGIN {NewChar}
+    Saved := FALSE;
+    L := LENGTH(CurrStr);
+    IF L < CurrPos THEN
+       FOR i := L+1 TO CurrPos DO CurrStr := CONCAT(CurrStr,' ');
+
+    CurrStr[ CurrPos] := ch;
+    IF CurrPos = ACTSTRLEN THEN CurrPos := 1
+                           ELSE Currpos := CurrPos + 1;
+
+    GetRowCols( CurrField, scol,srow,dcol,drow);
+    MvFieldCursor(dcol,drow);
+  END; {NewChar}
+
+  PROCEDURE CursorMove;
+
+    PROCEDURE ShowNewField;
+    VAR scol,srow,dcol,drow : INTEGER;
+    BEGIN
+      CurrPos := 1; GetCurrStr;
+      GetRowCols( CurrField, scol,srow,dcol,drow);
+      MvFieldCursor(dcol,drow);
+    END;
+
+    PROCEDURE MoveUp;
+    VAR scol,srow,dcol,drow : INTEGER;
+    BEGIN
+      SaveStr;  {Save Current Str in field}
+      {put cur field to normal video}
+      GetRowCols( CurrField, scol,srow,dcol,drow);
+      DispField(CurrStr,dcol, drow);
+
+      {move to new field, up subtract 1 unless cur 0 then do last field}
+      CurrField := CurrField - 1;
+      IF CurrField < ULON THEN CurrField := TWLM3SP;
+      ShowNewField;
+    END; {MoveUp}
+
+    PROCEDURE MoveDown;
+    VAR scol,srow,dcol,drow : INTEGER;
+    BEGIN
+      SaveStr;  {Save Current Str in field}
+      {put cur field to normal video}
+      GetRowCols( CurrField, scol,srow,dcol,drow);
+      DispField(CurrStr,dcol, drow);
+
+      {move to new field, down add 1 unles bottom then 0}
+      CurrField := CurrField + 1;
+      IF CurrField > TWLM3SP THEN CurrField := ULON;
+      ShowNewField;
+    END; {MoveDown}
+
+    PROCEDURE MoveLeft;
+    VAR scol,srow,dcol,drow : INTEGER;
+    BEGIN
+    IF CurrPos = 1 THEN CurrPos := ACTSTRLEN
+                   ELSE Currpos := CurrPos - 1;
+    GetRowCols( CurrField, scol,srow,dcol,drow);
+    MvFieldCursor(dcol,drow);
+    END; {MoveLeft}
+
+    PROCEDURE MoveRight;
+    VAR scol,srow,dcol,drow : INTEGER;
+    BEGIN
+    IF CurrPos = ACTSTRLEN THEN CurrPos := 1
+                           ELSE Currpos := CurrPos + 1;
+    GetRowCols( CurrField, scol,srow,dcol,drow);
+    MvFieldCursor(dcol,drow);
+    END; {MoveRight}
+
+  BEGIN {CursorMove}
+   IF NOT UNITBUSY(KEYBOARD) THEN NewChar(ESC)
+   ELSE BEGIN
+        ch := GetNextCh;
+        CASE ch OF
+          'A' : MoveUp;
+          'B' : MoveDown;
+          'C' : MoveRight;
+          'D' : MoveLeft;
+          OTHERWISE :  BEGIN
+                       NewChar(ESC);
+                       if ch <> ESC then NewChar(ch);
+                       END;
+          END;{CASE}
+        END;
+  END; {CursorMove}
+
+BEGIN {BldAct}
+
+  MainInit;
+
+  ior := MainLbls;
+  IF ior <> 0 THEN
+       BEGIN
+       WRITELN('Failed to establish main environment.  IORESULT = ',ior:1);
+       EXIT(BldAct);
+       END;
+  MainPrompt;
+
+  REPEAT
+    ch := GetNextCh;
+
+    IF ch = '\FF' THEN ProcFncKey
+    ELSE IF (ch = ESC) THEN
+              CursorMove
+         ELSE NewChar(ch);
+    UNTIL(Quit);
+END. {BldAct}
+

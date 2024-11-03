@@ -1,0 +1,158 @@
+
+
+
+
+         OMNIDIAG is a diagnostic tool for Omninet.  It can be
+    used to invoke Transporter commands from the keyboard.  This
+    version of OMNIDIAG will run on an Apple II which is equiped
+    with a Pascal card (or other 16K RAM expansion card) and UCSD
+    Pascal operating system.  The program works best when a
+    terminal is attached, but a 40 column monitor may be used.
+    To run OMNIDIAG, eXecute OD.
+
+         Input/Output Conventions - All numeric input and output
+    is assumed to be decimal numbers.  Hex numbers may be input
+    by preceding them with an exclamation point "!".  Buffer or
+    memory dumps are also displayed in hex.  Backspace may be
+    used to correct mistakes when the input is longer than one
+    character.  OMNIDIAG commands are invoked by typing a single
+    character.  If a user enters a command by mistake, he/she
+    may exit that command by typing <ESC> <CR> (escape and
+    carriage return) for the next input.
+
+         OMNIDIAG Commands
+
+         R)ecv:  Set up a receive on a particular socket, stop
+    receiving on a socket, or check the current setup.  Once a
+    user has set up a receive, OMNIDIAG will automatically set up
+    a new receive each time a new message comes in on that
+    socket.  There are two receive buffers allocated for each
+    socket.  A socket remains setup until the user explicitly
+    stops receiving on that socket or initializes the
+    Transporter.
+
+         S)end:  Send a message, or stop sending.  The user may
+    specify the number of messages to send, or instruct OMNIDIAG
+    to send forever.  In either case the user may terminate
+    sending by typing "S" again.  In other words, the S)end
+    command is a toggle switch.  If already sending then stop
+    sending, otherwise send a new message.
+
+         E)cho:  Send an echo packet to another host on the
+    network.  This can be used to verify that other hosts are
+    attached to the network without any cooperating software
+    running on the other host.
+
+         I)nit: Initialize the Transporter.
+
+         P)eek/Poke:  Read or write the Transporters memory.
+    Useful for checking (or changing) the values of Transporter
+    parameters.  See the Omninet Technical Reference Manual for
+    more details...
+
+         W)ho:  Prints the host numbers of every host which is
+    attached to the network and powered up...
+
+         O)ther:  Display the other command line.
+
+                                 -1-
+{$P}
+
+    OMNIDIAG Commands continued:
+
+         A)gain:  Send the last message again with the same
+    parameters.
+
+         C)ounters:  Display OMNIDIAG's counters or zero them.
+
+         D)ump:  Display buffers, headers or memory.
+
+         F)ill:  Fill memory, headers, or buffers.
+
+         H)elp:  Doesn't do much in this version...
+
+         O)mni:  Display the main OMNIDIAG command line.
+
+         Q)uit:  Exit the OMNIDIAG program.
+
+         M)isc:  Do the miscellaneous commands... described
+    below....
+
+    Note:  All of the above commands may be invoked at any time.
+    The command line is merely a reminder of the commands which
+    are possible.
+
+    The miscellaneous commands:
+
+         D)ebug:  Toggle the debugging flag... Unpredictable
+    things may happen!!!
+
+         N)ewDelay:  Allows the user to specify a delay between
+    sends....
+
+         R)AM6801:  Displays the entire RAM of the 6801
+    microcomputer which controls the Transporter.
+
+         S)lot:  Allows the user to change the Apple slot number
+    which is used by the Transporter.
+
+         V)erbose:  Toggles the verbose/brief flag.  OMNIDIAG is
+    in verbose mode by default.  When in brief mode, the screen
+    is not updated after every send or receive as is usually the
+    case.  This is useful when several senders are sending to one
+    receiver.  The receiver may not be able to keep up if it has
+    to do alot of printing on the screen.  Putting OMNIDIAG in
+    brief mode is a form of flow control... Of course, you could
+    always use the NewDelay command to slow down the senders.....
+
+                                 -2-
+{$P}
+
+
+         A few words about the screen format....  The bottom half
+    of the screen displays the receive socket status.  There are
+    five fields for each socket:
+
+         Socket - The socket number.
+
+         Status - The current state of that socket.  There are 3
+    possible states: Not Set Up, No Buffer, and Ready.  No
+    Buffer indicates that a receive has been set up on that
+    socket, but there is no buffer currently available.  This
+    should happen very infrequently.
+
+         Count - The number of messages which have been received
+    on that socket.  This is a 16 bit signed integer, so don't
+    be alarmed if you let it run for a long time and you see a
+    negative count.
+
+         Source - This is the host number of the station which
+    sent the last message which was received on the socket.
+
+         Buf Id - The buffer ID for the last message which was
+    received on the socket.  This is used to identify which
+    buffer when Dumping or Filling.....
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                 -3-

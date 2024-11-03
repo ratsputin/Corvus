@@ -1,0 +1,29 @@
+
+Directory of UCSD disk image file 'dor-1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume DOR.1 has 21 files,  0 to 6 (6), eov 500, size 119, free 21
+
+ 1: MOVE            Data  4-Feb-83    6-  37(  31), 15872+512= 16384 bytes
+ 2: BRPTMEMO.TEXT   Text 28-Feb-83   37-  43(   6),  3072+512=  3584 bytes
+ 3: DUMP.TEXT       Text 19-Jun-83   43-  49(   6),  3072+512=  3584 bytes
+ 4: DUMP.OBJ        Data 19-Jun-83   49-  52(   3),  1536+512=  2048 bytes
+ 5: DUMP            Data 19-Jun-83   52-  58(   6),  3072+512=  3584 bytes
+ 6: AP3BUGS.TEXT    Text 30-Mar-83   58-  66(   8),  4096+512=  4608 bytes
+ 7: CPMBUGS.TEXT    Text 25-May-83   66-  72(   6),  3072+512=  3584 bytes
+ 8: ALL.OS.TEXT     Text 10-Nov-83   72-  76(   4),  2048+512=  2560 bytes
+ 9: CCOSPSERV.TEXT  Text 10-Nov-83   76-  80(   4),  2048+512=  2560 bytes
+10: IBMPSERV.TEXT   Text  4-Oct-83   80-  86(   6),  3072+317=  3389 bytes
+11: TIPSERV.TEXT    Ux2003  1-Feb-84   86-  92(   6),  3072+512=  3584 bytes
+12: TIBUGS.TEXT     Text  1-Feb-84   92- 100(   8),  4096+512=  4608 bytes
+13: DRBBUGS.TEXT    Text  5-Dec-83  100- 114(  14),  7168+512=  7680 bytes
+14: DRBPSERV.TEXT   Text  5-Dec-83  114- 120(   6),  3072+512=  3584 bytes
+15: IB2BNK.TEXT     Text  1-Feb-84  120- 130(  10),  5120+512=  5632 bytes
+16: AP2C2BGS.TEXT   Text 29-May-84  130- 140(  10),  5120+512=  5632 bytes
+17: CCOSBANK1.TEXT  Text 29-May-84  140- 152(  12),  6144+512=  6656 bytes
+18: TBLCNTS.TEXT    Text 30-May-84  152- 174(  22), 11264+512= 11776 bytes
+19: PRINTER         Data  6-Jun-88  174- 177(   3),  1536+441=  1977 bytes
+20: LIST.TEXT       Text  2-Oct-89  177- 181(   4),  2048+ 34=  2082 bytes
+21: W               Data  2-Oct-89  181- 381( 200), 102400+512= 102912 bytes

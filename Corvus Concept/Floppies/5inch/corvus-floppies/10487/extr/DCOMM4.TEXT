@@ -1,0 +1,255 @@
+{----------------------------------------------------------------------}
+{ File: DCOMM4.TEXT
+{----------------------------------------------------------------------}
+
+{$S OPTIONSEG}
+
+{ ChkOpFil ------------------------------------------------------------}
+{ Attempts to find DCOMM.OPTIONS.  If found, does nothing.
+{ If not found, this creates a new one and fills it with
+{ default option settings.
+{----------------------------------------------------------------------}
+PROCEDURE ChkOpFil;
+      var result, k: integer;
+          default: array [1..20] of string[8];
+          infile, OptFile: text;
+      begin
+      reset (infile,'DCOMM.OPTIONS'); result := ioresult;
+      if result = 0
+        then begin close (infile); exit (ChkOpFil); end
+        else begin
+           if NOT GetYN (concat('Unable to find file DCOMM.OPTIONS'),
+                         'Create new file') then ExitPgm;
+           for k := 1 to 20 do default[k] := '';  { init array }
+           default[OPTversion] := version;
+           default[OPTautoDTR] := 'False';
+           default[OPTecho   ] := 'False';
+           default[OPTquiet  ] := 'False';
+           default[OPTxonXoff] := 'None';
+           default[OPTtrmType] := 'Concept';
+           default[OPTdialCmd] := 'ATDT';
+           default[OPTthrotle] := '1';
+           default[OPTbaud   ] := '300';
+           default[OPTparity ] := 'N';
+           default[OPTdtaBits] := '8';
+           default[OPTstpBits] := '1';
+           default[OPTport   ] := '1';
+           default[OPTdelay  ] := '0';
+           default[OPTpaceChr] := '0';
+           StatMsg ('');
+           StatMsg ('Unable to find file DCOMM.OPTIONS on current volume');
+           StatMsg ('Creating new file with default settings');
+           StatMsg ('');
+           rewrite (OptFile,'DCOMM.OPTIONS');
+           for k := 1 to 20 do writeln (OptFile,default[k]);
+           close (OptFile,lock);
+           end;
+      end;
+
+{$P}
+{ ReadOpts ------------------------------------------------------------}
+{ Reads option settings from file DCOMM.OPTIONS into
+{ string array 'options'.  If file DCOMM.OPTIONS can't be
+{ found, it creates a new one by calling ChkOpFil.
+{ If DCOMM.OPTIONS doesn't contain enough data, 'options'
+{ is padded with blank entries.
+{----------------------------------------------------------------------}
+PROCEDURE ReadOpts;
+      var k,result: integer; infile: text;
+      begin
+      for k := 1 to 20 do option[k] := '';  { init array with blanks }
+      filename := 'DCOMM.OPTIONS';
+      result := FileAgent (infile,filename,opn,rd,txt);
+      if result <> 1 then ChkOpFil; { open file, but create new if none there }
+      result := 0;  k := 0;
+      while (k < 20) and (result = 0) do begin
+          k := k+1;
+          readln (infile,option[k]); result := ioresult;
+          if result > 0 then option[k] := '';
+          end;
+      end;
+
+{$P}
+{ SetOpts -------------------------------------------------------------}
+{ Reads option settings/defaults from file DCOMM.OPTIONS.
+{ This file is guaranteed to exist by the time SetOpts is called.
+{----------------------------------------------------------------------}
+PROCEDURE SetOpts;
+      var k: integer; bool: string80;
+          filename: string[38]; infile: text;
+      PROCEDURE NxtField (var st: string80);
+          var i: integer;
+          begin
+          readln (infile,st);
+          for i := 1 to length(st) do st[i] := UpperCase (st[i]);
+          end;
+      begin
+      filename := 'DCOMM.OPTIONS';
+      reset (infile,filename);
+      NxtField (bool); { version number }
+      NxtField (bool); if bool = 'TRUE' then autodtr := TRUE
+                                        else autodtr := FALSE;
+      NxtField (bool); if bool = 'TRUE' then echo := TRUE
+                                        else echo := FALSE;
+      NxtField (bool); if bool = 'TRUE' then quiet := TRUE
+                                        else quiet := FALSE;
+      NxtField (bool); XON_XOFF[1] := bool[1];
+      NxtField (bool);
+      if bool = 'CONCEPT' then currTerm := Concept else
+      if bool = 'TTY'     then currTerm := TTY     else
+      if bool = 'VT100'   then currTerm := VT100   else
+                               currTerm := Concept;
+      NxtField (volname);
+      NxtField (dialcmd);
+      readln (infile,throttle);
+      readln (infile,baud[1]);
+      readln (infile,parity[1]);
+      readln (infile,databits[1]);
+      readln (infile,stopbits[1]);
+      readln (infile,DCport);
+      readln (infile,pace_delay);
+      readln (infile,pace_ascii);
+      pace_char := chr(pace_ascii);
+      for k := 1 to 4 do NxtField (prefix[k]);
+      if (DCport < 1) or (DCport > 2) then DCport := 1;
+      SetComm (1); { set the new comm parms }
+      close (infile);
+      end;
+
+{$P}
+{ ChgOpts -------------------------------------------------------------}
+{ Allows user to review/change option settings
+{----------------------------------------------------------------------}
+PROCEDURE ChgOpts;
+      var OptName: array [1..20] of string[39];
+          i,k,result: integer; ch: char;
+          newopt: string80; charstr: string[1];
+          OptFile: text;
+
+{ ChgOpts.ShowOpts ----------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ShowOpts;
+      var k: integer;
+      begin
+      write (crtNorVdo,crtEraALL,crtInvVdo,crtEraEOL,CR);
+      write ('     Option Name               Default      Current');
+      write (crtEraEOL,CR,crtEraEOL,CR);
+      for k := 2 to 20 do
+          writeln (' ',OptName[k],' ':6,option[k],crtEraEOL);
+      writeln (crtEraEOL);
+      GoToXY (0,23);
+      end;
+
+{ ChgOpts.OptErr ------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE OptErr (ernum: integer);
+      begin
+      StatMsg ('While trying to make new DCOMM.OPTIONS file,');
+      StatMsg ('following error occured:'); IOmsg (result);
+      StatMsg ('Changes NOT made');
+      close (OptFile);
+      exit (ChgOpts);
+      end;
+
+{ ChgOpts -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      HoldComm; LblsInit;      { turn off Dialer's labels }
+      OptName[OPTautoDTR] := 'a - Auto DTR on/off ......... False  ';
+      OptName[OPTecho   ] := 'b - Echo locally ............ False  ';
+      OptName[OPTquiet  ] := 'c - Quiet mode (no beeps) ... False  ';
+      OptName[OPTxonXoff] := 'd - Char protocol (handshake) None   ';
+      OptName[OPTtrmType] := 'e - Terminal type ........... Concept';
+      OptName[OPTdefVol ] := 'f - DComm default volume ....        ';
+      OptName[OPTdialCmd] := 'g - Auto dialing command .... ATDT   ';
+      OptName[OPTthrotle] := 'h - "throttle" setting ...... 1      ';
+      OptName[OPTbaud   ] := 'i - Baud rate ............... 300    ';
+      OptName[OPTparity ] := 'j - Parity .................. None   ';
+      OptName[OPTdtaBits] := 'k - Data bits ............... 8      ';
+      OptName[OPTstpBits] := 'l - Stop bits ............... 1      ';
+      OptName[OPTport   ] := 'm - DataComm port 1 or 2 .... 1      ';
+      OptName[OPTdelay  ] := 'n - Pacing delay (1/10 sec) . 0      ';
+      OptName[OPTpaceChr] := 'o - ASCII val of pacing chr . 0      ';
+      OptName[OPTpfx1   ] := 'p - Value of prefix  + ......        ';
+      OptName[OPTpfx2   ] := 'q - Value of prefix  & ......        ';
+      OptName[OPTpfx3   ] := 'r - Value of prefix  # ......        ';
+      OptName[OPTpfx4   ] := 's - Value of prefix  $ ......        ';
+      charstr := '*';
+      ReadOpts;     { get current option settings }
+      ShowOpts;     { display them }
+      while TRUE do begin
+          ChgChar (ch,'Options','Press RETURN to exit or ESC to escape',
+                                'Select entry to change [a..s]');
+          if cst <> Normal then begin  { EXIT - forget any changes }
+              StatMsg ('No changes made');
+              CR_DELAY (12);
+              exit (ChgOpts); { exit without changing DCOMM.OPTIONS }
+              end;
+          if eoln then begin  { EXIT & write a new DCOMM.OPTIONS file }
+              StatMsg ('Entering directory changes');
+              rewrite (OptFile,'DCOMM.OPTIONS'); result := ioresult;
+              if result <> 0 then OptErr (result);
+              for k := 1 to 20 do writeln (OptFile,option[k]);
+              result := ioresult;
+              if result <> 0 then OptErr (result);
+              close (OptFile,lock); result := ioresult;
+              if result <> 0 then OptErr (result);
+              CR_DELAY (12);
+              SetOpts;    { place new options into effect }
+              exit (ChgOpts);
+              end;
+          k := MapRecNum (ch);
+          if (k > 0) and (k <= 19)
+          then begin
+              charstr[1] := ch; newopt := '';
+              ChgString (newopt,'Options','',
+                         concat('Enter new setting for option ',charstr));
+              if (cst = Normal) and (newopt <> '') then begin
+                  for i := 1 to length(newopt) do
+                      newopt[i] := UpperCase (newopt[i]);
+                  case k+1 of
+                      OPTautoDTR,
+                      OPTecho,
+                      OPTquiet:   case newopt[1] of
+                                  'F': newopt := 'False';
+                                  'T': newopt := 'True';
+                            otherwise: newopt := 'False';
+                                  end; {case}
+                      OPTxonXoff: case newopt[1] of
+                                  'N': newopt := 'None';
+                                  'X': newopt := 'XonXoff';
+                            otherwise: newopt := 'None';
+                                  end; {case}
+                      OPTtrmType: case newopt[1] of
+                                  'C': newopt := 'Concept';
+                                  'T': newopt := 'TTY';
+                                  'V': newopt := 'VT100';
+                            otherwise: newopt := 'Concept';
+                                  end; {case}
+                      OPTparity : begin
+                                  if newopt[1] = 'E' then newopt := 'Even'  else
+                                  if newopt[1] = 'M' then newopt := 'Mark'  else
+                                  if newopt[1] = 'O' then newopt := 'Odd'   else
+                                  if newopt[1] = 'S' then newopt := 'Space' else
+                                                          newopt := 'None';
+                                  end;
+                      OPTdefVol,
+                      OPTdialCmd: begin
+                                  for i := 1 to length(newopt) do
+                                      newopt[i] := UpperCase (newopt[i]);
+                                  if newopt = ' ' then newopt := '';
+                                  end;
+                      end; {case}
+                  GoToXY (44,k+2);
+                  write (crtInvVdo,newopt,crtEraEOL,crtNorVdo);
+                  option[k+1] := newopt;
+                  end;
+              GoToXY (0,23);
+              end
+          else write (pbeep);
+          end; {while}
+      end;
+{$S}
+
+
+

@@ -1,0 +1,312 @@
+        page
+;
+; File: os.gbl.asm.text
+; Date: 11-May-83
+;
+;
+; Corvus CONCEPT operating system data structure equates
+;
+
+;
+; Additional Corvus CONCEPT I/O result codes
+;
+IOok       equ 0  ;Good result, no error
+IOEcrcer   equ 1  ;CRC error
+IOEinvdev  equ 2  ;Invalid unit number/invalid device
+IOEioreq   equ 3  ;Invalid I/O request
+IOEnebhrd  equ 4  ;Nebulous hardware error
+IOEoffln   equ 5  ;Drive off line
+                  ;
+IOEwrprot  equ 16 ;Device write protected
+IOEinvblk  equ 18 ;Invalid block number
+                  ;
+IOEnotrn   equ 21 ;Transporter not ready
+IOEtimot   equ 22 ;Timed out waiting for Omninet event
+IOEnobuf   equ 23 ;Read without a valid write buffer
+IOEflpto   equ 24 ;Timeout error
+IOEnoT0    equ 25 ;Cannot restore to track 0
+IOEnfmtd   equ 26 ;Disk not formatted
+IOEinvsct  equ 27 ;Invalid sector length error
+IOEwrngC   equ 28 ;Read wrong track
+IOEbdtrk   equ 29 ;Track marked as bad (IBM spec)
+                  ;
+IOEwndfn   equ 32 ;Invalid window function
+IOEwndbe   equ 33 ;Window create boundary
+IOEwndcs   equ 34 ;Invalid character set
+IOEwnddc   equ 35 ;Delete current window
+IOEwndds   equ 36 ;Delete system window
+IOEwndiw   equ 37 ;Inactive window
+IOEwndwr   equ 38 ;Invalid window record
+IOEwndwn   equ 39 ;Invalid system window number
+                  ;
+IOEnodsp   equ 40 ;Display driver not available
+IOEnokyb   equ 41 ;Keyboard driver not available
+IOEnotim   equ 42 ;Timer driver not available
+IOEnoomn   equ 43 ;OMNINET driver not available
+IOEnoprt   equ 44 ;Printer driver not available
+IOEnfdrv   equ 45 ;No floppy drive at slot
+IOEnodtc   equ 46 ;DataComm driver not available
+                  ;
+IOEtblid   equ 50 ;Invalid table entry ID
+IOEtblfl   equ 51 ;Table full
+IOEtbliu   equ 52 ;Table entry in use
+IOEkybte   equ 53 ;Keyboard transmission error
+IOEuiopm   equ 54 ;Invalid unit I/O parameter
+IOEprmln   equ 55 ;Invalid parameter block length
+IOEfnccd   equ 56 ;Invalid function code
+IOEclkmf   equ 57 ;Clock (hardware) malfunction
+                  ;
+IOEirdsbl  equ 60 ;Input to read buffer disabled
+IOEordsbl  equ 61 ;Output to read buffer disabled
+IOEiwdsbl  equ 62 ;Input to write buffer disabled
+IOEowdsbl  equ 63 ;Output to write buffer disabled
+IOEbszerr  equ 64 ;Buffer size error
+IOEunknwn  equ 64 ;Unknown hardware error
+IOEwszerr  equ 65 ;Write size error
+IOErszerr  equ 66 ;Read size error
+IOEuarter  equ 67 ;UART hardware error (overrun, parity, or framing)
+IOEpaderr  equ 68 ;Proportional spacing error (excess pad chars req)
+       page
+;
+; Queue element overhead definition
+;
+queLN   equ    0       ;queue element data length
+queFP   equ    4       ;queue element forward pointer (0 = end)
+queLP   equ    8       ;queue element listhead pointer
+queHD   equ    12      ;queue element header info length (actual)
+
+
+;
+; Queue buffer overhead definition
+;
+QBqov   equ    0       ;queue buffer element overhead
+QBkey   equ    12      ;queue buffer validation
+QBnlh   equ    16      ;queue buffer number of listheads
+QBovl   equ    18      ;queue buffer overhead length
+QBoln   equ    20      ;queue buffer overhead length (actual)
+
+
+;
+; Program Control Block definition
+;
+PCBsr    equ   0       ;status register
+PCBpc    equ   2       ;program counter
+PCBjt    equ   6       ;segment jump table pointer
+PCBwp    equ   10      ;window record pointer
+PCBdn    equ   14      ;data registers
+PCBan    equ   46      ;address registers
+PCBa0    equ   PCBan+00;   A0
+PCBa1    equ   PCBan+04;   A1
+PCBa7    equ   PCBan+28;   A7 (stack pointer)
+PCBnx    equ   78      ;next PCB pointer
+PCBst    equ   82      ;processing result
+PCBio    equ   84      ;I/O result
+PCBlhcd  equ   86      ;lsthd - code segments
+PCBlhlf  equ   90      ;lsthd - load file FIB
+PCBlhst  equ   94      ;lsthd - stack
+PCBlhhp  equ   98      ;lsthd - heap
+PCBlhsc  equ  102      ;lsthd - screen
+PCBhiH   equ  106      ;
+PCBloH   equ  110      ;
+PCBid    equ  114      ;program file id
+PCBlen   equ  138      ;
+
+       page
+BlockSz    equ 512      ;system block size
+;
+; System Common Pointer
+;
+pSysCom    equ  $0180   ;pointer to address of SYSCOM
+SysKybdFlg equ  $0184   ;keyboard control flags
+SysByteScn equ  $0186   ;display driver - bytes per scan line
+pQueBuf    equ  $0190   ;pointer to address of system queue buffer
+;
+; System Common Equates
+;
+SCiorslt equ    0       ;word - I/O result
+SCprocno equ    2       ;word - current process number
+SCfreehp equ    4       ;lint - free heap pointer
+SCjtable equ    8       ;lint - jump table pointer
+SCsysout equ    12      ;lint - default output file pointer
+SCsysin  equ    16      ;lint - default input file pointer
+SCdevtab equ    20      ;lint - device (unit) table pointer
+SCdirnam equ    24      ;lint - directory name string pointer
+SCutable equ    28      ;lint - user table pointer
+SCtoday  equ    32      ;word - system date
+SCcodejt equ    34      ;lint - code jump table pointer
+SCnxtpro equ    38      ;word - next process number
+SCnumpro equ    40      ;word - number of processes
+SCprotbl equ    42      ;lint - process table pointer
+SCbootnm equ    46      ;lint - boot device name pointer
+SCmemmap equ    50      ;lint - memory map pointer
+SCbootdv equ    54      ;word - boot device number
+                        ;
+                        ; CONCEPT additions
+;        equ    56      ;word - unused
+;        equ    58      ;word - unused
+SCslttbl equ    60      ;lint - slot table pointer
+SCrootw  equ    64      ;lint - root window record pointer
+SCcurrw  equ    68      ;lint - current window record pointer
+SCcurrk  equ    72      ;lint - current keyboard record pointer
+SCuserid equ    76      ;word - Constellation user ID
+SCvrsnbr equ    78      ;lint - current version number string pointer
+SCvrsdat equ    82      ;lint - current version date string pointer
+SCwndtbl equ    86      ;lint - window table pointer
+SCsusinh equ    90      ;word - suspend inhibit count
+SCsusreq equ    92      ;word - suspend request if non-zero
+;        equ    94      ;
+;        equ    95      ;
+SCcurPCB equ    96      ;lint - current PCB pointer
+
+        page
+;
+; System Vector Equates
+;
+SVuwrite equ     0*4    ;unit write
+SVuread  equ     1*4    ;unit read
+SVuclear equ     2*4    ;unit clear
+SVubusy  equ     3*4    ;unit busy
+SVput    equ     4*4    ;put
+SVget    equ     5*4    ;get
+SVinit   equ     6*4    ;init
+SVopen   equ     7*4    ;open
+SVclose  equ     8*4    ;close
+SVwrchar equ     9*4    ;writechar
+SVrdchar equ    10*4    ;readchar
+SVblkio  equ    11*4    ;blockio
+SVseek   equ    12*4    ;seek
+SVnew    equ    13*4    ;new
+SVdsp    equ    14*4    ;dispose
+SVmark   equ    15*4    ;mark
+SVrlease equ    16*4    ;release
+SVmavail equ    17*4    ;memory available
+SVgetdir equ    18*4    ;get directory
+SVcrkpth equ    24*4    ;crack path name
+SVustat  equ    25*4    ;unit status
+SVnew4   equ    26*4    ;new     (longint)
+SVdsp4   equ    27*4    ;dispose (longint)
+                        ;
+SVcli    equ    31*4    ;command line interpreter
+SVgetvnm equ    32*4    ;get volume names
+SVvaldir equ    33*4    ;check valid directory
+SVflpdir equ    34*4    ;flip directory
+SVschdir equ    35*4    ;search directory
+SVdelent equ    36*4    ;delete directory entry
+SVputdir equ    37*4    ;write directory
+SVuinstl equ    38*4    ;unit install
+
+;
+; Memory Map Equates
+;
+MMlodta  equ    0       ;lint - low data pointer
+MMhidta  equ    4       ;lint - high data pointer
+MMlocod  equ    8       ;lint - low code pointer
+MMhicod  equ    12      ;lint - high code pointer
+MMbtsw   equ    16      ;word - boot switches
+MMbtdev  equ    18      ;word - boot device number
+MMbtslt  equ    20      ;word - boot slot number
+MMbtsrv  equ    22      ;word - boot server number
+MMbtdrv  equ    24      ;word - boot drive number
+MMbtblk  equ    26      ;word - boot volume block number
+
+        page
+;
+; Unit Table Equates
+;
+UTiodrv equ     2       ;lint - I/O driver pointer
+UTblf   equ     6       ;bool - blocked device flag
+UTmtd   equ     7       ;bool - mounted device flag
+UTdid   equ     8       ;str7 - device ID
+UTsiz   equ     16      ;lint - device size
+UTslt   equ     20      ;byte - device slot
+UTsrv   equ     21      ;byte - device server
+UTdrv   equ     22      ;byte - disk drive nmbr
+UTtyp   equ     23      ;byte - disk drive type
+UTspt   equ     24      ;byte - sectors per track
+UTtps   equ     25      ;byte - tracks per side
+UTro    equ     26      ;bool - device read only
+UTflp   equ     27      ;bool - volume directory flipped
+UTblk   equ     28      ;lint - disk base block
+UTlen   equ     32      ;       entry length
+
+;
+; Slot Table Equates
+;
+STbtslt  equ    0       ;boot slot number
+STbtsrv  equ    2       ;boot server number
+STacslt  equ    4       ;active slot number
+STacsrv  equ    6       ;active server number
+STalslt  equ    8       ;alternate slot number
+STalsrv  equ    10      ;alternate server number
+STinfo   equ    12      ;array [1..5] of ....
+                        ;
+STnmbr   equ    0       ;   slot number (1-5)
+STtype   equ    1       ;   device type (slottypes)
+STndrv   equ    2       ;   number of drives
+STinfoL  equ    4       ;   device info length
+
+        page
+;
+; Character Set Record Equates
+;
+CStblloc equ    0       ;character set data pointer
+CSlpch   equ    4       ;scanlines per character (assume wide)
+CSbpch   equ    6       ;bits per character (vertical height)
+CSfrstch equ    8       ;first character code - ascii
+CSlastch equ    10      ;last character code - ascii
+CSmask   equ    12      ;mask used in positioning cells
+CSattr1  equ    16      ;attributes
+                        ;  bit 0 = 1 - vertical orientation
+CSattr2  equ    17      ;currently unused
+
+;
+; Window Record Equates
+;
+WRcharpt equ    0       ;character set pointer
+WRhomept equ    4       ;home (upper left) pointer
+WRcuradr equ    8       ;current location pointer
+WRhomeof equ    12      ;bit offset of home location
+WRbasex  equ    14      ;home x value, relative to root window
+WRbasey  equ    16      ;home y value, relative to root window
+WRlngthx equ    18      ;maximum x value, relative to window (bits)
+WRlngthy equ    20      ;maximum y value, relative to window (bits)
+WRcursx  equ    22      ;current x value (bits)
+WRcursy  equ    24      ;current y value (bits)
+WRbitofs equ    26      ;bit offset of current address
+WRgrorgx equ    28      ;graphics - origin x (bits relative to home loc)
+WRgrorgy equ    30      ;graphics - origin y (bits relative to home loc)
+WRattr1  equ    32      ;attributes
+                        ;
+invrse   equ    0       ;   inverse video mode
+undscr   equ    1       ;   underscore mode
+insmod   equ    2       ;   insert mode
+viddeflt equ    3       ;   0 = W on B,       1 = B on W
+noautolf equ    4       ;   0 = auto LF w/CR, 1 = no auto LF
+syswin   equ    5       ;   system defined window
+active   equ    6       ;   active window
+suspend  equ    7       ;   suspended window
+                        ;
+WRattr2  equ    33      ;attributes
+                        ;
+vert     equ    0       ;   1 = vertical,   0 = horizontal screen
+graphic  equ    1       ;   1 = graphics,   0 = character mode
+curson   equ    2       ;   1 = cursor on,  0 = cursor off
+invcurs  equ    3       ;   1 = inverse,    0 = underline cursor
+wrapon   equ    4       ;   1 = wrap,       0 = clip at eoln
+noscroll equ    5       ;   1 = no scroll,  0 = scroll
+clrsc    equ    6       ;   1 = paging mode
+vidset   equ    7       ;   1 = inverse     0 = normal
+                        ;
+WRstate  equ    34      ;used for decoding escape sequences
+WRrcdlen equ    35      ;window description record length
+WRattr3  equ    36      ;enhanced character set attributes
+WRfill1  equ    37      ;currently unused
+WRfill2  equ    38      ;currently unused
+WRfill3  equ    39      ;currently unused
+WRfill4  equ    40      ;currently unused
+WRwwsptr equ    44      ;window working storage pointer
+                        ;
+WRlength equ    48      ;actual window record length
+
+         page
+

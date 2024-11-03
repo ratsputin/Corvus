@@ -1,0 +1,393 @@
+
+From: Denise Pitsch                             June 29, 1982
+
+  To: Distribution
+      R&D Staff
+
+Subject:  Description of Constellation II software
+
+Three documents are now available describing the Constellation II
+software. The first is a description of the capabilities of
+Constellation II and is intended for both Corvus people and
+customers.  The second is a brief overview of the internals of
+Constellation II, and is intended for Corvus people and for interface
+developers who have some interest in implementing Constellation II. 
+The third is an analysis of the impact of Constellation II software
+on existing products, and is intended for product marketing and R&D
+only.
+
+Please let me know if you would like copies of any of these documents.
+
+Distribution:
+
+     Doug Broyles
+     Steve Davis 
+     Avery Dee 
+     Mark Hahn 
+     Joe Hughes 
+     Dave Sparks 
+     Bob Wohnoutka
+
+$P
+
+
+                       Constellation II Software
+                                   
+                             June 29, 1982
+
+
+                               
+                               Contents
+   
+   1.0  Introduction
+   
+   2.0  Constellation II overview
+        2.1  Disk sharing
+        2.2  File transfers between operating systems
+        2.3  Printer sharing
+        2.4  Concurrent access
+   
+   3.0  The pieces of Constellation II
+        3.1  Disk firmware
+        3.2  Disk-server firmware
+        3.3  Drivers
+        3.4  Booting
+        3.5  Support programs
+   
+   
+   
+                              Appendices
+
+   A. Definition of terms used
+
+   B. Tables
+      B.1  Boot assignments
+      B.2  Operating system assignments
+      B.3  Directory formats
+      B.4  Net host types
+$P
+1.0  Introduction
+
+
+This document defines what is meant by Constellation II.  It is
+intended to serve as an introduction to those people who know little
+or nothing about the Constellation II software.
+
+Constellation II software is the set of software supplied by Corvus
+which enables end-users to quickly and easily install their
+application programs on their Corvus drive and/or networks.  The bulk
+of the software is concerned with disk sharing; other programs
+support file transfer between operating systems and shared printing.
+
+Note that Constellation II software is not radically different, at 
+the user-level, from Constellation I software.  It is an extension of
+Constellation I software to systems other than the Apple, and it
+removes some of the limitations of Constellation I software.
+
+
+
+2.0  Constellation II overview
+
+
+2.1  Disk sharing
+-----------------
+
+A person using Constellation software should consider his/her Corvus
+disk as a box of different size and format floppy disks.  We call
+these imaginary floppy disks 'volumes'; the Corvus disk can contain
+many volumes. For instance, the same Corvus disk can contain a Zenith
+H-89 CP/M volume, an Apple II Pascal volume, and an IBM/PCDos
+volume.  In addition, these volumes can, depending upon the host
+operating system, be variable size, and can contain much more data
+than the floppy disks they are imitating.  Corvus provides the
+software necessary to set up and access these volumes in a manner
+transparent to the user's currently running software.  That is, a
+program accessing floppy drives A: and B: with IBM/PCDos can run on
+the Corvus disk simply by installing the Corvus supplied software and
+specifying that A: and B: reside on the Corvus disk.
+  
+The Corvus software also provides for shared and private volumes. A
+system manager can specify which users have read or write access to
+any volume, and the Corvus software guarantees that users who follow
+the rules cannot override the access they have been granted.  A user
+must know a valid user name and password before he/she can access the
+drive.  
+
+Specifically, disk sharing software includes the following programs,
+grouped according to who would use the them:
+
+  System manager functions
+    + Drive Manager - creates volumes
+    + User Manager  - creates users
+    + Access Manager- specifies user/volume relationship
+    + Boot manager  - sets up hardware boot information
+    
+  Maintenance programs
+    + Installation program (SYSGEN)
+    + Disk diagnostic
+    + Omninet diagnostic (OTEST)
+    + Recovery programs
+    + Mirror programs (Mirror, Mbackup)
+  
+  Individual user functions
+    + Mount Manager
+    + Library procedures for programmatic mount, getuser name
+
+Disk-sharing software is provided on Omninet and Multiplexer systems.
+
+2.2  File transfers between operating systems
+---------------------------------------------
+
+An operating system independent area of the Corvus disk, called the
+pipes area, may be reserved for this function, and Corvus-supplied
+software allows for transferring data into and out of this area. Both
+text files and non-text files may be transferred.  A sending program
+reads a file and writes to the pipes area, and a receiving program
+reads the pipes area and creates a file.
+
+This software is provided on disk-based Omninet and Multiplexer systems.
+
+An unbuffered version of this software is available for those Omninet
+systems which do not contain a Corvus disk.
+
+2.3  Printer sharing
+--------------------
+
+The same software described above can be used to control a shared
+printer. One computer must be dedicated to the printing task during the
+time which printing is to occur, but anyone can send a file to the
+printer at any time: the file will simply be saved on the disk until
+the printer is started up.
+
+An unbuffered version of this software is available for those Omninet
+systems which do not contain a Corvus disk; however, in this
+configuration, users cannot send files unless the computer
+controlling the printer is on-line. Additionally, only one user at a
+time may send a file.
+
+2.4  Concurrent access
+----------------------
+
+All of the operating systems currently supported by Constellation II
+are single-user operating systems.  This means that they have no
+protection against concurrent access, since concurrent access cannot
+occur in a single-user system.  
+
+For systems which contain a Corvus disk, Corvus provides a set of
+primitive operations upon which applications requiring concurrent
+access can be built. These primitives include indivisible LOCK and
+UNLOCK operations on Corvus supplied semaphores.  Note that Corvus
+does not supply any applications software which uses concurrent 
+access, but rather supplies the tools necessary to implement such
+applications.
+
+
+
+3.0  The pieces of Constellation II 
+
+
+The implementation of Constellation II involves a coordinated set of
+software ranging from disk firmware to assembly language drivers in
+the host machine to high-level application programs in the host
+machine.
+
+3.1  Disk firmware 
+------------------
+
+The disk firmware merely supports absolute disk sector reads/writes. 
+It knows nothing about which computers are connected to it, nor
+whether it is connected over flat cable or Omninet.  It knows nothing
+about volumes or users.  There are several firmware operations which
+serve specific functions; these include pipe operations, semaphore
+operations, and booting.
+
+3.2  Disk-server firmware
+-------------------------
+
+Like the disk firmware, the disk server knows nothing about which
+computers are connected to it, nor about volumes or users.  The disk
+server firmware merely keeps track of which request came from which
+host, so that it can send the reply to the proper location.
+
+3.3  Drivers
+------------
+
+Each computer supported by Corvus runs one or more operating systems.
+Each of these operating systems has some convention for communicating
+with file-structured devices (normally floppies).  For example, Apple
+DOS uses a subroutine called RWTS; Apple Pascal uses a set of
+procedures known as the BIOS; CP/M uses a set of procedures also
+known as the BIOS (although it is by no means the same as Apple's
+BIOS).  The code that makes up the BIOS is commonly referred to as
+drivers.  
+
+For each operating system, Corvus figures out how the driver or BIOS
+works, and adds, as transparently as possible, the code necessary to
+support the Corvus drive as a file-structured device under the host
+operating system.  In some cases, this is very easy, since some
+operating systems have well-defined conventions for adding drivers.
+In other cases, it is difficult, because of memory constraints (the
+driver has to fit into memory somewhere), and lack of flexibility in
+the host operating system.  The host operating system may, for
+example, not be able to handle varying size volumes, or it may have
+certain pieces of code that assume that a device is a floppy rather
+than any file-structured device.
+
+The normal method of implementation is to make a volume on the
+Corvus look exactly like a floppy to the host operating system.  The
+Corvus driver stores, in its memory, information that says where the
+volume resides on the Corvus, how big it is, and what type of access
+is allowed.  The driver also remembers which user is currently
+running, in order to communicate with the mount program, as described
+below.
+
+In most cases, it is desirable to have several volumes on the Corvus,
+which may be of varying sizes.  It is possible to have more volumes
+available than the operating system is capable of supporting.  For
+example, Apple Pascal can only support 6 volumes at a time, while a
+20MB Corvus drive could contain fifteen or more volumes.  The mount
+program is provided as a utility which allows the user to choose
+which volumes are currently on-line.  The mount program, is, in fact,
+modifying the information used by the Corvus driver.
+
+3.4  Booting
+------------
+
+The Corvus driver must be installed into the host machine at some
+point, in order for the host machine to access the Corvus.  This
+installation can be accomplished in several ways: by modifying the
+copy of the operating system that is used to boot, by supplying boot
+ROMs that know about booting from the Corvus, or by booting in the
+normal way (from floppy) and installing a patch in the operating
+system afterwards.  Some operating systems, such as SOS for the Apple
+III, provide a method for any manufacturer to add drivers, while
+others, such as Apple DOS, provide no such method. The degree to
+which the host operating system must be modified is dependent upon
+the capabilities of the host operating system.
+
+In those machines in which it is possible to add a boot ROM, the
+Corvus driver can normally be installed as part of the boot process,
+since Corvus supplies the code that does the boot.
+
+In order to gain access to the Corvus drive, the user must either
+boot directly from the Corvus, or run a link program.  In either
+case, the user must specify a user name and password.  The user name
+determines where the user's boot code is and which operating system
+will be booted/linked to.  It also determines which volumes the 
+drivers will be allowed to access.
+
+3.5  Support programs
+---------------------
+
+The set of support programs provided by Corvus uses an area of the
+Corvus drive called the Corvus volume.  The Corvus volume is a normal
+volume in that it is simply a designated area of the drive.  Within
+the Corvus volume is a set of tables which describe how the drive is
+divided (where all the volumes are), who the users of the drive are,
+and which users have access to which volumes.  The Corvus volume may
+be located anywhere on the drive.
+
+Below is a brief description of each of the support programs.
+
+  1.  Installation program
+      Initializes drives.  Prompts for the system password.  Writes
+      any boot information necessary.  After running the installation
+      program, the system should be usable by one user.
+
+  2.  Drive Manager - system password required
+      a.  List drives on line. List the drive number and capacity of all
+          drives on line.  Indicate if they are not initialized.
+          Indicate controller ROM version and firmware version.
+      b.  List volumes.  List the name, address, length, and operating
+          system type of all volumes on the specified drive.  Also list
+          all the unused spaces on the drive.
+      c.  Add a volume to a drive.
+      d.  Remove a volume from a drive.
+      e.  List freespace. The unused space on all drives is displayed.
+      f.  Protect.  Specify system-wide access:
+          none/read-only/read-write.
+
+  3.  User Manager -- requires system password (user information is
+      updated on all systems, but transparently)
+      a.  List user information including user name, password,
+          boot operating system type, and home system.
+      b.  Remove user from user directory.
+      c.  Add user to user directory.
+      d.  Change user information.
+
+  4.  Access Manager - requires system password
+      a.  Specify user access to several volumes.
+      b.  Specify volume access for several users.
+
+  5.  Boot manager -- requires system password.
+      a.  List filenames and cpu types of all boot files.
+      b.  Add boot file to volume.
+      c.  Remove boot file from volume.
+
+  6.  Mount Manager
+      a.  List drives on line.  Same as Drive Manager function.
+      b.  List volumes.  Lists volumes accessible to this user.
+      c.  Mount volume.  Mounts a volume.
+      d.  Unmount volume.  Unmounts a volume.
+      e.  Save mount table.  Saves current mount table as default.
+      f.  Change password.  Changes user's password.
+      g.  Protect.  Specify individual access: read-only/read-write
+      h.  Security.  Specify secure/release.
+
+  7.  Library procedures
+      a.  Mount/unmount a volume.
+      b.  Get user name.
+
+  8.  Recovery programs
+      a.  Backup to a file the volume information, user information,
+          boot information.
+      b.  Restore from a file the volume information, user information,
+          boot information.
+      c.  Rewrite system name and password.
+
+$P
+A.  Definition of terms used
+
+   network - an OMNINET network, with 1 or more disk servers
+
+   system - a set of daisy-chained drives, with a disk server or MUX
+
+   drive - one drive in a set of daisy-chained drives
+
+   volume - a contiguous area on a drive
+
+   mount - associate a volume with a driver in the host operating system
+
+   unmount - clear any association with a driver
+
+$P
+B.  Tables
+
+B.1  The operating system types for users are:
+$I c2ostypes *)
+
+This list will grow as more operating systems are supported by
+Constellation II; a maximum of 63 operating system types will be
+supported.
+
+
+$P
+B.2  The directory types for volumes are:
+$I c2dirtypes *)
+
+This list will grow as more operating systems are supported by
+Constellation II; a maximum of 63 operating system types will be
+supported.
+$P
+B.3  The computer names for boot files are:
+
+$I c2boots *)
+
+This list will grow as more computers are supported by Constellation II;
+a maximum of 63 computer types will be supported.
+
+B.4  The types of net hosts are:
+$I c2nettypes
+
+
+

@@ -1,0 +1,39 @@
+; File: ccosgotoxy.text
+; Date: 13-Dec-82
+
+        ident   mergotox
+        
+        global  %_gotoxy
+        
+;
+; %_GOTOXY - gotoxy
+;
+; Parameters: ST.W - X coordinate
+;             ST.W - Y coordinate
+;
+
+%_GOTOXY
+       MOVE.L (SP)+,A0         ;pop return address
+       MOVE.W (SP)+,D2         ;pop Y value
+       MOVE.W (SP)+,D3         ;pop X value
+       lsl.w  #8,d3            ;combine x and y values
+       move.b d2,d3            ;*
+       move.l a0,-(sp)         ;push return address
+       move.w d3,-(sp)         ;push x and y values
+       move.w #$1B3D,-(sp)     ;push gotoxy command
+       move.l sp,d1            ;get pointer to command
+       move.w #1,-(sp)         ;push unit number
+       move.l d1,-(sp)         ;push pointer to command
+       move.l #4,-(sp)         ;push number of characters
+       clr.l  -(sp)            ;push block number
+       clr.w  -(sp)            ;push mode
+       clr.w  d0               ;d0 - offset to unitwrite vector
+       move.l $180.w,a0        ;a0 - syscom pointer
+       move.l 8(a0),a0         ;a0 - system vector table pointer
+       move.l 0(a0,d0.w),a0    ;a0 - unitwrite pointer
+       jsr    (a0)             ;do unitwrite
+       move.l (sp)+,d0         ;clean up stack
+       rts                     ;return
+
+       end
+

@@ -1,0 +1,683 @@
+; File: CC.PROM.OD.TEXT
+; Date: 18-Jan-84
+
+; OMNINET disk driver data area equates
+;
+DCmd    EQU     0       ;byte - disk command offset
+DCdrv   EQU     1+DCmd  ;byte - offset for drive number
+DCblklo EQU     2+DCmd  ;byte - LSB of block number to read or write
+DCblkhi EQU     3+DCmd  ;byte - MSB      "     "
+DClen   EQU     4+DCmd  ;word - length of request (in bytes)
+
+;  result vector and header used for all setuprecv commands
+;
+RHdr    EQU     6       ;
+RHpktRC EQU     0+RHdr  ;byte - return code from transporter
+RHsor   EQU     1+RHdr  ;byte - the source of the message
+RHpktLN EQU     2+RHdr  ;word - total length of data portion of packet
+RHdskLN EQU     4+RHdr  ;word - length of info returned from drive
+RHdskRC EQU     6+RHdr  ;byte - return code from drive
+;
+;  result vector and header for all sendmsg commands
+;
+SHdr    EQU     14      ;
+SHpktRC EQU     0+SHdr  ;byte - return code from transporter
+;       EQU     1+SHdr  ;byte - unused
+;       EQU     2+SHdr  ;word - unused
+SHtoLN  EQU     4+SHdr  ;word - number of bytes to send to drive
+SHfmLN  EQU     6+SHdr  ;word - number of bytes expected from drive
+                        ;
+GData   EQU     22      ;word - area to receive "GO" into
+
+;  area used for constructing Transporter commands
+;
+TCmd    EQU     24      ;
+TCop    EQU     0+TCmd  ;byte - op code
+TCrADhi EQU     1+TCmd  ;byte - result address HI
+TCrADlo EQU     2+TCmd  ;word - result address MED, LO
+TCsock  EQU     4+TCmd  ;byte - socket number
+TC6801Ad EQU    4+TCmd  ;word - 6801 addr for peek/poke              0.8
+TCdADhi EQU     5+TCmd  ;byte - data buffer address HI
+TCdADlo EQU     6+TCmd  ;word - data buffer address MED, LO
+TCpekpok EQU    6+TCmd  ;byte - peek/poke function code              0.8
+TCdtaLN EQU     8+TCmd  ;word - data length
+TChdrLN EQU     10+TCmd ;byte - header length
+TCdest  EQU     11+TCmd ;byte - destination host number
+                        ;
+ODdw    EQU     36      ;lint - temporary buffer (for 3 byte nmbrs)
+ODdwhi  EQU     37      ;byte - temporary HI
+ODdwlo  EQU     38      ;word - temporary MID, LO
+ODwrAD  EQU     40      ;lint - to save buffer address for CWrites
+ODvalid EQU     44      ;word - for marking buffer as valid
+EHpktRC EQU     46      ;byte - End Recv result code
+    page
+; Transporter Return Codes
+;
+Waiting EQU     $FF     ;
+CmdAcpt EQU     $FE     ;
+Echoed  EQU     $C0     ;echo command was successful
+                        ;
+GaveUp  EQU     $80     ;aborted a send command after MaxRetries tries
+TooLong EQU     $81     ;last message sent was too long for the receiver
+NoSockt EQU     $82     ;sent to an unititialized socket
+HdrErr  EQU     $83     ;sender's header length did not match receiver's
+BadSock EQU     $84     ;illegal socket number
+Inuse   EQU     $85     ;tried to set up a receive on an active socket
+BadDest EQU     $86     ;sent to an illegal host number
+
+NoTrans EQU     -112    ;could not strobe cmd addr to Transporter
+TimeOut EQU     -111    ;timed out waiting for an Omninet event
+NoBufr  EQU     -110    ;tried a CRRead without a valid write buffer
+;
+; Transporter Opcodes
+;
+RecvOp  EQU     $F0     ;SETUPRECV opcode
+SendOp  EQU     $40     ;SENDMSG opcode
+InitOp  EQU     $20     ;INIT opcode
+EndOp   EQU     $10     ;ENDRECV opcode
+DebOp   EQU     $08     ;PEEK/POKE opcode
+EchoOp  EQU     $02     ;ECHOCMD opcode
+WhoOp   EQU     $01     ;WHOAMI opcode
+
+; Socket numbers
+;
+RestSkt EQU     $A0     ;dest. socket for REST packet
+CnstSkt EQU     $B0     ;socket for disk server protocol
+CIIpSkt EQU     $80     ;socket for Const II protocol                   0.8
+
+; Const II protocol
+;
+C2pid    EQU     $01FE  ;Const II protocol id                           0.8
+C2whomg  EQU     $0200  ;msgtype= who msg                               0.8
+C2idmsg  EQU     $1000  ;msgtype= identification                        0.8
+C2dsksrv EQU     $0001  ;devtype= disk server                           0.8
+C2omndsk EQU     $0006  ;devtype= omnidisk                              1.0
+
+; Const II protocol message form                                        0.8
+;                                                                       0.8
+C2Ppid   EQU     0           ;word - protocol id                        0.8
+C2Pmsgtp EQU     C2Ppid+2    ;word - message type                       0.8
+C2Psrc   EQU     C2Pmsgtp+2  ;word - source host number                 0.8
+C2Pdevtp EQU     C2Psrc+2    ;word - device type                        0.8
+C2PwhoLn EQU     C2Pdevtp+2  ;length of "who" msg                       0.8
+C2Pname  EQU     C2Pdevtp+2  ;chars - name  10 bytes                    0.8
+C2PmaxLn EQU     C2Pname+10  ;length of other msgs                      0.8
+
+TOintvl EQU     $2FFFF  ;timeout interval                               0.8
+    page
+;
+; Oboot -- OMNINET disk server boot processing
+;
+Oboot   tst.b   CPbtsrvr.w      ;is server number valid?                0.7
+        bge.s   Oboot10         ;yes, go on                             0.7
+        bsr     ODbroad         ;send broadcast message to disk srvr    0.7
+                                ;*  in order to get disk server         0.7
+                                ;*  Transporter number                  0.7
+        move.b  d7,CPbtsrvr.w   ;save boot server number                0.7
+
+Oboot10 move.b  #5,CPbtslot.w   ;set boot slot number
+        lea     ODblkIO,a6      ;set boot disk blk i/o subr pointer
+        move.l  a6,CPblkio.w    ;*
+        lea     ODdskIO,a6      ;set boot disk i/o subr pointer
+        move.l  a6,CPdskio.w    ;*
+        bra     Lboot80         ;load boot code
+                                ;   (Lboot80 is in CC.PROM.LD)
+;
+; ODcomnd -- send simple command to Transporter
+;
+;       Enter:  D0.B - Transporter command
+;               D1.B - Destination host number (if ECHO)                0.7
+;               D1.B - Socket number (if ENDRECV)                       0.7
+;               D1.B - MSB 6801 address (if PEEK/POKE)                  0.8
+;
+;       Exit:   D7.B - IORESULT (OMNINET status)
+;
+ODcomnd movem.l a1-a3/d0,-(sp)          ;save registers                 0.8
+        move.l  #CPomnibf,a1            ;get pointer to Data Area
+        lea     RHpktRc(A1), A3         ;assume not end recv            0.8
+        cmpi.b  #EndOp, D0              ;if is a end recv use different 0.8
+        bne.s   ODcmdgo                 ;  result code location than    0.8
+        lea     EHpktRC(A1), A3         ;  the recv                     0.8
+ODcmdgo move.l  A3,TCop(a1)             ;(A3) = result record pointer   0.8
+        move.b  d0,TCop(a1)             ;set Transporter command
+        move.b  d1,TCsock(a1)           ;set dest host number (ECHO)    0.7
+                                        ;set socket number (ENDRECV)    0.7
+        move.b  #Waiting,(A3)           ;set Transporter waiting flag   0.8
+        lea     TCmd(A1),A2             ;get command address
+        bsr     StrobIt                 ;strobe command address to Transporter
+        bne.s   ODcmd9                  ;Transporter not responding
+
+        move.l  #TOintvl,D0             ;get timeout interval           0.8
+ODcmd1  move.b  (A3),d7                 ;get Transporter return code    0.8
+        cmpi.b  #Waiting, d7            ;has Transporter responded?     0.8
+        bne.s   ODcmd9                  ;yes, ready to return           0.8
+        subq.l  #1, D0                  ;see if waited long enough      0.8
+        bpl.s   ODcmd1                  ;no, look again                 0.8
+        moveq   #TimeOut, d7            ;yes, set timeout error & return0.8
+
+ODcmd9  movem.l (sp)+,a1-a3/d0          ;restore registers              0.8
+        move.b  d7,CPomniRC.w           ;save OMNINET return code       0.7
+        rts                             ;return
+    page
+;
+; ODblkIO - Read or write an OMNINET disk server block subroutine
+;
+;       Enter:  A0.L - Buffer address
+;               D0.L - Block number                                     0.7
+;               D1.W - Drive number
+;               D5.W - Read ($32) or Write ($33) command
+;               D6.W - Destination host number * 256
+;
+;       Exit:   A0.L - Next free location in buffer
+;               D0.L - Updated block number                             0.7
+;               D7.W - IORESULT (OMNINET/disk controller status)
+;
+;       All other registers are preserved.
+;
+ODblkIO movem.l d0-d2/a1-a2,-(sp);Save registers
+        move.l  #CPomnibf,a1    ;A1 points to the start of the Data Area
+        clr.w   ODvalid(A1)     ;buffer valid = False... see ODdskIO
+        move.b  D5,DCmd(A1)     ;Stuff disk command - read or write
+        move.l  d0,d2           ;Compute drive nmbr/MSN block nmbr      0.7
+        swap    d2              ;*                                      0.7
+        lsl.w   #4,d2           ;*                                      0.7
+        or.b    d1,d2           ;*                                      0.7
+        move.b  D2,DCDrv(A1)    ;stuff drive number                     0.7
+        move.b  D0,DCBlkLo(A1)  ;lo order byte of block number
+        lsr.w   #8,D0           ;
+        move.b  D0,DCBlkHi(A1)  ;hi order byte of block number
+        move.w  #512,DCLen(A1)  ;set length to 512...
+        cmpi.w  #DskWrit,D5     ;Are we reading or writing?
+        bne.s   ODblk2          ;Reading
+                                ;
+ODblk1  move.w  #516,SHtoLN(A1) ;number of bytes to send to drive
+        clr.w   SHfmLN(A1)      ;number of bytes expected back
+        move.l  A0,ODwrAD(A1)   ;save address of REST of data
+        bsr     LongCmds        ;Writing
+        bra.s   ODblk3          ;return
+                                ;
+ODblk2  move.w  #4,SHtoLN(A1)   ;number of bytes to send to drive
+        move.w  #512,SHfmLN(A1) ;number of bytes expected back
+        bsr     ShortCmds       ;
+                                ;
+ODblk3  movem.l (sp)+,d0-d2/a1-a2;Restore registers
+        adda.w  #512,a0         ;Update buffer pointer
+        addq.l  #1,d0           ;Update disk block number               0.8
+        move.b  d7,CPdiskRC.w   ;Save current disk return code          0.7
+        ext.w   d7              ;Set return condition code
+        rts                     ;Return
+    page
+;                                                                       0.7
+; ODbroad - Send broadcast message to disk server                       0.7
+;                                                                       0.7
+;       Exit:   D7.W - disk server number                               0.7
+;                                                                       0.7
+;       All other registers are preserved.                              0.7
+;                                                                       0.7
+ODbroad movem.l d2-d6/a0,-(sp)  ;save registers                         0.7
+        move.l  #NTO1,CPtimout.w;set timeout for broadcast              0.7
+        bsr.s   ODC2broad       ;do const II broadcast                  0.8
+        bpl.s   ODbrd90         ;found disk server                      0.8
+        move.l  #USRbase,a0     ;send broadcast message to disk srvr    0.7
+        move.b  #$FF,(a0)       ;*  in order to get disk server         0.7
+        moveq   #1,d2           ;*  Transporter number                  0.7
+        moveq   #$33,d5         ;*                                      0.7
+        moveq   #-1,d6          ;*                                      0.7
+        bsr     ODdskIO         ;*                                      0.7
+        moveq   #$32,d5         ;*                                      0.7
+        bsr     ODdskIO         ;*                                      0.7
+ODbrd90 move.l  #NTO2,CPtimout.w;set timeout for normal network traffic 0.7
+        movem.l (sp)+,d2-d6/a0  ;restore registers                      0.7
+        rts                     ;return                                 0.7
+
+;
+; ODpeek - do peek at $F800 to find version number                      0.8
+;                                                                       0.8
+;        Exit:  D7.B - peek data or error code                          0.8
+;                                                                       0.8
+ODpeek   LEA       CPomnibf.L, A1      ;omninet data area               0.8
+         MOVE.W    #$F800, TC6801Ad(A1) ;put in 6801 addr to peek       0.8
+         CLR.B     TCpekpok(A1)        ;do peek                         0.8
+         MOVEQ     #DebOp, D0          ;peek/poke op code               0.8
+         MOVE.W    #$F8, D1            ;ODcomnd puts D1 over TC6801Ad   0.8
+         BSR       ODcomnd             ;do peek                         0.8
+         MOVE.B    RHpktRC(A1), D7     ;get version number              0.8
+         RTS                           ;                                0.8
+    page
+;
+; ODC2broad - broadcast the Const II who are you to find disk server    0.8
+;             receive ident msg from disk server.                       0.8
+;                                                                       0.8
+;        Exit:  MI - no response or error                               0.8
+;               PL - found disk server                                  0.8
+;               D7.W - disk server number or error code                 0.8
+;                                                                       0.8
+ODC2broad                              ;                                0.8
+         MOVEQ     #1, D2              ;try 2 times max.                0.8
+         LEA       CPomnibf.L, A1      ;omninet data area               0.8
+
+ODC2b10  BSR.S     Set80Rcv            ;setup recv on socket $80        0.8
+         BNE.S     ODC2Err             ;error, do end recv              0.8
+         BSR       SendWhoDS           ;send who msg                    0.8
+         BMI.S     ODC2Err             ;error, do end recv              0.8
+
+         MOVE.L    CPtimout.W, D0      ;wait for response               0.8
+ODC2wait MOVE.B    RHpktRC(A1), D7     ;got it?                         0.8
+         BEQ.S     ODC2chk             ;yes, check it out               0.8
+         SUBQ.L    #1, D0              ;no, dec retry count             0.8
+         BNE.S     ODC2wait            ;if not zero test again          0.8
+
+ODC2Err  MOVEQ     #EndOp, D0          ;ERROR - do endrecv              0.8
+         MOVE.W    #CIIpSkt, D1        ;  on socket $80                 0.8
+         MOVE.W    D7, -(SP)           ;save error code or server host #0.8
+         BSR       ODcomnd             ;do end recv                     0.8
+         MOVE.W    (SP)+, D7           ;restore error code              0.8
+         DBRA      D2, ODC2b10         ;do again if another retry       0.8
+ODC2b90  EXT.W     D7                  ;set cc                          0.8
+         RTS                           ;EXIT                            0.8
+
+ODC2chk  BSR.S     Set80Rcv            ;setup recv again just in case   0.8
+         BNE.S     ODC2Err             ;error, restart                  0.8
+         LEA       USRbase.L, A0       ;verify msg is correct type      0.8
+         CMPI.W    #C2pid, (A0)        ;Const II pid?                   0.8
+         BNE.S     ODC2wait            ;no, wait for correct msg        0.8
+         CMPI.W    #C2idmsg, C2Pmsgtp(A0) ;Ident msg type?              0.8
+         BNE.S     ODC2wait            ;no, wait for correct msg        0.8
+         CMPI.W    #C2dsksrv, C2Pdevtp(A0) ;from a disk server?         0.8
+         BEQ.S     ODC2bDS             ;yes, got old disk server        1.0
+         CMPI.W    #C2omndsk, C2Pdevtp(A0) ;from a omnidisk?            1.0
+         BNE.S     ODC2wait            ;no, wait for correct msg        1.0
+
+ODC2bDS  MOVE.W    C2Psrc(A0), D7      ;get disk server host number     0.8
+         LEA       C2Pname(A0), A0     ;move disk server name           0.8
+         LEA       CPsrvnam.W, A1      ;  into static memory            0.8
+         MOVEQ     #C2PmaxLn-C2Pname-1, D0 ;10 bytes                    0.8
+ODC2move MOVE.B    (A0)+, (A1)+        ;                                0.8
+         DBRA      D0, ODC2move        ;                                0.8
+         CLR.L     D2                  ;clear retry counter to show done0.8
+         BRA.S     ODC2Err             ;do end recv and exit            0.8
+    page
+;
+; Set80Rcv - setup a recv on socket 80 for Const II ident msg.          0.8
+;                                                                       0.8
+;        Enter: A1 - omninet data area address                          0.8
+;        Exit:  NE - error                                              0.8
+;               EQ - setup worked                                       0.8
+;               D7.W - error code                                       0.8
+;                                                                       0.8
+Set80Rcv LEA       USRbase.L, A0       ;address to receive ident msg    0.8
+         MOVE.L    A0, TCdADhi-1(A1)   ;put in transporter cmd block    0.8
+         MOVE.W    #C2PmaxLn, TCdtaLN(A1) ;ident msg is 18 bytes        0.8
+         CLR.B     TChdrLN(A1)         ;socket $80 has no header area   0.8
+         MOVE.W    #RecvOp, D0         ;setup recv                      0.8
+         MOVE.W    #CIIpSkt, D1        ;  on socket $80                 0.8
+         BSR       ODcomnd             ;do setup                        0.8
+         CMPI.B    #CmdAcpt, D7        ;was socket setup?               0.8
+         BNE.S     S80Rexit            ;no, report error                0.8
+         CLR.L     D7                  ;yes, show no error              0.8
+S80Rexit RTS                           ;                                0.8
+    page
+;
+; SendWhoDS - send Const II who are you msg to find disk server.        0.8
+;                                                                       0.8
+;        Enter: A1 - omninet data area address                          0.8
+;        Exit:  MI - error                                              0.8
+;               PL - send worked                                        0.8
+;               D7.B - error code                                       0.8
+;                                                                       0.8
+SendWhoDS                              ;                                0.8
+         LEA       USRbase+$20.L, A0   ;address to put who msg          0.8
+         MOVE.L    WhoMsg, (A0)        ;move who msg from ROM           0.8
+         MOVE.L    WhoMsg+4, 4(A0)     ;  to dynamic RAM                0.8
+         MOVE.B    CPtprnbr.W, C2Psrc+1(A0) ;put in station's host #    0.8
+
+         MOVE.L    A0, TCdADhi-1(A1)   ;put in adr of msg as data       0.8
+         PEA       SHdr(A1)            ;result vector adr               0.8
+         MOVE.L    (SP)+, TCrADhi-1(A1) ; put in cmd block              0.8
+         MOVE.B    #SendOp, TCop(A1)   ;send msg                        0.8
+         MOVE.B    #CIIpSkt, TCsock(A1);  on socket $80                 0.8
+         MOVE.W    #C2PwhoLn, TCdtaLN(A1) ;msg length = 8 bytes         0.8
+         CLR.B     TChdrLN(A1)         ;socket $80 has no header area   0.8
+         MOVEQ     #-1, D0             ;                                0.8
+         MOVE.B    D0, TCdest(A1)      ;$FF means broadcast             0.8
+         MOVE.B    D0, SHpktRC(A1)     ;$FF means waiting for trnsprtr  0.8
+
+         LEA       TCmd(A1), A2        ;stobe in cmd                    0.8
+         BSR       Strobit             ;   block                        0.8
+         BNE.S     SWDSexit            ;timed out waiting for Ready     0.8
+
+         MOVE.L    #TOintvl, D0        ;get timeout interval            0.8
+SWDSwait MOVE.B    SHpktRC(A1), D7     ;get result code                 0.8
+         CMPI.B    #Waiting, D7        ;has Transporter responded?      0.8
+         BNE.S     SWDSdone            ;yes, ready to return            0.8
+         SUBQ.L    #1, D0              ;see if waited long enough       0.8
+         BPL.S     SWDSwait            ;no, look again                  0.8
+         MOVEQ     #TimeOut, D7        ;yes, set timeout error          0.8
+
+SWDSdone MOVE.B    D7, CPomniRC.w      ;save OMNINET return code        0.8
+SWDSexit RTS                           ;return                          0.8
+
+WhoMsg   DATA.W    C2pid               ;Const II protocol id            0.8
+         DATA.W    C2whomg             ;who msg type code               0.8
+         DATA.W    0                   ;source host number              0.8
+         DATA.W    C2dsksrv            ;disk server host type           0.8
+    page
+;
+; ODdskIO - Read from/write to Corvus disk
+;
+;       Enter:  A0.L - Buffer address
+;               D2.W - Count
+;               D5.W - Read ($32) or Write ($33) command
+;               D6.W - Destination host number * 256
+;
+;       Exit:   D7.W - IORESULT (OMNINET/disk controller status)
+;
+;       All other registers are preserved.
+;
+ODdskIO movem.l d0-d2/a0-a2,-(sp);Save registers
+        move.l  #CPomnibf,a1    ;A1 points to the start of the Data Area
+        moveq   #-1, d0         ;get word of $FFFF                      0.8
+        cmpi.w  #DskWrit,D5     ;do we want to read or write
+        bne.s   ODdsk2          ;read
+                                ;
+ODdsk1  move.w  D2,SHtoLN(A1)   ;
+        move.l  (A0)+,DCmd(A1)  ;move first four bytes of send data to DiskCmd
+        move.l  A0,ODwrAD(A1)   ;save address of REST of data
+        clr.w   D7              ;force successful IOResult
+        move.w  d0, ODvalid(A1) ;mark send buffer as valid...           0.8
+        bra.s   ODdsk9          ;return
+
+ODdsk2  cmp.w   ODvalid(A1),d0  ;is send buffer valid? (=$FFFF)         0.8
+        beq.s   ODdsk3          ;yes, go on
+        moveq   #NoBufr,D7      ;set IOresult to "no buffer" error      0.8
+        bra.s   ODdsk6          ;return
+                                ;
+ODdsk3  clr.w   ODvalid(A1)     ;mark send buffer as invalid
+        move.w  D2,SHfmLN(A1)   ;
+        subq.w  #1,SHfmLN(A1)   ;subtract one for the return code       0.8
+        addq.l  #1,A0           ;inc buffer pointer past return code    0.8
+        cmpi.w  #4,SHtoLN(A1)   ;are we doing a longcmd?
+        bhi.s   ODdsk4          ;yes
+        bsr     ShortCmds       ;no
+        bra.s   ODdsk5          ;
+ODdsk4  bsr     LongCmds        ;
+ODdsk5  subq.l  #1,A0           ;dec buffer pointer past return code    0.8
+
+ODdsk6  ;
+        ; the return code must be loaded explicitly since it comes from
+        ; the header portion of the results packet....
+        ;
+        move.b  D7,(A0)         ;stuff return code in read buffer
+                                ;
+ODdsk9  movem.l (sp)+,d0-d2/a0-a2;Restore registers
+        move.b  d7,CPdiskRC.w   ;Save current disk return code          0.7
+        ext.w   d7              ;Set return condition code
+        rts                     ;Return
+    page
+;                                                                       0.7
+; EndRecv -- end receive on disk server socket                          0.7
+;                                                                       0.7
+EndRecv movem.l d0-d1,-(sp)             ;save registers                 0.7
+        moveq   #EndOp,d0               ;set command to ENDRECV         0.8
+        move.w  #CnstSkt,d1             ;set socket number              0.7
+        bsr     ODcomnd                 ;do ENDRECV on disk srvr socket 0.7
+        movem.l (sp)+,d0-d1             ;restore registers              0.7
+        moveq   #0,d7                   ;set no error IOresult          0.7
+        rts                             ;return                         0.7
+    page
+;
+; StrobIt -- Strobe command address to Transporter
+;
+;       Enter:  A2 = command address
+;
+;       Exit:   D7 = Transporter strobe status
+;
+;               EQ = successful
+;               NE = Transporter not responding
+;
+;       All other registers are preserved
+;
+StrobIt movem.l D0-D1/A0,-(sp)  ;save registers                0.8
+        lea     RdyAdr.L,A0     ;get address of ready flag     0.8
+        clr.l   D7              ;assume no Transporter error   0.8
+        move.l  A2,D0           ;get command address
+        rol.l   #8,D0           ;move command address to msb
+                                ;
+        bsr.s   SBstrob         ;strobe address HI
+        beq.s   SBerr           ;
+        bsr.s   SBstrob         ;strobe address MED
+        beq.s   SBerr           ;
+        bsr.s   SBstrob         ;strobe address LO
+        beq.s   SBerr           ;
+        bsr.s   SBwait          ;wait for Transporter ready
+        bne.s   SBexit          ;
+                                ;
+SBerr   moveq   #NoTrans,d7     ;no transporter ...
+                                ;
+SBexit  movem.l (sp)+,D0-D1/A0  ;restore registers              0.8
+        tst.w   d7              ;set return condition code
+        rts                     ;return
+                                ;
+SBstrob rol.l   #8,D0           ;shift address byte to lsb
+        move.b  D0,StrAdr-RdyAdr(A0) ;strobe address            0.8
+SBwait  move.l  #TOintvl,D1     ;get timeout interval           0.8
+SBW1    btst    #0, (A0)        ;is transporter ready?
+        bon.s   SBWchk          ;yes, return                    0.8
+        subq.l  #1, D0          ;see if waited long enough      0.8
+        bne.s   SBW1            ;no, look again                 0.8
+        bra.s   SBWexit         ;timed out                      0.8
+SBWchk  nop                     ;check for glitch in ready      0.8
+        btst    #0, (A0)        ;is transporter ready?          0.8
+        boff.s  SBW1            ;no, then continue to wait      0.8
+SBWexit rts                     ;return
+    page
+;
+; SetGo -- set up a receive for the 'GO' packet
+;
+SetGo   move.w  #2,TCdtaLN(A1)          ;2 bytes of data
+        clr.b   TChdrLN(A1)             ;no header
+        pea     GData(A1)               ;get address of data area
+        move.l  (SP)+,TCdADhi-1(A1)     ;load data buffer address -- TCsock destroyed
+        bra.s   SetGo1                  ;
+;
+; SetRecv -- set up a receive for the disk results and read data
+;            returns result in D0
+;
+SetRecv move.l  A0,TCdADhi-1(A1)        ;load data buffer address -- TCsock destroyed
+        move.w  SHfmLN(A1),TCdtaLN(A1)  ;
+        move.b  #3,TChdrLN(A1)          ;disk results have a hdr len of 3
+                                        ;
+SetGo1  move.b  #Waiting,RHpktRC(A1)    ;set result to FF to see it change
+                                     ;prepare the command vector
+        pea     RHdr(A1)                ;load result vector address
+        move.l  (SP)+,TCrADhi-1(A1)     ; -- TCop destroyed
+        move.b  #RecvOp,TCop(A1)        ;set up a receive
+        move.b  #CnstSkt,TCsock(A1)     ;  on socket B0
+                                        ;
+        lea     TCmd(A1),A2             ;get command address
+        bsr     StrobIt                 ;strobe command address to Transporter
+        bne     SCerr2                  ;Transporter not responding
+
+        move.l  #TOintvl,D0             ;for time out                   0.8
+SC10    cmpi.b  #Waiting,RHpktRC(A1)
+        bne.s   SC12                    ;wait till result changes
+        subq.l  #1, D0                  ;see if waited long enough      0.8
+        bne.s   SC10                    ;no, look again                 0.8
+        bra     SCerr3                  ;timeout error
+
+SC12    move.b  RHpktRC(A1),d0          ;get Transporter return code
+        cmpi.b  #CmdAcpt,d0             ;was command accepted?
+        blt     SCexit                  ;no, fatal error
+        clr.w   D0                      ;indicate success
+        bra     SCexit                  ;return
+    page
+; SndRest -- send the rest of the data (from long command) to the disk server
+;            result of call is in D0, 0 = success
+;
+SndRest move.l  ODwrAD(A1),TCdADhi-1(A1);load data buffer address
+        move.b  #RestSkt,TCSock(A1)     ;    - TCsock destroyed
+        subq.w  #4,SHtoLN(A1)           ;                               0.8
+        bge.s   SC20                    ;
+        clr.w   SHtoLN(A1)              ;result was negative, make it zero
+SC20    move.w  SHtoLN(A1),TCdtaLN(A1)  ;send length - 4 bytes
+        clr.b   TChdrLN(A1)             ;no header for rest packets
+        bra.s   SC40                    ;send it
+
+; SndCmds -- send a disk command to the disk server
+;            result of call is in D0, 0 = success
+;
+SndCmds pea     DCmd(A1)                ;data is the Disk command
+        move.l  (SP)+,TCdADhi-1(A1)     ;load data buffer address
+        move.b  #CnstSkt,TCsock(A1)     ;     - TCsock destroyed
+        moveq   #4, D0                  ;4 is data and header lengt     0.8
+        move.w  D0,TCdtaLN(A1)          ;disk command is 4 bytes long   0.8
+        cmp.w   SHtoLN(A1), D0          ;are we sending less than 4 bytes
+        ble.s   SC30                    ;no (dest <= src)
+        move.w  SHtoLN(A1),TCdtaLN(A1)  ;less
+SC30    move.b  D0,TChdrLN(A1)          ;send header is 4 bytes         0.8
+        ror.w   #8,d6                   ;set destination host number
+        move.b  d6,TCdest(A1)
+        rol.w   #8,d6
+
+SC40    move.b  #Waiting,SHpktRC(A1)    ;set result to FF to see it change
+        pea     SHdr(A1)                ;load result vector address
+        move.l  (SP)+,TCrADhi-1(A1)     ;          -- TCop destroyed
+        move.b  #SendOp,TCop(A1)        ;sendmsg opcode
+        lea     TCmd(A1),A2             ;get command address
+        bsr     StrobIt                 ;strobe command address to Transporter
+        bne.s   SCerr2                  ;Transporter not responding
+
+SC60    move.b  SHpktRC(A1), D7         ;get send result code           0.8
+        cmpi.b  #Waiting, D7            ;still waiting?                 0.8
+        beq.s   SC60                    ;yes, check status again        0.7
+        cmpi.b  #GaveUp, D7             ;did disk srvr accept message?  0.8
+        beq.s   SC40                    ;no, try again                  0.7
+        cmpi.b  #NoSockt, D7            ;did disk srvr accept message?  0.8
+        beq.s   SC40                    ;no, try again                  0.8
+
+        clr.w   D0                      ;indicate success               0.7
+        tst.b   D7                      ;did it work?                   0.8
+        bge.s   SCexit                  ;yes, return                    0.7
+SCerr2  move.b  D7,D0                   ;no transporter ...             0.8
+        bra.s   SCexit                  ;return
+SCerr3  moveq   #TimeOut,D0             ;time out ...
+SCexit  ext.w   D0                      ;make return code a word
+        rts                             ;return
+    page
+LongCmds
+
+; 1. set up a receive for the GO message
+;
+        bsr     SetGo           ;
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error
+;
+; 2. send disk command
+;
+        bsr     SndCmds         ;doit
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error
+;
+; 3. wait to receive GO
+;
+Lcmd1   move.b  RHpktRC(A1),d0  ;get Transporter return code
+        cmpi.b  #CmdAcpt,d0     ;has return code changed?
+        beq.s   Lcmd1           ;no, wait some more
+        tst.b   D0              ;successful receive?
+        blt.s   LcmdErr         ;no, set error return
+;
+; 4. validate GO packet
+;
+Lcmd3   move.b  TCdest(A1),D0   ;response come from the right place?    0.7
+        cmp.b   RHsor(A1),D0    ;*                                      0.7
+        bne.s   Lcmd4           ;no, setup receive again                0.7
+        btst    #7,Gdata(A1)    ;disk server restart?                   0.7
+        bon.s   LongCmds        ;yes, start request over                0.7
+        cmpi.w  #'GO',Gdata(A1) ;"GO" command?                          0.7
+        beq.s   Lcmd5           ;yes, go on                             0.7
+                                ;
+Lcmd4   bsr     SetGo           ;set up for GO receive again
+        blt.s   LcmdErr         ;
+        bra.s   Lcmd1           ;
+
+        page
+;
+; 5. set up receive for results
+;
+Lcmd5   bsr     SetRecv         ;
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error
+;
+; 6. send REST
+;
+        bsr     SndRest         ;
+        blt.s   LcmdErr         ;
+;
+; 7. wait for results
+;
+Lcmd6   move.b  RHpktRC(A1),d0  ;get Transporter return code
+        cmpi.b  #CmdAcpt,d0     ;has return code changed?
+        beq.s   Lcmd6           ;no, wait some more
+        tst.b   D0              ;successful receive?
+        blt.s   LcmdErr         ;no, set error return
+;
+; 8. validate results
+;
+Lcmd7   move.b  TCdest(A1),D0   ;response come from the right place?    0.7
+        cmp.b   RHsor(A1),D0    ;*                                      0.7
+        beq.s   Lcmd8           ;yes                                    0.7
+        bsr     SetRecv         ;no, set up receive again....           0.7
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error         0.7
+        bra.s   Lcmd6           ;go back and wait again...              0.7
+                                ;                                       0.7
+Lcmd8   btst    #7,RHdskLN(a1)  ;disk server restart?                   0.7
+        bon.s   LongCmds        ;yes, start request over                0.7
+                                ;no, done with request                  0.7
+                                ;                                       0.7
+LcmdOK  move.b  RHdskRC(A1),D0  ;get disk server return code            0.7
+                                ;                                       0.7
+LcmdErr
+        move.w  #$1FFF,d7       ;--UP- wait a little                    0.8
+lc1err1 dbra    d7,lc1err1      ;--UP-    Why???? a bug                 0.8
+        bsr     EndRecv         ;end receive on disk server socket      0.7
+        move.b  D0,D7           ;get error return code                  0.7
+        ext.w   D7              ;make return code a word                0.7
+        rts                     ;return for ShortCmds or LongCmds       0.7
+    page
+ShortCmds
+;
+; 1. set up a receive for the results
+;
+        bsr     SetRecv         ;
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error
+;
+; 2. send disk command to disk server
+;
+        bsr     SndCmds         ;doit
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error
+;
+; 3. wait to receive results
+;
+Scmd2   move.l  CPtimout.w,d7   ;get timeout value                      0.7
+Scmd2A  move.b  RHpktRC(A1),d0  ;get Transporter return code            0.7
+        bge.s   Scmd3           ;successful receive, go on
+        cmpi.b  #CmdAcpt,d0     ;has return code changed?
+        bne.s   LcmdErr         ;yes, set error return
+        subq.l  #1,d7           ;time out?
+        bne.s   Scmd2A          ;no, wait some more                     0.7
+        bra.s   LcmdErr         ;set error return
+;
+; 4. validate results
+;
+Scmd3   move.b  RHsor(A1),D7    ;get source of response
+        cmpi.b  #$FF,TCdest(a1) ;is this a broadcast?
+        bne.s   Scmd4           ;no, go on
+        move.b  d7,RHdskRC(A1)  ;save disk server number
+        bra.s   LcmdOk          ;return
+                                ;
+Scmd4   cmp.b   TCdest(A1),D7   ;response come from the right place?
+        bne.s   Scmd5           ;no                                     0.7
+        btst    #7,RHdskLN(a1)  ;disk server restart?                   0.7
+        bon.s   ShortCmds       ;yes, start request over                0.7
+        bra.s   LcmdOK          ;no, done with request                  0.7
+                                ;                                       0.7
+Scmd5   bsr     SetRecv         ;set up receive again....               0.7
+        blt.s   LcmdErr         ;if D0 < 0 then fatal DRW error         0.7
+        bra.s   Scmd2           ;go back and wait again...              0.7

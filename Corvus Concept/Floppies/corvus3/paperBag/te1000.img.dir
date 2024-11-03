@@ -1,0 +1,17 @@
+
+Directory of UCSD disk image file 'te1000.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 9 files,  0 to 6 (6), eov 500, size 118, free 9
+
+ 1: SEE.TEXT        Text  4-Oct-84    6-  10(   4),  2048+512=  2560 bytes
+ 2: PASLIB.OBJ      Data  1-Feb-84   10- 115( 105), 53760+512= 54272 bytes
+ 3: CLIB.OBJ        Data 23-Jan-84  115- 157(  42), 21504+512= 22016 bytes
+ 4: STDIO.M.TEXT    Text 23-Jan-84  157- 163(   6),  3072+512=  3584 bytes
+ 5: C               Data 23-Jan-84  163- 300( 137), 70144+512= 70656 bytes
+ 6: NSEE.TEXT       Text  6-Jul-84  304- 308(   4),  2048+512=  2560 bytes
+ 7: LINKER          Data  1-Feb-84  380- 433(  53), 27136+512= 27648 bytes
+ 8: NSEE.OBJ        Data 31-Oct-84  435- 437(   2),  1024+512=  1536 bytes
+ 9: NSEE            Data 31-Oct-84  437- 460(  23), 11776+512= 12288 bytes

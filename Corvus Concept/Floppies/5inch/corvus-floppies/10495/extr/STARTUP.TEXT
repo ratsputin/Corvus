@@ -1,0 +1,3 @@
+!cc.wndmgr csdisp /ccutil/csd.07.11.alt
+/ccutil/loadspooler
+/ccutil/pipes s=5/0

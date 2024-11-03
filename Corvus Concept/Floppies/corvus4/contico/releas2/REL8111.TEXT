@@ -1,0 +1,219 @@
+This release supports 5MB, 10MB, and 20MB drives for Apple Pascal and
+Basics on OMNINET and flat cable.  This release replaces two of the
+five floppies in the AP set:  Basics and Pascal vol 1 of 2.
+
+  
+AP Utilities for Basics
+-----------------------
+
+There is one floppy for the AP Utilities for Basics: it supports
+only DOS3.3.  The programs contained on this floppy are listed on the next
+page, along with their version numbers and version dates.
+
+Programs changed in this release include:
+
+        DIAGNOSTIC - prompts for new firmware version number.  Also has
+          been fixed so it doesn't write out one extra byte to the screen
+          during the version check, which looked funny on the screen.
+        
+        DIAG.OBJ.17.3 - prep block for DIAGNOSTIC (same as version 16.3).
+        
+        CF17.3, CF17.3A, CF17.3B - firmware for all REV B drives.  Fixes
+          problems with daisy chaining drives.  (See PCO for firmware 
+          version 17.3).  There is still a problem with pipes:  sometimes
+          a pipe will not be closed properly, and sometimes garbage is
+          appended to a pipe.  
+        
+
+Constellation Utilities for Basics
+----------------------------------
+
+There is one floppy for the Constellation Utilities for Basics: it
+supports only DOS3.3.  The programs on this floppy are listed on the next
+page.
+        
+  
+$P
+Contents of the AP Utilities for Basics floppy:
+
+        BASICS UTILITIES 4-DEC-81       4.2D            4-Dec-81 
+        APPLESOFT BOOT PREP             nvn             no date
+        BCI.OBJ                         --              --
+        BOOT PREP                       nvn             no date
+        BRINGUP                         4.1             19-Jul-81
+        
+        BSYSGEN                         4.5             19-Jul-81 
+        BSYSGEN.OBJ                     --              --
+        CF17.3                          nvn             20-Nov-81     
+        CF17.3A                         --              --
+        CF17.3B                         --              --
+        
+        COPY3                           4.2             13-Mar-81
+        COPY3.OBJ1                      --              --
+        DIAGNOSTIC                      4.9C            4-Dec-81 
+        DIAG.OBJ.17.3                   --              --
+        FILE FINDER                     4.1             27-Feb-81
+        
+        FILE MOVER                      nvn             no date
+        MIRROR                          4.3             19-Jul-81
+        OMNIBCI.OBJ                     --              --
+        PASCAL                          nvn             no date
+        SETBOOT                         4.5             9-Sep-81 
+        SETBOOT.OBJ31                   3.1             --
+        
+        VOLUME INIT                     4.4             19-Jul-81
+        VOLUME UPDATER                  4.0             13-Mar-81
+        UNLOCK VOLUME                   --              --
+        UNLOCK VOLUME.OBJ               --              --
+        CATV99                          --              --
+        
+        
+Contents of Constellation Utilities for Basics floppy:
+        CONST UTILITIES 20-AUG-81       4.2A            20-Aug-81
+        ACCESS MANAGER                  4.2             20-Aug-81
+        BCI.OBJ                         --              --
+        CONSTCREATE                     4.2             08-Apr-81
+        
+        PIPES INIT                      1.3             19-Jul-81
+        PIPES DIAGNOSTIC                1.2             19-Jul-81
+        SEMAPHORES INIT                 1.2             19-Jul-81
+        SHARE                           1.1             19-Jul-81
+        
+        SPOOL                           2.3             19-Jul-81
+        USER MANAGER                    4.4             27-Jul-81 
+        SPOOL PREP                      nvn             no date
+        VOLUME UPDATER                  4.0             13-Mar-81
+        
+$P
+AP Utilities for Pascal
+-----------------------
+
+There are two floppies for the AP Utilities for Pascal:  CORVUS1 and
+CORVUS2, because the programs are too big to fit on one floppy.  The contents
+of each volume are listed on the next page.
+
+This release supports DOS 3.3 and Pascal 1.1.
+
+Programs that have changed are listed below:
+  
+        CF17.3.DATA - firmware used by Pascal Diagnostic (see CF17.3 under
+        Basics for features)
+        
+        DIAGNOSTIC - changed to prompt for CF17.3.
+        
+        DIAG.DATA - prep block for DIAGNOSTIC (same as 16.3).
+        
+  
+Constellation Utilities for Pascal
+----------------------------------
+
+There is one floppy for Constellation Utilities for Pascal for OMNINET.
+Its contents are listed on the next page.
+
+$P
+Contents of AP Utilities floppies for Pascal:
+    CORVUS1:            
+        BASICS.CODE             nvn     26-Feb-81
+        BOOT.DATA               3.1     1-Sep-81 
+        CF17.3.DATA             nvn     20-Nov-81                      
+        DIAGNOSTIC.CODE         4.6b    4-Dec-81  
+        DIAG.DATA               nvn     5-Nov-81 
+        MIRROR.CODE             2.0b    12-Aug-81
+        PSYSGEN.CODE            2.6     1-Sep-81 
+        SETBOOT.CODE            1.5     12-Aug-81
+        VMGR.CODE               2.3     12-Aug-81
+        
+    CORVUS2:
+        BACKUP.CODE             nvn     13-Sep-79               
+        BASICS3.DATA            nvn     28-Oct-80
+        BASICS3.OMNI            nvn     31-Jul-81
+        RESTORE.CODE            nvn     5-Oct-79
+        VINIT.CODE              2.4b    20-Aug-81
+ 
+Contents of Constellation Utilities floppies for Pascal
+    CONST:
+        CMGR.CODE               1.0     20-Aug-81
+        CORVUS.LIBRARY          nvn     20-Aug-81
+        SETBOOT.CODE            1.5     12-Aug-81
+        SHARE.TEXT              1.2     1-Jul-81
+        SHARE.CODE              1.2     12-Aug-81
+        SPOOL.TEXT              1.6b    20-Aug-81
+        SPOOL.CODE              1.6b    20-Aug-81
+        VINIT.CODE              2.4b    20-Aug-81
+$P
+Labels for floppies should look like this:
+
++----------------------------------+
+!        CORVUS AP UTILITIES       !  Checksum= 113
+!                                  !
+!         Basics - DOS 3.3         !
+!                                  !
+!     Release date:  4-Dec-81      !
++----------------------------------+  CP#: 8100-0
+
+
++----------------------------------+
+! CORVUS AP UTILITIES - VOL 1 of 2 !  Checksum= 129
+!                                  !
+!            Pascal 1.1            !
+!                                  !
+!     Release date:  4-Dec-81      !
++----------------------------------+  CP#: 8100-0
+
+
++----------------------------------+
+! CORVUS AP UTILITIES - VOL 2 of 2 !  Checksum=  96
+!                                  !
+!            Pascal 1.1            !
+!                                  !
+!     Release date:  20-Aug-81     !
++----------------------------------+  CP#: 8100-0
+
+
++-----------------------------------+
+! CORVUS Constellation AP UTILITIES !  Checksum=  28
+!                                   !
+!          Basics - DOS 3.3         !
+!                                   !
+!      Release date:  20-Aug-81     !
++-----------------------------------+  CP#: 8100-0
+
+
++-----------------------------------+
+! CORVUS Constellation AP UTILITIES !  Checksum= 173
+!                                   !
+!            Pascal 1.1             !
+!                                   !
+!      Release date:  20-Aug-81     !
++-----------------------------------+  CP#: 8100-0
+
+$P
+
+Previous releases:
+------------------
+Corvus AP Utilities Basics - DOS 3.3 11/6/81
+
+Corvus AP Utilities Pascal 1.1 11/6/81
+
+The floppy labels are listed below.
+
+
+                           +-----------------------------+
+                           |                             |
+                           |     Corvus AP Utilities     | Checksum= 61
+                           |                             |
+                           |       Basics - DOS 3.3      |
+                           |                             |
+                           |     Release date: 6-Nov-81  |
+                           +-----------------------------+
+
+
+                           +-----------------------------+
+                           |                             |
+                           |     Corvus AP Utilities     | Checksum=174
+                           |                             |
+                           |          Pascal 1.1         |
+                           |                             |
+                           |     Release date: 6-Nov-81  |
+                           +-----------------------------+
+

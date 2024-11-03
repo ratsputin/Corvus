@@ -1,0 +1,234 @@
+; File: mermisc.text
+; Date: 17-Sep-82
+;
+
+        ident   mermisc
+        
+        global  %_halt,%_goto,%_lstsg,%_iochk
+        global  %_setior,%_panic,%_prloc
+        extern  %_uwrit
+        
+;
+; System EQU's
+;
+
+PSYSCOM EQU     $180            ; Address of pointer to SYSCOM
+
+;
+; %_panic - write a panic message to the screen
+;
+; Parameters: D0.W - Length of message
+;             A0.L - Address of message
+;
+
+%_panic
+        move.w  #1,-(sp)        ; Unit = 1
+        move.l  a0,-(sp)        ; Buffer address
+        move.w  d0,-(sp)        ; Count
+        clr.w   -(sp)           ; Rest of count
+        clr.l   -(sp)           ; Block
+        clr.w   -(sp)           ; Mode
+        jsr     %_uwrit         ; Output to console
+        rts
+        
+;
+; %_halt - Halt
+;
+; Parameters: D0.W - Halt code
+;
+; All registers are preserved
+;
+
+%_halt
+        move.w  4(sp),-(sp)     ; Pass arg
+        pea     hlt_rtn         ;
+        clr.l   -(sp)           ; Room for jump address
+        move.l  a0,-(sp)
+        move.l  PSYSCOM.w,a0    ; (A0) = syscom
+        move.l  8(a0),a0        ; (A0) = sys call vector
+        move.l  92(a0),4(sp)    ; Set up alternate return address
+        move.l  (sp)+,a0
+        rts                     ; Call fhalt
+hlt_rtn rts                     ; Should never return from fhalt
+
+        
+;
+; %_iochk - Check IORESULT - if not zero, error
+;
+
+%_iochk
+        move.l  PSYSCOM.w,a0    ; Get syscom
+        move.w  (a0),d0         ; D0 = ioresult
+        bne.s   oops            ; <> 0 is an error
+        rts
+oops    lea     iomess,a0       ;
+        ext.l   d0              ;
+        divu    #10,d0          ;
+        add.b   d0,11(a0)       ;
+        swap    d0              ;
+        add.b   d0,12(a0)       ;
+        moveq   #14,D0          ; D0 = Message length
+        bsr.s   %_panic
+        move.l  (sp),-(sp)
+        bsr.s   %_prloc
+        move.w  #-1,-(sp)
+        bsr.s   %_halt          ; Kill this process
+        
+iomess  data.b  'IORESULT = 00 '
+        
+;
+; %_LSTSG - Returns the address of the last segment loaded.
+;            If it was a Quick-Load, returns NIL (0).
+;
+; Parameters: ST.L - Room for result.
+;
+; This routine preserves all registers.
+;
+
+%_LSTSG
+        MOVEM.L D0/A0,-(SP)
+        MOVE.L  PSYSCOM.W,A0    ; (A0) = syscom
+        MOVE.L  $22(A0),A0      ; (A0) = user jump table
+        MOVE.L  A0,D0           ; See if nil (0)
+        BEQ.S   QuickSG         ; Yes.
+        MOVE.W  (A0)+,D0        ; No. Find head of seg list.
+        LSL.W   #5,D0           ; D5 = bytes to fake seg entry
+        ADDA.W  D0,A0           ; (A0) = Dummy table
+        MOVE.L  (A0),A0         ; (A0) = %%FIRST - 20
+        MOVE.L  12(A0),D0       ;  D0  = head of seg list
+QuickSG MOVE.L  D0,12(SP)       ; Store result.
+        MOVEM.L (SP)+,D0/A0
+        RTS
+
+;
+; %_GOTO - Global GOTO code segment remover
+;
+; Parameters: ST.L - Pointer to the desired last-segment jump table
+;
+
+%_GOTO
+        MOVE.L  4(SP),A1        ; A1 = desired head of segment list
+        MOVE.L  A1,D0           ; Are we Quick-Load?
+        BEQ.S   GT_DONE         ; Yes. Do nothing.
+GT_LOOP MOVE.L  PSYSCOM.W,A0    ; (A0) = syscom
+        MOVE.L  $22(A0),A0      ; (A0) = user jump table
+        MOVE.W  (A0)+,D0        ; Find head of seg list.
+        LSL.W   #5,D0           ; D5 = bytes to fake seg entry
+        ADDA.W  D0,A0           ; (A0) = Dummy table
+        MOVE.L  (A0),A0         ; (A0) = %%FIRST - 20
+        CMPA.L  12(A0),A1       ; Is this the one?
+        BEQ.S   GT_DONE         ; Yes.
+                                ; No. Pop one code segment
+                                ;   off the code stack.
+        MOVE.L  PSYSCOM.W,A0    ; (A0) = syscom
+        MOVE.L  8(A0),A0        ; (A0) = sysvect
+        MOVE.L  80(A0),A0       ; (A0) = REMOVE1
+        JSR     (A0)            ;
+        ADDQ.L  #4,SP           ; Remove extra return address
+        BRA.S   GT_LOOP         ; See if any more to pop.
+GT_DONE MOVE.L  (SP)+,A0
+        ADDQ.L  #4,SP
+        JMP     (A0)
+
+;
+;%_setior - Set IORESULT variable
+;
+; Parameters: ST.W - IORESULT value
+;
+
+%_setior
+        move.l  (sp)+,a0
+        move.l  PSYSCOM.w,a1    ; (A1) = syscom
+        move.w  (sp)+,(a1)
+        jmp     (a0)
+        
+;
+; %_prloc - Print 'Seg $00 Offset $000000'
+;
+; Parameters:  ST.L - Address to print
+;
+; All user regsters are destroyed.
+;
+
+%_prloc
+        move.l  a4,d1           ; Is this a Quick-Load file?
+        beq.s   quick           ; Yes.
+        move.l  a4,a0           ; No. Get address of jump-table
+        move.w  (a0)+,d0        ; D0 = number of segments
+        clr.w   d2              ; D2 = segment number
+        bra.s   segtest         ; Start search loop
+segtop  tst.l   20(a0)          ; Check segs reference count
+        beq.s   notseg          ; Zero means not in memory
+        move.l  4(sp),d1        ; Get abs address
+        sub.l   12(a0),d1       ; Subtract seg's starting loc
+        blt.s   notseg          ; Negative means not this seg
+        cmp.l   8(a0),d1        ; Is it in this seg?
+        blt.s   fillhex         ; Yes.
+notseg  adda.w  #32,a0          ; Advance to next segment
+        addq.w  #1,d2           ; Bump segment number
+segtest dbra    d0,segtop       ; See if more segs to search
+        move.b  #$ff,d2         ; Set seg number to $FF
+        move.l  4(sp),d1        ; Get abs address of loc
+        bra.s   fillhex
+quick   move.l  4(sp),d1        ; D1 = address
+        sub.l   $10C.w,d1       ; Subtract lowest seg loc
+        clr.w   d2              ; D2 = seg number
+;
+; D1 = segment offset
+; D2 = segment number
+;
+fillhex lea     locmess+5,a0
+        move.b  d2,d0
+        bsr.s   mak2hex
+        lea     locmess+16,a0
+        move.l  d1,d0
+        swap    d0
+        bsr.s   mak2hex
+        swap    d0
+        rol.w   #8,d0
+        bsr.s   mak2hex
+        rol.w   #8,d0
+        bsr.s   mak2hex
+        lea     locmess,a0
+        moveq   #23,d0
+        jsr     %_panic         ; Print an error message
+        move.l  (sp)+,(sp)
+        rts
+
+;
+; mak2hex - convert a byte into hex
+;
+; Parameters: D0.B - Value to convert
+;             A0.L - Address to put result
+;
+; Returns:    A0.L - A0.L + 2
+;
+; Preserves all other registers
+;
+
+mak2hex
+        move.w  d0,-(sp)
+        ror.b   #4,d0
+        bsr.s   makhex
+        move.b  d0,(a0)+
+        move.w  (sp),d0
+        bsr.s   makhex
+        move.b  d0,(a0)+
+        move.w  (sp)+,d0
+        rts
+        
+;
+makhex  andi.w  #$f,d0
+        cmpi.b  #9,d0
+        ble.s   addzero
+        addq.b  #7,d0
+addzero add.b   #'0',d0
+        rts
+        
+;
+; Messages
+;
+
+locmess data.b  'seg $00 offset $000000',$0d,0
+
+        end

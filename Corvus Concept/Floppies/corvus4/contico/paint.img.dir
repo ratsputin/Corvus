@@ -1,0 +1,9 @@
+
+Directory of UCSD disk image file 'paint.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume PAINT has 1 files,  0 to 6 (6), eov 500, size 188, free 1
+
+ 1: PAINT.MOUSE     Data 20-Sep-83    6- 312( 306), 156672+512= 157184 bytes

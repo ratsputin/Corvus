@@ -1,0 +1,73 @@
+
+{---------------------------------------------------------------------------}
+{                                                                           }
+{ Title:         CONTYPES                                                   }
+{                                                                           }
+{ Description:   This file contains the operating system, directory, and    }
+{                boot file descriptor codes. These codes are found in the   }
+{                constellation II tables and are used to identify the type  }
+{                of system ( processor type or operating system ) or the    }
+{                native directory structure....                             }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+
+CONST                            {  OPERATING SYSTEM DIRECTORY TYPES  }
+
+   DI_UCSD         =    1;       { UCSD II.0                          }
+   DI_CPM          =    2;       { Control Program for Microcomputers }
+   DI_MDOS         =    3;       { MDOS                               }
+   DI_PET          =    4;       { Commodore PET                      }
+   DI_APDOS33      =    5;       { Apple DOS 3.3                      }
+   DI_ATARI        =    6;       { Atari DOS 2.0                      }
+   DI_RT11         =    7;       { RT-11                              }
+   DI_RSX11        =    8;       { RSX-11                             }
+   DI_NEWDOS       =    9;       { TRS-80 NewDOS                      }
+   DI_NEW80        =   10;       { TRS-80 NewDOS - 80                 }
+   DI_UNIX         =   11;       { UNIX                               }
+   DI_A3SOS        =   12;       { Apple III SOS                      }
+   DI_IBMDOS       =   13;       { IBM Personal Computer DOS          }
+   DI_CONCEPT      =   14;       { Corvus Concept OS                  }
+   DI_CPM86        =   15;       { CP/M 86                            }
+
+
+                                 { OPERATING SYSTEM TYPES             }
+
+   OS_APUCSD       =    1;       { Apple Pascal                       }
+   OS_APDOS33      =    2;       { Apple DOS 3.3                      }
+   OS_UCSDII       =    3;       { UCSD II.0                          }
+   OS_IBMDOS       =    4;       { IBM Personal Computer DOS          }
+   OS_A3SOS        =    5;       { Apple III SOS                      }
+   OS_APRT         =    6;       { Apple Run-Time                     }
+   OS_CPM          =    7;       { Control Program for Microcomputers }
+   OS_RT11         =    8;       { RT-11                              }
+   OS_RSX11        =    9;       { RSX-11                             }
+   OS_PET          =   10;       { Commodore PET                      }
+   OS_NEWDOS       =   11;       { TRS-80 NewDOS                      }
+   OS_NEW80        =   12;       { TRS-80 NewDOS - 80                 }
+   OS_ATARI        =   13;       { Atari DOS 2.0                      }
+   OS_UNIX         =   14;       { UNIX                               }
+   OS_UCSD40       =   15;       { UCSD IV.0                          }
+   OS_CONCEPT      =   16;       { Corvus Concept OS                  }
+   OS_CPM86        =   17;       { CP/M 86                            }
+
+
+                                 { BOOT FILE indices                  }
+
+   BT_oApl2        =    1;       { Apple Pascal Omninet               }
+   BT_fApl2        =    3;       { Apple Pascal Flat Cable            }
+   BT_oLSI11       =   41;       { RT-11 Omninet                      }
+   BT_fLSI11       =   43;       { RT-11 FlatCable                    }
+   BT_oIBMPC       =    9;       { IBM Personal Computer Omninet      }
+   BT_fIBMPC       =   11;       { IBM Personal Computer Flat Cable   }
+   BT_oX820        =   13;       { Xerox  Omninet                     }
+   BT_fX820        =   15;       { Xerox Flat Cable                   }
+   BT_oConcept     =    5;       { Corvus Concept OS Omninet          }
+   BT_fConcept     =    7;       { Corvus Concept OS Flat Cable       }
+
+
+   CP_Concept      =    2;       { Corvus Concept processor types     }
+
+
+
+

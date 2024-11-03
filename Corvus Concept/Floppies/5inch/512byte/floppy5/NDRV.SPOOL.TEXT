@@ -1,0 +1,658 @@
+        GLOBAL  DRVSPOOL
+        
+;
+; file :  drv.spool.text
+; date :  22-February-1984   dp  changes by kb
+;
+; This is the source for the spooler driver.  I used the file
+; drv.apio.text, dated 20-september-1983, as a basis for this code.
+;
+; INCLUDE FILES USED :
+;       /ccos/os.gbl.asm.text                    ;OS GLOBAL EQUATES
+;
+; INCLUDE OS GLOBALS HERE
+;
+            LIST       OFF
+;;;;;;;     INCLUDE    'OS.GBL.ASM.TEXT'               ;for at home no CCOS
+            INCLUDE    '/CCOS/OS.GBL.ASM.TEXT'
+            LIST       ON
+;
+  page
+; Unit I/O Command codes
+;
+READCMD     EQU        1                         ; read command
+WRCMD       EQU        2                         ; write command
+BUSYCMD     EQU        4                         ; busy command
+STATCMD     EQU        5                         ; status command
+UNMCMD      EQU        6                         ; unmount command
+;
+; Status Register values
+;
+CARRYST     EQU        $0001                     ; CCR with carry set
+;
+; ASCII character codes
+;
+CR          EQU        $0D                       ;CARRIAGE RETURN
+LF          EQU        $0A                       ;LINE FEED
+CntrlZ      EQu         26                       ;control z
+Escape      EQU        $1B                       ;ESCAPE CHARACTER
+SpSTrf      EQU        $27                       ;Apostrophe character "'"
+Minus       EQU        $2D                       ;Minus character  "-"
+;
+; error codes (IORESULT)
+;
+INVCMD      EQU        IOEioreq                  ;invalid cmd-(invalid I/O request)
+INVTBLID    EQU        IOEtblid                  ;invalid table id
+INVPRM      EQU        IOEuiopm                  ;invalid parameter
+INVFNC      EQU        IOEfnccd                  ;invalid function code
+PADERR      EQU        IOEpaderr                 ;invalid prop spacing/need to much extra space
+;
+; Miscellaneous definitions
+;
+TRUE        EQU        1                         ; Pascal true boolean value
+FALSE       EQU        0                         ; Pascal false boolean value
+ON          EQU        1                         ;LISTING CONTROL - START LISTING
+OFF         EQU        0                         ;LISTING CONTROL - STOP LISTING
+LFsprsflg   EQU      $0C               ; linefeed suppress flag- bit 2 or 3
+BUFSIZE  EQU    255
+SLOTIO      EQU        30                        ;slot io unit number
+  page
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.W - Count
+;               D3.W - Block Number
+;               D4.W - Command
+;               D5.W - Access Mode
+;
+;                   Input Parameters:              Result values:
+;     Command       Unit  Addr  Count Block Mode   IORESULT  Busy
+;
+;    0 - Install    D0.W                            D7.W
+;    1 - Read       D0.W  D1.L  D2.W  D3.W  D5.W    D7.W
+;    2 - Write      D0.W  D1.L  D2.W  D3.W  D5.W    D7.W
+;    3 - Clear      D0.W                            D7.W
+;    4 - Busy       D0.W                            D7.W     D0.B
+;    5 - Status     D0.W  D1.L  D2.W                D7.W
+;    6 - Unmount    D0.W                            D7.W
+;
+
+; Global register useage :
+;        D0
+;        to : temps
+;        D5
+;
+;        D6 : mode flag save
+;
+;        A0
+;        to : temps
+;        A3
+;
+;        A4 : addr of PiIndex
+;        A5 : user data buffer address
+;        A6 : addr of flag byte (PiFlags)
+  page
+DRVSPOOL BRA.S    START          ;start of code
+         data.b  0               ;device not blocked
+         data.b  31              ;valid commands
+         data.b  84,02,22        ;date February 22, 1984
+         data.b  0               ;fill
+         data.b  hmlen           ;header message length
+hm       data.b  'Spool driver v 1.0a '
+hmlen    equ     %-hm            ;
+         data.b  0               ; word alignment
+
+START    MOVEQ     #IOEioreq,D7                  ;assume invalid command
+         CMPI.W    #UNMCMD,D4                    ;VALID COMMAND
+         BHI.S     SpolERR                       ;no, exit
+         CLR.L     D7                            ;clear IOresult
+         MOVEM.L   D1-D6/A0-A6,-(SP)             ;SAVE REGISTERS
+         LEA       SpTabl,A2
+         LSL.W     #1,D4                         ;INDEX TO THE FUNCTION
+         MOVE.W    0(A2,D4.W),D4
+         JSR       0(A2,D4.W)                    ;DO FUNCTION
+         MOVEM.L   (SP)+,D1-D6/A0-A6             ;RESTORE registers
+SpolERR  RTS
+
+SpTABL   data.w  SpINST-SpTABL
+         data.w  SpRD-SpTABL
+         data.w  SpWR-SpTABL
+         data.w  SpCLR-SpTABL
+         data.w  SpBSY-SpTABL
+         data.w  SpST-SpTABL
+         data.w  SpUNMT-SpTABL
+ page
+; SpUNMT, SpCLR: unmount/clear
+;
+SpUNMT
+SpCLR    LEA       PiFlags, A6         ;mark pipe closed
+         BCLR      #PiOpen, (A6)       ;test and clear
+         BOFF.S    SPCUexit            ;already closed
+         BSR       Closepipe           ;close pipe
+SPCUexit RTS
+
+; SpBSY - unitbusy
+;
+; Returns: D0.B - Result
+;
+SpBSY    CLR.B     D0        ; always ready!?
+         RTS
+;
+; SpRD - unitread
+;
+SpRD     RTS
+
+; SpINST : unitinstall
+;
+SpINST ; initialize variables
+         LEA       PiFlags, A6         ;clear all flags
+         CLR.W     (A6)
+
+         LEA       PiIndex, A4         ;reset index into buffer
+         CLR.W     (A4)
+
+         LEA       PiName, A0          ;pipe name
+         MOVE.L    DefPiName, (A0)+    ;8 bytes
+         MOVE.L    DefPiName+4, (A0)
+
+         LEA       AttUnitNo, A0       ;set attached unit number
+         MOVE.W    DefUnit, (A0)
+
+         LEA       UserName, A0        ;put user name in default msg
+         LEA       $71C.W, A1          ;from static ram location
+         MOVEQ     #UsrNmLen-1, D0     ;   OS saves it in
+SIuser   MOVE.B    (A1)+, (A0)+
+         DBF       D0, SIuser
+
+         LEA       DefPiMesg, A0       ;put default message into
+         LEA       PiMsg, A1           ;current pipe message area
+         MOVEQ     #DfMgLen, D0        ;msg length
+         MOVE.B    D0, (A1)+           ;put in msg string
+         SUBQ.W    #1, D0              ;change to loop counter
+SImesg   MOVE.B    (A0)+, (A1)+        ;move message
+         DBF       D0, SImesg
+
+         BSR       GETSLTTBL           ;get system slot table
+         MOVE.W    (A0)+, D0           ;boot slot
+         MOVE.W    (A0),  D1           ;boot server
+         LSL.W     #8, D1              ;shift server to multiply by 256
+         ADD.W     D1, D0
+         LEA       PiAddr, A0          ;save net address of pipes area
+         MOVE.W    D0, (A0)
+         RTS
+ page
+; SpST - UnitStatus functions for DTACOM compatibility
+;        Plus spool control functions : close pipe, change message
+;        and change pipe name
+
+SpST     CMPI.B  #TBLSTATE,D2   ; check for valid function code
+         BHI.S   ASTERR         ; no good
+         MOVEA.L D1,A3          ; A3==> user buffer
+         MOVE.W  (A3),D0        ; get parameter
+         LEA     ASTTBL,A1      ; convert function code
+         LSL.W   #1,D2          ; to table index
+         MOVE.W  0(A1,D2.W),D2
+         JMP     0(A1,D2.W)     ; do function
+
+ASTERR   MOVEQ   #INVFNC,D7     ; invalid function code
+STNOP    RTS
+
+TBLSTATE EQU     21             ; highest valid function code
+
+; first 17 functions necessary to make driver work with DRV.EPRNT
+; functions 18,19, 20 and 21 are functions for this driver
+
+ASTTBL   DATA.W  STWBUF-ASTTBL  ; 0 - write buffer free space
+         DATA.W  STNOP-ASTTBL   ; 1 - set baud rate
+         DATA.W  STNOP-ASTTBL   ; 2 - set parity
+         DATA.W  ASTERR-ASTTBL  ; 3 - not used
+         DATA.W  STNOP-ASTTBL   ; 4 - set word size
+         DATA.W  STNOP-ASTTBL   ; 5 - set handshake method
+         DATA.W  STBFSTS-ASTTBL ; 6 - tell buffer control status
+         DATA.W  ASTERR-ASTTBL  ; 7 - not used
+         DATA.W  STWTSTS-ASTTBL ; 8 - tell write status
+         DATA.W  ASTERR-ASTTBL  ; 9 - not used
+         DATA.W  ASTERR-ASTTBL  ; 10- not used
+         DATA.W  ASTERR-ASTTBL  ; 11- not used
+         DATA.W  ASTERR-ASTTBL  ; 12- not used
+         DATA.W  ASTERR-ASTTBL  ; 13- not used
+         DATA.W  ASTERR-ASTTBL  ; 14- not used
+         DATA.W  ASTERR-ASTTBL  ; 15- not used
+         DATA.W  ASTERR-ASTTBL  ; 16- not used
+         DATA.W  STATOLF-ASTTBL ; 17- toggle auto linefeed flag
+         DATA.W  PSSTPIPE-ASTTBL ; 18- change pipe name
+         DATA.W  PSCLPIPE-ASTTBL ; 19- close pipe
+         DATA.W  PSSTMESG-ASTTBL ; 20- change message
+         DATA.W  PSSTSERV-ASTTBL ; 20- change slot and server
+  page
+STWBUF   ; buffer status: return 255 for amount of space avail
+         MOVE.W  #BUFSIZE,(A3)
+         RTS
+
+STBFSTS  ; buffer control status
+         MOVE.W  #6,(A3)+       ; baud rate
+         CLR.W   (A3)+          ; parity
+         CLR.W   (A3)+          ; datacom
+         MOVE.W  #1,(A3)+       ; wordsize = 8
+         MOVE.W  #9,(A3)        ; handshake = none
+         RTS
+
+STWTSTS  ; get the write buffer status
+         MOVE.W  #BUFSIZE,(A3)+       ; buffer size
+         MOVE.W  #BUFSIZE,(A3)+       ; free space
+         CLR.W   (A3)+          ; chars between ENQs
+         CLR.W   (A3)+          ; input,output disable = false
+         LEA     PiFlags,A6     ; addr of flag byte
+         BTST    #AutoLF,(A6)   ; create a pascal boolean
+         SNE     D0             ;  representing the state
+         ANDI.B  #TRUE,D0       ;  of the bit flag.
+         MOVE.B  D0,(A3)+       ; auto linefeed flag
+         CLR.B   (A3)+          ; alt buffer avail = false
+         CLR.L   (A3)+          ; alt buffer addr = 0
+         CLR.W   (A3)+          ; alt buffer size = 0
+         RTS
+
+STATOLF  ; toggle auto linefeed flag
+         LEA     PiFlags,A6
+         BCHG    #AutoLF,(A6)        ; toggle 0 <==> 1
+         RTS
+  page
+;
+; PSSTMESG - Change message
+; Entry : (A3) = pointer to pascal string of message
+;                length = 0, then use default message
+;
+PSSTMESG LEA       PiMsg, A0           ;ptr to message save area
+         MOVE.B    (A3)+, D0           ;get length
+         BNE.S     PSMGchck            ;not zero then use it
+         LEA       DefPiMesg, A3       ;else use default
+         MOVEQ     #DfMgLen, D0
+
+PSMGchck EXT.W     D0                  ;make length a word
+         CMPI.B    #79, D0             ;if length > 79 then
+         BLS.S     PSMGless
+         MOVEQ     #79, D0             ; make it 79
+
+PSMGless MOVE.B    D0, (A0)+           ;save msg length
+         SUBQ.B    #1,D0               ;move in message
+PSMGmove MOVE.B    (A3)+, (A0)+
+         DBF       D0,PSMGmove
+         RTS
+;
+; PSSTPIPE - Change pipe name
+; Entry : (A3) = pointer to pascal string of pipe name
+;                length = 0, then use default pipe name
+;
+PSSTPIPE LEA       PiName, A0          ;ptr to pipe name save area
+         MOVE.B    (A3)+, D0           ;get length
+         BNE.S     PSPNinit            ;not zero then use it
+         LEA       DefPiName, A3       ;else use default
+         MOVEQ     #PiNmLen, D0
+
+PSPNinit MOVEQ     #PiNmLen-1, D1      ;blank fill the
+PSPNlop1 MOVE.B    #' ', 0(A0,D1)      ;  pipe name area
+         DBF       D1,PSPNlop1
+
+         EXT.W     D0                  ;make length a word
+         CMPI.B    #PiNmLen, D0        ;if length > 8 then
+         BLS.S     PSPNless
+         MOVEQ     #PiNmLen, D0        ; make it 8
+
+PSPNless SUBQ.B    #1,D0               ;move in pipe name
+PSPNlop2 MOVE.B    (A3)+, (A0)+
+         DBF       D0,PSPNlop2
+         RTS
+  page
+;
+; PSSTSERV - Change slot and server number
+; Entry : (A3) = pointer to a record
+;                  Slot : integer;
+;                  Server: integer;
+;
+PSSTSERV LEA       PiAddr, A0          ;ptr to slot and server
+
+         MOVE.W    (A3)+, D0           ;get slot number
+         BMI.S     PSSRerr             ;negativer -error
+         CMPI.B    #5, D0              ;greater than 5
+         BHI.S     PSSRerr             ;yes, to big
+
+         MOVE.W    (A3), D1            ;get server number
+         BMI.S     PSSRerr             ;negative - error
+         CMPI.B    #63, D1             ;greater than 63
+         BHI.S     PSSRerr             ;yes, invalid host number
+
+         LSL.W     #8, D1              ;server is in hi byte
+         OR.W      D1, D0              ;put in 1 word
+         MOVE.W    D0, (A0)            ;save it
+         BRA.S     PSSRexit            ;done
+
+PSSRerr  MOVEQ     #IOEuiopm, D7       ;bad slot or server number
+PSSRexit RTS
+;
+; PSCLPIPE - Close pipe
+; Closepipe - entry for call from unitwrite section
+;
+PSCLPIPE    LEA        PiFlags, A6     ;get addr of flag byte
+            BTST       #PiOpen, (A6)   ;is it open?
+            BOFF.S     CLexit          ;no
+Closepipe   BSR        Writepipe       ;dump last block
+            BCS.S      CLexit          ;check error
+
+            LEA        PiClsPN, A0     ;get pipe number
+            MOVE.B     Pinumber, (A0)
+            LEA        PiClsWr, A0     ;send pipe close command
+            MOVE.L     A0, D1
+            MOVEQ      #PiClLen, D2
+            MOVE.W     PiAddr, D5
+            BSR        SendCmd
+            BCS.S      CLexit
+
+            BCLR       #PiOpen, (A6)   ;set pipe open flag to false
+CLexit      RTS
+ page
+;
+; SpWR - unitwrite
+;
+; init global registers
+;
+SpWR     LEA       PiIndex, A4         ; pipe buffer index
+         MOVEA.L   D1,A5               ; address of user buffer
+         LEA       PiFlags, A6         ; addr of flag byte
+         MOVE.L    D5, D6              ; save mode flag
+
+SWRloop  SUBQ.W    #1,D2               ; More to write?
+         BMI.S     SWRexit             ; No.
+
+SWRout   MOVE.W    D2, -(SP)           ; save user count
+         BSR.S     OutChar             ; output character
+         MOVE.W    (SP)+, D2           ; restore user count
+         TST.W     D7                  ; get an I/O error
+         BNE.S     SWRexit             ; yes, exit
+
+; check for carriage return
+;
+         MOVE.B    (A5)+, D0           ; Get character just processed
+         CMPI.B    #CR,D0              ; is it CR?
+         BNE.S     SWRloop             ; no, do next
+
+; determine if auto LF is needed
+;
+         BTST      #AutoLF, (A6)       ; auto LF mode?
+         BOFF.S    SWRloop             ; no
+         MOVE.W    D6,D0               ; get mode flags
+         ANDI.W    #LFsprsflg,D0       ; if LF suppress flag set
+         BNE.S     SWRloop             ;   then don't send LF
+         MOVEQ     #LF,D0              ; output a linefeed char
+         BRA.S     SWRout
+
+SWRexit  RTS
+  page
+;
+; OutChar - process one character
+; Entry : A5 = address of character
+;         A6 = address of flag byte
+;         A4 = address of pipe buffer index
+; Exit  : D7 = IORESULT code
+;
+OutChar  BTST      #PiOpen, (A6)       ;is pipe open
+         BON.S     OCopen              ;yes
+
+         BSR.S     Openpipe            ;no, open it
+         BCS.S     OCHexit             ;if error then exit
+
+OCopen   MOVE.W    (A4), D0            ;get current pipe buffer index
+         CMPI.W    #PiBfEnd, D0        ;buffer full?
+         BNE.S     OCstop              ;not full, so check if 2nd ctrlz
+         BSR       WritePipe           ;send the buffer
+         BCS.S     OCHexit             ;I/O error, exit
+         BSR       Reinitpipe          ;set up buffer again
+
+OCstop   MOVE.B    (A5), D1            ;get next character
+         BCLR      #PiStop, (A6)       ;checking for 2nd ctl-z
+         BOFF.S    OCctrlz             ;no, then look for 1st
+         CMPI.B    #CntrlZ, D1         ;is it 2nd ctrl-z?
+         BNE.S     OCsendcz            ;no, then send 1st and then this char
+         BSR       Closepipe           ;yes, close pipe
+         BRA.S     OCHexit             ;done, don't send ctl-z's
+
+OCsendcz MOVEQ     #CntrlZ, D1         ;get a control-z
+         BSR.S     OCmvchar            ;send it to pipe
+         BRA.S     OCopen              ;restart to send cur char @A5
+
+OCctrlz  CMPI.B    #CntrlZ, D1         ;check for 1st control-z
+         BNE.S     OCmvchar            ;no, send this char to pipe
+         BSET      #PiStop, (A6)       ;yes, show got 1
+         BRA.S     OCHexit             ;and see if another
+
+OCmvchar LEA       PiBuf1, A0          ;pipe buffer address
+         MOVE.W    (A4), D0            ;get index
+         MOVE.B    D1, 0(A0,D0)        ;save char in buffer
+         ADDQ.W    #1, (A4)            ;bump index
+
+OCHexit  RTS
+  page
+;
+; Openpipe - open pipe, save pipe number, set pipe open flag,
+;            and write preamble block
+;
+Openpipe LEA       PiOpWr, A0          ;get pipe command
+         MOVE.L    A0, D1
+         MOVEQ     #PiOpLen, D2        ;command length
+         MOVE.W    PiAddr, D5          ;get net address
+         BSR.S     SendCmd
+         BCS.S     OPexit
+
+         LEA       Pinumber, A0        ;save pipe number
+         MOVE.B    PiRes2, (A0)
+         BSET      #PiOpen, (A6)       ;set pipe open flag
+         BSR.S     Reinitpipe          ;init pipe buffer
+
+; write preamble block
+;
+         LEA       PiBuf1, A0          ;send preamble block
+         CLR.B     (A0)+               ;1st byte always 0
+         MOVE.L    Pifile, (A0)+       ;file name always 8 bytes
+         MOVE.L    PiFile+4, (A0)+     ;buffer starts on a odd boundary
+
+         LEA       PiMloc, A0          ;put in message
+         LEA       PiMsg, A1           ;message area
+         CLR.L     D0                  ;get rid of garbage
+         MOVE.B    (A1)+, D0           ;get length
+         MOVE.B    D0, (A0)+           ;put in preamble
+         SUBQ.B    #1, D0              ;if length = 0
+         BMI.S     OPnomsg             ;  then no message
+OPloop   MOVE.B    (A1)+, (A0)+        ;move message
+         DBF       D0, OPloop
+
+OPnomsg  LEA       PiTloc, A0          ;put in file type
+         MOVE.B    #48, (A0)+
+         BSR.S     Writepipe
+         BCS.S     OPexit              ;check error
+         BSR.S     Reinitpipe          ;set up pipe buffer again
+OPexit   RTS
+ page
+;
+; WritePipe - pipe write of 512 bytes
+;
+WritePipe
+         LEA       PiWrite, A0         ;get pipe command
+         MOVE.L    A0, D1
+         MOVE.W    #PiWrLen, D2        ;command length
+         MOVE.W    PiAddr, D5          ;get net address
+         BSR.S     SendCmd
+         RTS
+;
+; Reinitpipe - reset PiIndex and zero pipe buffer
+;
+Reinitpipe
+         CLR.W     (A4)                ;reset index
+         LEA       PiBuf1, A0          ;addr of buffer
+         MOVE.W    #PiBfEnd-1, D0      ;number of bytes in buffer
+
+REloop   CLR.B     (A0)+               ;clear buffer
+         DBF       D0, REloop
+         RTS
+  page
+;
+; Sendcmd - send command to unitio driver
+;      Entry : D1 = address of cmd buffer
+;              D2 = length of command
+;              D5 = Server # * 256 + slot number
+;      Exit  : (C) = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+; COMMAND - D4    UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 2 - WRITE       D0.W   D1.L   D2.W            D5.W     D7.W
+; 2 - CDSEND      D0.W   Cmd    # of bytes 0    PiAddr
+; 1 - CDRECV             Result max #      0    PiAddr
+;
+SendCmd  MOVEQ     #WRCMD, D4          ;unitwrite command code
+         CLR.L     D3
+
+         MOVEM.L   D0-D6/A0-A6, -(SP)
+         BSR.S     GoAttUnit           ;puts unit number in D0
+         MOVEM.L   (SP)+, D0-D6/A0-A6
+         TST.W     D7                  ;see if driver had error
+         BNE.S     SCMerr              ;if error set carry
+
+SCMrecv  MOVEQ     #READCMD, D4        ;unitread command code
+         LEA       PiResult, A0        ;result buffer
+         MOVE.L    A0, D1
+         MOVEQ     #PiReslen, D2       ;result length
+         MOVEQ     #0, D3
+         MOVE.W    PiAddr, D5
+         MOVEM.L   D0-D6/A0-A6, -(SP)
+         BSR.S     GoAttUnit           ;puts unit number in D0
+         MOVEM.L   (SP)+, D0-D6/A0-A6
+         TST.W     D7                  ;see if driver had error
+         BNE.S     SCMerr              ;if error set carry
+
+         MOVEQ     #4, D7              ;assume error
+         MOVE.B    Piresult, D1        ;check return code
+         BMI.S     SCMerr              ;bad drive code
+         MOVE.B    PiRes1, D1          ;check pipe code
+         BNE.S     SCMerr              ;bad pipe code
+         CLR.L     D7                  ;no error
+         BRA.S     SCMexit             ;carry cleared by CLR
+SCMerr   MOVE.W    #CARRYST,CCR        ;error
+SCMexit  RTS
+  page
+;
+; GETSLTTBL: sets A0==> start of slot table
+;
+GETSLTTBL   MOVEA.L    PSYSCOM.W,A0
+            MOVE.L     SCslttbl(A0),A0
+            RTS
+
+
+; GETDEVTBL: sets A0==> 1st device in device table, D0=MAXDEV
+;
+GETDEVTBL   MOVEA.L    PSYSCOM.W,A0
+            MOVE.L     SCdevtab(A0),A0           ; A0=> device table
+            MOVE.W     (A0)+,D0                  ; D0 = #device entries, A0=> 1st entry
+            RTS
+
+; GETDRVR: input- A0==> 1st device in device table, D0=unit#
+;          returns A0 = address of unit driver
+;          and D0 = index to entry
+;
+GETDRVR     MULU       #UTlen,D0                 ; calc offset of device entry
+            MOVE.L     UTiodrv(A0,D0.W),A0       ; A0 = address of driver
+            RTS
+
+; GoAttUnit - call attached unit
+;
+GoAttUnit   BSR.S      GETDEVTBL                 ; get table address in A0
+            MOVE.W     AttUnitNo, D0             ; unit to find
+            BSR.S      GETDRVR                   ; get driver entry address
+            MOVE.W     AttUnitNo, D0             ; get unit number
+            JMP        (A0)                      ; call unit
+  page
+;
+;Constants
+;
+; default values
+;
+DefUnit     DATA.W SLOTIO              ;default unit number
+DefPiName   DATA.B 'PRINTER '          ;default pipe name
+DefPiMesg   DATA.B 'User :  '          ;default message
+UserName    DATA.B '          '        ;username 10 bytes
+UsrNmLen    EQU    %-UserName          ;length of user name
+DfMgLen     EQU    %-DefPiMesg         ;length of default message
+
+; Attached unit number
+;
+AttUnitNo   DATA.W     0
+
+; Pipe state
+;
+PiFlags  DATA.W    0                   ;Flags - all flags currently in hi byte
+AutoLF   EQU       0                   ;auto linefeed mode flag
+PiOpen   EQU       1                   ;pipe open flag
+PiStop   EQU       2                   ;pipe stop flag if get another control-z
+
+PiIndex  DATA.W    0                   ;pipe buffer index
+
+PiFile   DATA.B    7                   ;file name length
+         DATA.B    'SPOOL  '           ;file name
+PiMsg    DATA.L    0,0,0,0,0,0,0,0,0,0 ;80 bytes
+         DATA.L    0,0,0,0,0,0,0,0,0,0
+PiAddr   DATA.W    0                   ;pipe slot and server
+
+; Pipe commands
+;
+PiOpWr   DATA.B    $1B                 ;pipe open write command
+         DATA.B    $80
+PiName   DATA.B    0,0,0,0,0,0,0,0     ;pipe name - 8 bytes
+PiNmLen  EQU       %-PiName            ;pipe name length
+PiOplen  EQU       %-PiOpWr            ;pipe open command length
+;
+PiClsWr  DATA.B    $1A                 ;pipe close command
+         DATA.B    $40
+PiClsPN  DATA.B    0                   ;pipe number
+         DATA.B    $FE                 ;close write
+         DATA.B    0                   ;don't care
+PiCllen  EQU       %-PiClsWr           ;pipe close/purge command length
+         DATA.B    0                   ;filler
+;
+PiWrite  DATA.B    $1A                 ;pipe write
+         DATA.B    $21
+PiNumber DATA.B    0                   ;pipe number
+         DATA.B    0                   ;number of bytes (low  byte) - always 512
+         DATA.B    2                   ;number of bytes (high byte)
+PiBuf1   DATA.B    0,0,0               ;first 3 bytes
+         DATA.L    0,0,0,0,0,0,0,0     ;bytes 4-35
+         DATA.L    0,0,0,0,0,0,0,0     ;bytes 36-67
+         DATA.L    0,0,0               ;bytes 68-79
+         DATA.B    0,0,0               ;bytes 80-82
+PiMloc   DATA.B    0                   ;byte 83
+         DATA.L    0,0,0,0,0,0,0,0     ;bytes 84-115
+         DATA.L    0,0,0,0,0,0,0,0     ;bytes 116-147
+         DATA.L    0,0,0,0             ;bytes 148-163
+PiTloc   DATA.L    0,0,0,0             ;bytes 164-195
+         DATA.L    0,0,0,0,0,0,0,0     ;bytes 196-227
+         DATA.L    0,0,0,0,0,0,0       ;bytes 228-255
+         DATA.L    0,0,0,0,0,0,0,0     ;bytes 256-511
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0,0,0,0,0
+         DATA.L    0,0,0,0             ;added 16 bytes to make exactly 512
+         DATA.B    0                   ;last byte
+PiBfEnd  EQU       %-PiBuf1            ;number of bytes in buffer
+PiWrlen  EQU       %-PiWrite           ;pipe write command length
+PiBuf2   DATA.B    0                   ;filler
+;
+PiResult DATA.B    0                   ;disk code
+PiRes1   DATA.B    0                   ;pipe code
+PiRes2   DATA.B    0                   ;pipe number on open
+         DATA.B    0,0,0,0,0,0,0,0,0   ;rest of 12 bytes
+PiReslen EQU       %-PiResult          ;pipe result buffer length
+
+         end     DRVSPOOL

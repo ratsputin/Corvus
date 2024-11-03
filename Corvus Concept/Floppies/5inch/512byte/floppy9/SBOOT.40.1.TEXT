@@ -1,0 +1,265 @@
+; file : sboot.40.1.text
+; last modified 01/25/84
+
+        page
+
+;
+;
+; MessOut - Output a message on the Display
+;
+; Parameters: A4.L - Address of string message
+;
+; Scratches: A4
+;
+;
+MessOut movem.l a0-a1,-(sp)     ;save register
+        move.l  CPdsputs.l,a1   ;get address of output string vector
+        move.l  a4,a0           ;copy address of string buffer
+        jsr     (a1)            ;jump to subroutine
+        movem.l (sp)+,a0-a1     ;restore registers
+        rts
+;
+;
+; TTyOut  - Output a message on the TTY device
+;
+; Parameters: A4.L - Address of string message
+;
+; Scratches: A4
+;
+;
+TtyOut  move.l  d0,-(sp)        ;Store registers
+        move.b  (a4)+,d0        ;Fetch string length
+TTYloop btst    #WrBit,UARTst.l ;Is UART output busy?
+        boff.s  TTYloop         ;Yes. Try again
+        move.b  (a4)+,UARTda.l  ;Output the character
+        subq.b  #1,d0           ;More to write?
+        bne.s   TTYloop         ;Yes. Go do it.
+        move.l  (sp)+,d0        ;Restore register
+        rts                     ;No. Return
+
+        page
+; DSKRD
+;
+; Parameters:   A0.L - Address of buffer
+;               D0.L - Block Number
+;               D2.L - Count
+;
+; Returns: D7.W = ioresult
+;          ne = error
+;          eq = good
+;
+DSKRD   movem.l a0-a4/d0-d6,-(sp);Save registers
+        move.l  CPblkio.w,a4    ;Get pointer to block i/o subr
+        move.b  bootdrv,d1      ;Get drive number
+        moveq   #$32,d5         ;Get "read" command
+        move.b  bootsrv,d6      ;Get boot disk server number
+        lsl.w   #8,d6           ;*
+        move.b  bootslt,d6      ;Get boot slot number
+        move.w  #4,d4           ;retry count               *4.0
+
+DR1     subi.l  #512,d2         ;Are there more whole blocks?
+        blt.s   DR2             ;No. See if any partial blocks
+DR1a    move.l  d4,-(sp)
+        jsr     (a4)            ;Read block -- updates A0 and D0
+        move.l  (sp)+,d4
+        tst.w   d7
+        bpl.s   DR1             ;no error, Process next block *3.6
+        cmpi.b  #NoSocket, d7   ;uninited socket send err?    *3.6
+        bne.s   DSKerr          ;no, then exit                *3.6
+        bsr.s   DRretry         ;see if should retry          *3.6
+        bne.s   DR1a            ;yes                          *3.6
+        bra.s   DSKerr          ;no, error exit               *3.6
+                                ;
+DR2     addi.w  #512,d2         ;D2 = bytes to read
+        beq.s   DSKdone         ;
+        move.l  a0,a3           ;Save buffer pointer
+        movea.l #$91000,a0      ;Get pointer to temp buffer
+                                ;(OMNINET can't access below $80000)
+DR2a    jsr     (a4)            ;Read a whole block
+        bpl.s   DR2b            ;no error, move data          *3.6
+        cmpi.b  #NoSocket, d7   ;uninited socket send err?    *3.6
+        bne.s   DSKerr          ;no, then exit                *3.6
+        bsr.s   DRretry         ;see if should retry          *3.6
+        bne.s   DR2a            ;yes                          *3.6
+DSKerr  moveq   #4,d7           ;Set IORESULT to 4            *3.6
+        bra.s   DSKrtrn         ;Return                       *3.6
+                                ;
+DR2b    movea.l #$91000,a0      ;Get pointer to temp buffer
+        subq.w  #1,d2           ;Set up DBRA inst
+DR3     move.b  (a0)+,(a3)+     ;Copy byte to real dest
+        dbra    d2,DR3          ;  and loop
+DSKdone clr.l   d7              ;OK. Clear IORESULT
+                                ;
+DSKrtrn movem.l (sp)+,a0-a4/d0-d6;Restore registers
+        tst.w   d7              ;set cc
+        rts                     ;Return
+
+;added for version 3.6
+;DRretry - prepare for disk read retry and check if no more retries
+;
+DRretry subq.l  #1,d0           ;get back block number
+        suba.w  #512, a0        ;get back address (blocksize)
+        subq.l  #1, d4          ;more retries?
+        beq.s   DRRexit         ;ran out exit
+        move.b  CPtprnbr.w, d7  ;wait by transporter number
+        lsl.w   #8, d7          ; times 512
+        lsl.w   #1, d7
+DRR010  dbra    d7, DRR010      ;everybody waits different time length
+DRRexit tst.w   d4              ;show error codes
+        rts
+
+
+;added for version 3.6
+;
+; Valid8B8 - validate the Drive.Info table read from block 8
+;
+; Parameters: (A0) = pointer to drive.info table
+;
+; Returns   : (NE) = invalid
+;             (EQ) = good table
+;             (A0) = unchanged
+;
+; Scratches : D7
+;
+Valid8B8 CMPI.B    #1, DIdrvinit(A0)        ;boolean must = 1
+         BNE.S     V8badEx                  ;no, table invalid
+         CMPI.B    #1, DIonline(A0)         ;boolean must = 1
+         BNE.S     V8badEx                  ;no, table invalid
+         CMPI.W    #1982, DIspecial(A0)     ;word must = 1982
+         BNE.S     V8badEx                  ;no, table invalid
+
+; Drive number must be in the range of 1 to DrMax - 1
+;
+         CMPI.W    #1, DIdrvnmbr(A0)        ;greater than or equal 1
+         BLT.S     V8badEx                  ;no, table invalid
+         CMPI.W    #DrMax, DIdrvnmbr(A0)    ;less than DrMax
+         BGE.S     V8badEx                  ;no, table invalid
+
+; Table valid
+;
+         CLR.L     D7                       ;make cc = EQ
+         BRA.S     V8exit
+
+; Table invalid
+;
+V8badEx  MOVEQ     #-1, D7                  ;make cc = NE
+V8exit   RTS
+
+        page
+
+;
+;
+;       write boot error codes
+;
+;
+Berr2   lea     mess2,a4        ;
+        bra.s   BootErr         ;Print message and halt.
+Berr3   lea     mess3,a4        ;
+        bra.s   BootErr         ;Print message and halt.
+Berr4   lea     mess4,a4        ;
+        bra.s   BootErr         ;Print message and halt.
+Berr5   lea     mess5,a4        ;
+                                ;
+BootErr bsr     MessOut         ;
+        trap    #15
+        data.w  0
+;
+c2cvadr data.l  0               ;Corvus volume address
+;
+;
+;       Initial boot stage error messages
+;
+;
+mess2   data.b  'DRIVE.INFO read error.   ',CR,LF,0
+mess3   data.b  'CORVUS VOLUME read error.',CR,LF,0
+mess4   data.b  'Boot block 1 read error. ',CR,LF,0
+mess5   data.b  'Invalid DRIVE.INFO table.',CR,LF,0
+        data.w  0
+
+        page
+;
+; START of secondary boot sequence
+;
+;
+start   move.w  #$2700,sr           ;Disable interrupts
+        lea     ptrs,a0             ;Get pointer to memory pointers
+        move.l  #$C0000,d6          ;last addr + 1 of 256K system          *kb 1/23/84 4.0*
+        move.l  d0,LODATA-ptrs(a0)  ;Save low data pointer
+        addi.l  #$10000,d0          ;Compute data area size
+        cmp.l   d6,d1               ; if 512K then data area = $2000 bytes *kb 1/23/84 4.0*
+        blt.s   start1              ; if 256K then data area = $1000 bytes
+        addi.l  #$10000,d0
+        cmp.l   d6,d0               ; if locode not at or above $C0000     *kb 1/23/84 4.0*
+        bge.s   start1              ;                                      *kb 1/23/84 4.0*
+        move.l  d6,d0               ; then set locode and hidata to $C0000 *kb 1/23/84 4.0*
+start1  move.l  d0,HIDATA-ptrs(a0)  ;Save high data pointer
+        move.l  d0,LOCODE-ptrs(a0)  ;Save low code pointer
+        move.l  d1,HICODE-ptrs(a0)  ;Save high code pointer
+        move.b  d4,bootsrv-ptrs(a0) ;Save boot server number
+        lsr.w   #8,d4               ;Save boot slot number
+        move.b  d4,bootslt-ptrs(a0)
+        move.b  CPextcrt.w,extcrt-ptrs(a0)  ;Save external CRT flag
+;
+; read drive info block from drive
+; drive.info block is located at the block
+; identified by the symbol 'DIOFSET
+;
+        lea     DirBuf,a0       ;Get pointer to input buffer
+        moveq   #DiOfset,d0     ;Get Drive.Info block on drive
+        move.l  #512,d2         ;Get Drive.Info block length
+                                ;
+        bsr     DskRd           ;Read Drive.Info block from drive
+        bne     BErr2           ;Read failed, output error message
+        bsr     Valid8B8        ;validate drive.info table
+        bne     BErr5           ;bad, output error message
+;
+; get the address of the CORVUS volume from the
+; DRIVE.INFO block on this drive. Use this location
+; to read in the cold boot table located on rel. blocks
+; 6 and 7 of the CORVUS volume
+;
+        lea     DirBuf,a0       ;Get pointer to input buffer
+        move.l  #512,d2         ;Get disk block length
+        move.l  CrvOfst(a0),d0  ;Get address of Corvus volume in D0
+        move.l  d0,d1           ;Save addres of Corvus volume
+        lea     c2cvadr,a3      ;Save address of Corvus volume in memory
+        move.l  d0,(a3)         ;
+        addq.l  #6,d0           ;Offset the corvus volume address by 6 to
+                                ;obtain the cold boot table blocks which are always
+                                ;located in the first file of the corvus volume
+        bsr     DskRd           ;Read Cold boot table block from disk drive
+        bne     BErr3           ;Read failed, output error message
+        lea     DirBuf,a0       ;get address of cold boot block read from Corvus volume
+        clr.l   d0              ;make sure hi word is clear  *4.0
+        move.w  23*2(a0),d0     ;the first boot file block index is at offset 23 *4.0
+        add.l   d1,d0           ;absolute block addr = CVRS volume addr + index
+    page
+;
+;       Now read in the approapriate boot file blocks
+;       Since the boot command was used to readin the first two
+;       blocks of the boot code, these blocks must be skiped and the
+;       rest of the boot code readin and branched to.
+;
+;       a0   -  address of first block of the boot file
+;       d0   -  first block on drive containing boot file ( must
+;               be offset by two)
+;
+;
+rdboot  addq.l  #2,d0           ;offset block address by two to compensate
+                                ;for the 2 blocks read in by the boot cmd
+        move.l  #Nobtblk-2,d1   ;d1 contains number of additional boot blocks
+        move.l  #512,d2         ;length of block is 512 bytes
+
+        lea     ConBoot+1024-12, a0    ;boot rom loaded first 2 blocks which
+                                       ;also includes 12 bytes of header
+;
+; this loop reads in the remaining blocks from the boot file
+; area of the disk...
+;
+;
+rdloop  bsr     DskRd           ;Read fist boot file block
+        bne     BErr4           ;Read failed, output error message
+        adda.w  #512,a0         ;increment buffer address
+        addq.l  #1,d0           ;increment boot block address
+        subq.l  #1,d1           ;decrement no. of boot blocks remaining
+        bne.s   rdloop          ;loop back to read next block

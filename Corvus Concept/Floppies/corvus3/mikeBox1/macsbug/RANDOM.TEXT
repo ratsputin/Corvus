@@ -1,0 +1,32 @@
+program Random;
+const T2CntLow = $30F71; {Timer 2 counter low byte}
+      T2CntHi = $30F73; {Timer 2 counter high byte}
+type byte = -128..127;
+     pbyte = ^byte;
+var T2low,T2hi : pbyte;
+    i,j,seed : longint;
+    k : integer;
+function readT2(ptr : pbyte) : integer;
+  var b : record  case integer of
+               0 : (b:byte);
+               1 : (s:set of 0..7);
+          end;
+      x : integer;
+  Begin
+    b.b := ptr^;
+    x := b.b;
+    if (7 in b.s) then {yes, then x is between 128 and 255}
+       x := x + 256;
+    readT2 := x;
+  End; {readT2}
+BEGIN
+ T2low := pointer(T2CntLow);
+ T2hi := pointer(T2CntHi);
+ for k:=1 to 20 do begin
+   i := ord4(readT2(T2low));
+   j := ord4(readT2(T2hi));
+   seed := i+(j*256);
+   writeln('Seed = ',seed);
+ end;
+END.
+

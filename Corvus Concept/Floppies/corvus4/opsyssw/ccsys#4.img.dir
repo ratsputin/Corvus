@@ -1,0 +1,12 @@
+
+Directory of UCSD disk image file 'ccsys#4.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 4 files,  0 to 6 (6), eov 500, size 8, free 4
+
+ 1: FORTRAN         Data 20-Sep-83    6- 210( 204), 104448+512= 104960 bytes
+ 2: FTNLIB.OBJ      Data 20-Sep-83  210- 391( 181), 92672+512= 93184 bytes
+ 3: FTNCTERRS.TEXT  Text 20-Sep-83  391- 419(  28), 14336+512= 14848 bytes
+ 4: SPOOL           Data 20-Sep-83  419- 492(  73), 37376+512= 37888 bytes

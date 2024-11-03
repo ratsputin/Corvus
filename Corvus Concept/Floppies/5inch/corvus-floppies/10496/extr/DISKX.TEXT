@@ -1,0 +1,77 @@
+program diskx;
+
+const nblk  = 40;
+      fname = 'JUNK.DATA';
+
+type  buffer= record case integer of
+                 1: (b: packed array [0..511] of char);
+                 2: (s1,s2,s3,s4: packed array [1..128] of char);
+               end;
+
+var   f: file;
+      pass,err,i,k: integer;
+      buf1,buf2: buffer;
+
+procedure chkIO;
+    var i: integer; ch: char;
+    begin
+    i := ioresult;
+    if i <> 0 then begin
+        writeln;
+        write ('**** I/O error ',i:1,', continue? [Y/N]: ');
+        read (ch); writeln;
+        if (ch = 'N') or (ch = 'n') then begin
+            close (f,purge); exit (diskx); end;
+        end;
+    end;
+
+procedure fillbuff (p,b: integer);
+    var i,n: integer;
+    begin
+    n := p+b;
+    for i := 0 to 511 do begin
+        buf1.b[i] := chr (ord (n)); n := n+1; end;
+    end;
+
+begin (* diskx *)
+pass := 0; err := 0;
+while true do begin
+    write ('O');
+    rewrite (f,fname); chkIO;
+    for i := 0 to nblk-1 do begin
+        fillbuff (pass,i);
+        write ('W');
+        k := blockwrite (f,buf1,1,i);
+        chkIO;
+        if k <> 1 then begin writeln;
+            writeln ('**** Insufficient room on volume');
+            close (f,purge);
+            exit (diskx); end;
+        end;
+    write ('C');
+    close (f,crunch); chkIO;
+    write ('o');
+    reset (f,fname); chkIO;
+    for i := 0 to nblk-1 do begin
+        fillbuff (pass,i);
+        write ('r');
+        k := blockread (f,buf2,1,i); chkIO;
+        if (buf1.s1 <> buf2.s1) or
+           (buf1.s2 <> buf2.s2) or
+           (buf1.s3 <> buf2.s3) or
+           (buf1.s4 <> buf2.s4) then begin
+            err := err+1; writeln;
+            writeln ('Error on block: ',i:1); end;
+        end;
+    write ('c');
+    close (f,crunch); chkIO;
+    writeln;
+    pass := pass+1;
+    writeln ('pass = ',pass:1,'  error = ',err:1);
+    if unitbusy (1) then exit (diskx);
+    end;
+writeln;
+unitclear (1);
+reset (f,fname); close (f,purge);
+end.
+

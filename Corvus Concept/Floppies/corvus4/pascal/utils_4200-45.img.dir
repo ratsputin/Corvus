@@ -1,0 +1,30 @@
+
+Directory of UCSD disk image file 'utils_4200-45.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume UTILS has 22 files,  0 to 6 (6), eov 500, size 168, free 22
+
+ 1: WILD.CODE       Code  1-Apr-82    6-  12(   6),  3072+512=  3584 bytes
+ 2: SYS.INFO.CODE   Code  1-Apr-82   12-  17(   5),  2560+512=  3072 bytes
+ 3: FILE.INFO.CODE  Code  1-Apr-82   17-  24(   7),  3584+512=  4096 bytes
+ 4: DIR.INFO.CODE   Code 18-Jun-82   24-  42(  18),  9216+512=  9728 bytes
+ 5: SCREENOPS.CODE  Code 27-May-82   42-  56(  14),  7168+512=  7680 bytes
+ 6: COMMANDIO.CODE  Code 26-Apr-82   56-  62(   6),  3072+512=  3584 bytes
+ 7: PDBG.SEED.CODE  Code  1-Apr-82   62-  66(   4),  2048+512=  2560 bytes
+ 8: REALCONV.CODE   Code 25-Mar-82   66-  70(   4),  2048+512=  2560 bytes
+ 9: DECODE.CODE     Code 10-Jun-82   70- 104(  34), 17408+512= 17920 bytes
+10: DEBUGGER.CODE   Code 24-May-82  104- 133(  29), 14848+512= 15360 bytes
+11: YALOE.CODE      Code 22-Apr-82  133- 145(  12),  6144+512=  6656 bytes
+12: COMPRESS.CODE   Code 24-May-82  145- 155(  10),  5120+512=  5632 bytes
+13: COPYDUPDIR.CODE Code  7-Apr-82  155- 158(   3),  1536+512=  2048 bytes
+14: MARKDUPDIR.CODE Code  7-Apr-82  158- 162(   4),  2048+512=  2560 bytes
+15: ABSWRITE.CODE   Code 18-May-82  162- 166(   4),  2048+512=  2560 bytes
+16: RECOVER.CODE    Code 21-Jun-82  166- 174(   8),  4096+512=  4608 bytes
+17: KERNEL.CODE     Code  7-Jun-82  174- 240(  66), 33792+512= 34304 bytes
+18: SETUP.CODE      Code  7-Jun-82  240- 276(  36), 18432+512= 18944 bytes
+19: XREF.CODE       Code  1-Apr-82  276- 304(  28), 14336+512= 14848 bytes
+20: REMTALK.CODE    Code 18-May-82  304- 310(   6),  3072+512=  3584 bytes
+21: READ.ME.TEXT    Text 18-May-82  310- 314(   4),  2048+512=  2560 bytes
+22: REMTALK.TEXT    Text 24-Jan-83  314- 332(  18),  9216+512=  9728 bytes

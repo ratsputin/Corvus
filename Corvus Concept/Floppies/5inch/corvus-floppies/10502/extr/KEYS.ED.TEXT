@@ -1,0 +1,274 @@
+; Edword 2.2 Function Keys
+;
+; File format:
+;   <frame> <key> 'label' 'return string'
+;
+; Change label field ONLY!!!
+
+
+;Main function keys
+
+#1 'Edit    '
+1  0  'ScrlBack' '\1B#00'
+1  1  'ScrlFwrd' '\1B#01'
+1  2  'Undo    ' '\1B#02'
+1  3  'Mark    ' '\1B#03'
+1  4  'Ins Char' '\1B#04'
+1  5  'Del Char' '\1B#05'
+1  6  'Erase   ' '\1B#06'
+1  7  'Search  ' '\1B#07'
+1  8  'WorkPad ' '\1B#08'
+1  9  'Go To   ' '\1B#09'
+
+1 10  'Enhance ' '\1B#0A'
+1 11  'Format  ' '\1B#0B'
+1 12  'Redo    ' '\1B#0C'
+1 13  'Bound   ' '\1B#0D'
+1 14  'Ins Line' '\1B#0E'
+1 15  'Del Line' '\1B#0F'
+1 16  'Adjust  ' '\1B#10'
+1 17  'UserKeys' '\1B#11'
+1 18  'JoinLine' '\1B#12'
+1 19  'Exit    ' '\1B#13'
+
+1 20  'CutText ' '\1B#14'
+1 21  'PasteLin' '\1B#15'
+1 22  'PasteOvr' '\1B#16'
+1 23  'PasteCol' '\1B#17'
+1 24  'CopyText' '\1B#18'
+1 25  'Print   ' '\1B#19'
+1 26  'Flush L ' '\1B#1A'
+1 27  'Center  ' '\1B#1B'
+1 28  'Flush R ' '\1B#1C'
+1 29  'Set     ' '\1B#1D'
+
+1 30  'Forms   ' '\1B#1E'
+1 39  'Verify  ' '\1B#27'
+
+
+; BOUND function keys
+
+#2 'Bound   '
+2  0  'CopyText' '\1B#00'
+2  1  'Flush L ' '\1B#01'
+2  2  'Center  ' '\1B#02'
+2  3  'Flush R ' '\1B#03'
+2  4  'Indent  ' '\1B#04'
+2  5  'Del Col ' '\1B#05'
+2  6  'Erase   ' '\1B#06'
+2  7  'Search  ' '\1B#07'
+2  8  'Print   ' '\1B#08'
+2  9  'Exit    ' '\1B#09'
+
+2 10  'CutText ' '\1B#0A'
+2 12  'Sort    ' '\1B#0C'
+2 15  'Del Line' '\1B#0F'
+
+
+; ENHANCE function keys
+
+#3 'Enhance '
+3  0  'ULine   ' '\1B#00'
+3  1  'Sub     ' '\1B#01'
+3  2  'Bold    ' '\1B#02'
+3  3  'OverStrk' '\1B#03'
+3  4  'Insert  ' '\1B#04'
+3  5  'Enh On  ' '\1B#05'
+3  6  'Enh Off ' '\1B#06'
+3  9  'Exit    ' '\1B#09'
+
+3 10  'DblUline' '\1B#0A'
+3 11  'Super   ' '\1B#0B'
+3 12  'StrkOut ' '\1B#0C'
+
+
+;SEARCH function keys
+
+#4 'Search  '
+4  0  'Pattern1' '\1B#00'
+4  1  'Pattern2' '\1B#01'
+4  2  'CursrPat' '\1B#02'
+4  3  'Prev    ' '\1B#03'
+4  4  'Next    ' '\1B#04'
+4  5  'WordSrch' '\1B#05'
+4  6  'Replace ' '\1B#06'
+4  7  'Show All' '\1B#07'
+4  9  'Exit    ' '\1B#09'
+
+4 10  'Pattern3' '\1B#0A'
+4 11  'Pattern4' '\1B#0B'
+4 13  'First   ' '\1B#0D'
+4 14  'Last    ' '\1B#0E'
+4 17  'Look Fwd' '\1B#11'
+
+
+; WORKPAD function keys
+
+#5 'Workpad '
+5  0  'LoadFile' '\1B#00'
+5  2  'ClearPad' '\1B#02'
+5  4  'SaveFile' '\1B#04'
+5  5  'Make Pad' '\1B#05'
+5  6  'Ins File' '\1B#06'
+5  7  'View Dir' '\1B#07'
+5  8  'View Pad' '\1B#08'
+5  9  'Exit    ' '\1B#09'
+
+5 12  'Del Pad ' '\1B#0C'
+5 15  'Make Dir' '\1B#0F'
+5 17  'List Vol' '\1B#11'
+
+
+; USER function keys
+
+#6 'User    '
+6  8  'Use Name' '\1B#08'
+6  9  'Exit    ' '\1B#09'
+
+6 18  'LoadDefn' '\1B#12'
+6 19  'Define  ' '\1B#13'
+
+
+; FORMAT function keys
+
+#7 'Format  '
+7  0  'Footer  ' '\1B#00'
+7  1  'LinSpcng' '\1B#01'
+7  2  'Fill    ' '\1B#02'
+7  3  'Margins ' '\1B#03'
+7  4  'Page Brk' '\1B#04'
+7  5  'SkipLine' '\1B#05'
+7  6  'Center  ' '\1B#06'
+7  7  'Page Off' '\1B#07'
+7  8  'Comment ' '\1B#08'
+7  9  'Exit    ' '\1B#09'
+
+7 10  'Header  ' '\1B#0A'
+7 12  'Justify ' '\1B#0C'
+7 14  'NeedLins' '\1B#0E'
+7 15  'FigSpace' '\1B#0F'
+7 17  'Page Len' '\1B#11'
+7 18  'Ascii   ' '\1B#12'
+
+
+; FORM function keys
+
+#8 'Forms   '
+8  0  'Prev Rec' '\1B#00'
+8  1  'Next Rec' '\1B#01'
+8  2  'FirstRec' '\1B#02'
+8  3  'Last Rec' '\1B#03'
+8  4  'Ins Rec ' '\1B#04'
+8  5  'Del Rec ' '\1B#05'
+8  6  'Sort    ' '\1B#06'
+8  7  'Print   ' '\1B#07'
+8  8  'Word Cap' '\1B#08'
+8  9  'Exit    ' '\1B#09'
+
+
+; GOTO function keys
+
+#9 'Go To   '
+9  0  'PrevWord' '\1B#00'
+9  1  'NextWord' '\1B#01'
+9  2  'GotoLine' '\1B#02'
+9  3  'PrevPage' '\1B#03'
+9  4  'NextPage' '\1B#04'
+9  5  'Down    ' '\1B#05'
+9  6  'GotoMark' '\1B#06'
+9  7  'FrstLine' '\1B#07'
+9  8  'LastLine' '\1B#08'
+9  9  'Exit    ' '\1B#09'
+
+9 10  'PrevPara' '\1B#0A'
+9 11  'NextPara' '\1B#0B'
+9 13  'PrevSent' '\1B#0D'
+9 14  'NextSent' '\1B#0E'
+9 15  'Up      ' '\1B#0F'
+9 19  'Cancel  ' '\1B#13'
+
+
+; PRINT function keys
+
+#10 'Print   '
+10  0  'Pause   ' '\1B#00'
+10  1  'Continue' '\1B#01'
+10  2  'Enhance ' '\1B#02'
+10  3  'SglSheet' '\1B#03'
+10  4  'PageRng ' '\1B#04'
+10  5  'Display ' '\1B#05'
+10  6  'Printer ' '\1B#06'
+10  7  'File    ' '\1B#07'
+10  8  'LayOut  ' '\1B#08'
+10  9  'Exit    ' '\1B#09'
+
+; SET function keys
+
+#11 'Set     '
+11  0  'Page Len' '\1B#00'
+11  1  'Set Mar ' '\1B#01'
+11  2  'ClearMar' '\1B#02'
+11  3  'Left Mar' '\1B#03'
+11  4  'RightMar' '\1B#04'
+11  5  'Set Tabs' '\1B#05'
+11  6  'Clr Tabs' '\1B#06'
+11  7  'Tab Set ' '\1B#07'
+11  8  'Tab Clr ' '\1B#08'
+11  9  'Exit    ' '\1B#09'
+
+11 10  'Set Scrl' '\1B#0A'
+11 11  'Set Bell' '\1B#0B'
+
+
+; REPLACE function Keys
+
+#12 'Replace '
+12  3  'Prev    ' '\1B#03'
+12  4  'Next    ' '\1B#04'
+12  5  'Change  ' '\1B#05'
+12  9  'Exit    ' '\1B#09'
+
+
+; SHOW function keys
+
+#13 'ShowAll '
+13  3  'Prev    ' '\1BA'
+13  4  'Next    ' '\1BB'
+13  5  'Cancel  ' '\1B#04'
+13  9  'Exit    ' '\1B#09'
+
+
+; ADJUST function keys
+
+#14 'Adjust  '
+14  0  'Left    ' '\1BD'
+14  1  'Right   ' '\1BC'
+14  2  'Hyphen  ' '\1B#02'
+14  3  'Break   ' '\1B#03'
+14  4  'No Break' '\0D'
+14  5  'Mar Rel ' '\1B#05'
+14  9  'Exit    ' '\1B#09'
+
+; SORT function keys
+
+#16 'Sort  '
+16  0  'Sort Key' '\1B#00'
+16  1  'Order   ' '\1B#01'
+16  2  'Buf Size' '\1B#02'
+16  5  'Start   ' '\1B#05'
+16  9  'Exit    ' '\1B#09'
+
+
+; PRINT DISPLAY function keys
+
+#17 'Display'
+17  0  'ScrlBack' '\1B#00'
+17  1  'ScrlFwrd' '\1B#01'
+17  9  'Exit    ' '\1B#09'
+
+
+
+
+
+
+

@@ -1,0 +1,26 @@
+
+Directory of UCSD disk image file 'lc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 18 files,  0 to 6 (6), eov 500, size 217, free 18
+
+ 1: TESTSAVE.LC     Data 20-Nov-90    6-   7(   1),   512+512=  1024 bytes
+ 2: TEST2.LC        Data 20-Nov-90    7-   8(   1),   512+512=  1024 bytes
+ 3: IPC.TEXT        Text 20-Nov-90    8-  12(   4),  2048+502=  2550 bytes
+ 4: FILEAZ.TEXT     Text 20-Nov-90   12-  16(   4),  2048+192=  2240 bytes
+ 5: CONSOLE.TEXT    Text 20-Nov-90   16-  22(   6),  3072+  4=  3076 bytes
+ 6: HELLO.TEXT      Text 22-Nov-90   50-  54(   4),  2048+512=  2560 bytes
+ 7: HEAD.LC         Data 22-Nov-90   54-  76(  22), 11264+512= 11776 bytes
+ 8: NEW.LC          Data 23-Nov-90   76-  77(   1),   512+512=  1024 bytes
+ 9: NEW1.LC         Data 23-Nov-90   77-  87(  10),  5120+512=  5632 bytes
+10: NEW2.LC         Data 23-Nov-90   87-  88(   1),   512+512=  1024 bytes
+11: NEW3.LC         Data 23-Nov-90   89-  90(   1),   512+512=  1024 bytes
+12: SEGA.TEXT       Text 23-Nov-90  102- 106(   4),  2048+231=  2279 bytes
+13: SEGB.TEXT       Text 23-Nov-90  106- 110(   4),  2048+165=  2213 bytes
+14: SEGC.TEXT       Text 23-Nov-90  110- 114(   4),  2048+209=  2257 bytes
+15: SEGD.TEXT       Text 23-Nov-90  114- 118(   4),  2048+143=  2191 bytes
+16: LINE10.LC       Data 22-Nov-90  236- 251(  15),  7680+512=  8192 bytes
+17: A10.LC          Data 22-Nov-90  251- 261(  10),  5120+512=  5632 bytes
+18: VFW.LC          Data 20-Nov-90  298- 479( 181), 92672+512= 93184 bytes

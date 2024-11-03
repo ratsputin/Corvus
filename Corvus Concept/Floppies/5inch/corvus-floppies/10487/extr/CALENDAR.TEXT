@@ -1,0 +1,275 @@
+{-----------------------------------------------------------------------------}
+{ Program : Analog CLock V.I                                                  }
+{ Author  : David Ramsey                                                      }
+{ Date    : 8/31/82                                                           }
+{-----------------------------------------------------------------------------}
+{ Revision: 1.1                                                               }
+{ Author  : David Ramsey                                                      }
+{ Date    : 10/10/82                                                          }
+{ Mods    : Added ShowMonth display                                            }
+{-----------------------------------------------------------------------------}
+{ Revision: 1.2                                                               }
+{ Author  : David Ramsey                                                      }
+{ Date    : 03/16/83                                                          }
+{ Mods    : Added dual screen orientation adjustment                          }
+{-----------------------------------------------------------------------------}
+{                                 Comments                                    }
+{-----------------------------------------------------------------------------}
+
+Program Aclock1;
+
+Uses {$U /ccutil/CCLIB}
+  CCdefn,
+  CCgrfIO,                      { Graphics routines }
+  CCcrtIO,                      { Display routines }
+  CCwndIO,
+  CClblIO,
+  CCclkIO,                      { Clock "routines" }
+     {$U /ccutil/userio}
+  UserIO;
+
+Const
+  VXCenter = 270;                { Horizontal centering of clock face }
+  VYCenter = 400;                { Vertical centering of clock face }
+  HXCenter = 435;
+  HYCenter = 242;               { For horizontal screens }
+  KeyBoard = 2;                 { Keyboard unit number }
+
+Type                            { Co-ordinate system for clock face tics }
+  Co_Ordinates = Record
+                   XCo,
+                   YCo  : Integer
+                 End;
+  S9 = String[9];               { Used for literal months and days }
+
+Var
+  Glotzy  : pwndRcd;
+  ClkInfo : ClkPB;
+  Face    : Array[0..179] of Co_Ordinates;
+  Done,
+  Initial : Boolean;            { Set to TRUE for initial time displays }
+  NewSet  : Boolean;            { TRUE if we have to load the default charset }
+  OldStartDay,                  { Day of week 1st day of month falls on }
+  OldEndDay,                    { Day of week last day of month falls on }
+  CCH,                          { Character cell HEIGHT in pixels }
+  CCW,                          { Character cell WIDTH in pixels  }
+  XOff,                         { # of chars ShowMonth starts from left window }
+  YOff,                         { # of chars ShowMonth starts from bottom window }
+  X,
+  XMax,                         { Max x co-ordinate of current window }
+  YMax,                         { Max y co-ordinate of current window }
+  Raskin,
+  OldSec,
+  OldHour,
+  OldDay,
+  OldMonth: Integer;
+  CurMonth,
+  CurYear : Integer;
+  FirstDay: Integer;
+  Key : Char;
+
+{--------------------------- Global Routines --------------------------------}
+
+Function poscurwnd : pwndrcd; external;        { Get current window record }
+
+Function BrkPress : Boolean; External;
+
+
+Procedure GO;   { Get the ball rolling! }
+
+Var
+  HomeX, HomeY,
+  LX,LY,
+  CurrX,CurrY : Integer;
+
+Begin
+  CCwndIOinit;
+  CCgrfIOinit;
+  ClkRead(ClkInfo);
+  OldSec := ClkInfo.Secs;
+  OldDay := ClkInfo.Day;
+  OldMonth := ClkInfo.Month
+End;
+
+
+
+{------------------------ End of global routines ------------------------------}
+
+Procedure ShowMonth(XOff,YOff,Month,Day,Year : Integer);
+
+        { Draw a ShowMonth for the given month and year }
+
+Var
+  X,
+  Y,
+  XMax, YMax,
+  HomeX, HomeY,
+  CurrX, CurrY,
+  LX, LY   : Integer;
+  Days     : String[21];
+  D1       : Integer;
+  MS       : S9;
+
+  function StartDay (Month,Year: Integer): integer;
+
+  Const
+    Day = 1;
+
+  Var
+    T1,
+    T2 : Double;
+
+  begin
+    T1 := Trunc(-(1/(Month+1)+0.7));
+    Year := Year + Trunc(T1);
+    T2   := (Month+1)-12*T1;
+    T2   := T2 * 30.6001;
+    StartDay := ((Trunc(Year * 365.25) + Trunc(T2) + Day) + 5)MOD 7
+  end;
+
+
+  Function NumOfDays(Month,Year : Integer) : Integer;
+
+  Begin
+    Case Month Of 1,3,5,7,8,10,12 : NumOfDays := 31;
+                  4,6,9,11        : NumOfDays := 30;
+                  2               : If (Year Mod 4) = 0
+                                      Then NumOfDays := 29
+                                      Else NumOfDays := 28
+    End
+  End;
+
+
+  Procedure LitMonth(M : Integer; Var Month : S9);
+
+  Begin
+    Case M Of 1 : Month := 'January';
+              2 : Month := 'February';
+              3 : Month := 'March';
+              4 : Month := 'April';
+              5 : Month := 'May';
+              6 : Month := 'June';
+              7 : Month := 'July';
+              8 : Month := 'August';
+              9 : Month := 'September';
+              10: Month := 'October';
+              11: Month := 'November';
+              12:  Month := 'December'
+            End
+  End;
+
+
+  Procedure Grid;               { Draw ShowMonth grid }
+
+  Var
+    Counter : Integer;
+    DH,DW   : Integer;
+
+    Procedure Days;             { Label day columns }
+
+    Var
+      Dy      : String[21];
+      Counter : Integer;
+
+    Begin
+      Dy := 'SunMonTueWedThuFriSat';
+      For Counter := 0 To 6 Do
+        Begin
+          GotoXY(Counter*4+XOff,YMax-YOff-1);
+          Write(Copy(Dy,Counter*3+1,3))
+        End
+    End;
+
+  Begin         { Grid }
+    Days;
+    For Counter := 0 To 7 Do Begin  { Vertical lines }
+        DW := Counter*CCW*4+(XOff*CCW) - 2;
+        DrawLine(DW,(YOff*CCH),DW,(YOff*CCH*15)+2,-1);
+        End;
+    For Counter := 6 DownTo 0 Do Begin   { Horizontal lines }
+        DW := Counter*CCH*2+((YOff+2)*CCH)+2;
+        DrawLine((XOff*CCW)-2,DW,(XOff*CCW)+(CCW*28)-2,DW,-1)
+        End;
+      DrawLine((Xoff*CCW)-2,((YOff)*CCH),28*CCW+(XOff*CCW)-2,((YOff)*CCH),-1)
+  End;
+
+
+  Procedure MarkDay(DayOfWeek,Day : Integer);
+
+  { Invert the current date in the ShowMonth display }
+
+  Var
+    Counter,
+    CX,
+    CY,
+    Dy   : Integer;
+
+  Begin
+    Dy := StartDay(DayOfWeek,Day)+Day-1;
+    CX := (Dy Mod 7)*4*CCW+XOff*CCW;     { LLH corner of ShowMonth cell }
+    CY := (6 - DY DIV 7) * CCH * 2 + YOff * CCH + 2;
+    For Counter := 2 To (CCH*2) - 2 Do
+        DrawLine(CX,CY+counter,CX+(4*CCW)-4,CY+Counter,-1)
+  End;
+
+
+
+  Begin  { ShowMonth }
+    Glotzy := pOScurWnd;                        { Get the current window record }
+    CCH := (Glotzy^.charpt^.lpch);              { Get character cell height     }
+    CCW := (Glotzy^.charpt^.bpch);              { Get character cell width      }
+    Raskin := WinStatus(HomeX,HomeY,LX,LY,CurrX,CurrY);
+    XMax := LX;                                 { Width of window, in chars     }
+    YMax := Glotzy^.LngthY DIV CCH;             { Height of window, in chars    }
+    GotoXY(0,YMax);
+    SetOrigin(0,0,3);                           { Set graphics origin           }
+    D1 := StartDay(Month,Year);
+    For X := 1 to NumOfDays(Month,Year) Do Begin   { Display the day numbers    }
+      GotoXY((D1 Mod 7)*4+XOff,(YMax - (13+YOff))+((D1 Div 7)*2));
+      If X < 10 Then Write(X:1) Else Write(X:2);
+      D1 := D1+1
+      End;
+    LitMonth(Month,MS);                         { Get the month name            }
+    GotoXY(XOff,YMax - (14+YOff));
+    Write(MS,', ',Year:4);                      { Display the month name        }
+    Grid;                                       { Draw the ShowMonth grid        }
+    ClkRead(ClkInfo);
+{   If (Month = ClkInfo.Month) and (Year = ClkInfo.Year) Then
+      MarkDay(ClkInfo.DayOfWeek,ClkInfo.Day)   }
+  End;
+
+{----------------------  End of ShowMonth procedure  ---------------------------}
+  Procedure BackGround;
+
+  Begin
+  End;
+
+
+  Procedure DoIt;
+
+  Begin
+    CCcrtIOinit;
+    CCgrfIOInit;
+    CrtAction(EraseAll);
+    ClkRead(ClkInfo);
+    XOff := 2;
+    YOff := 1;
+    With ClkInfo Do ShowMonth(XOff,YOff,Month,Day,Year+1900);
+    Done := False;
+    Repeat
+      GotoXY(0,0);
+      Write('Enter month, year: ');
+      ReadLn(CurMonth,CurYear);
+      CrtAction(EraseAll);
+      If CurMonth > 0 Then ShowMonth(XOff,YOff,CurMonth,1,CurYear)
+    Until CurMonth = 0;
+    UnitClear(Keyboard);
+    CrtAction(CursorOn)
+  End;
+
+
+Begin           { Mainline }
+  UserIOInit('');
+  LockUserIO(DoIt);
+  UserIOTerm
+End.

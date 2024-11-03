@@ -1,0 +1,9 @@
+program x;
+var i,k: integer;
+begin
+for i := 1 to 26 do
+    begin
+    k := i+(i-1); if k > 26 then k := (k mod 26) + 1;
+    write('k[',i:1,'] = ',k:1);
+    end;
+end.

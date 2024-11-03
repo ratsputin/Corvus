@@ -1,0 +1,145 @@
+
+
+         file :  ccosinit.text
+         date :  09-February-1984
+         from :  Keith Ball
+
+         Re :    Procedure to initialize CCOS from IBM PC
+
+
+         User procedure :
+
+         1) Boot IBM PC to user IBMGR, the system manager.
+
+         2) go to Drive Management level in the Constellation II
+            system utility program.
+               a) use IBMGR's home server.
+
+         3) Run User Manager.
+               a) add user SNAGATE
+                   - device user
+                   - type is SNA gateway
+                   - add omninet host number of Uniplex
+                   - home disk server is server with CCSYS on it
+                   - boot operating system is CCOS
+
+         4) Run Volume Manager.
+               a) add volumes to IBMGR's home disk server
+               b) add volume CCSYS
+                   - 512 blocks
+                   - type UCSD
+                   - RW
+                   - initialize
+               c) add volume NAS
+                   - 512 blocks
+                   - type UCSD
+                   - RW
+                   - initialize
+
+         5) Run Access Manager.
+               a) for user SNAGATE
+                   - grant access to CCSYS mounted on unit 4
+                     with RW access.
+                   - grant access to NAS mounted on unit 5
+                     with RW access.
+               b) for user IBMGR
+                   - change access to CCSYS mounted on unit 10
+                     with RW access.
+                   - change access to NAS mounted on unit 11
+                     with RW access.
+
+
+         6) Exit to main level and reboot the IBM PC to user IBMGR.
+
+         7) Run Boot Manager in the Drive Management section.
+               a) add FCCSYS:BOOT.CONCEPT2 file to type Concept2.
+
+         8) Run M)aintenance then U)pdate.
+               a) use FCCSYS floppy to copy to volume CCSYS.
+               b) use FNASn floppies to copy to volume NAS.
+                   - maybe more than one floppy to hold NAS system
+                     code and data files.
+
+         9) Must reboot IBM PC after run Update.
+
+         Needs :
+
+               a) IBM PC Boot Manager version that has boot type
+                  Concept2 and device type SNA gateway.
+                   - this is March 1984 release of Constellation II
+                     for the IBM PC.
+               b) Update floppies for CCOS and NAS.
+
+
+         Procedure to create Update floppies :
+
+
+         1) Format single sided, 48-TPI, 8 sectors per track IBM PC
+            p-system floppies.
+
+         2) Boot a Concept running CCOS 1.2a with a 5-1/4 inch floppy.
+
+         3) Run FUTIL in volume CCUTIL.
+               a) press Configure
+                   - press TPI, configures driver to 48 TPI.
+                   - press Sectors/Track and enter 8.
+
+         4) Rename floppy volume to correct name
+               a) FCCSYS for CCOS files
+
+         5) Using CopyFile in the File Manager, copy the necessary
+            files to the floppy.
+               a) CCOS files are :
+                   - ASSIGN
+                   - BOOT.CONCEPT2
+                   - CC.EXEC
+                   - CC.FILMGR
+                   - CC.KERNEL
+                   - CC.SETUP
+                   - CC.WNDMGR
+                   - DRV.CDISK1
+                   - DRV.CDISK2
+                   - DRV.DTACOM
+                   - DRV.EPRNT
+                   - DRV.FDISK1
+                   - DRV.FDISK2
+                   - DRV.OMNINET
+                   - DRV.TIMER
+                   - all the files are found in CCSYS of a CCOS 1.2a
+                     system except BOOT.CONCEPT2 which is in CCUTIL.
+
+.pg
+         6) Build SYSTEM.CONTENT file for Update program with EdWord
+            and save it on floppy.
+
+               a) CCOS file is :
+ ...
+ ... comments are lines with a blank in column 1
+ ...
+ ... Initialize CCOS for Uniplex
+ ... Copy files from the floppy FCCSYS: to volume CCSYS:
+ ...
+ ...     1         2         3         4         5    5    6
+ ...5....0.........0.........0.........0.........0....5....0
+C   FCCSYS:ASSIGN            CCSYS:ASSIGN             /
+C   FCCSYS:BOOT.CONCEPT2     CCSYS:BOOT.CONCEPT2      /
+C   FCCSYS:CC.EXEC           CCSYS:CC.EXEC            /
+C   FCCSYS:CC.FILMGR         CCSYS:CC.FILMGR          /
+C   FCCSYS:CC.KERNEL         CCSYS:CC.KERNEL          /
+C   FCCSYS:CC.SETUP          CCSYS:CC.SETUP           /
+C   FCCSYS:CC.WNDMGR         CCSYS:CC.WNDMGR          /
+C   FCCSYS:DRV.CDISK1        CCSYS:DRV.CDISK1         /
+C   FCCSYS:DRV.CDISK2        CCSYS:DRV.CDISK2         /
+C   FCCSYS:DRV.DTACOM        CCSYS:DRV.DTACOM         /
+C   FCCSYS:DRV.EPRNT         CCSYS:DRV.EPRNT          /
+C   FCCSYS:DRV.FDISK1        CCSYS:DRV.FDISK1         /
+C   FCCSYS:DRV.FDISK2        CCSYS:DRV.FDISK2         /
+C   FCCSYS:DRV.OMNINET       CCSYS:DRV.OMNINET        /
+C   FCCSYS:DRV.TIMER         CCSYS:DRV.TIMER          /
+ ...
+ ... use the following command to chain to NAS volume copy
+ .. N    FNAS                     /
+
+
+         7) Floppy is now complete.
+

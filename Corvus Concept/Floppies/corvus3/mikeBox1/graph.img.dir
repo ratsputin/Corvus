@@ -1,0 +1,12 @@
+
+Directory of UCSD disk image file 'graph.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 4 files,  0 to 6 (6), eov 500, size 12, free 4
+
+ 1: CC.GR.FONTS     Data 10-Jan-84    6-  26(  20), 10240+512= 10752 bytes
+ 2: CC.GR.IPC.TEXT  Text 10-Jan-84   26-  38(  12),  6144+512=  6656 bytes
+ 3: CC.GR.TMPLTS    Data 10-Jan-84   38- 241( 203), 103936+512= 104448 bytes
+ 4: CC.GRAPH        Data 10-Jan-84  241- 488( 247), 126464+512= 126976 bytes

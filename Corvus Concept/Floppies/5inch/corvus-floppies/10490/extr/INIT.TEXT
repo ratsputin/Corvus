@@ -1,0 +1,339 @@
+{$I-}
+{$S INIT}
+{.IX} procedure INITIALIZE;
+VAR
+  DUM: CHAR;
+   I: INTEGER;
+
+{.IX} procedure Init0;
+VAR
+  WinFlg, hx, hy, w, h, x, y, iost, I: INTEGER;
+
+BEGIN
+  UserIOInit;
+  GaugeWin := AppWin;
+  iost := WinStatus( hx, hy, w, h, x, y );
+  CurMode := '';
+  ScrWid := W-5;
+  BotRow := H-1;
+  SclHgt := (BotRow * 2) div 3;
+  WinFlg := WfgCursOn + WfgInvCur;
+  write( C_ClrHome,C_SetGrfOrg,'\0\0\0', chr(H-2), '\4' );
+  iost := WinCreate( CurWin, 3, 0, ScrWid, h, WinFlg );
+  WinFlg := WfgCursOn + WfgInvCur + WfgWrap;
+  iost := WinCreate( SuspWin, 0, 0, W-6, h-6, WinFlg );
+  iost := WinCreate( CallWin, 6, 6, W-6, h-6, WinFlg );
+  iost := WinSelect( GaugeWin );
+  writeln( C_CsrOff,C_SetInvrs,C_ClrEOL);      { Invert top bar on screen }
+  JstfOpt := false;
+  writeln( '\1BK\1BG0' );
+  PushWindow( CurWin );
+  writeln; writeln;
+  PopWindow;
+  ShwPagBnd := false;
+  RHTMAR := 65;
+  LFTMAR := 1;
+  LINSPC := 1;
+  HyphOpt := false;
+  RdwRqd := false;
+  CurTsk := TIDEdit;
+  PrvTsk := CurTsk;
+
+  ProgFlg := False;
+  CleanFlg := false;
+  CntrTxt := false;
+  InsMod := false;
+  FastFlg := False;
+  CSFlg := False;
+  HOTZON := 6;
+  PRTNDV := TRUE;
+  MAXCHG := 30000;
+  LFTJST := FALSE;
+  TOKFND := false;
+  FRMLEN := 66;
+  ScrPagLen := 56;
+  FSTPAG := 1;
+  FSTIND := 5;
+  CurEnh := [];
+  EnhCod := '\1Be';
+  FollowEnh := true;
+  fillchar( TabAra, MaxLinLen, chr(12) );
+  for I := 1 to (RhtMar) div 8 do
+    TabAra[I*8] := SymLTab;
+  fillchar( ZipAra, MaxLinLen, '-' );
+END;
+
+{
+.PG
+}
+procedure INIT1;
+var i: integer;
+BEGIN
+{ InitMouse;
+  MouseMode(Txt); }
+  CrtBuf[1] := 27;             { eAEscapee@ }
+  CrtBuf[2] := ord('e'); {enh }
+  CrtBuf[3] := ord('@'); {off }
+  CrtBuf[4] := 27;             { eAEscapee@ }
+  CrtBuf[5] := ord('K'); {clear line}
+  CrtBuf[6] := 32;
+  CSense  := False;    { Default to case insensitive search }
+  CommFlg := False;
+  GhstCsr := 0;
+  Ptrn[1] := '';
+  Ptrn[2] := '';
+  Ptrn[3] := '';
+  Ptrn[4] := '';
+  Ptrn[5] := '';
+  LastCall := '';
+  CurPat := 1;
+  BkTim := 0;
+  EndLine[1] := Chr(27);
+  EndLine[2] := 'e';
+  EndLine[3] := Chr(64);
+  ParFmt[1].F := 5; ParFmt[1].L := 1; ParFmt[1].R :=65; ParFmt[1].I := false;
+  ParFmt[2].F := 0; ParFmt[2].L := 1; ParFmt[2].R :=65; ParFmt[2].I := false;
+  ParFmt[3].F :=-2; ParFmt[3].L := 6; ParFmt[3].R :=65; ParFmt[3].I := false;
+  ParFmt[4].F := 0; ParFmt[4].L := 6; ParFmt[4].R :=60; ParFmt[4].I := false;
+  ParFmt[5].F :=-1; ParFmt[5].L :=11; ParFmt[5].R :=65; ParFmt[5].I := true;
+  PrintEnable := false;
+  fillchar( PBuf, MaxLinLen, ' ' );
+  PBufPtr := 1;
+  PBufLen := -1;
+  write( chr(27), 'v' );
+  LogUndo := true;
+  UndoRedo := false;
+  RedoMty := true;
+  UndoFullFlg := False;
+  CmdStr := '';
+  SentEnd := ['.','!','?',':',';'];
+  PlsMns := ['-','+'];
+  fillchar( ColHdr, MaxLinLen, ' ' );
+  SCRLFT := 1;
+  OldEnh := [];
+  ESCSTR := '\1B';
+  DPYCHG := TRUE;
+  YNKWID := MAXLINLEN;
+  YNKINS := TRUE;
+  BlkStr[1] := ord( ' ' );
+  moveleft( BlkStr[1], BlkStr[2], MaxLinLen-1 );
+  InvVid := '\1BG0' ;
+  NrmVid := '\1BG4' ;
+  SglShtOpt := false;
+  Write(NrmVid); Write('\1Bb');   { Cursor off }
+  CLRSCR := '\1BJ';
+  Write(InvVid); Write('\1Bc');
+
+  PushWindow( CmdWin );
+  write( ClrScr );
+  PopWindow;
+
+  PushWindow( GaugeWin );
+  write( InvVid );
+  DrawGauge( 4, 105 );
+  PopWindow;
+
+  PushWindow( CurWin );
+  write( EnhOff );
+END;
+
+{
+.PG
+}
+procedure INIT2;
+var Tmp: pStrTyp;
+    i: integer;
+BEGIN
+   NamNdxPad := '';
+   UlMode := false;
+   FmtCmd := ord('.');
+   ShwBnd := false;
+   DpyChg := true;
+   NewTxtMty := true;
+   ShwPat := false;
+   CLREOS := '\1BY';
+   LoadUserKeys := true;
+   WRITE( InvVid );
+   WINRWS := BOTROW - TXTTOP + 1;
+   CTRROW := (WINRWS+1) DIV 2;
+   WINTOP := 1;
+   WINBOT := WINTOP + WINRWS - 1;
+
+   LoadLabels( MENU1Frame );
+   InitMutes;
+   KeepCnt := 0;       { eANoe@ eAdictionarye@ eAwordse@ eAone@ eAheap!e@ }
+   Tmp := pOSCurVol;
+   CurVol := Tmp^;
+   UCase := ['A'..'Z'];
+   LCase := ['a'..'z'];
+   Digit := ['0'..'9'];
+   PstTim := 30;
+   WrdChr := UCase + LCase + Digit;
+   Blnk := ord(' ');
+   YNKMTY := TRUE;
+   YNKLEN := 0;
+   PstWid := MaxLinLen;
+   PrtPause := false;
+   PagLen := 56;
+   FNAM := '';
+   RPL := '';
+   PAT := '';
+   CurSample := 0;
+   fillchar( Sample, sizeof( Sample ), chr(0) );
+   PrevTxtPad := '';
+end;
+
+
+{
+.PG
+}
+procedure WINIT;
+var MakeWkSP: boolean;
+    Term: KeyTyp;
+    NStr: StrTyp;
+    SBuf: string[250];
+    Buf: BA;
+    DictVal,DictKey:str255;
+    I,L,R: integer;
+    Dum: boolean;
+
+procedure AsgnFile( var F: FilId; Nam: StrTyp; Typ: StrTyp; Shw: boolean );
+begin
+  if FilCreate( F ) then begin
+    if FilOpen( F ) then begin
+      if NamStor( Nam, ord( F.Loc ) ) then begin
+         if not Shw then exit(AsgnFile);
+         if AddDE( Nam, Typ, F, '' ) then begin
+            exit( AsgnFile );
+         end;
+      end;
+    end;
+  end;
+  warn( Subst( @Nam, Msg(MGWKSP,76) ) );
+end;
+
+function GetFile( var F: FilId; Nam: StrTyp ): boolean;
+var I: integer;
+begin
+  if NamFtch( Nam, I ) then begin
+    F.Loc := I;
+    F.Key := 0;
+    GetFile := true;
+  end else begin
+    warn( Subst( @Nam, Msg(MGWKSP,77) ) );
+    GetFile := false;
+  end;
+end;
+
+begin
+  if argc>0 then begin
+    WkSpNam := argv[1]^;
+  end else begin
+    WkSpNam := 'W';
+    if not PmtStr( Msg(MGWKSP,78), WkSpNam ) then begin
+       UserIOTerm;
+       Halt;
+    end;
+  end;
+  if debug then begin
+    writeln( 'WorkSpace diagnostic program. . .' );
+    WkSpDiag;
+  end;
+  MakeWkSp := false;
+  if not WkSpOpen( WkSpNam ) then begin
+    if Confirm( Subst(@WkSpNam,Msg(MGWKSP,79)), false) then begin
+      MakeWkSp := PmtStr( Msg(MGWKSP,78), WkSpNam );
+    end else begin
+      UserIOTerm;
+      Halt;
+    end;
+  end;
+  if pos( '/', WkSpNam )<>1 then
+     WkSpNam := concat( CurVol, '/', WkSpNam );
+  if MakeWkSp then begin
+    I := 494;
+    if (not PmtInt( Msg(MGWKSP,80), I )) or (I<50) or (I>2000) then begin
+      Bell(BelWrn);
+      WrtMsg( MGGENL, 12 );
+      UserIOTerm;
+      Halt;
+    end;
+    WrtMsg( MGWKSP, 82 );
+    if not WkSpInit( WkSpNam, I ) then begin
+      Bell(BelWrn);
+      WrtMsg( MGWKSP, 83 );
+      UserIOTerm;
+      Halt;
+    end else begin
+      if WkSpOpen( WkSpNam ) then begin
+         Dum := FilCreate( DirFid ) and
+                FilOpen( DirFid ) and
+                InitDir( DirFid, DirFid ) and
+                NamStor( 'SclHgt', BotRow div 2 ) and
+                NamStor( 'CurDir', ord(DirFid.Loc) );
+         AsgnFile( YnkFid, 'Copy', 'CPY', true );
+         AsgnFile( RedoFid, 'Redo', 'RDO', false);
+         AsgnFile( UndoFid, 'Undo', 'UDO', false );
+         AsgnFile( PrtFid, 'Print', 'PRT', true );
+         AsgnFile( TxtFid, 'Hello', 'TXT', true );
+         Dum := FilCurRec(DirFid,CurDE) and NamStor('CurDE',CurDE);
+         WrtMsg( MGWKSP, 85 );
+      end;
+    end;
+  end else begin
+    if GetFile( DirFid, 'CurDir' ) and
+       GetFile( TxtFid, 'Text' ) and
+       GetFile( YnkFid, 'Copy' ) and
+       GetFile( RedoFId, 'Redo' ) and
+       GetFile( UndoFid, 'Undo' ) and
+       GetFile( PrtFid, 'Print' ) and
+       NamFtch( 'CurDE', CurDE ) and
+       NamFtch( 'SclHgt', SclHgt )
+    then begin
+    end else begin
+      warn( Msg(MGWKSP,6) );
+    end;
+  end;
+  DictKey := 'TabAra';
+  if DictFind( DictKey, DictVal ) then begin
+    for i := 1 to min(MaxLinLen, length(DictVal)-2 ) do
+       TabAra[i] := CnvIB(ord(DictVal[i]));
+    L := CnvBI( ord(DictVal[length(DictVal)-1]) );
+    R := CnvBI( ord(DictVal[length(DictVal)]) );
+    if (L<R) and (0<L) and (R<MaxLinLen) then begin
+       LftMar := L;
+       RhtMar := R;
+    end;
+  end;
+  DictKey := 'ParFmt';
+  if DictFind( DictKey, DictVal ) then begin
+     i := min( sizeof(ParFmt), length(DictVal) );
+     moveleft( DictVal, Buf, i+1 );
+     moveleft( Buf[2], ParFmt, i );
+  end;
+
+  if not NamFtch('BelTone',i) then i := 1;
+  if not NamFtch('TimZon',TimZon) then TimZon := 4;
+  BelTone := i=1;
+  if not NamFtch('ShwPagBnd',i) then i := 0;
+  ShwPagBnd := i=1;
+
+  SclHgt := min( SclHgt, BotRow-2 );
+  UpShift( WkSpNam );
+  InitTxtFid;
+  dum := unitbusy(6);
+  PrintEnable := ioresult=0;
+  PrtPause := false;
+end;
+
+{
+.PG
+}
+BEGIN
+  writeln;
+  Init0;
+  INIT1;
+  INIT2;
+  WINIT;
+  BkGrndOK := true;
+END;

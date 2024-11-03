@@ -1,0 +1,17 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY has 10 files,  0 to 6 (6), eov 1440, size 49, free 10
+
+ 1: C1.L.TEXT       Text 21-Jun-85    6- 836( 830), 424960+132= 425092 bytes
+ 2: C               Ux195 23-Jan-84  836- 973( 137), 70144+512= 70656 bytes
+ 3: STDIO.M.TEXT    Ux193 23-Jan-84  973- 979(   6),  3072+512=  3584 bytes
+ 4: CLIB.OBJ        Ux195 23-Jan-84  979-1021(  42), 21504+512= 22016 bytes
+ 5: PASLIB.OBJ      Ux195  1-Feb-84 1021-1126( 105), 53760+512= 54272 bytes
+ 6: PASCAL          Ux195  1-Feb-84 1126-1323( 197), 100864+512= 101376 bytes
+ 7: PASCTERRS.TEXT  Ux193  1-Feb-84 1323-1337(  14),  7168+512=  7680 bytes
+ 8: SEE.TEXT        Ux183  4-Oct-84 1337-1341(   4),  2048+512=  2560 bytes
+ 9: SEE.I           Ux3b5 19-Oct-85 1341-1343(   2),  1024+512=  1536 bytes
+10: SEE.OBJ         Ux345  0-Bad-100 1343-1391(  48), 24576+512= 25088 bytes

@@ -1,0 +1,41 @@
+UNIT BldAltEQU;
+
+{**************************************************************}
+{                                                              }
+{   11 Feb 1983   original version   KB                        }
+{                   released 1.0b                              }
+{                                                              }
+{   08 Apr 1983   changed size of    KB                        }
+{                   array of strings                           }
+{                                                              }
+{   03 Aug 1983   changed length of  KB                        }
+{                   of strings                                 }
+{                                                              }
+{**************************************************************}
+
+INTERFACE
+
+USES {$U /CCUTIL/CCLIB}   CCdefn;
+
+
+CONST
+       MAXSTR          =       95;     {must be an ODD number}
+       ALTSTRLEN       =       19;     {must be an ODD number}
+
+TYPE
+       AltStrg         =       STRING[ ALTSTRLEN ];
+
+       pAltStrTbl      =       ^AltStrTbl;
+       AltStrTbl       =       ARRAY[0..MAXSTR] OF AltStrg;
+       StrIndxTbl      =       ARRAY[0..95] OF Byte;
+
+       AltTbl          =       RECORD
+                                  ActualStrs : INTEGER;
+                                  STptr   : pAltStrTbl;
+                                  Indices : StrIndxTbl;
+                                  StrList : AltStrTbl;
+                                  END;
+
+IMPLEMENTATION
+
+END. {BldAltEQU}

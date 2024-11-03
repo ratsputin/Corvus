@@ -1,0 +1,26 @@
+
+Directory of UCSD disk image file 'ccsys#2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 18 files,  0 to 6 (6), eov 500, size 27, free 18
+
+ 1: HELP.LC.TEXT    Text 20-Sep-83    6-  28(  22), 11264+512= 11776 bytes
+ 2: KEYS.LC.TEXT    Text 20-Sep-83   28-  40(  12),  6144+512=  6656 bytes
+ 3: KEYS.LCI.TEXT   Text 20-Sep-83   40-  52(  12),  6144+512=  6656 bytes
+ 4: LC.CONVERT      Data  3-Feb-83   52-  67(  15),  7680+512=  8192 bytes
+ 5: OS.GBL.ASM.TEXT Text 20-Sep-83   67-  95(  28), 14336+512= 14848 bytes
+ 6: SGEN.TEXT       Text 20-Sep-83   95- 101(   6),  3072+512=  3584 bytes
+ 7: SPOOL.CODE      Code 20-Sep-83  101- 123(  22), 11264+512= 11776 bytes
+ 8: START.CODE      Text  3-Mar-83  123- 127(   4),  2048+512=  2560 bytes
+ 9: WNDUTIL         Data 20-Sep-83  127- 183(  56), 28672+512= 29184 bytes
+10: CC.SYSMGR       Data 20-Sep-83  183- 206(  23), 11776+512= 12288 bytes
+11: DEBUG           Data 20-Sep-83  206- 218(  12),  6144+512=  6656 bytes
+12: SYSMSG          Data 20-Sep-83  218- 251(  33), 16896+512= 17408 bytes
+13: LOADER.IMAGE    Data 20-Sep-83  251- 252(   1),   512+512=  1024 bytes
+14: DRV.ADISK       Data 20-Sep-83  252- 258(   6),  3072+512=  3584 bytes
+15: DRV.DTACOM      Data 20-Sep-83  258- 266(   8),  4096+512=  4608 bytes
+16: DRV.EPRNT       Data 20-Sep-83  266- 271(   5),  2560+512=  3072 bytes
+17: DIAG.DATA       Data 20-Sep-83  271- 272(   1),   512+512=  1024 bytes
+18: CC.LGICLC       Data 13-Oct-83  272- 473( 201), 102912+512= 103424 bytes

@@ -1,0 +1,124 @@
+{$S EDIT}
+{
+.PG
+}
+procedure MBDelLin;
+var i: integer;
+begin
+   SetUpNewTxt( MarkTop );
+   DpyChg := false;
+   BeginEvent;
+   for i := MarkTop to MarkBot do begin
+      if i mod 5=0 then
+         UpdtGauge( i-MarkTop+1, MarkBot-MarkTop+1 );
+      DelLin;
+   end;
+   EndEvent;
+   SetUpNewTxt( MarkTop+1 );
+   TellUsr( Subst(AsStr(MarkBot-MarkTop+1,10),Msg(MGEDIT,27)) );
+end;
+
+{$S filetask}
+procedure MBSave;
+
+var FNam: StrTyp;
+    FID: tXTFile;
+    FidFCB : TXTCB;
+    S: TXTString;
+    pLen, pStr: ^byte;
+    Lin,R,L: integer;
+    OK: boolean;
+
+begin {$I-}
+  FNam := '';
+  if PmtStr( Msg(10,6), FNam ) then begin
+    TXTsetCB(FBlk,UnKnown,True);
+    UpShift( FNam );
+    if pos( '.TEXT', FNam )=0 then FNam := concat( FNam, '.TEXT' );
+    If FileExists(FNam) Then
+      if Not Confirm( Subst( @FNam, Msg(10,17) ), false ) then Exit(MBSave);
+    TXTWrOpen(FidFCB, Fid, FNam );
+    if IOResult = 0 then begin
+      Lin := MarkTop;
+
+(*    pLen := pointer( ord4(@S) );
+      pStr := pointer( ord4(@S)+1 );
+*)
+      TellUsr( Msg(10,7) );         { eA"Savinge@ eAfile...e@ eA"e@ }
+      while (Lin<=MarkBot) and UsrIdle do begin
+        SetUpNewTxt( Lin );
+        Lin := Lin + 1;
+        if Lin mod 5=0 then UpdtGauge( Lin-MarkTop+1, MarkBot-MarkTop+1 );
+        L := BAColToNdx( MarkLft, NewTxt );
+        R := BAColToNdx( MarkRht, NewTxt );
+        SpecBAToStr(NewTxt,Max(0,BkSpanNE(NewTxt,R,' ')),S);
+        S := Copy(S,L,255);
+(*
+        pLen^ := max( 0, BkSpanNE( NewTxt, R, ' ' )-L+1 );
+        moveleft( NewTxt[L], pStr^, pLen^ );
+*)
+        TXTWrite(FidFCB, FID, S)
+        end;            { eAIfe@ eALine@ eA<=e@ eA...e@ }
+      FidFCB.OpnFlg := True;
+      TXTclose(FidFCB, Fid);
+      TellUsr( Subst( @FNam, Msg(10,16) ) )    { eA"Done"e@ }
+      End               { eAIfe@ eAIOResulte@ eA=e@ eA0e@ }
+    end;
+end;  {$I+}
+
+
+{$S edit }
+procedure BoundTask;
+var I: integer;
+    ReadCmd: boolean;
+
+  procedure Swap(var x,y: integer);
+  var t: integer;
+  begin t := x; x := y; y:= t; end;
+
+begin
+  if Curcol=MarkLft then begin
+     MarkRht := MaxLinLen
+  end else begin
+     MarkRht := CurCol-1;
+  end;
+  MarkBot := CurLin;
+
+  if MarkTop>MarkBot then Swap( MarkTop, MarkBot );
+  if MarkLft>MarkRht then Swap( MarkLft, MarkRht );
+
+  ShwBnd := true;
+  for I := max( WinTop, MarkTop ) to MarkBot do
+    ShowLine( I );
+  LoadLabels( BndFrame );
+
+  SetUpNewTxt( MarkBot );
+  ReadCmd := true;
+  NextCmd;
+  case Cmd of
+     KF1 : DoCopy( true, MarkTop, MarkBot, MarkLft, MarkRht );
+     KF2 : ForEachLine( MarkTop, MarkBot, MarkLft, MarkRht, FlushLeft );
+     KF3 : ForEachLine( MarkTop, MarkBot, MarkLft, MarkRht, Center );
+     KF4 : ForEachLine( MarkTop, MarkBot, MarkLft, MarkRht, FlushRight );
+     KF5 : ForEachLine( MarkTop, MarkBot, MarkLft, MarkRht, Indent );
+     KF6 : ForEachLine( MarkTop, MarkBot, MarkLft, MarkRht, DelChr );
+     KF7 : ForEachLine( MarkTop, MarkBot, MarkLft, MarkRht, Erase );
+     KF8 : SearchTask( MarkTop, MarkBot, MarkLft, MarkRht,True );
+     KF9 : PrintTask( MarkTop, MarkBot, PrintText );
+     KF10: begin end;
+     KF11: DoCopy( false, MarkTop, MarkBot, MarkLft, MarkRht );
+
+     KF13: SortTask( MarkTop, MarkBot, MarkLft, MarkRht-MarkLft+1 );
+     KF14: SpellTask(MarkTop,MarkBot);
+     KF15: MBSave;
+     KF16: MBDelLin;
+     otherwise: ReadCmd := LocalEdit;
+  end;
+
+  ShwBnd := false;
+  Redraw( WinTop );
+  if ReadCmd then begin
+     Cmd := KTASK;
+     Key := chr( TIDEdit );
+  end;
+end;

@@ -1,0 +1,483 @@
+; File: os.unitio.text
+; Date: 17-Dec-82
+
+        IDENT   CCUNITIO
+        
+        GLOBAL  UWRITE,UREAD,UCLR,UBUSY,USTATUS,UINSTALL,UUNMOUNT
+        GLOBAL  %P821201,%_END,%_TERM
+        GLOBAL  NULLDRIV,DrvBootDev
+        
+        include '/ccos/os.gbl.asm.text'
+
+;
+; %P821201, %_TERM and %_END - Pre- and post- execution routines for CCOS
+;
+%P821201
+%_TERM  RTS                     ; Nop
+%_END   TRAP    #$0F            ; Call MACSBUG
+        
+;
+; Unit I/O commands
+;
+INSMODE EQU     0
+RDMODE  EQU     1
+WRMODE  EQU     2
+CLRMODE EQU     3
+BSYMODE EQU     4
+STAMODE EQU     5
+UNMMODE EQU     6
+        page
+;
+; UINSTALL - Install a unit driver
+;
+; Parameters: +========+===================+===================+
+;             | Offset | Old format        | New format        |
+;             +========+===================+===================+
+;             | SP+00  | Return address    | Return address    |
+;             +--------+--               --+--               --+
+;             | SP+02  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+04  | Unit number       | Unit number       |
+;             +--------+-------------------+-------------------+
+;
+UINSTALL
+       MOVE.L  (SP)+,A0        ; Pop return address
+       MOVE.W  (SP)+,D0        ; Get unit number
+       MOVE.L  A0,-(SP)        ; Push return address on stack
+       MOVEQ   #INSMODE,D4
+       BSR     GETUNIT
+       RTS                     ; Return
+;
+; UUNMOUNT - Unmount a unit driver
+;
+; Parameters: +========+===================+===================+
+;             | Offset | Old format        | New format        |
+;             +========+===================+===================+
+;             | SP+00  | Return address    | Return address    |
+;             +--------+--               --+--               --+
+;             | SP+02  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+04  | Unit number       | Unit number       |
+;             +--------+-------------------+-------------------+
+;
+UUNMOUNT
+       MOVE.L  (SP)+,A0        ; Pop return address
+       MOVE.W  (SP)+,D0        ; Get unit number
+       MOVE.L  A0,-(SP)        ; Push return address on stack
+       MOVEQ   #UNMMODE,D4
+       BSR     GETUNIT
+       RTS                     ; Return
+       page
+
+;
+; UWRIT - Unit write
+;
+; UREAD - Unit read
+;
+; Parameters: +========+===================+===================+
+;             | Offset | Old format        | New format        |
+;             +========+===================+===================+
+;             | SP+00  | Return address    | Return address    |
+;             +--------+--               --+--               --+
+;             | SP+02  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+04  | Mode              | Mode              |
+;             +--------+-------------------+-------------------+
+;             | SP+06  | Block number      | Block number      |
+;             +--------+-------------------+--               --+
+;             | SP+08  | Byte count        |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+10  | Buffer pointer    | Byte count        |
+;             +--------+--               --+--               --+
+;             | SP+12  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+14  | Unit number       | Buffer pointer    |
+;             +--------+-------------------+--               --+
+;             | SP+16  | ....              |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+18  | ....              | Unit number       |
+;             +--------+-------------------+-------------------+
+;
+; If SP+10.L is greater than $7FFFF, then old format assumed
+; All software doing I/O using low RAM must use new format
+;
+; This routine only preserves A3..A7
+;
+                               ;
+                               ; Old stack offsets
+                               ;
+Omode  EQU     4               ; Mode
+OblkNo EQU     6               ; Block number
+Ocount EQU     8               ; Byte count
+ObufPt EQU     10              ; Buffer pointer
+OuntNo EQU     14              ; Unit number
+OargSz EQU     16              ; Argument size
+                               ;
+                               ; New stack offsets
+                               ;
+Nmode  EQU     4               ; Mode
+NblkNo EQU     6               ; Block number
+Ncount EQU     10              ; Byte count
+NbufPt EQU     14              ; Buffer pointer
+NuntNo EQU     18              ; Unit number
+NargSz EQU     20              ; Argument size
+                               ;
+UREAD  MOVEQ   #RDMODE,D4      ; D4 = command request
+       BRA.S   UIO             ;
+                               ;
+UWRITE MOVEQ   #WRMODE,D4      ; D4 = command request
+                               ;
+UIO    MOVE.L  10(SP),D0       ; Get possible new byte count
+       CMPI.L  #$7FFFF,D0      ; Is this an old type request?
+       BGT.S   UIOOLD          ; Yes, process old request
+       MOVE.W  Nmode(SP),D5    ; Get mode
+       MOVE.L  NblkNo(SP),D3   ; Get block number
+       MOVE.L  Ncount(SP),D2   ; Get byte count
+       MOVE.L  NbufPt(SP),D1   ; Get buffer pointer
+       MOVE.W  NuntNo(SP),D0   ; Get unit number
+       BSR     GETUNIT         ; Validate unit nmbr / call driver
+       MOVE.L  (SP),A0         ; Get return address
+       ADDA.W  #NargSz,SP      ; Pop parameters
+       JMP     (A0)            ; Return to user
+                               ;
+UIOOLD MOVE.W  Omode(SP),D5    ; Get mode
+       CLR.L   D3              ; Get block number
+       MOVE.W  OblkNo(SP),D3   ; *
+       CLR.L   D2              ; Get byte count
+       MOVE.W  Ocount(SP),D2   ; *
+       MOVE.L  ObufPt(SP),D1   ; Get buffer pointer
+       MOVE.W  OuntNo(SP),D0   ; Get unit number
+       BSR     GETUNIT         ; Validate unit nmbr / call driver
+       MOVE.L  (SP),A0         ; Get return address
+       ADDA.W  #OargSz,SP      ; Pop parameters
+       JMP     (A0)            ; Return to user
+       page
+;
+; UBUSY - Unit busy
+;
+; Parameters: +========+===================+===================+
+;             | Offset | Old format        | New format        |
+;             +========+===================+===================+
+;             | SP+00  | Return address    | Return address    |
+;             +--------+--               --+--               --+
+;             | SP+02  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+04  | Unit number       | Unit number       |
+;             +--------+-------------------+-------------------+
+;
+; Returns:      ST.B - Boolean result
+;
+; This routine preserves all registers
+;
+;BUSY  MOVE.W  4(SP),D0        ; Get unit number
+;      MOVEQ   #BSYMODE,D4
+;      BSR.S   GETUNIT
+;      MOVE.L  (SP),A0         ; Get return address
+;      ADDA.W  #6,SP           ; Pop parameters
+;      MOVE.B  D0,(SP)         ; Store the result
+;      JMP     (A0)            ; Return to user
+UBUSY  MOVE.W  4(SP),D0        ; Get unit number
+       MOVEQ   #BSYMODE,D4
+       BSR.S   GETUNIT
+       MOVE.B  D0,4(SP)        ; Store the result
+       RTS                     ; Return to user
+;
+; UCLR - Unit clear
+;
+; Parameters: +========+===================+===================+
+;             | Offset | Old format        | New format        |
+;             +========+===================+===================+
+;             | SP+00  | Return address    | Return address    |
+;             +--------+--               --+--               --+
+;             | SP+02  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+04  | Unit number       | Unit number       |
+;             +--------+-------------------+-------------------+
+;
+UCLR   MOVE.L  (SP)+,A0        ; Pop return address
+       MOVE.W  (SP)+,D0        ; Get unit number
+       MOVE.L  A0,-(SP)        ; Push return address
+       MOVEQ   #CLRMODE,D4
+       BSR.S   GETUNIT
+       RTS                     ; Return
+;
+; USTATUS - Unit status
+;
+; Parameters: +========+===================+===================+
+;             | Offset | Old format        | New format        |
+;             +========+===================+===================+
+;             | SP+00  | Return address    | Return address    |
+;             +--------+--               --+--               --+
+;             | SP+02  |                   |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+04  | Command           | Command           |
+;             +--------+-------------------+--               --+
+;             | SP+06  | Buffer pointer    |                   |
+;             +--------+--               --+-------------------+
+;             | SP+08  |                   | Buffer pointer    |
+;             +--------+-------------------+--               --+
+;             | SP+10  | Unit number       |                   |
+;             +--------+-------------------+-------------------+
+;             | SP+12  | ....              | Unit number       |
+;             +--------+-------------------+-------------------+
+;
+; If SP+04.W is non-zero, then old format assumed
+; All software doing I/O using low RAM must use new format
+;
+USTATUS
+       MOVE.W  04(SP),D0       ; Is this an old type request?
+       BNE.S   USTOLD          ; Yes, process old request
+       MOVE.W  06(SP),D0       ;
+       CMPI.W  #$8,D0          ; Is this a new type request?
+       BLT.S   USTNEW          ; Yes, process new request
+       CMPI.W  #$F,D0          ; Is this a new type request?
+       BGT.S   USTNEW          ; Yes, process new request
+       MOVE.W  08(SP),D0       ;
+       CMPI.W  #$8,D0          ; Is this an old type request?
+       BLT.S   USTOLD          ; Yes, process old request
+       CMPI.W  #$F,D0          ; Is this an old type request?
+       BGT.S   USTOLD          ; Yes, process old request
+                               ;
+USTNEW MOVE.L  (SP)+,A0        ; Pop return address
+       MOVE.L  (SP)+,D2        ; Pop command
+       BRA.S   UST1            ;
+                               ;
+USTOLD MOVE.L  (SP)+,A0        ; Pop return address
+       CLR.L   D2              ; Pop command
+       MOVE.W  (SP)+,D2        ; *
+UST1   MOVE.L  (SP)+,D1        ; Pop buffer address
+       MOVE.W  (SP)+,D0        ; Get unit number
+       MOVE.L  A0,-(SP)        ; Push return address
+       MOVEQ   #STAMODE,D4     ;
+       BSR.S   GETUNIT         ;
+       RTS                     ; Return
+       page
+;
+; GETUNIT
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.W - Count
+;               D3.W - Block Number
+;               D4.W - Command (1)
+;               D5.W - Access mode
+;
+; (1) This is the only value passed to unit clear or unit busy
+;
+GETUNIT
+       TST.W   D0
+       BLT.S   BadUnit
+       MOVE.L  PSYSCOM.W,A0    ; (A0) = SYSCOM
+       MOVE.L  20(A0),A0       ; (A0) = device table
+       CMP.W   (A0)+,D0
+       BGT.S   BadUnit
+       MOVE.W  D0,D7
+       MULU    #UTlen,D7       ; Form index into UnitTab
+       ADDA.W  D7,A0
+       MOVE.W  (A0)+,D6        ; Get command mode word
+       LSL.W   #1,D6           ; Left one bit
+       ORI.W   #1,D6           ; Everyone gets UNITINSTALLed
+       BTST    D4,D6           ; Test access mode
+       BEQ.S   BadFunc         ; Is bit set?
+       MOVE.L  (A0),D7         ; Yes. Get driver address
+       BEQ.S   NoDrivr         ; 0 --> No driver
+       MOVE.L  D7,A0
+       CLR.W   D7              ; Clear IORESULT
+       JSR     (A0)            ; Call driver
+       BRA.S   SETIORS         ; Driver returns with ioresult in D7
+                               ;
+NoDrivr                        ;
+BadUnit
+       MOVEQ   #2,D7           ; 2 = Bad unit number
+       BRA.S   SETIORS
+                               ;
+BadFunc
+       MOVEQ   #3,D7           ; 3 = Bad mode, illegal operation
+;
+; SETIORES - Stores D7 into IORESULT
+;
+SETIORS
+       MOVE.L  PSYSCOM.W,A0    ; (A0) = syscom
+       MOVE.W  D7,SCiorslt(A0) ; Set ioresult
+       RTS                     ; Return
+
+       page
+;
+; DRVBOOTDEV -- Boot device driver
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.W - Count
+;               D3.W - Block Number
+;               D4.W - Access mode (1)
+;                       0 = Install, 1 = Read,
+;                       2 = Write, 3 = Clear,
+;                       4 = Busy, 5 = Status
+;
+; (1) This is the only value passed to unit clear or unit busy
+;
+; Returns: D7.W - IORESULT
+;
+DrvBootDev
+        MOVE.L  D1,A0           ; Data address to A0
+        LEA     DBDtabl,A1
+        LSL.W   #1,D4           ; D4 to word count
+        MOVE.W  0(A1,D4.W),D4   ; D4 = dist from DBDtabl
+        JMP     0(A1,D4.W)      ; Go to appropriate driver
+
+DBDtabl data.w  DBDinst-DBDtabl
+        data.w  DBDrd-DBDtabl
+        data.w  DBDwr-DBDtabl
+        data.w  DBDclr-DBDtabl
+        data.w  DBDbsy-DBDtabl
+        data.w  DBDst-DBDtabl
+        data.w  DBDum-DBDtabl
+
+;
+; DBDbsy
+;
+; Returns: D0.B - Result
+;
+DBDbsy  CLR.B   D0              ; Set result
+
+;
+; DBDum, DBDinst, DBDwr, DBDclr, DBDst
+;
+DBDum
+DBDinst
+DBDwr
+DBDclr
+DBDst
+        RTS                     ; Return
+
+        page
+;
+; DBDrd -- Read data from boot device
+;
+;       Enter:  D0.W - Unit number (not used)
+;               D1.L - Address of buffer
+;               D2.W - Count
+;               D3.W - Block Number
+;
+CPblkio  equ    $714            ;PROM boot device driver pointer
+CPdsputc equ    $10064          ;PROM display character subr pointer
+                                ;
+DBDrd   move.l  d1,a0           ;set pointer to data buffer
+        move.l  pSysCom.w,a1    ;get pointer to SysCom
+        move.l  SCmemmap(a1),a1 ;get pointer to memory map (boot info)
+        move.l  CPblkio.w,a2    ;get pointer to boot device driver
+        move.l  d3,d0           ;set relative block number
+        add.w   MMbtblk(a1),d0  ;set absolute block number
+        move.w  MMbtdrv(a1),d1  ;set drive number
+        moveq   #$32,d5         ;set "read" command
+        move.b  MMbtsrv+1(a1),d6;get boot server from slot table
+        lsl.w   #8,d6           ;*
+        move.b  MMbtslt+1(a1),d6;get boot slot from slot table
+                                ;
+DBDrd1  subi.w  #512,d2         ;are there more whole blocks?
+        blt.s   DBDrd2          ;no, see if any partial blocks
+        move.l  a2,-(sp)        ;--- boot PROM v 0.3 forgot to save a2
+        jsr     (a2)            ;read this block
+        move.l  (sp)+,a2        ;--- boot PROM v 0.3 forgot to save a2
+        btst    #7,d7           ;error reported by controller?
+        bon.s   DBDrd7          ;yes, set IORESULT and return
+        bsr.s   DBDdot          ;
+        bra.s   DBDrd1          ;process next block, if any
+                                ;
+DBDrd2  addi.w  #512,d2         ;D2 = bytes to read
+        beq.s   DBDrd8          ;
+        move.l  a0,a3           ;save buffer pointer
+        suba.w  #512,sp         ;get temp buffer on the stack
+        move.l  sp,a0           ;*
+        move.l  a2,-(sp)        ;--- boot PROM v 0.3 forgot to save a2
+        jsr     (a2)            ;read this block
+        move.l  (sp)+,a2        ;--- boot PROM v 0.3 forgot to save a2
+        move.l  sp,a0           ;
+        subq.w  #1,d2           ;set up DBRA inst
+DBDrd3  move.b  (a0)+,(a3)+     ;copy byte to real destination
+        dbra    d2,DBDrd3       ;*
+        adda.w  #512,sp         ;remove temp buffer
+        bsr.s   DBDdot          ;
+                                ;
+DBDrd7  btst    #7,d7           ;error reported by controller?
+        boff.s  DBDrd8          ;no, clear IORESULT
+        moveq   #4,d7           ;set IORESULT to 4
+        bra.s   DBDrd9          ;return
+                                ;
+DBDrd8  clr.w   d7              ;OK. Clear IORESULT
+                                ;
+DBDrd9  rts                     ;return
+                                ;
+DBDdot  movem.l a0/d0,-(sp)     ;save registers
+        move.l  CPdsputc.l,a0   ;get pointer to boot put character subr
+        move.b  #'.',d0         ;get character
+        jsr     (a0)            ;output character
+        movem.l (sp)+,a0/d0     ;restore registers
+        rts                     ;return
+
+        page
+;
+; NULLDRIV - The NULL device driver
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.W - Count
+;               D3.W - Block Number
+;               D4.W - Access mode (1)
+;                       0 = Install, 1 = Read,
+;                       2 = Write, 3 = Clear,
+;                       4 = Busy, 5 = Status
+;
+; (1) This is the only value passed to unit clear or unit busy
+;
+; Returns: D7.W - IORESULT
+;
+NULLDRIV
+        bra.s   nulIOrq         ;start of code
+        data.b  0               ;device not blocked
+        data.b  31              ;valid commands
+        data.b  82,07,07        ;date
+        data.b  0               ;fill
+        data.b  hmlen           ;header message length
+hm      data.b  'NULL device driver'
+hmlen   equ     %-hm            ;
+                                ;
+nulIOrq MOVE.L  D1,A0           ; Data address to A0
+        LEA     NULTABL,A1
+        LSL.W   #1,D4           ; D4 to word count
+        MOVE.W  0(A1,D4.W),D4   ; D4 = dist from NULTABL
+        JMP     0(A1,D4.W)      ; Go to appropriate driver
+
+NULTABL data.w  NULINST-NULTABL
+        data.w  NULRD-NULTABL
+        data.w  NULWR-NULTABL
+        data.w  NULCLR-NULTABL
+        data.w  NULBSY-NULTABL
+        data.w  NULST-NULTABL
+        data.w  NULUM-NULTABL
+        page
+;
+; NULUM, NULINST, NULWR, NULCLR, NULST
+;
+NULUM
+NULINST
+NULWR
+NULCLR
+NULST
+        RTS                     ; Return
+;
+; NULRD
+;
+NULRD   MOVE.B  #4,(A0)         ; Send EOF character
+        RTS                     ; Return
+;
+; NULBSY
+;
+; Returns: D0.B - Result
+;
+NULBSY  CLR.B   D0              ; Set result
+        RTS                     ; Return
+
+        page
+        END
+

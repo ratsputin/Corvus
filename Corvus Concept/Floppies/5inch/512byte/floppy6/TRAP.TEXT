@@ -1,0 +1,17 @@
+start
+                moveq   #-1,d0
+
+                lea     save,a0
+                move.l  $78.w,(a0)
+
+                trap    #15
+                data    0
+
+                lea     save,a0
+                move.l  (a0),$78.w
+
+                rts
+
+save            data.l  0
+
+                end     start

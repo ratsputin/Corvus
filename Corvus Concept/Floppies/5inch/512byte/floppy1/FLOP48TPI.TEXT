@@ -1,0 +1,57 @@
+
+
+
+         To   : Bob
+         From : Keith
+         File : flop48tpi.text
+
+         How to make and write 48 TPI 5-1/4 inch floppy diskettes
+
+
+         1) Format the floppy on the IBM PC with a double-sided
+            diskette drive under the P-system.
+
+               a) run the turnkey format program
+               b) format 8 sectors per track
+
+         2) Put the floppy in the Concept 5-1/4 inch floppy
+            drive.
+
+         3) run /CCUTIL/FUTIL
+
+         4) press Configure, function key F3
+
+         5) press TPI, function key F5
+
+               a) This makes the driver read and write 48 TPI
+                  floppies.
+
+         6) press Sec/Trk, function key F6
+
+               b) Type 8, for 8 sectors per track.
+
+         7) press Exit, function key F10, twice.
+
+         8) The floppy system is now usable with the formatted
+            floppy.  You can copy files between the hard disks
+            and the floppy diskette  using CopyFile in the
+            FileManager.
+
+         9) When finished with the 48 TPI floppies set the
+            system bakc to it's default configuration.  To
+            make the system work with the default floppy
+            configuration :
+
+               a) run /CCUTIL/FUTIL
+
+               b) press Configure, function key F3
+
+               c) press TPI, function key F5. This makes the
+                  driver read and write 96 TPI floppies.
+
+               d) press Sec/Trk, function key F6, then type
+                  RETURN.  This sets sectors per track back to
+                  the default of 9.
+
+               e) press Exit, function key F10, twice.
+

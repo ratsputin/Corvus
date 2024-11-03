@@ -1,0 +1,10 @@
+date : 05-January-1983
+
+DataCom document
+
+
+      The driver maintains an Auto LineFeed flag.  If the flag is set
+and the mode unitwrite parameter is zero (0) then the driver will put
+a LineFeed character into the character stream after a Carraige
+Return character.  If the mode parameter is non-zero or the Auto
+LineFeed flag is clear then no LineFeed character will be added.

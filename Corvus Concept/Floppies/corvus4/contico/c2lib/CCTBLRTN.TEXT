@@ -1,0 +1,1277 @@
+{$S CVTutils}
+{ CCTblRtn --------------------------------------------------------------------}
+{                                                                              }
+{       CCTblRtn -- Corvus Table Routine Units for CONSTELLATION               }
+{                                                                              }
+{       Copyright 1982 by Corvus Systems, Inc.                                 }
+{                         San Jose, California                                 }
+{                                                                              }
+{       All Rights Reserved                                                    }
+{                                                                              }
+{       v 1.0 19-MAR-82  ESP                                                   }
+{                                                                              }
+{------------------------------------------------------------------------------}
+
+UNIT CCTblRtn;
+
+INTERFACE
+
+USES    { CCtblrtn public }
+   {$U /CCLIB/CClib.OBJ         }       CCdefn,
+   {$U /CCDECLS/ERRORS.OBJ      }       ERRORS,
+   {$U /CCDECLS/CCdrvIO.OBJ     }       CCdrvIO;
+
+CONST   { CCtblrtn public }
+   TBLrev     = '1.0';
+   OK         = 0;
+   Blok       = 512;
+   CDBufLen   = 1024;
+   MaxRecSize = 31;   {Maximum record size}
+
+TYPE    { CCtblrtn public }
+   TBLvarbuf    = RECORD CASE integer OF
+                   1 : (b : ARRAY[0..MaxRecSize] of Byte);
+                   2 : (c : PACKED ARRAY[0..MaxRecSize] of CHAR);
+                   END;
+
+
+
+   TBLtype   = RECORD
+                   Buf     : TBLvarbuf;  {Buffer for one table entry}
+                   TblSize : INTEGER;  {in number of blocks}
+                   NetInfo : CdAddr;   {Network information}
+                   RecSize : INTEGER;  {Record size}
+                   OffSet  : INTEGER;  {Table entry offset}
+                   KeyLgth : INTEGER;  {Table entry key length}
+                   END;
+
+PROCEDURE TBLinitunit;
+
+PROCEDURE TBLdebug
+   ( {input}      DeBug:        BOOLEAN
+     {output}
+   );
+
+FUNCTION  TBLinit
+   ( {input}      TBLinfo:      TBLtype
+     {output}
+   ): INTEGER;
+
+FUNCTION  TBLinsert
+   ( {input}      TBLinfo:      TBLtype
+     {output}
+   ): INTEGER;
+
+FUNCTION  TBLdelete
+   ( {input}      TBLinfo:      TBLtype
+     {output}
+   ): INTEGER;
+
+PROCEDURE TBLsearch
+   ( {input}      TBLinfo:      TBLtype;
+                  Scan:         BOOLEAN;
+              VAR Status:       INTEGER;        { 0 if OK, else error }
+              VAR Entry:        TBLvarbuf
+   );
+
+PROCEDURE TBLreplace
+   ( {input}      TBLinfo:      TBLtype;
+              VAR Status:       INTEGER
+   );
+
+PROCEDURE TBLlist
+   ( {input}      TBLinfo:      TBLtype;       { table addr, size, etc}
+                  begrec:       INTEGER;        { first entry requested}
+                  bufsize:      INTEGER;        { max # of entries in buffer }
+     {output} VAR RetCod:       INTEGER;        { return code }
+              VAR reccnt:       INTEGER;        { # of entries returned }
+              VAR buf:          DrvBlk          { buf for data returned }
+   );
+
+IMPLEMENTATION
+
+CONST
+   DskErrOK   = 127;    {Disk read/write OK}
+   EndTbl     = 255;    {End of Table flag}
+   Null       = 0;
+   Zero       = 0;
+   DecOne     = 1;
+   MaxBlk     = 4;      {Maximum number of block for TblBuf}
+   StdTblOffSet = 32;   {All table entry have 32 bytes reserved}
+   MaxAvailBlk = 100;   {max value for AvailBlk array}
+   MaxPtr     = 2047;   {Maximum number of bytes for TblBuf array}
+   InvalidBlk = -1;     {content in TblBuf is invalid - due to disk read error}
+
+TYPE
+   TblBufType = RECORD CASE integer OF
+                   10 : (b : ARRAY[0..MaxPtr] of Byte);
+                   11 : (c : PACKED ARRAY[0..MaxPtr] of CHAR);
+                   12 : (r : RECORD
+                                BufOne : Cd_Buf;
+                                BufTwo : Cd_Buf;
+                                END);
+                   END;
+
+
+VAR
+     TblBuf      : TblBufType;{1 logical table block}
+     TotTblByte  : INTEGER;   {Total number of bytes in current TblBuf}
+     LastTblByte : INTEGER;   {Last valid byte in current TblBuf}
+     TblPtr      : INTEGER;   {general pointer for table cache}
+     StartRecNum : INTEGER;   {has total number of entry for each table cache}
+     RecPtr      : INTEGER;   {points to the location to insert, delete or search}
+     LastDskAcc  : INTEGER;   {has the total number access made to the disk}
+             { AvailBlk variable contain starting entry number and indicate}
+             {  space availability for every 4 blocks of the table accessed.}
+     AvailBlk    : RECORD
+                     Space : ARRAY[1..MaxAvailBlk] of CHAR;      { room in logical blocks? }
+                     IEntry : ARRAY[1..MAXAVAILBLK] OF INTEGER;  { total entries in each logical
+                                                           logical block }
+                     TblAddr : LONGINT;     {starting physical disk address of current table}
+                     TblBlk : INTEGER;      {logical block of current table}
+                   END;
+    TblBug : BOOLEAN;
+
+
+{.IX} PROCEDURE Initialize;    {Initializes Global Variables}
+   VAR I : INTEGER;
+
+BEGIN    {PROCEDURE Initialize}
+{ IF TblBug THEN WRITELN('(INITIALIZE)  executing initialize.'); }
+
+  lastdskacc := Zero;
+  RecPtr := Zero;
+  FILLCHAR(AvailBlk.Space[DecOne],MaxAvailBlk,CHR(Null));
+
+{ IF TblBug THEN WRITELN('(INITIALIZE)  AvailBlk.space array set to null.'); }
+
+  FILLCHAR(AvailBlk.IEntry[DecOne],MaxAvailBlk*2,CHR(Null));
+
+{ IF TblBug                                                      }
+{ THEN BEGIN                                                     }
+{   WRITELN('(INITIALIZE)  AvailBlk.Space array set to Null.');  }
+{   WRITELN('(INITIALIZE)  AvailBlk.IEntry array set to Null.'); }
+{   WRITELN('(INITIALIZE)  executed initialize  procedure.');    }
+{ END;                                                           }
+
+END;     {PROCEDURE Initialize}
+
+{.IX} PROCEDURE TableRead(VAR NetWorkInfo : CdAddr;
+                    Len : INTEGER;
+                    VAR Error : INTEGER);
+
+
+  BEGIN
+  { IF TblBug THEN WRITELN('(TABLEREAD)  will read from the disk.'); }
+
+    IF (Len - CdBufLen) > 0
+
+    THEN BEGIN
+      Error := CdRead(NetworkInfo,TblBuf.r.BufOne,CdBufLen);
+      NetWorkInfo.BlkNO := NetWorkInfo.BlkNo + 2;
+
+      IF Error <= DskErrOK
+      THEN BEGIN
+
+      { IF TblBug                                                    }
+      { THEN BEGIN                                                   }
+      {   WRITELN('(TABLEREAD)  Total bytes read - 1st disk read '); }
+      {   WRITELN(len - CdBufLen);                                   }
+      {   WRITELN('(TABLEREAD)  Total bytes read - 2nd disk read '); }
+      {   WRITELN(len - CdBufLen);                                   }
+      { END;                                                         }
+
+        Error := CdRead(NetWorkInfo,TblBuf.r.BufTwo,Len - CdBufLen);
+        NetWorkInfo.BlkNo := NetWorkInfo.BlkNo + ((Len - CdBufLen) DIV Blok);
+
+        IF (Error <= DskErrOK) THEN Error := OK;
+      END;
+    END
+
+    ELSE BEGIN
+      Error := CdRead(NetWorkInfo,TblBuf.r.BufOne,Len);
+      NetWorkInfo.BlkNO := NetWorkInfo.BlkNO + (Len DIV Blok);
+
+      IF (Error <= DskErrOK) THEN Error := OK;
+
+    { IF TblBug                                                            }
+    { THEN BEGIN                                                           }
+    {   WRITELN('(TABLEREAD)  Total bytes read from remaining table is '); }
+    {   WRITELN(len);                                                      }
+    { END;                                                                 }
+
+    END;
+
+
+  { IF TblBug THEN WRITELN('(TABLEREAD)  finish reading from the disk.'); }
+  END;   {PROCEDURE TableRead}
+
+
+{.IX} PROCEDURE TableWrite(VAR NetWorkInfo : CdAddr;
+                     Len : INTEGER;
+                     VAR Error : INTEGER);
+
+  BEGIN
+  { IF TblBug THEN WRITELN('(TABLEWRITE)   will write to the disk.'); }
+
+    IF (Len - CdBufLen) > 0
+
+    THEN BEGIN
+      Error := CdWrite(NetWorkInfo,TblBuf.r.BufOne,CdBufLen);
+      NetWorkInfo.BlkNo := NetWorkInfo.BlkNo + 2;
+
+      IF Error <= DskErrOK
+      THEN BEGIN
+        Error := CdWrite(NetWorkInfo,TblBuf.r.BufTwo,Len - CdBufLen);
+        NetWorkInfo.BlkNo := NetWorkInfo.BlkNo + ((Len - CdBufLen) DIV Blok);
+
+      { IF TblBug                                                      }
+      { THEN BEGIN                                                     }
+      {   WRITELN('(TABLEWRITE)  Total bytes read - 1st disk write '); }
+      {   WRITELN(len - CDBufLen);                                     }
+      {   WRITELN('(TABLEWRITE)  Total bytes read - 2nd disk write '); }
+      {   WRITELN(LEN - CDBUFLen);                                     }
+      { END;                                                           }
+
+        IF (Error <= DskErrOK) THEN Error := OK;
+
+      END;
+    END
+
+    ELSE BEGIN
+      Error := CdWrite(NetWorkInfo,TblBuf.r.BufOne,Len);
+      NetWorkInfo.BlkNo := NetWorkInfo.BlkNo + (Len DIV Blok);
+
+      IF (Error <= DskErrOK) THEN Error := OK;
+    { IF TblBug THEN WRITELN('(TABLEWRITE)  write out the remaining table.'); }
+    END;
+
+  { IF TblBug THEN WRITELN(' (TABLEWRITE)  finish writing to the disk.'); }
+
+  END;    {PROCEDURE Tablewrite}
+
+
+{.IX} PROCEDURE GetTable(VAR TInfo : TBLtype; ThisBlock : INTEGER
+                   VAR Error : INTEGER);
+
+  {PROCEDURE GetTable access up to 4 blocks (512 bytes) of table   }
+  {  into TblBuf.  It also determines the maximum number of bytes  }
+  {  vaild in current TblBuf, since lask disk access bay be less   }
+  {  4 blocks.  It reinitialize TblPtr to the starting location of }
+  {  of the TblBuf to begin processing from.  TblPtr starting point}
+  {  may vary depending on whether TblBuf contains the first       }
+  {  logical block of the table or not.                            }
+
+VAR NoBlk : LONGINT;
+
+BEGIN     {PROCEDURE GetTable}
+{ IF TblBug THEN WRITELN('(GETTABLE)  executing GetTable procedure.'); }
+  ERRor := OK;
+
+  IF (ThisBlock * MaxBlk >= TInfo.TblSize) OR (TInfo.TblSize <= zero)
+
+  THEN Error := EndofTable
+
+  ELSE BEGIN
+    FILLCHAR(TblBuf.b[Zero],MaxPtr + 1,CHR(EndTbl));
+    NoBlk := ThisBlock * MaxBlk;   {determine physical block of the table}
+
+    IF (TInfo.TblSize - NoBlk) >= MaxBlk
+
+    THEN TotTblByte := MaxBlk * Blok
+
+    ELSE TotTblByte := (TInfo.TblSize - NoBlk) * Blok;
+
+    LastTblByte := TotTblByte - 1;
+    TInfo.NetInfo.BlkNo := AvailBlk.TblAddr + NoBlk;
+    TableRead(TInfo.NetInfo,TotTblByte,Error);
+
+    IF Error = OK
+    THEN BEGIN
+      AvailBlk.TblBlk := ThisBlock;
+      IF ThisBlock > MaxAvailBlk
+      THEN Error := Ovfl
+      ELSE BEGIN
+        IF ThisBlock = Zero
+        THEN TblPtr := StdTblOffSet + TInfo.OffSet
+        ELSE TblPtr := TInfo.OffSet;
+      END;
+
+    END;
+
+  END;
+
+{ IF TblBug THEN WRITELN('(GETTABLE)  terminating procedure gettable.'); }
+END;     {PROCEDURE GetTable}
+
+
+
+{.IX} PROCEDURE MarkAvSpace(TBLinfo : TBLtype);
+
+  {PROCEDURE MarkAvSpace scans for a character NOT equal to  }
+  {  EndTbl or Null character.  If the location of character }
+  {  found is not the last entry in Tblbuf buffer then       }
+  {  the appropriate element in AvailBlk array is marked.  It}
+  {  also note the number of entries present in the current  }
+  {  AvailBlk array.                                         }
+
+  VAR ScanByte, LocFound, ScanValu : INTEGER;
+
+BEGIN   {PROCEDURE MarkAvSpace}
+{ IF TblBug THEN WRITELN('(MARKAVSPACE)  executing Procedure MarkAvSpace.'); }
+
+  ScanByte := TotTblByte;
+
+{ IF TblBug                                       }
+{ THEN BEGIN                                      }
+{   WRITELN('(MARKAVSPACE)  ScanByte value is '); }
+{   WRITELN(scanbyte);                            }
+{ END;                                            }
+
+  ScanValu :=  SCANNE(-ScanByte,CHR(Null),TblBuf.b[LastTblByte]);
+
+  IF ScanValu >= Zero      {found non-null char @ first scanned byte}
+  THEN ScanValu := SCANNE(-ScanByte,CHR(EndTbl),TblBuf.b[LastTblByte]);
+
+{ IF TblBug                                  }
+{ THEN BEGIN                                 }
+{   WRITELN('(MARKAVSPACE)  ScanVAlue is '); }
+{   WRITELN(Scanvalu);                       }
+{ END;                                       }
+
+  LocFound := TotTblByte + ScanValu;
+     {test if null or endtbl character is the first byte of the record.}
+     {If null or endtbl character is not the first byte then adjust    }
+     {the record location found to be the next record.                 }
+  IF (LocFound MOD TBLinfo.RecSize) <> Zero
+  THEN LocFound := LocFound + (LocFound MOD TBLinfo.RecSize);
+
+  IF LocFound < LastTblByte
+  THEN AvailBlk.Space[lastdskacc] := CHR(DecOne);
+
+  IF LastDskAcc = 1
+  THEN BEGIN
+
+         {if it is the first entry in the table, IEntry value is set to zero.}
+         {otherwise, find the number of record in the logical block.         }
+    IF (LocFound - StdTblOffSet) <= Zero
+    THEN AvailBlk.IEntry[LastDskAcc] := Zero
+    ELSE AvailBlk.IEntry[lastdskacc] := (LocFound - StdTblOffSet) DIV TBLinfo.RecSize;
+  END
+  ELSE AvailBlk.IEntry[lastdskacc] := LocFound DIV TBLinfo.RecSize;
+
+{ IF TblBug                                                                                   }
+{ THEN BEGIN                                                                                  }
+{   WRITELN(' (MARKAVSPACE)  terminating MarkAvSpace procedure.');                            }
+{   WRITELN('(MARKAVSPACE)  locfound value is ',LOCFOUND);                                    }
+{   WRITELN('(MARKAVSPACE)  number of entries is ',AVAILBLK.IENTRY[lastdskacc]);              }
+{   WRITELN('(MARKAVSPACE)  lastdskacc value is ',lastdskacc);                                }
+{   WRITELN('(MARKAVSPACE)  AVAILBLK.SPACE[LASTDSKACC] IS ',ORD(AVAILBLK.SPACE[LASTDSKACC])); }
+{   WRITELN('(MARKAVSPACE)  CHR(DECONE) IS ',ORD(DECONE));                                    }
+{ END;                                                                                        }
+END;   {PROCEDURE MarkAvSpace}
+
+
+
+{.IX} PROCEDURE TBLsearch(* TBLinfo : TBLtype; Scan : BOOLEAN;
+                   VAR Status : INTEGER;
+                   VAR Entry : TBLvarbuf *);
+
+  {PROCEDURE TBLsearch : searches for an entry equal to or greater than }
+  {  the item being searched.  TBLsearch will return an index (RecPtr)  }
+  {  to where entry was found or where entry should go.  TBLsearch will }
+  {  return a status of OK if entry is found, or will return an error}
+  {  code (disk error, ovfl, searchfail, etc).  Variable "Entry" will}
+  {  contain the searched record if entry is found.                 }
+
+  VAR Stop, Keyfound, MoveOn : BOOLEAN;
+      BufPtr, Index          : INTEGER;
+      Error, Cnt             : INTEGER;
+
+BEGIN      {PROCEDURE TBLsearch}
+{ IF TblBug THEN WRITELN('(TBLsearch)  executing provcedure TBLsearch.'); }
+
+  Initialize;
+  StartRecNum := 0;          {var for number of entries in the table cache}
+  KeyFound := FALSE;         {terminator for finding key}
+  Stop := FALSE;             {terminator for entry greater than key}
+  BufPtr := TBLinfo.OffSet;  {var for offset into entry where key is located}
+  Status := SearchFail;
+  AvailBlk.TblAddr := TBLinfo.NetInfo.BlkNo;
+
+{ IF TblBug                                                                               }
+{ THEN BEGIN                                                                              }
+{   WRITELN('(TBLsearch)  completed initialization of variables.');                       }
+{   WRITELN('(TBLsearch)  Table size passed is ',TBLinfo.tblSize);                        }
+{   WRITELN('(TBLsearch)  Record size passed is ', TBLinfo.RecSize);                      }
+{   WRITELN('(TBLsearch)  Offset value passed is ', TBLinfo.OffSet);                      }
+{   WRITELN('(TBLsearch)  Key length value passed is ', TBLinfo.KeyLgth);                 }
+{   WRITELN('(TBLsearch)  Lastdskacc value is ',LastDskAcc);                              }
+{   WRITELN('(TBLsearch)  starting table block number passed is ',TBLinfo.NetInfo.BlkNo); }
+{ END;                                                                                    }
+  MOVELEFT(TBLinfo.Buf.b,Entry.b,TBLinfo.RecSize);
+  REPEAT          {loop for looking at each TblBuf - 1 logical block}
+    GetTable(TBLinfo,LastDskAcc,Error);
+    IF Error <> OK
+
+    THEN BEGIN
+      IF Error = EndOfTable
+      THEN Status := SearchFail
+      ELSE Status := Error;
+      Stop := TRUE;
+    END
+
+    ELSE BEGIN
+      LastDskAcc := LastDskAcc + 1;
+      MarkAvSpace(TBLinfo);
+      Cnt := Zero;
+
+      REPEAT      {loop for looking at each entry of the table in current TblBuf}
+      { IF TblBug THEN WRITELN('(TBLsearch)  Looking in TblBuf for entry.'); }
+
+              {test to see if we have searched through all }
+              {the entries in the table.                   }
+
+        IF Cnt >= AvailBlk.IEntry[LastDskAcc]
+        THEN BEGIN
+
+          Index := 0;
+          RecPtr := TblPtr - TBLinfo.OffSet;
+
+          REPEAT    {test if the whole record entry is $FF}
+            IF TblBuf.c[RecPtr + Index] = CHR (EndTbl)
+            THEN Index := Index + 1
+            ELSE TblPtr := TotTblByte;
+          UNTIL (Index >= TBLinfo.KeyLgth) OR (TblPtr >= TotTblByte);
+
+          IF Index >= TBLinfo.KeyLgth      {Found a record entry equal to $FF}
+          THEN Stop := TRUE;
+
+        END
+
+        ELSE BEGIN
+
+          MoveOn := FALSE;
+          Index := 0;
+          REPEAT        {Loop for looking at each byte of the entry}
+          { IF TblBug THEN WRITELN('(TBLsearch)  comparing byte number ',index:3,' of entry'); }
+
+                      {This portion of the code looks for entry equal to the key}
+            IF Scan
+            THEN BEGIN
+            { IF TblBug THEN WRITELN('(TBLsearch) looking for equality.'); }
+
+              IF TblBuf.c[TblPtr + Index] = TBLinfo.Buf.c[BufPtr + Index]
+              THEN BEGIN
+                Index := Index + 1;
+                IF Index >= TBLinfo.KeyLgth THEN KeyFound := TRUE;
+              END
+
+              ELSE MoveOn := TRUE;
+            END
+
+            ELSE BEGIN   {This portion of the code looks for entry >= to the key}
+            { IF TblBug                                                                        }
+            { THEN WRITELN('(TBLsearch) looking for entry greater than or equal to the key.'); }
+
+              IF TblBuf.c[TblPtr + Index] >= TBLinfo.Buf.c[BufPtr + Index]
+
+              THEN BEGIN
+
+                IF Index + 1 >= TBLinfo.KeyLgth
+                THEN KeyFound := TRUE       {entry equal is found}
+
+                ELSE BEGIN                  {entry is > than key}
+                  IF ((TblBuf.c[TblPtr + Index]) > (TBLinfo.Buf.c[BufPtr + Index]))
+
+                  THEN BEGIN
+
+                  { IF TblBug THEN WRITELN('(TBLsearch)  found an entry greater than  the  key.'); }
+
+                    Stop := TRUE;
+                    RecPtr := TblPtr - TBLinfo.OffSet;
+                  END;
+
+                END;
+              Index := Index + 1;
+
+              END
+
+              ELSE BEGIN
+                MoveOn := TRUE;
+
+                        {if no entry greater than the key}
+                        {is found and you are in the last}
+                        {logical block, then set RecPtr. }
+
+                IF LastDskAcc * MaxBlk >= TBLinfo.TblSize
+                THEN RecPtr := (TblPtr - TBLinfo.OffSet) + TBLinfo.RecSize;
+
+              END;    {IF Cnt >= AvailBlk.IEntry[LastDskAcc] THEN - ELSE}
+
+            END;  {IF Scan THEN - ELSE}
+
+          UNTIL (KeyFound) OR (Stop) OR (MoveOn);
+
+          IF KeyFound
+          THEN BEGIN
+            Status := OK;
+            Stop := TRUE;
+
+          { IF TblBug THEN WRITELN('(TBLsearch)  found an entry equal to the key.'); }
+
+            RecPtr := TblPtr - TBLinfo.OffSet;
+            MOVELEFT(TblBuf.b[RecPtr],Entry.b[Zero],TBLinfo.RecSize);
+          END;        {IF KeyFound THEN}
+
+          IF MoveOn THEN TblPtr := TblPtr + TBLinfo.RecSize;
+        END;
+
+        Cnt := Cnt + 1;
+      UNTIL (TblPtr > LastTblByte) OR (Stop);
+    END;            {IF Error <> OK THEN - ELSE}
+
+  UNTIL Stop;
+
+{ IF TblBug THEN WRITELN('(TBLsearch)  terminating procedure TBLsearch.'); }
+
+END;     {PROCEDURE TBLsearch}
+
+
+
+{.IX} FUNCTION TBLdelete(* TBLinfo : TBLtype): INTEGER *);
+
+  {FUNCTION TBLdelete : Call procedure TBLsearch for a location of an entry. }
+  {  If an entry is found, TBLdelete := OK, else TBLdelete := DelFail        }
+  {  If an entry is deleted, the TblBuf is packed and Null inserted  at}
+  {  the end of TblBuf buffer.                                         }
+
+VAR     Len, Result : INTEGER;
+        LocFound : INTEGER;
+        RetBuf : TBLvarbuf;
+        DrvBlkNo : LONGINT;
+        Scan : BOOLEAN;
+
+BEGIN   {FUNCTION TBLdelete}
+{ IF TblBug THEN WRITELN('(TBLdelete)  executing function TBLdelete.'); }
+
+  Scan := FALSE;
+  TBLsearch(TBLinfo,Scan,Result,RetBuf);
+
+  IF Result = SearchFail THEN TBLdelete := DelFail
+
+  ELSE IF Result <> OK THEN TBLdelete := Result
+
+  ELSE BEGIN
+
+  { IF TblBug THEN WRITELN('will delete an entry.'); }
+
+    TBLdelete := OK;
+    AvailBlk.IEntry[lastdskacc] := AvailBlk.IEntry[lastdskacc] - 1;
+
+         { if deleting the last entry in logical block }
+         { then set last block to null. otherwise move }
+         { up the entries in the logical block.        }
+
+    IF RecPtr + TBLinfo.RecSize < LastTblByte
+    THEN BEGIN
+      Len := LastTblByte - (RecPtr + TBLinfo.RecSize - 1);
+      MOVELEFT(TblBuf.b[RecPtr+TBLinfo.RecSize],TblBuf.b[RecPtr],Len);
+
+        {determine location of last table entry in this logical block}
+      IF LastDskAcc = 1
+
+      THEN LocFound := AvailBlk.IEntry[LastDskAcc] * TBLinfo.RecSize + StdTblOffSet
+
+      ELSE LocFound := AvailBlk.IEntry[LastDskAcc] * TBLinfo.RecSize;
+
+      Len :=  TotTblByte - LocFound;
+
+        {determine number of bytes to move}
+      FILLCHAR(TblBuf.b[LocFound],Len,CHR(Null));
+    END
+    ELSE FILLCHAR(TblBuf.b[RecPtr],TBLinfo.RecSize,CHR(Null));
+
+   { IF TblBug                                                                     }
+   { THEN BEGIn                                                                    }
+   {   WRITELN('(TBLdelete)  locfound is at ',LOCFOUND, '   LEN IS ',LEN);         }
+   {   WRITELN('(TBLdelete)  recptr is ',RECPTR);                                  }
+   {   WRITELN('(TBLdelete)  lastdskacc is ',LASTDSKACC);                          }
+   {   WRITELN('(TBLdelete)  number of entries are ',AVAILBLK.IENTRY[LASTDSKACC]); }
+   { END;                                                                          }
+
+    TBLinfo.NetInfo.BlkNO := AvailBlk.TblAddr + ((lastdskacc - 1) * MaxBlk);
+    TableWrite(TBLinfo.NetInfo,TotTblByte,Result);
+    IF Result <> OK THEN TBLdelete := Result;
+
+  { IF TblBug THEN WRITELN (' (TBLdelete)  deleted an entry already.'); }
+
+  END;
+
+{ IF TblBug THEN WRITELN('(TBLdelete)  terminating function TBLdelete.'); }
+
+END;    {FUNCTION TBLdelete}
+
+
+{.IX} FUNCTION TBLinsert(* TBLinfo :  TBLtype):INTEGER *);
+
+  {FUNCTION TBLinsert : Call procedure TBLsearch for location to insert an }
+  {  entry.  TBLinsert will always insert an entry in ascending order.  }
+  {  If space available in this table cache "TblBuf buffer", an entry}
+  {  is inserted; otherwise, TBLinsert searches back for available      }
+  {  space by looking at AvailBlk array. If no space is available,   }
+  {  TBLinsert will search forward for available space.                 }
+
+VAR     TempRecBuf, RetBuf : TBLvarbuf;
+        Temp1, Temp2, Status : INTEGER;
+        DrvBlkNo : LONGINT;
+        Found : INTEGER;
+        Scan : BOOLEAN;
+
+
+{.IX} PROCEDURE SearchBack(VAR Success : INTEGER);
+
+    {PROCEDURE SearchBack will search back in the table for available }
+    { space. If space is found, an entry is inserted in an appropriate}
+    { location. Success returns a status of searching back for space. }
+
+    VAR Found, Len : INTEGER;
+        Index, LocIndex : INTEGER;
+        LocSpaceFound   : INTEGER;  {location where space is found}
+
+    BEGIN
+    { IF TblBug THEN WRITELN('(SEARCHBACK)  starting searchback procedure.'); }
+
+      Success := TblFull;
+      IF lastdskacc > 1
+      THEN BEGIN
+        Found := TblFull;
+        Index  := lastdskacc;
+        LocSpaceFound := zero;
+
+    { IF  TblBug THEN WRITELN('(SEARCHBACK)  starting to look at AvailBlk.Space array.'); }
+
+        REPEAT
+        { IF TblBug                                                                        }
+        { THEN BEGIN                                                                       }
+        {   WRITELN('(SEARCHBACK)  AVAILBLK.SPACE[INDEX] IS ',ORD(AVAILBLK.SPACE[INDEX])); }
+        {   WRITELN('(SEARCHBACK)  CHR(DECONE) VALUE IS',ORD(DECONE));                     }
+        {   WRITELN('(SEARCHBACK)  INDEX VALUE IS ',INDEX);                                }
+        { END;                                                                             }
+
+          IF AvailBlk.Space[Index] = CHR(DecOne)
+          THEN BEGIN
+            LocSpaceFound := Index;
+            Found := OK;
+          END
+          ELSE Index := Index - 1;
+        UNTIL (Found = OK) OR (Index < 1);
+
+        IF Found = OK
+        THEN BEGIN
+        { IF TblBug                                                         }
+        { THEN BEGIN                                                        }
+        {   WRITELN('(SEARCHBACK)  Found available space to insert.');      }
+        {   WRITELN('(SEARCHBACK)  LocSpaceFound value is ',LocSpaceFound); }
+        {   WRITELN('(SEARCHBACK)  Index value is ',Index);                 }
+        { END;                                                              }
+
+          Success := OK;
+
+          IF RecPtr > zero
+          THEN BEGIN
+            MOVELEFT(TblBuf.b[zero],TempRecBuf.b[zero],TBLinfo.RecSize);
+            MOVELEFT(TblBuf.b[TBLinfo.RecSize],TblBuf.b[0],RecPtr - TBLinfo.RecSize);
+            MOVELEFT(TBLinfo.Buf.b[zero],TblBuf.b[RecPtr-TBLinfo.RecSize],TBLinfo.RecSize);
+          END
+          ELSE MOVELEFT(TBLinfo.Buf.b[zero],TempRecBuf.b[zero],TBLinfo.RecSize);
+
+          TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr + ((lastdskacc - 1) *  MaxBlk);
+          TableWrite(TBLinfo.NetInfo,TotTblByte,Success);
+
+          IF Success = OK
+
+          THEN BEGIN
+            Index := lastdskacc;
+
+            REPEAT
+            { IF TblBug                                                                   }
+            { THEN WRITELN('(SEARCHBACK) starting to make room for inserting an entry.'); }
+
+              Index := Index - 1;
+              TBLinfo.NetInfo.BlkNO := AvailBlk.TblAddr + ((Index - 1) * MaxBlk);
+              Len := MaxPtr + 1;    {will have to read in 4 blocks }
+              TableREAD(TBLinfo.NetInfo,Len,Success);
+
+              IF Success = OK
+
+              THEN BEGIN
+
+                IF LocSpaceFound = Index
+                THEN BEGIN
+
+                { IF TblBug                                                             }
+                { THEN WRITELN('(SEARCHBACK)  At location where a space is available.');}
+
+                  LocIndex := AvailBlk.IEntry[Index] * TBLinfo.RecSize;
+                  IF LocSpaceFound = 1 THEN LocIndex := LocIndex + StdTblOffSet;
+                  MOVELEFT(TempRecBuf.b[zero],TblBuf.b[LocIndex],TBLinfo.RecSize);
+                  AvailBlk.IEntry[Index] := AvailBlk.IEntry[Index] + 1;
+                END
+
+                ELSE BEGIN
+                { IF TblBug THEN WRITELN('Moving entries in the table.'); }
+
+                  MOVELEFT(TempRecBuf.b[zero],RetBuf.b[zero],TBLinfo.RecSize);
+                  MOVELEFT(TblBuf.b[zero],TempRecBuf.b[zero],TBLinfo.RecSize);
+
+                  MOVELEFT(TblBuf.b[TBLinfo.RecSize],TblBuf.b[0],len - TBLinfo.RecSize);
+                  MOVELEFT(RetBuf.b[0],TblBuf.b[len - TBLinfo.RecSize],TBLinfo.RecSize);
+                END;
+
+                TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr + ((Index - 1) * MaxBlk);
+                TableWrite(TBLinfo.NetInfo,len,Success);
+
+              END;  {IF Success = OK}
+            UNTIL (LocSpaceFound = Index) OR (Success <> OK);
+
+          END;  {IF Success = OK}
+
+        END;   {IF Found THEN}
+
+      END;     {IF LastDskAcc > 1 THEN}
+
+  { IF TblBug THEN WRITELN('quitting procedure searchback.'); }
+
+    END;       {PROCEDURE SearchBack}
+
+
+{.IX} PROCEDURE SearchForward ( VAR Success : INTEGER);
+
+    {PROCEDURE SearchForward : searches forward in the table for available }
+    {  space.  If space for insertion is found then an entry is inserted in}
+    {  an appropriate spot and the table entries adjusted accordingly.  If }
+    {  no space was found for an entry, Success returns FALSE else Success }
+    {  is set to TRUE.                                                     }
+
+    VAR   AccDsk : LONGINT;    {Nth  access to  disk where entry is to insert}
+          Len, Error, LocIndex, Temp : INTEGER;
+          Stop, Found  : BOOLEAN;   {loop terminator flag}
+
+
+  BEGIN
+  { IF TblBug THEN WRITELN('(SEARCHFORWARD)  starting SearchForward procedure.'); }
+
+    Found := FALSE;
+    Success := TblFull;
+    IF (lastdskacc * MaxBlk < TBLinfo.TblSize)
+
+    THEN BEGIN
+      AccDsk := lastdskacc;
+      Stop := FALSE;
+
+      REPEAT
+        GetTable(TBLinfo,LastDskAcc,Error);
+
+        IF Error <> OK
+        THEN BEGIN
+          Success := Error;
+          Stop := TRUE;
+        END
+
+        ELSE BEGIN
+          LastDskAcc := LastDskAcc + 1;
+
+          MarkAvSpace(TBLinfo);
+
+          IF AvailBlk.Space[lastdskacc] = CHR (DecOne)
+          THEN Found := TRUE;
+
+        END;    {IF Error <> OK THEN - ELSE}
+      UNTIL (Found) OR (Stop);
+
+      IF Found
+      THEN BEGIN
+      { IF TblBug THEN WRITELN('(SEARCHFORWARD)  found space to insert an entry.'); }
+
+        Len := MaxPtr + 1;   {will have to read in 4 blocks}
+        Success := OK;
+        TBLinfo.NetInfo.BlkNO := AvailBlk.TblAddr + (AccDsk - 1) * MaxBlk;
+        TableRead(TBLinfo.NetInfo,Len,Success);
+
+        IF Success = OK
+        THEN BEGIN
+          MOVELEFT(TblBuf.b[Len - TBLinfo.Recsize],TempRecBuf.b[0],TBLinfo.RecSize);
+          Temp := Len - RecPtr - TBLinfo.RecSize;
+          MOVERIGHT(TblBuf.b[RecPtr],TblBuf.b[RecPtr+TBLinfo.RecSize],Temp);
+          MOVELEFT(TBLinfo.Buf.b[zero],TblBuf.b[RecPtr],TBLinfo.RecSize);
+          TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr + ((AccDsk - 1) * MaxBlk);
+          TableWrite(TBLinfo.NetInfo,Len,Success);
+        END;  {IF Success = OK}
+
+        IF Success = OK
+        THEN BEGIN
+          REPEAT
+          { IF TblBug THEN WRITELN('(SEARCHFORWARD)  still moving table entries around.'); }
+
+            AccDsk := AccDsk + 1;
+
+            IF AccDsk = LastDskAcc    {read in only the number of blocks you have to}
+            THEN Len := TotTblByte
+            ELSE Len := MaxPtr + 1;
+
+            TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr +  (AccDsk - 1) * MaxBlk;
+            TableRead(TBLinfo.NetInfo,Len,Success);
+
+            IF Success = OK
+            THEN BEGIN
+
+              IF AccDsk = lastdskacc
+
+              THEN BEGIN
+              { IF TblBug                                                                      }
+              { THEN WRITELN('(SEARCHFORWARD)  at the block where  empty location is found.'); }
+
+                LocIndex := AvailBlk.IEntry[AccDsk] * TBLinfo.RecSize;
+                MOVERIGHT(TblBuf.b[zero],TblBuf.b[TBLinfo.RecSize],LocIndex);
+                MOVELEFT(TempRecBuf.b[zero],TblBuf.b[zero],TBLinfo.RecSize);
+                AvailBlk.IEntry[AccDsk] := AvailBlk.IEntry[AccDsk] + 1;
+              END
+
+              ELSE BEGIN
+                MOVELEFT(TempRecBuf.b[zero],RetBuf.b[zero],TBLinfo.RecSize);
+                Temp := Len - TBLinfo.RecSize;
+                MOVELEFT(TblBuf.b[Temp],TempRecBuf.b[zero],TBLinfo.RecSize);
+                MOVERIGHT(TblBuf.b[zero],TblBuf.b[TBLinfo.RecSize],TBLinfo.RecSize);
+                MOVELEFT(RetBuf.b[zero],TblBuf.b[zero],TBLinfo.RecSize);
+              END;
+
+              TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr + ((AccDsk - 1) * MaxBlk);
+              TableWrite(TBLinfo.NetInfo,Len,Success);
+            END;   {IF Success = OK}
+          UNTIL (AccDsk = lastdskacc) OR (Success = OK);
+
+        END;    {IF Success = OK}
+
+      END   {IF Found}
+      ELSE Success := TblFull;
+
+    END;     {IF LastDskAcc * MaxBlk < TBLinfo.TblSize}
+
+{ IF TblBug THEN WRITELN(' (SEARCHFORWARD)  quitting Searchforward procedure.'); }
+
+  END;       {PROCEDURE SearchForward}
+
+
+
+
+{.IX} BEGIN      {FUNCTION TBLinsert}
+{ IF TblBug THEN WRITELN('(TBLinsert)  start function TBLinsert.'); }
+
+  FILLCHAR(TempRecBuf.b[zero],MaxRecSize,CHR(Null));
+  FILLCHAR(RetBuf.b[zero],MaxRecSize,CHR(Null));
+
+(*   TBLinsert := TblFull;      see procedure searchforward *)
+
+  Scan := FALSE;
+  TBLsearch(TBLinfo,Scan,Status,RetBuf);
+
+  IF Status = OK THEN TBLinsert := EntryExist
+
+  ELSE IF (Status = SearchFail)   {** OR (Status = EndofTable) **}
+
+  THEN BEGIN
+  { IF TblBug                                                                    }
+  { THEN BEGIN                                                                   }
+  {   WRITELN('(TBLinsert)  AvailBlk.Space[LastDskAcc] is ');                    }
+  {   WRITELN(ORD(AvailBlk.Space[LastDskAcc]));                                  }
+  {   WRITELN('(TBLinsert)  CHR(DecOne) is ');                                   }
+  {   WRITELN(ORD(DecOne));                                                      }
+  {   WRITELN('(TBLinsert)  number of entries is ',AvailBlk.IEntry[LastDskAcc]); }
+  {   WRITELN('(TBLinsert)  LastDskAcc value is ',LastDskAcc);                   }
+  {   WRITELN('(TBLinsert)  RecPtr value is ',RecPtr);                           }
+  { END;                                                                         }
+
+    IF  AvailBlk.Space[lastdskacc] = CHR(DecOne)
+
+    THEN BEGIN
+
+    { IF TblBug THEN WRITELN('(TBLinsert)  found space at table cache.'); }
+
+      AvailBlk.IEntry[lastdskacc] := AvailBlk.IEntry[lastdskacc] + 1;
+      Temp2 := TBLinfo.RecSize;
+      Temp1 := TotTblByte - RecPtr - Temp2;
+      MOVERIGHT(TblBuf.b[RecPtr],TblBuf.b[RecPtr + Temp2],Temp1);
+      MOVELEFT(TBLinfo.Buf.b[zero],TblBuf.b[RecPtr],Temp2);
+      TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr + ((LastDskAcc-1) * MaxBlk);
+      TableWrite(TBLinfo.NetInfo,TotTblByte,Found);
+
+    { IF TblBug                                                  }
+    { THEN BEGIN                                                 }
+    {   WRITELN('(TBLinsert)  temp2 value is ',temp2);           }
+    {   WRITELN('(TBLinsert)  temp1 value is ',temp1);           }
+    {   WRITELN('(TBLinsert)  recptr value is ',recptr);         }
+    {   WRITELN('(TBLinsert)  tottblbyte value is ',tottblbyte); }
+    { END;                                                       }
+    END
+
+    ELSE SearchBack(Found);
+
+    IF Found <> OK THEN SearchForward(Found);
+
+    IF Found = OK
+    THEN TBLinsert := OK
+    ELSE TBLinsert := Found;
+
+{ IF TblBug THEN WRITELN('(TBLinsert)  stopping TBLinsert function .'); }
+
+  END  {IF Status = OK THEN }
+ELSE TBLinsert := Status;
+
+END;    {FUNCTION TBLinsert}
+
+
+{.IX} PROCEDURE TBLreplace(* TBLinfo : TBLtype;
+                    VAR Status : INTEGER *);
+
+    {PROCEDURE TBLreplace : search the table. If entry is found, the }
+    {  table entry is replaced; otherwise, returns an error code. }
+
+  VAR RetBuf : TBLvarbuf;
+      Result : INTEGER;
+      Scan   : BOOLEAN;
+
+  BEGIN
+  { IF TblBug THEN WRITELN('(TBLreplace)  Starting TBLreplace procedure.'); }
+
+    Scan := FALSE;
+    TBLsearch(TBLinfo,Scan,Result,RetBuf);
+
+    IF Result = SearchFail THEN Status := ReplaceFail
+    ELSE IF Result  <> OK THEN Status := Result
+
+    ELSE BEGIN
+      Status := OK;
+      MOVELEFT(TBLinfo.Buf.b[zero],TblBuf.b[RecPtr],TBLinfo.RecSize);
+      TBLinfo.NetInfo.BlkNo := AvailBlk.TblAddr + ((LastDskAcc - 1) * MaxBlk);
+      TableWrite(TBLinfo.NetInfo,TotTblByte,Status);
+    END;
+
+  { IF TblBug THEN WRITELN('(TBLreplace)  Completed TBLreplace procedure.'); }
+
+  END;   {PROCEDURE TBLreplace}
+
+
+{.IX} FUNCTION TBLinit (* (TBLinfo : TBLtype) : INTEGER *);
+
+  VAR Error, Index, Len : INTEGER;
+
+  BEGIN
+    AvailBlk.TblAddr := TBLinfo.NetInfo.BlkNo;
+    Error := OK;
+    Index := 0;
+
+    REPEAT
+
+      IF Index * MaxBlk < TBLinfo.TblSize
+      THEN BEGIN
+        IF (TBLinfo.TblSize - (Index * MaxBlk)) >= MaxBlk
+        THEN Len := MaxBlk * Blok
+        ELSE Len := ((TBLinfo.TblSize - (Index * MaxBlk)) * Blok);
+
+        FILLCHAR(TblBuf.b[zero],Len,CHR(EndTbl));
+
+      END;
+
+    { IF TblBug                                }
+    { THEN BEGIN                               }
+    {   WRITELN('(TBLinit)  Len value is ');   }
+    {   WRITELN( len);                         }
+    {   WRITELN('(TBLinit)  INDEX VALUE IS '); }
+    {   WRITELN(Index);                        }
+    { END;                                     }
+
+      TBLinfo.NetInfo.BlkNO := (Index * MaxBlk) + AvailBlk.TblAddr;
+      TableWrite(TBLinfo.NetInfo,Len,Error);
+
+      Index := Index + 1;
+
+      IF Error <> OK THEN TBLinit := Error;
+
+    UNTIL ((Index * MaxBlk) >= (TBLinfo.TblSize)) OR (Error <> OK);
+
+    Initialize;        {reset global parameters}
+
+  END;   {PROCEDURE TBLinit}
+
+
+{.IX} PROCEDURE TBLdebug { (DeBug : BOOLEAN) };
+  BEGIN
+    TblBug := Debug;
+  { IF TblBug THEN WRITELN(' turned on the debugger.') }
+  { ELSE WRITELN(' debugger off.');                    }
+  END;
+
+{$P}
+{------------------------------------------------------------------------------}
+{                                                                              }
+{ Date of creation :           9-APR-82 D.HO                                   }
+{ Date of last modification : 27-APR-82 D.HO                                   }
+{                                                                              }
+{------------------------------------------------------------------------------}
+{.IX} procedure GET_BLOCK ({input}      x     : integer;   {index of first...}
+                                                           {...entry wanted}
+                                        tinfo : TBLtype;
+                           {output} var rcode : integer;   {return code}
+                                    var firsti: integer;   {index of first...}
+                                                           {...found in block}
+                                    var lasti : integer    {index of last ...}
+                                                           {...found in block}
+                          );
+
+
+var
+   curblock : integer;
+
+begin {procedure GET_BLOCK}
+
+ { if TblBug then WRITELN ('GET_BLOCK procedure'); }
+   rcode := ok;
+   curblock := 1;
+   lasti := 0; {index starts at 0 and firsti will be set to lasti+1}
+
+   repeat {until x falls in the right block or error}
+
+      {better be the right table in buffer !}
+    { if TblBug then                                           }
+    { begin                                                    }
+    {    WRITELN ('   (GET_BLOCK) curblock : ', curblock);     }
+    {    WRITELN ('   (GET_BLOCK) lastdskacc : ', lastdskacc); }
+    { end;                                                     }
+      if (curblock > lastdskacc) then
+      begin
+         {no info for this block yet}
+         GETTABLE (tinfo, (curblock-1), rcode); {read logical block}
+       { if TblBug then WRITELN ('   (GET_BLOCK) rcode : ', rcode); }
+         if (rcode = ok) then
+            begin
+               lastdskacc := lastdskacc + 1; {inc logical block count}
+             { if TblBug then                                           }
+             {    WRITELN ('   (GET_BLOCK) lastdskacc : ', lastdskacc); }
+               MARKAVSPACE (tinfo); {counts the # of entries in this block}
+            end;
+      end;
+
+      if (rcode = ok) then
+      begin
+         firsti := lasti + 1;
+         lasti := firsti + availblk.ientry [curblock] - 1;
+       { if TblBug then                                   }
+       { begin                                            }
+       {    WRITELN ('   (GET_BLOCK) firsti : ',firsti ); }
+       {    WRITELN ('   (GET_BLOCK) lasti  : ', lasti);  }
+       { end;                                             }
+         curblock := curblock + 1;
+       { if TblBug then WRITELN ('   (GET_BLOCK) curblock : ', curblock); }
+      end;
+
+   until ( (x >= firsti) and (x <= lasti) ) or {x falls in the right block}
+         (rcode <> ok) or                      {error}
+        ((curblock-1)*MaxBlk >= tinfo.tblsize); {ed-30apr82 - not that many entries}
+
+ { if TblBug then                                                 }
+ { begin                                                          }
+ {    WRITELN ('   (GET_BLOCK) x             : ', x);             }
+ {    WRITELN ('   (GET_BLOCK) firsti        : ', firsti);        }
+ {    WRITELN ('   (GET_BLOCK) lasti         : ', lasti);         }
+ {    WRITELN ('   (GET_BLOCK) curblock      : ', curblock);      }
+ {    WRITELN ('   (GET_BLOCK) rcode         : ', rcode);         }
+ {    WRITELN ('   (GET_BLOCK) lastdskacc    : ', lastdskacc);    }
+ {    WRITELN ('   (GET_BLOCK) tinfo.tblsize : ', tinfo.tblsize); }
+ { end;                                                           }
+
+   if ( (x >= firsti) and (x <= lasti) ) then
+   begin
+      if (rcode = ok) then
+      begin
+         if ((curblock-2) <> availblk.tblblk) then {right table but ...}
+            GETTABLE (tinfo, (curblock-2), rcode) {...wrong block in buffer}
+         else
+         begin
+            if ((curblock-2) = Zero) then
+               tblptr := stdtbloffset
+            else
+               tblptr := 0;
+         end
+      end;
+   end
+   else
+      if (curblock - 1) * MaxBlk >= TInfo.TblSize
+      then rcode := EndOfTable;
+
+ { if TblBug then WRITELN ('exit GET_BLOCK'); }
+
+end; {procedure GET_BLOCK}
+
+{$P}
+{------------------------------------------------------------------------------}
+{                                                                              }
+{ TBLlist : (CREATION 02-MAR-82 D. HO)                                         }
+{        (LAST MOD 27-APR-82 D. HO)                                            }
+{                                                                              }
+{------------------------------------------------------------------------------}
+
+{.IX} procedure TBLlist;
+   (* {input}      TBLinfo : TBLtype; {table addr, size, etc}
+                   begrec  : integer;  {first entry requested}
+                   bufsize : integer;  {max # of entries in buffer }
+      {output} var retcod  : integer;  {return code}
+               var reccnt  : integer;  {# of entries returned}
+               var buf     : DrvBlk    {buf for data returned}
+   *)
+
+var
+   index : integer; {logical index of entry in entire table}
+   max : integer; {index of last entry found in block just read}
+   pdest : integer;
+
+begin {procedure TBLlist}
+
+ { if TblBug then                    }
+ {    WRITELN ('TBLlist procedure'); }
+
+   if (TBLinfo.tblsize <= 0) then
+   begin
+      retcod := endoftable;
+      reccnt := 0;
+   end
+   else
+   begin
+      retcod := OK;
+      TBLinfo.offset := 0; {cludge to be able to use GET_TABLE !}
+      reccnt := 0;
+      pdest := 1;
+
+    { if TblBug then                                                                }
+    { begin                                                                         }
+    {    WRITELN ('   (TBLlist) reccnt : ', reccnt);                                }
+    {    WRITELN ('   (TBLlist) offset : ', TBLinfo.offset);                        }
+    {    WRITELN ('   (TBLlist) TBLinfo.netinfo.blkno : ', TBLinfo.netinfo.blkno);  }
+    {    WRITELN ('   (TBLlist) availblk.tbladdr : ', availblk.tbladdr);            }
+    {    WRITELN ('   (TBLlist) availblk.tblblk  : ', availblk.tblblk);             }
+    { end;                                                                          }
+
+      { if table is not already in buffer -> fetch its first logical block }
+      if (TBLinfo.netinfo.blkno <> availblk.tbladdr) then
+      begin
+         INITIALIZE;       {set lastdskacc to 0 + a few more things I don't need}
+
+       { if TblBug then                                               }
+       { begin                                                        }
+       {    WRITELN ('   (TBLlist) last disk acc. : ', lastdskacc);   }
+       {    WRITELN ('   (TBLlist) # of blocks : ', TBLinfo.tblsize); }
+       {    WRITELN ('   (TBLlist) record size : ', TBLinfo.recsize); }
+       {    WRITELN ('   (TBLlist) offset      : ', TBLinfo.offset);  }
+       {    WRITELN ('   (TBLlist) keylength   : ', TBLinfo.keylgth); }
+       { end;                                                         }
+
+         availblk.tbladdr := TBLinfo.netinfo.blkno;
+         GETTABLE (TBLinfo, 0, retcod); {read first logical block into buffer}
+
+       { if TblBug then WRITELN ('   (TBLlist) retcod : ', retcod); }
+
+         lastdskacc := lastdskacc + 1;
+         if (retcod = ok) then
+            MARKAVSPACE (TBLinfo)
+         else availblk.tbladdr := InvalidBlk;
+      end;
+
+      if (retcod = ok) then
+      repeat {until buffer full or out of entries}
+
+       { if TblBug then WRITELN ('   (TBLlist) begrec : ', begrec); }
+
+         GET_BLOCK (begrec, TBLinfo, retcod, index, max);
+
+       { if TblBug then                                 }
+       { begin                                          }
+       {    WRITELN ('   (TBLlist) retcod : ', retcod); }
+       {    WRITELN ('   (TBLlist) index  : ', index);  }
+       {    WRITELN ('   (TBLlist) max    : ', max);    }
+       { end;                                           }
+
+         if (retcod = ok) then
+         begin
+
+            while (reccnt < bufsize) and (index <= max) do
+            begin
+
+               if (index >= begrec) then
+               begin
+                { if TblBug then                                       }
+                { begin                                                }
+                {    WRITELN ('   (TBLlist) pdest   : ', pdest);       }
+                {    WRITELN ('   (TBLlist) tblptr  : ', tblptr);      }
+                {    WRITELN ('   (TBLlist) reccnt(bef.) : ', reccnt); }
+                { end;                                                 }
+
+                  MOVELEFT (tblbuf.b[tblptr],
+                            buf.b[pdest],
+                            TBLinfo.recsize);
+                  reccnt := reccnt + 1; {inc counter of entries found}
+                  pdest := pdest + TBLinfo.recsize;
+                { if TblBug then WRITELN ('   (TBLlist) reccnt(aft.) : ', reccnt); }
+               end;
+
+               { bump everything up to next entry }
+               index := index + 1;
+               tblptr := tblptr + TBLinfo.recsize;
+            end; { found all entries requested or error }
+
+            begrec := index  {+ 1  ed-30apr82} ; {beginning of next logical block}
+         end;
+
+      until (retcod <> ok) or
+            (reccnt >= bufsize);
+      {buffer full or out of entries}
+   end;
+
+   if (retcod = endoftable) AND (reccnt >= 0)
+   then retcod := OK;
+
+   if (retcod <> endoftable)
+   then if (retcod <> OK)
+        then reccnt := 0;
+
+
+ { if TblBug then                                 }
+ { begin                                          }
+ {    WRITELN ('   (TBLlist) retcod : ', retcod); }
+ {    WRITELN ('   (TBLlist) reccnt : ', reccnt); }
+ {    WRITELN ('exit TBLlist');                   }
+ { end;                                           }
+
+end; {procedure TBLlist}
+
+{.IX}  PROCEDURE TBLinitunit;
+
+BEGIN
+  LastDskAcc := Zero;
+  AvailBlk.TblBlk := InvalidBlk;
+  AvailBlk.TblAddr := InvalidBlk;
+  FILLCHAR(AvailBlk.Space[DecOne],MaxAvailBlk,CHR(Null));
+  FILLCHAR(AvailBlk.IEntry[DecOne],MaxAvailBlk*2,CHR(Null));
+  TblBug := FALSE;
+END;    {PROCEDURE TBLinitunit}
+
+END.  {CCTBLRTN UNIT}
+
+
+
+
+
+
+
+
+
+

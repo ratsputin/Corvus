@@ -1,0 +1,81 @@
+;
+; File: USERKEYS.TEXT
+;
+; This file defines user keys for the Dispatcher.  User keys are
+; active if USERKEYS.TEXT is in the volume mounted on unit 5.
+;
+; ";" records are comments.
+; Blank lines are ignored.
+;
+; User key definitions are:
+;
+;    <level> <keynmbr> <keylabel>
+;    <command>
+;   [<command>]
+;   [ ....    ]
+;
+; <level>    is Dispatcher level number from 1 to 9.
+; <keynmbr>  is key number from 0 to 39
+;               (9,19 and 29 used by Dispatcher).
+; <keylabel> is the function key label text.
+; <command>  is the command to be executed when the function key
+;               is selected.  Multiple commands are acceptable.
+;
+; If <keynmbr> is 40, the dispatcher displays the <level> function
+; key labels initially.  The system level function key labels are
+; NOT available when the dispatcher displays user key labels
+; initially.  However, by requesting the dispatcher again by
+; executing CC.DISPAT, the function keys may be displayed.
+;
+; If <level> is 98 and <keynmbr> is 98, the first (and only)
+; <command> is executed once when the dispatcher is ready to
+; process commands.
+;
+; If <level> is 99 and <keynmbr> is 99, the first (and only)
+; <command> is executed each time the dispatcher is ready to
+; get the next command from the user.
+;
+; The following special commands are available as user key
+; commands:
+;
+;     CLRWND  - same processing as <ClrWndow> key
+;     REBOOT  - same processing as <Reboot> key
+;     RESTART - same processing as <Restart> key
+;
+; After editing file USERKEYS.TEXT, execute program CC.DISPAT
+; to check out the file before rebooting.
+;
+
+;
+; Define level 1
+;
+
+1 2 EdWord
+!ED
+clrwnd
+
+1 3 SetVol
+!CC.FILMGR SETVOL
+
+1 4 ListVol
+!CC.FILMGR LSTVOL
+
+1 5 ClrWndow
+clrwnd
+
+1 7 Restart
+restart
+
+1 20 FileMgr
+!CC.FILMGR
+
+1 38 Ld 7x11
+!CC.WNDMGR CSDISP /CCUTIL/CSD.07.11
+
+1 39 Reboot
+reboot
+
+98 98
+!CC.WNDMGR CSDISP /CCUTIL/CSD.07.11
+
+

@@ -1,0 +1,1588 @@
+;
+; file :  drv.eprnt.text
+; date :  14-December-1983  meb
+;
+            LIST       OFF
+; This is the source for the Printer driver with enhancements.  I used the old
+; printer driver as a basis for this code.
+;
+; Changed default table for NEC 7710 :  12-8-82  kb
+; Install of Alt char table and Action table use A3, the parameter block address
+;      as the pointer to the new table : 12-20-82  kb
+; Changed install action table and alternate table status routines.  A table pointer
+;      of zero (0) means use the local default tables : 1-5-83 kb
+; Changed STATE6 calls SendBuf instead of OutChar, was putting on queue but
+;      never taking it off : 1-11-83 kb
+; Added unitstatus function to return state of pitch and lines per inch : 1-19-83 kb
+; Added code to suppress Auto LF when send to attached driver bytes from Action table.
+;      Those bytes may be a CR and no additional character is wanted : 1-21-83 kb
+; Added will not do prop spacing if normal 10 pitch string has 0 length : 1-21-83 kb
+; Alt char strings are ten bytes, 1 length 9 chars : 1-21-83 kb
+; Made Action strings 8 bytes, 1 length and 7 chars : 1-21-83  kb
+; Made backspace into an action string in the Action Table: 1-21-83  kb
+; Changed prop spacing tracking.  It does not clear prop sp flag until sent out all
+;      chars involved in prop spacing :  1-24-83  kb
+; Changed StartPSP so on PadErr doesn't set carry to stop processing the rest of
+;       user's data : 1-27-83  kb
+; Changed StartPSP, will not process esc P seq if pad length = 0 : 2-1-83 kb
+; Fixed ClrEnhc so does not change LPI and Pitch setting : 3-15-83  kb
+; Changed processing of Rubber Space, if not prop spacing then checks Alt table
+;        to see how to process it.  Also change so after clear bit 7 of Alt char
+;        check to see if should do strikeout : 7-26-83  kb
+; Increased length of Alt char translation string to 19 :  8-3-83 kb
+; Fixed bug in GetNxtCh :  9-20-83  kb
+;
+; Replaced Alt char table with State/Translation table--translates any char,
+;        replaced UnitWrite state machine: 11-23-83  meb
+; Modified Printer Action Table--now has index to variable-length strings:
+;        12-7-83 meb
+;
+; INCLUDE FILES USED :
+;       /ccos/os.gbl.asm.text                    ;OS GLOBAL EQUATES
+;
+; INCLUDE OS GLOBALS HERE
+;
+            INCLUDE    '/CCOS/OS.GBL.ASM.TEXT'
+;
+  page
+; EQUATES FOR ALL PRINTER DRIVER SOFTWARE
+; BIT NUMBER DEFINITIONS
+;
+BITD0       EQU        0                         ;BIT 0
+BITD1       EQU        1                         ;BIT 1
+BITD2       EQU        2                         ;BIT 2
+BITD3       EQU        3                         ;BIT 3
+BITD4       EQU        4                         ;BIT 4
+BITD5       EQU        5                         ;BIT 5
+BITD6       EQU        6                         ;BIT 6
+BITD7       EQU        7                         ;BIT 7
+;
+; Internal Flag word bit definitions
+; Low order byte
+;
+BufMTY      EQU        BITD0                     ;look ahead buffer empty
+Pitch       EQU        BITD1                     ;1 = 10 pitch, 0 = 12 pitch
+LinesIn     EQU        BITD2                     ;1 = 6 lines per inch, 0 = 8 lines
+PropSP      EQU        BITD3                     ;1=proportional spacing on
+UndLine     EQU        BITD4                     ;1=underline each char
+TransPar    EQU        BITD5                     ;*110283* 1=transparent mode
+Out2Buf     EQU        BITD6            ;*112383 1=output to buffer (BUFAD,BUFOFS)
+UseLA       EQU        BITD7            ;*112383 1=get input char from lookahead Buffer
+;
+; High order byte
+; Also good for ehancement sequence flag byte
+;
+Bold        EQU        BITD0                     ;Bold on flag
+StrikOut    EQU        BITD1                     ;Strikeout on flag
+Inverse     EQU        BITD2                     ;Inverse char - not used
+UnderLn     EQU        BITD3                     ;Underline on flag
+Super       EQU        BITD4                     ;Superscript on flag
+SubOn       EQU        BITD5                     ;Subscript on flag
+DblULine    EQU        BITD7                     ;Double underline - not used
+;
+; Unit I/O Command codes
+;
+READCMD     EQU        1                         ; read command
+WRCMD       EQU        2                         ; write command
+BUSYCMD     EQU        4                         ; busy command
+STATCMD     EQU        5                         ; status command
+UNMCMD      EQU        6                         ; unmount command
+;
+; UnitStatus function codes
+; Local
+;
+AltTblFC    EQU        $80                       ; install Alternate Char Table
+PrntTblFC   EQU        $85                       ; install Printer Action Table
+PLIstatFC   EQU        $86                       ; return Pitch and LinesIn state
+Wr2Buf      EQU        $87              ;*112883 output to buffer (address=BUFAD(A4))
+MinInFC     EQU        AltTblFC                  ; first internal function code
+MaxInFC     EQU        Wr2Buf           ;*112883   last internal function code
+SlctPort    EQU        3                         ; select port function code
+;
+; New equates *112983
+BadProc     EQU        99               ;*112983 bad procedure #
+MAXPROCS    EQU        4                ;*112983 largest procedure #
+;
+; External
+;
+BAUDFC      EQU        1                         ; set baud rate function code
+PRTYFC      EQU        2                         ; set parity function code
+WDSZFC      EQU        4                         ; set word size function code
+HNDSFC      EQU        5                         ; set handshake protocol func code
+;
+; Status Register values
+;
+DISINT4     EQU        $2400                     ; Disable all DataCom device ints
+DISINT1     EQU        $2100                     ; Disable DataCom Control int
+CARRYST     EQU        $0001                     ; CCR with carry set
+;
+; ASCII character codes
+;
+XON         EQU        $11                       ;CAN XMIT (CTL-Q)
+XOFF        EQU        $13                       ;STOP XMIT (CTL-S)
+ENQ         EQU        $05                       ;READY FOR MORE? (CTL-E)
+ACK         EQU        $06                       ;YES, I'M READY (CTL-F)
+NULL        EQU        $00                       ;NULL CHARACTER-DO NOTHING
+BS          EQU        $08                       ;BACK SPACE CHARACTER
+CR          EQU        $0D                       ;CARRIAGE RETURN
+LF          EQU        $0A                       ;LINE FEED
+Escape      EQU        $1B                       ;ESCAPE CHARACTER
+Apstrf      EQU        $27                       ;Apostrophe character "'"
+Minus       EQU        $2D                       ;Minus character  "-"
+UndScore    EQU        $5F              ;*121283 underscore character "_"
+;
+; Alternate characters
+;
+RubberSP    EQU        $A0                       ;Alternate SP - ignore on prop spacing
+AltEP       EQU        $A1                       ;Alternate !
+;
+; Alternate Table definitions
+;
+NullIndx    EQU        $FF                       ;a nil index, means no string for this char
+;
+; Maximum Parameter values for Unitstatus functions
+;
+MAXDTCM     EQU        1                         ; Select Data com port
+MAXMODE     EQU        1                         ; Select mode
+MAXPITCH    EQU        1                         ; Select pitch
+MAXLINES    EQU        1                         ; Select lines per inch
+;
+; error codes (IORESULT)
+;
+INVCMD      EQU        IOEioreq                  ;invalid cmd-(invalid I/O request)
+INVTBLID    EQU        IOEtblid                  ;invalid table id
+INVPRM      EQU        IOEuiopm                  ;invalid parameter
+INVFNC      EQU        IOEfnccd                  ;invalid function code
+PADERR      EQU        IOEpaderr                 ;invalid prop spacing/need to much extra space
+;
+; Data com equates
+;
+DTACOM2     EQU        32                        ;Data com 2 unit number
+DiffP1      EQU        5                         ;unit no. difference of /DTACOM1 to MAXDEV
+DiffP2      EQU        4                         ;unit no. difference of /DTACOM2 to MAXDEV
+;
+; enhancement escape sequence identifier codes
+;
+OverChar    EQU         'O'                      ;Overstrike escape sequence
+PropChar    EQU         'P'                      ;Proportional spacing escape sequence
+EnhcChar    EQU         'e'                      ;Enhancement flag escape sequence
+;
+; proportional spacing definitions
+;
+Pitch10M    EQU        12                        ;# of 1/120ths of an inch per 10 pitch char
+Pitch12M    EQU        10                        ;# of 1/120ths of an inch per 12 pitch char
+;
+; Miscellaneous definitions
+;
+TRUE        EQU        1                         ; Pascal true boolean value
+ON          EQU        1                         ;LISTING CONTROL - START LISTING
+OFF         EQU        0                         ;LISTING CONTROL - STOP LISTING
+;
+LFsprsflg   EQU        $0C                       ;Auto LF suppress mode flag bit 2 or 3
+  page
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.W                     D7.W
+; 2 - WRITE       D0.W   D1.L   D2.W            D5.W     D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W       D0.W
+; 5 - STATUS      D0.W   D1.L   D2.W <--FUNCTION CODE    D7.W
+; 6 - UNMOUNT     D0.W                                   D7.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D0 & D7
+; INTERNAL REGISTER USEAGE :
+;
+;      D0      =       TEMP
+;      D1      =       TEMP
+;      D2      =       COUNT OR FUNCTION CODE
+;      D3      =       TEMP
+;      D4      =       UNITCOMMAND
+;      D5      =       write mode flag
+;      D6      =       Flag save for enhance flag subroutines and enhance on rtns
+;      A0      =       TEMP
+;      A1      =       TEMP
+;      A2      =       TEMP
+;      A3      =       POINTER TO PARAMETER BLOCK OR USER BUFFER
+;      A4      =       POINTER TO FLAGS,TMPFLGS,STATE
+;      A5      =       POINTER TO CURRENT CHARACTER
+;      A6      =       POINTER TO PRINTER ACTION TABLE
+  page
+;
+            GLOBAL     PRNTRDRV
+;
+; PRINTER DRIVER
+;
+PRNTRDRV
+            BRA.S      PRNT001                   ;JUMP AROUND HEADER
+            DATA.B     0                         ;DEVICE NOT BLOCKED
+            DATA.B     30                        ;VALID CMDS - NOT UNITREAD
+            DATA.B     83,12,14,0                ;DATE
+            DATA.B     hmlen                     ;HEADER MSG LENGTH
+xxx010      DATA.B     'PRINTER driver (v 2.0f)' ;HEADER MSG
+hmlen       EQU        %-xxx010
+;
+PRNT001     CMPI.W     #UNMCMD,D4                ;VALID COMMAND
+            BHI.S      PRNDERR                   ;NO
+            MOVEM.L    D1-D6/A0-A6,-(SP)         ;SAVE REGISTERS
+            MOVEQ      #0,D7                     ;CLEAR IORESULT
+            MOVEA.L    D1,A3                     ;ADDRESS OF USERS BUFFER
+            LEA        FLAGS,A4                  ;*110383 A4==>flags,tmpflgs,state
+            MOVE.L     D4,D0                     ;SAVE COMMAND
+            LSL.W      #1,D0                     ;INDEX TO THE FUNCTION
+            MOVE.W     PRNDTBL(D0),D0
+            JSR        PRNDTBL(D0)               ;DO FUNCTION
+            MOVEM.L    (SP)+,D1-D6/A0-A6         ;Restore registers
+            RTS
+;
+; Invalid Command Error
+;
+PRNDERR     MOVE.W     #INVCMD,D7
+            RTS
+;
+; THE PRINTER DRIVER JUMP TABLE
+;
+PRNDTBL     DATA.W     PRNINST-PRNDTBL           ;UNITINSTALL
+            DATA.W     PRNRD-PRNDTBL             ;UNITREAD
+            DATA.W     PRNWR-PRNDTBL             ;UNITWRITE
+            DATA.W     PRNCLR-PRNDTBL            ;UNITCLEAR
+            DATA.W     PRNBSY-PRNDTBL            ;UNITBUSY
+            DATA.W     PRNST-PRNDTBL             ;UNITSTATUS
+            DATA.W     PRNUNMT-PRNDTBL           ;UNITUNMOUNT
+  page
+;
+; PRNRD - UNITREAD
+; READ FROM THE PRINTER IS ILLEGAL
+;
+PRNRD       MOVE.W     #INVCMD,D7
+            RTS
+  page
+            LIST       ON
+; PRNWR - UNITWRITE
+;           Setup the printer driver and place the user' characters
+;           into it.
+;
+;      Entry : D5 = mode flag
+;              A3 = address of user buffer
+;              D2 = #chars in user buffer
+;              A4==>flags,tmpflgs,state
+;           Uses D5 (Mode flag).  If (D5) = 1 then doesn't do Auto Linefeed.
+;      Register usage:
+;              D0 = current char
+;              D1 = current state
+;
+PRNWR       CLR.W      BUFOFS(A4)                ;*110483 buffer offset = 0
+            BTST       #TransPar,1(A4)           ;*111683 if transparent mode
+            BOFF.S     PRWmain                   ;*111683    then don't do lookup
+
+TPloop      BSR.S      GetNxtCh         ; D0 = next character
+            BCS.S      TPexit           ; quit if Carry set
+            BSR        OutChar          ; output the character
+            BCC.S      TPloop           ; loop, unless error on output
+TPexit      RTS
+
+GetNxtCh    ; get next char, return it in D0.B
+            ; if useLA flag=1, get char from lookahead buffer,
+            ; else get it from user buffer
+            ; set carry when run out of chars from user buffer
+            BTST       #UseLA,1(A4)     ; use which buffer?
+            BOFF.S     GetCh            ; flag on, use lookahead buffer
+            LEA        MARK,A0          ; A0==>mark
+            MOVEA.L    (A0),A1          ; A1 = mark
+            CMPA.L     REAR,A1          ; if mark<>rear
+            BNE.S      GetLA            ;    then get char from LA
+            BCLR       #UseLA,1(A4)     ; mark=rear: UseLA = False
+GetCh       MOVE.B     (A3)+,D0         ; D0 = next char from user buf
+            DBF        D2,GNCckA0       ; dec(count)
+            MOVE.W     #CARRYST,CCR     ; out of characters: CS
+            RTS
+
+GNCckA0     CMPI.B     #RubberSP,D0     ; if char is $A0
+            BNE.S      GNCexit
+            BTST       #PropSP,1(A4)    ;    and prop spacing is on
+            BON.S      GetCh            ;        then skip it
+            BCLR       #7,D0            ; else change it to space
+GNCexit     TST.B      D0               ; (clear Carry)
+            RTS
+
+GetLA       MOVE.B     (A1)+,D0         ; D0 = next char from LA buffer
+            MOVE.L     A1,(A0)          ; update mark pointer
+            RTS
+
+SaveCh      ; save char in D0 in Buffer[rear], unless UseLA = True
+            BTST       #UseLA,1(A4)     ; if UseLA
+            BON.S      SaveDone         ;    then char already in buffer
+            LEA        REAR,A0          ; A0==>rear pointer
+            MOVEA.L    (A0),A1          ; A1 = rear
+            MOVE.B     D0,(A1)+         ; Buffer[rear] = char
+            MOVE.L     A1,(A0)          ; rear = rear+1,
+            ADDQ.W     #1,COUNT(A4)     ; inc(count)
+SaveDone    RTS
+
+PRWdone     ; come here when run out of input chars
+            MOVE.W     D1,STATE(A4)     ; save state
+PRWexit     RTS
+  page
+;----------------------------------------------------------------------
+PRWmain     MOVE.W     STATE(A4),D1     ; D1 = state
+            BGT.S      PRWgetptr        ; if state>0, have LA chars
+
+PRWloop0    MOVEQ      #1,D1            ; st = 1
+PRWgetptr   MOVEA.L    pSttTbl,A2       ; A2==>StateTbl
+
+PRWloop1    BSR.S      GetNxtCh         ; D0 = ch
+            BCS.S      PRWdone          ; CS: no more user chars
+
+LookUp      MOVE.W     D1,D6
+            ASL.W      #2,D6            ; D6 = st*4 = byte offset
+            CMP.B      0(A2,D6),D0      ; if ch<State[st].minch
+            BCS.S      State0           ;    then no match
+
+            CMP.B      1(A2,D6),D0      ; if ch>State[st].maxch
+            BLS.S      Match
+            ADDQ.W     #1,D1            ;    then inc(st)
+            BRA.S      LOOKUP
+
+Match       MOVE.W     2(A2,D6),D1      ; match: st = State[st].newst
+            BLT.S      DoTrans          ; if st<0, translate
+            BEQ.S      STATE0           ; if st=0, no match
+            BSR.S      SaveCh           ;    st>0: save this char
+            BRA.S      PRWloop1         ;          and continue
+
+State0      TST.W      COUNT(A4)        ; if LA char count = 0
+            BEQ.S      ChOut            ;    then output current char
+            BSR.S      SaveCh           ; else save this char,
+            BSR.S      OutFrontCh       ;      output Buffer[front]
+            BRA.S      PRWloop0         ; start lookup again
+ChOut       BSR        SingleChar       ; output char in D0
+            BRA.S      PRWloop0         ; start lookup again
+
+DoTrans     MOVEA.L    MARK,A5          ; save Mark for DoProc
+            BSR        INITBUF          ; clear LA buffer
+            MOVE.W     2(A2),D3         ; D3 = StringTbl offset
+            SUB.W      D1,D3            ; calculate string offset
+            MOVE.B     0(A2,D3),D6      ; D6 = first byte of string
+            BMI.S      DoProc           ; byte<0: procedure
+            BEQ.S      PRWloop0         ; byte=0: null string
+                                        ; byte>0: output string
+            LEA        1(A2,D3),A5      ; A5==>1st char in string
+            MOVE.W     D5,-(SP)         ; save mode flag
+            MOVEQ      #1,D5            ; turn off Auto LF
+Trans       ; output each char in translation string
+            MOVE.B     (A5)+,D0         ; D0 = char
+            BSR.S      SingleChar       ; output it
+            BCS.S      TransErr         ; CS = IO error
+            SUBQ.B     #1,D6            ; dec(count)
+            BGT.S      Trans            ; loop until count=0
+            MOVE.W     (SP)+,D5         ; restore mode flag
+TransDone   BRA.S      PRWloop0         ; start all over from state 1
+
+TransErr    MOVE.W     (SP)+,D5         ; restore mode flag
+            RTS                         ; error exit
+
+DoProc      NEG.B      D6               ; D6 = procedure number
+            EXT.W      D6
+            CMPI.W     #MAXPROCS,D6     ; range checking
+            BLE.S      ProcOK           ; D6 <= highest proc #
+            MOVEQ      #BadProc,D7      ; else set IORESULT,
+            BRA.S      IOerror          ;      error exit
+ProcOK      SUBQ.W     #1,D6
+            LSL.W      #1,D6            ; convert to word offset
+            MOVE.W     PROCTBL(D6),D6   ; get jump table offset
+            JSR        PROCTBL(D6)      ; call specified procedure
+            BCC        PRWloop0         ; CS = IO error
+IOerror     RTS                         ; error exit
+
+PROCTBL     DATA.W     HIBITOFF-PROCTBL          ; turn off bit 7, output char
+            DATA.W     DoOvrStrk-PROCTBL         ; overstrike
+            DATA.W     StartPSP-PROCTBL          ; prop spacing
+            DATA.W     DoEnhcFlg-PROCTBL         ; enhancement
+
+OutFrontCh  ; output 1 char at Buffer[front]
+            LEA        FRONT,A0         ; A0==>front pointer
+            MOVEA.L    (A0),A1          ; A1==>Buffer[front]
+            MOVE.B     (A1)+,D0         ; D0 = char
+            BSR.S      SingleChar       ; output it
+            MOVE.L     A1,(A0)          ; front = front + 1
+            SUBQ.W     #1,COUNT(A4)     ; dec(count)
+            BNE.S      ELSE             ; if count=0
+            BSR        INITBUF          ;    then Init buffer pointers
+            BCLR       #UseLA,1(A4)     ;         UseLA = False
+            RTS
+
+ELSE        LEA        MARK,A0          ; A0==>mark pointer
+            MOVE.L     A1,(A0)          ; mark = front,
+            BSET       #UseLA,1(A4)     ; UseLA = True
+            RTS
+
+HiBitOff    ; Proc1: turn off high bit and output character
+            ; D0 = char
+            BCLR       #BITD7,D0        ; clear high bit
+
+SingleChar  ; D0 = char
+            BSR.S      OUTCHAR          ; output char in D0
+            BCS.S      IOerror          ; CS = error
+            CMPI.B     #CR,D0           ; if char was CR
+            BEQ        CRproces         ;    then go process it
+            BRA        ChkSOPSP         ; else check prop spacing
+  page
+;----------------------------------------------------------------------
+; OutChar - send char in D0 to Attached unit
+;      Entry : D0 = char to output
+;              D5 = LF suppress mode flag
+;      Exit  : (C) = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+; COMMAND - D4    UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 2 - WRITE       D0.W   D1.L   D2.W            D5.W     D7.W
+;
+OutChar     MOVEM.L    D0-D6/A0-A6,-(SP)         ;save global registers
+            BTST       #Out2Buf,1(A4)            ;*110483 output to buffer?
+            BOFF.S     OutChDev                  ;*110483 no
+            MOVEA.L    BUFAD(A4),A2              ;*110483 A2==>buffer
+            MOVE.W     BUFOFS(A4),D2             ;*110483 D2 = offset
+            MOVE.B     D0,0(A2,D2)               ;*110483 put char in buffer
+            ADDQ.W     #1,BUFOFS(A4)             ;*110483 increment offset
+            BRA.S      OCHfinish                 ;*110483 finish up
+OutChDev    MOVE.L     SP,D1
+            ADDQ.L     #3,D1            ; D1 = @char
+            MOVEQ      #1, D2                    ;send one char at a time
+            MOVEQ      #WRCMD, D4                ;unitwrite command code
+            BSR        GoAttUnit                 ;puts unit number in D0
+            TST.W      D7                        ;see if driver had error
+            BNE.S      OCHerror                  ;if error set carry
+OCHfinish   MOVEM.L    (SP)+,D0-D6/A0-A6         ;restore global registers
+CkError     TST.W      D7               ; Carry = 0
+            BEQ.S      OCHexit
+OCHerror    MOVE.W     #CARRYST,CCR     ; Carry = 1
+OCHexit     RTS
+
+;----------------------------------------------------------------------
+; SendBuf: Send out all the chars in the buffer
+;      Exit  : (C) = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;              buffer and buffer variables initialized to empty state
+;
+;      Clobbers A0, D1 and D4
+;
+SendBuf     MOVEA.L    FRONT, A0        ;*112883 A0==>1st char in buffer
+            MOVE.L     REAR, D4         ; D4 = rear pointer
+;
+SBFsend     CMP.L      A0,D4            ; at end of buffer
+            BEQ.S      SBFexit          ; yes, done
+            MOVE.B     (A0)+,D0         ;*112883 D0 = char to send
+            BSR.S      OutChar          ; send out char
+            BCC.S      SBFsend          ;*112883 fall thru if CS (error)
+
+SBFexit     BSR        INITBUF          ; init buffer to empty
+            BRA.S      CkError          ;*112883 was there an error
+  page
+;----------------------------------------------------------------------
+; ChkSOPSP - check if strike out, single underline, and prop spacing on.
+;            If so do whichever is on, maybe all.
+;      Exit  : (C) = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+ChkSOPSP                                         ;always check strike out first
+            BTST       #StrikOut,(A4)            ;is strike out mode on
+            BOFF.S     CSOchkul                  ;no, check underline
+            MOVE.B     #Minus,D3        ;*120783 strikeout char
+            BSR.S      OverStrike       ;*120783
+            BCS.S      CSOexit                   ;if error exit
+
+CSOchkul    BTST       #UndLine,1(A4)   ;*120783 underline prev char?
+            BOFF.S     CSOchkpsp        ;*120783 no, check prop spacing
+            MOVE.B     #UndScore,D3     ;*120783 overstrike char
+            BSR.S      OverStrike       ;*120783
+            BCS.S      CSOexit          ;*120783 exit if error
+
+CSOchkpsp   BTST       #PropSP,1(A4)             ;check if prop spacing on
+            BOFF.S     CSOgood                   ;no, done
+            BSR        TrkPSP                    ;yes, track prop spacing
+            BRA.S      CSOexit
+;
+CSOgood     TST.W      D7
+CSOexit     RTS
+  page
+;----------------------------------------------------------------------
+; DoOvrStrk - process an overstrike escape sequence.
+;             has form :  escape, O, firstchar, overchar
+;             send firstchar to printer, then send a back
+;             space, then send the overchar.
+;      Entry : buffer and buffer variables initialized to empty state
+;      Exit  : (C) = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+; output first char
+;
+DoOvrStrk   ; A5==> ESC O c1, c2 in D0
+            MOVE.B     D0,D3            ;*112983 save overstrike char
+            MOVE.B     2(A5),D0         ;*112883 D0 = 1st char
+            BSR        OutChar          ;*112883 write it
+            BCS.S      CSOexit          ;*112983 if I/O error exit
+;
+; output back space, overstrike char
+            BSR.S      OverStrike       ;*120783
+;
+; check if should do strike out or prop space tracking
+            BRA.S      ChkSOPSP                  ;sets cc if I/O error
+
+;----------------------------------------------------------------------
+; OverStrike- Backspace and print over previous char
+;      Entry:  D3 = char to print over
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+OverStrike  ; output back space
+            MOVEA.L    pPrntTbl,A6               ;send out backspace seq
+            MOVE.W     (A6),D4          ;*120783 index of BS string
+            BEQ.S      OVSexit          ;*121383 if 0, can't do it
+            LEA        0(A6,D4),A0      ;*120783 address of BS string
+            BSR        MoveSend
+            BCS.S      OVSexit                   ;if I/O error exit
+;
+; output char in D3
+;
+            MOVE.B     D3,D0            ;*120783 D0 = char to write
+            BSR        OutChar                   ;sets cc if I/O error
+OVSexit     RTS
+  page
+;----------------------------------------------------------------------
+; CRproces - check for Underline, Bold, and Proportional spacing.
+;            If Underline or Bold are on turn them on in printer again.
+;            If Proportional spacing on turn it off.
+;            buffer must be in init state
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+CRproces    MOVEA.L    pPrntTbl, A6              ;address of printer action table
+            BTST       #UnderLN,(A4)             ;is underline on?
+            BOFF.S     CRPchkB                   ;no, check Bold
+            BSR        UndrLnOn                  ;yes, turn on underline
+            BCS.S      CRPexit                   ;if I/O error exit
+;
+; maintain the bold enhancement
+;
+CRPchkB     BTST       #Bold,(A4)                ;is Bold on?
+            BOFF.S     CRPchkP                   ;no, check prop spacing
+            BSR        TBoldOn                   ;yes, turn on Bold
+            BCS.S      CRPexit                   ;if I/O error exit
+
+;
+; prop spacing is on a line per line basis, turn it off if on
+;
+CRPchkP     BTST       #PropSP,1(A4)             ;is Prop spacing on?
+            BOFF.S     CRPgood                   ;no, exit with no error
+            BSR        TPSPoff                   ;yes, turn off prop spacing
+            BRA.S      CRPexit                   ;sets cc if I/O error
+;
+CRPgood     TST.W      D7                        ;clear carry
+CRPexit     RTS
+  page
+;----------------------------------------------------------------------
+; DoEnhcFlg - process flag byte from the escape e sequence for turning off
+;             and on enhancements.  Effects Bold, Strikeout, Underline,
+;             Superscript and Subscript.
+;      Entry : flag byte is in D0
+;              buffer inited to empty but not overwritten
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+DoEnhcFlg   MOVE.B     D0,2(A4)                  ;save flag byte in TmpFlgs
+            MOVE.B     D0, D6                    ;save it
+            MOVE.B     FLAGS, D0                 ;old (eor) new yields flags
+            EOR.B      D0, D6                    ;that changed - 1 bits
+;
+; Do for each bit in exclusive ored flag bytes - if bit set call routine
+;
+            MOVEA.L    pPrntTbl, A6              ;address of printer action table
+            MOVEQ      #BITD7, D3                ;do i := 7 to 0
+;
+DEFchk      BTST       D3, D6                    ;is bit on?
+            BOFF.S     DEFnxt                    ;no, see if another
+            MOVE.W     D3, D4                    ;bit
+            LSL.W      #1,D4                     ;routine must not change
+            MOVE.W     EnhcTbl(D4),D4            ;D3 and A6
+            MOVE.B     TMPFLGS, D0               ;get new flag byte
+            JSR        EnhcTbl(D4)               ;move always clears carry
+            BCS.S      DEFexit                   ;if I/O error exit
+;
+DEFnxt      DBF        D3, DEFchk
+;
+; save new flag
+;
+DEFgood     MOVE.B     TMPFLGS,(A4)              ;*110283 flags <- tmpflgs (carry cleared)
+;
+ChkStrk                                          ;nothing to do except save flag
+ChkNada                                          ;check for unused flag
+DEFexit     RTS
+;
+EnhcTbl     DATA.W     ChkBold-EnhcTbl           ;Check Bold
+            DATA.W     ChkStrk-EnhcTbl           ;Check Strikeout
+            DATA.W     ChkNada-EnhcTbl           ;Inverse video flag, do Nada
+            DATA.W     ChkUndr-EnhcTbl           ;Check Underline
+            DATA.W     ChkSuper-EnhcTbl          ;Check Superscript
+            DATA.W     ChkSub-EnhcTbl            ;Check Subscript
+            DATA.W     ChkNada-EnhcTbl           ;bit should always be 1, do Nada
+            DATA.W     ChkNada-EnhcTbl           ;Dbl Underline flag, do Nada
+  page
+;
+; MoveInB - move string pointed at by A0 into buffer
+;
+MoveInB     MOVEA.L    A0, A2                    ;PutQue clobbers A0 and A1
+            MOVEQ      #0,D4                     ;clear garbage
+            MOVE.B     (A2)+, D4                 ;get length of string
+;
+MIBloop     DBF        D4, MIBmove               ;do i:=1 to n
+            RTS
+;
+MIBmove     MOVE.B     (A2)+, D0                 ;get char
+          ; following code is former PutQue
+            LEA        REAR, A1                  ;get address of Rear ptr
+            MOVEA.L    (A1), A0                  ;get where putting char
+            MOVE.B     D0, (A0)                  ;put char in buffer
+            ADDQ.L     #1, (A1)                  ;increment Rear ptr
+            BCLR       #BufMTY,1(A4)
+            BRA.S      MIBloop                   ;see if another
+
+;----------------------------------------------------------------------
+; ChkBold - check new bold flag.  If it is on turn on the enhancement.
+;           If it is off turn off the ehancement.
+;      Entry : D0 = new flag
+;              D3 = bit number to check
+;              D6 = eor bit flags
+;              A6 = address of printer action table
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+ChkBold     BTST       D3, D0                    ;is bit on?
+            BON.S      TBoldOn
+;
+; TBoldOff - Turn bold off
+;      Entry : A6 = pointer to printer action table
+; uses temp buffer
+;
+TBoldOff    MOVE.W     PIbdoff(A6),D4   ;*121283 index of Bold Off string
+            BRA.S      SendIt           ;*121283
+;
+; TBoldOn - Turn bold on
+;      Entry : A6 = pointer to printer action table
+; uses temp buffer
+;
+TBoldOn     MOVE.W     PIbdon(A6),D4    ;*121283 index of Bold On string
+            BRA.S      SendIt           ;*121283
+  page
+;-----------------------------------------------------------------------
+; ChkUndr - check new underline flag.  If it is on turn on the enhancement.
+;           If it is off turn off the ehancement.
+;      Entry : D0 = new flag
+;              D3 = bit number to check
+;              D6 = eor bit flags
+;              A6 = address of printer action table
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+ChkUndr     BTST       D3, D0                    ;is bit on?
+            BOFF.S     UndrLNoff
+;
+; UndrLNon - Turn underline on
+;      Entry : A6 = pointer to printer action table
+; uses temp buffer
+;
+UndrLNon    MOVE.W     PIulon(A6),D4    ;*121283 index of UL on string
+            BNE.S      SendIt           ;*121383 index=0: no string,
+            BSET       #UndLine,1(A4)   ;*121283    set flag to underline each char
+            RTS                         ;*121283
+;
+; UndrLNoff - Turn underline off
+;      Entry : A6 = pointer to printer action table
+; uses temp buffer
+;
+UndrLNoff   MOVE.W     PIuloff(A6),D4   ;*121283 index of UL off string
+            BNE.S      SendIt           ;*121483 index=0: no string,
+            BCLR       #UndLine,1(A4)   ;*121483    clear underline flag
+            RTS                         ;*121483
+;
+; SendIt - D4 = index of string to send
+SendIt      LEA        0(A6,D4),A0      ;*121283 A0==> string to send
+;
+; move string to buffer then send it to the printer
+;
+MoveSend    BSR.S      MoveInB                           ;put in buffer
+                                        ;*121383 fall thru to CtlSend
+;----------------------------------------------------------------------
+; Routine added 1/21/83  kb
+; CtlSend - sends characters from buffer with Auto LF suppressed.
+;           Saves the user value of D5, the mode flag
+;      Entry : same as SendBuf
+;      Exit  : same as SendBuf
+;
+CtlSend     MOVE.L     D5, -(SP)                 ;save user's mode flag
+            MOVEQ      #LFsprsflg, D5            ;get auto LF suppress flag
+            BSR        SendBuf                   ;send chars in buffer
+            MOVE.W     SR, D1                    ;save return code
+            MOVE.L     (SP)+, D5                 ;restore user's mode flag
+            MOVE.W     D1, CCR                   ;restore return code
+            RTS
+  page
+;---------------------------------------------------------------------
+; ChkSuper - check new superscript flag.  If it is on turn on the enhancement.
+;            If it is off turn off the ehancement.
+;      Entry : D0 = new flag ALSO at 3rd byte of buffer
+;              D3 = bit number to check
+;              D6 = eor bit flags
+;              A6 = address of printer action table
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+ChkSuper    BTST       #SubOn,(A4)               ;*110283 make sure subscript is not on
+            BON.S      TurnOff                   ;it is, don't do superscript
+;
+; find out which LPI sub-record to use
+;
+            LEA        PT6rec(A6),A0    ;*121283 assume 6LPI
+            BTST       #LinesIn,1(A4)   ;*121283 is it really?
+            BON.S      CSPonoff         ;*121283
+            LEA        PT8rec(A6),A0    ;*121283 it's 8LPI
+
+CSPonoff    MOVE.W     PIsson(A0),D4    ;*121283 assume superscript on
+            BTST       D3,D0            ;*121283 check flag
+            BON.S      SendIt           ;*121283 on: send string
+            MOVE.W     PIssoff(A0),D4   ;*121283 D4 = index of ss off string
+            BRA.S      SendIt           ;*121283 output string
+
+;
+; ChkSub - check new subscript flag.  If it is on turn on the enhancement.
+;          If it is off turn off the ehancement.
+;      Entry : D0 = new flag
+;              D3 = bit number to check
+;              D6 = eor bit flags
+;              A6 = address of printer action table
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+ChkSub      BTST       #Super,(A4)               ;*110283 make sure superscript is not on
+            BOFF.S     CSB2                      ;it is, don't do subscript
+
+TurnOff     BCLR       D3,2(A4)         ; clear flag in TmpFlgs
+            MOVEQ      #0,D0            ; clear Carry
+            RTS
+;
+; find out which LPI sub-record to use
+;
+CSB2        LEA        PT6rec(A6),A0    ;*121283 assume 6LPI
+            BTST       #LinesIn,1(A4)   ;*121283 is it really?
+            BON.S      CSBonoff         ;*121283
+            LEA        PT8rec(A6),A0    ;*121283 it's 8LPI
+;
+CSBonoff    MOVE.W     PIsubon(A0),D4   ;*121283 assume subscript on
+            BTST       D3,D0            ;*121283 check flag
+            BON.S      SendIt           ;*121283 on: send string
+            MOVE.W     PIsuboff(A0),D4  ;*121283 off: get index
+            BRA.S      SendIt           ;*121283 output string
+  page
+;----------------------------------------------------------------------
+; StartPSP - process the proportional space escape sequence.  if can turn on
+;            proportional spacing.
+;      Entry : # OF CHARS byte is at 2(A5) in buffer *112883
+;              # OF PADS  byte is in D0 *112983
+;              buffer inited to empty but not overwritten
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good or got a PadErr   *1/27/83 kb*
+;              D7 = IORESULT
+;
+StartPSP
+            MOVEA.L    pPrntTbl, A6              ;printer action table addr
+            LEA        PT10pt(A6),A2    ;*121283
+            MOVE.W     (A2),D4          ;*121283 assume 10 pitch subrecord
+            BEQ        SSPexit                   ;printer doesn't do prop spacing 1/21/83
+
+            ANDI.W     #$0F,D0          ;*121283 get # of pads
+            BEQ        SSPexit                   ;no pads, exit  *2/1/83 kb*
+            MOVEQ      #Pitch10M, D1             ;calc the # char fractions to add
+                                                 ;extra := (# of pads) * pitch multiplier
+            BTST       #Pitch,1(A4)              ;the pitch multiplier is the # of
+            BON.S      SSPis10                   ;1/120ths to a single char for a given
+            LEA        PITsize(A2),A2   ;*121283 not 10, use 12 pitch subrecord
+            MOVEQ      #Pitch12M, D1             ;pitch
+SSPis10     MULU       D1, D0                    ;D0 = extra micro spaces needed
+;
+; determine the spacing needed per char
+;      A2 = ptr to record in Printer Action Table to get spacing string
+;
+            LEA        PSPctlrec, A1             ;A1 = addr of ctl record
+            MOVE.B     2(A5),D1         ;*112883 D1 = # of chars (upper byte=0)
+            MOVE.W     D1, PSPnumch(A1)          ;save number of chars *kb 1/24/83*
+            SUBQ.W     #1, D1                    ;don't add pad to last char
+            MOVE.W     D1, D3                    ;save # of chars
+            CMP.W      D1, D0                    ;is extra <= # of chars
+            BHI.S      SSPn01                    ;no, try 2 times
+            MOVE.W     D0, (A1)                  ;main count = to # extras needed
+            CLR.W      PSPCRc2(A1)               ;no 2nd string
+            MOVE.W     PI1mSP(A2),D4    ;*121283 1st spacing=add 1 1/120ths to norm
+            BRA.S      SSPsend
+
+SSPn01      ADD.W      D3, D1                    ;D1 = 2 * (# of chars)
+            CMP.W      D1, D0                    ;is extra <= 2 * (# of chars)
+            BHI.S      SSPn02                    ;no, try 3 times
+            SUB.W      D3, D0                    ;main count = to extras - # of chars
+            MOVE.W     D0, (A1)                  ;save in control record as PTcurcnt
+            SUB.W      D0, D3                    ;2nd spacing for (# of chars -  # of
+            MOVE.W     D3, PSPCRc2(A1)           ;   chars used on the 1st spacing)
+            MOVE.W     PI1mSP(A2),D4    ;*121283 2nd spacing=add 1 1/120ths to norm
+            PEA        0(A6,D4)         ;*121283 get string address
+            MOVE.L     (SP)+, PSPCRs2(A1)        ;save address in control record
+            MOVE.W     PI2msp(A2),D4    ;*121283 1st spacing=add 2 1/120ths to norm
+            BRA.S      SSPsend
+
+SSPn02      ADD.W      D3, D1                    ;D1 = 3 * (# of chars)
+            CMP.W      D1, D0                    ;is extra <= 3 * (# of chars)
+            BHI.S      SSPerror                  ;no, error => to much pads
+            SUB.W      D3, D1                    ;D1 = 2 * (# of chars)
+            SUB.W      D1, D0                    ;main count = to extras - (2 * # of chars)
+            MOVE.W     D0, (A1)                  ;save in control record as PTcurcnt
+            SUB.W      D1, D3                    ;2nd spacing for (# of chars -  # of
+            MOVE.W     D3, PSPCRc2(A1)           ;   chars used on the 1st spacing)
+            MOVE.W     PI2msp(A2),D4    ;*121283
+            PEA        0(A6,D4)         ;*121283 2nd spacing=add 2 1/120ths to norm
+            MOVE.L     (SP)+, PSPCRs2(A1)        ;save address in control record
+            MOVE.W     PI3mSP(A2),D4    ;*121283 1st spacing=add 3 1/120ths to norm
+;
+; send out 1st spacing sequence
+;
+SSPsend     BSR        SendIt           ;*121283 put in buffer and send out
+            BCS.S      SSPexit                   ;if I/O error then exit
+;
+; set flag and exit
+;
+            BSET       #PropSP,1(A4)             ;set on proportional spacing
+            BRA.S      SSPexit                   ;exit
+;
+; error, need to many pads
+;
+SSPerror    MOVEQ      #PADERR, D7               ;to many pads error code
+;;;;;;;;;;; MOVE.W     #CARRYST, CCR ;don't stop processing - send out rest *1/27/83 kb*
+SSPexit     MOVEQ      #0,D0                     ;clear carry *1/27/83 kb*
+            RTS                                  ;exit        *1/27/83 kb*
+  page
+;----------------------------------------------------------------------
+; TrkPSP - track proportional spacing.  See if need to turn off or change
+;          change the spacing.
+; added PSPnumch checking *kb 1/24/83*
+;      Entry : buffer inited to empty
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+TrkPSP      LEA        PSPcurcnt, A0             ;address of cnt of chars left
+            SUBQ.W     #1, PSPnumch-PSPcurrent(A0) ;when # chars=0 then totally done
+            BEQ.S      TPSPoff                   ;clear flag and reset printer spacing
+            TST.W      (A0)                      ;exhausted micro spacing chars?
+            BMI.S      TSPgood                   ;yes, exit. track until send all chars
+
+; still had chars with micro spacing, see if this was last one
+;
+            SUBQ.W     #1, (A0)                  ;just sent out one
+            BNE.S      TSPgood                   ;more left continue
+;
+; see if all done, if am then turn off prop spacing
+;
+            LEA        PSPcnt2, A1               ;addr of # chars to use 2nd spacing
+            TST.W      (A1)                      ;is it zero?
+            BNE.S      TSPupdat                  ;no then use that 2nd spacing
+            BSR.S      TPSOspnm                  ;yes, reset printer to normal spacing
+            BRA.S      TSPexit                   ;if I/O error then TPSPoff sets cc
+;
+; not done, switch to second spacing
+;
+TSPupdat    MOVE.W     (A1), (A0)                ;make 2nd spacing cnt the main cnt
+            CLR.W      (A1)+                     ;zero out 2nd count
+            MOVEA.L    (A1), A0                  ;send 2nd count sequence to the printer
+            BRA        MoveSend                  ;move into buffer, then send out
+;
+TSPgood     TST.W      D7                        ;show no error
+TSPexit     RTS                                  ;exit
+  page
+;----------------------------------------------------------------------
+; TPSPoff - turn off proportional spacing.
+;      Entry : buffer inited to empty
+;      Exit  : (C)  = I/O error reported by attached driver
+;              (NC) = I/O result good
+;              D7 = IORESULT
+;
+TPSPoff     BCLR       #PropSP,1(A4)             ;*110283 first turn off flag
+;
+; send normal spacing distance selection sequence to printer
+;
+TPSOspnm                                         ;ENTRY: reset printer spacing*kb 1/24/83*
+            MOVEA.L    pPrntTbl, A6              ;printer action table addr
+            MOVE.W     PT10pt(A6),D4    ;*121283 assume 10 pitch
+            BTST       #Pitch,1(A4)              ;is it 10?
+            BON.S      TPOis10                   ;yes
+            MOVE.W     PT12pt(A6),D4    ;*121283 no, use 12 pitch normal spacing
+TPOis10     BRA        SendIt           ;*121283 move to buffer and send out
+  page
+;---------------------------------------------------------------------
+; PRNINST - UNITINSTALL ==> SETUP THE DRIVER FOR THE DEFAULT PRINTER
+;   Attach driver to default unit.  Setup communication for (UART state)
+;   for default printer.
+;
+PRNINST
+;
+; Attach to default unit
+;
+            LEA        DefUnit, A3
+            BSR        STATTACH
+            TST.W      D7                        ;unit not available
+            BNE.S      PINexit                   ;yes
+;
+; Initialize Buffer and buffer variables, Flags, and table pointers
+;
+            BSR.S      INITBUF
+            MOVE.W     DefFlags,(A4)             ;*110283 set default FLAGS
+;
+            LEA        pSttTbl,A0                ;*110283
+            LEA        StTable,A1                ;*112883
+            MOVE.L     A1, (A0)+                 ;* put in address of state/trans table
+;
+            LEA        dPrntTbl, A1              ;Printer Action Table
+            MOVE.L     A1, (A0)
+;
+; Initialize UART from default values, call attached unit
+;
+            BSR.S      SETUART
+PINexit     RTS
+
+;----------------------------------------------------------------------
+; INITBUF - Initialize Buffer variables to EMPTY Buffer
+;      uses only address registers
+;
+INITBUF     LEA        MARK,A0          ;*112883 A0==>mark,front,rear
+            LEA        BUFFER,A1
+            MOVE.L     A1,(A0)+         ;*112883 mark = @buffer
+            MOVE.L     A1,(A0)+                  ;FRONT := @BUFFER
+            MOVE.L     A1,(A0)                   ;REAR := @BUFFER
+            CLR.W      COUNT(A4)        ;*112883 count = 0
+            BSET       #BufMTY,1(A4)             ;Buffer empty
+            RTS
+  page
+            LIST       OFF
+;
+; SETUART - Initialize UART from default table call attached unit to
+;           do changes.
+;
+SETUART     LEA        DefUART, A0
+            MOVE.L     A0,D1                     ;address of parameters
+            MOVEQ      #STATCMD, D4              ;unitstatus command code
+;
+; set Baud rate
+;
+            MOVEQ      #BAUDFC, D2               ;function code
+            BSR.S      CallDrvr                  ;call unit
+            BNE.S      STUexit                   ;if error exit
+            ADDQ.L     #DBDlen, D1               ;point at next field
+;
+; set Parity
+;
+            MOVEQ      #PRTYFC, D2               ;function code
+            BSR.S      CallDrvr                  ;call unit
+            BNE.S      STUexit                   ;if error exit
+            ADDQ.L     #DPTlen, D1               ;point at next field
+;
+; set Word size
+;
+            MOVEQ      #WDSZFC, D2               ;function code
+            BSR.S      CallDrvr                  ;call unit
+            BNE.S      STUexit                   ;if error exit
+            ADDQ.L     #DWSlen, D1               ;point at next field
+;
+; set Handshake protocol
+;
+            MOVEQ      #HNDSFC, D2               ;function code
+            BSR.S      CallDrvr                  ;call unit
+STUexit     RTS                                  ;point at next field
+;
+; CALLDRVR
+;
+CallDrvr    MOVEM.L    D1/D4,-(SP)               ;save addr and command
+            BSR        GoAttUnit
+            MOVEM.L    (SP)+,D1/D4
+            TST.W      D7                        ;set cc
+            RTS
+  page
+;----------------------------------------------------------------------
+; PRNCLR - UNITCLEAR
+;           First call attached driver for it to do unitclear of.
+;           Initialize Buffer to empty.  Initialize Communications control
+;           variables.  Turn off all enhancements on.
+;
+PRNCLR      BSR        GoAttUnit                 ;Call attached driver's unitclear
+;
+            BSR.S      INITBUF                   ;INIT BUFFER & CONTROL VARIABLES
+;
+; turn off enhancements
+;
+            BSR.S      ClrEnhc
+            RTS
+  page
+;
+; ClrEnhc - turn off all enhancements on.
+;
+ClrEnhc     MOVEA.L    pPrntTbl, A6              ;address of printer action table
+            BTST       #UnderLN,(A4)             ;is underline on?
+            BOFF.S     CLEchkB                   ;no, check Bold
+            BSR        UndrLnOff                 ;yes, turn off underline
+            BCS.S      CLEexit                   ;if I/O error exit
+;
+; check for bold enhancement
+;
+CLEchkB     BTST       #Bold,(A4)                ;is Bold on?
+            BOFF.S     CLEchkP                   ;no, check prop spacing
+            BSR        TBoldOff                  ;yes, turn off Bold
+            BCS.S      CLEexit                   ;if I/O error exit
+;
+; check for proportional spacing
+;
+CLEchkP     BTST       #PropSP,1(A4)             ;is Prop spacing on?
+            BOFF.S     CLEsubs                   ;no, check subscript
+            BSR        TPSPoff                   ;yes, turn off prop spacing
+            BCS.S      CLEexit                   ;sets cc if I/O error
+;
+; check for subscript
+;
+CLEsubs     MOVEQ      #SubOn, D3                ;Subscript flag bit number
+            BTST       D3,(A4)                   ;is Subscript on?
+            BOFF.S     CLEsupr                   ;no, check Superscript
+            MOVEQ      #0,D0                     ;show bit off to subroutine
+            BSR        ChkSub                    ;yes, turn off Subscript
+            BCS.S      CLEexit                   ;if I/O error exit
+;
+; check for subscript
+;
+CLEsupr     MOVEQ      #Super, D3                ;Superscript flag bit number
+            BTST       D3,(A4)                   ;is Superscript on?
+            BOFF.S     CLEgood                   ;no, init flags
+            MOVEQ      #0,D0                     ;show bit off to subroutine
+            BSR        ChkSuper                  ;yes, turn off Superscript
+            BCS.S      CLEexit                   ;if I/O error exit
+;
+CLEgood     ;*kb 3/15/83*                        ;set flags to default
+            andi.w     #6,(A4)                   ;leave pitch and lpi but clear the rest
+            bset       #bufmty,1(A4)             ;mark buffer empty
+            moveq      #0,d0                     ;clear carry
+            ;*kb 3/15/83*
+CLEexit     RTS
+  page
+;----------------------------------------------------------------------
+; PRNBSY - UNITBUSY
+;           Call attached unit's unitbusy.
+;
+PRNBSY      BRA        GoAttUnit
+;
+; PRNUNMT - UNITUNMOUNT
+;           Do nothing.
+;
+PRNUNMT
+            RTS
+  page
+;----------------------------------------------------------------------
+; PRNST - UNITSTATUS
+;      Entry : D4 = Unitstatus command
+;              D2 = Function code
+;              D1 = Parameter Block Address
+;              A3 = Parameter Block Address
+;              A4==>Flags
+; pass through to attached unit all function calls with a fc less than $80
+; except fc = 3, for select port.
+;
+PRNST       CMPI.W     #MinInFC,D2               ;Function code for internal
+            BCS.S      PSTCHKSP                  ;No, check if select port
+
+            CMPI.W     #MaxInFC, D2              ;FC in range
+            BHI.S      PSTERR                    ;NO, error
+
+            BCLR       #BITD7, D2                ;clear bit 7 to get index
+            LSL.W      #1,D2                     ;AN INDEX TO THE FUNCTION
+            MOVE.W     PSTTBL(D2),D2
+            JMP        PSTTBL(D2)                ;DO FUNCTION
+;
+; Invalid Function Code Error
+;
+PSTERR      MOVEQ      #INVFNC,D7
+            RTS
+;
+; THE PRINTER DRIVER JUMP TABLE
+;
+PSTTBL      DATA.W     STMODE-PSTTBL             ;Translate/Transparent mode
+            DATA.W     STALTTBL-PSTTBL           ;install Alternate Char Table
+            DATA.W     STATTACH-PSTTBL           ;attach driver to unit
+            DATA.W     STPITCH-PSTTBL            ;select pitch
+            DATA.W     STLINES-PSTTBL            ;select lines per inch
+            DATA.W     STPRNTBL-PSTTBL           ;install Printer Action Table
+            DATA.W     STCLPIST-PSTTBL           ;return Pitch and LinesIn state
+            DATA.W     ST2BUF-PSTTBL    ;*112883 output to buffer or device
+;
+; before call attached unit check for select port function
+;
+PSTCHKSP    CMPI.W     #SlctPort, D2             ;Is it select port
+            BEQ.S      STDTACOM                  ;Yes, process this internally
+            BRA        GoAttUnit                 ;No, let attached unit process
+  page
+;
+; STDTACOM - Attach driver to one of the Data Com units
+;
+STDTACOM    CMPI.W     #MAXDTCM, (A3)            ;Valid parameter
+            BHI        BadParam                  ;No
+
+            BSR        GETDEVTBL                 ;get max unit no in D0
+            MOVEQ      #DiffP1,D1                ;assume port 1
+            TST.W      (A3)                      ;is it port 1
+            BEQ.S      STDCSAVE                  ;yes
+            MOVEQ      #DiffP2,D1                ;get value for port 2
+STDCSAVE    SUB.W      D1,D0                     ;calc unit number
+
+            MOVE.W     D0,D1                     ;Save unit number
+            BSR.S      ChkUnit                   ;is unit ok? (A0 = dev tbl ptr)
+            BNE.S      STDexit                   ;no
+
+            LEA        AttUnitNo, A0
+            MOVE.W     D1, (A0)                  ;Save unit number
+STDexit     RTS
+;
+; STATTACH - Attach driver to unit
+;      Entry : A3 = pointer to unit number of unit to attach to
+;
+STATTACH    BSR        GETDEVTBL                 ;get max unit no in D0
+            CMP.W      (A3), D0                  ;parameter in range
+            BCS.S      BadParam                  ;No
+            MOVE.W     (A3), D0                  ;get unit number
+            BSR.S      ChkUnit                   ;is unit ok?
+            BNE.S      STAexit                   ;no
+
+            LEA        AttUnitNo, A0
+            MOVE.W     (A3), (A0)                ;Save unit number
+STAexit     RTS
+  page
+;
+; ChkUnit - make sure unit is mounted and and not blocked.
+;      Entry : A0 = pointer to 1st entry in device table
+;              D0 = unit number
+;              Clobbers D0
+;
+ChkUnit     MOVEA.L    A0, A1                    ;save table address
+            BSR        GETDRVR
+            TST.B      UTmtd(A1,D0.W)            ;is it mounted
+            BEQ.S      BadParam                  ;No
+            TST.B      UTblf(A1,D0.W)            ;is it blocked
+            BNE.S      BadParam                  ;Yes
+            TST.W      D7
+            RTS
+;
+; STMODE - Select transparent mode
+;      Entry : A3 = pointer to mode parameter
+;                   (1 = translate, 0 = transparent)
+;     *110283 transparent mode indicated by flag TransPar in FLAGS+1
+;
+STMODE      CMPI.W     #MAXMODE, (A3)            ;Valid parameter
+            BHI.S      BadParam                  ;No
+
+            TST.W      (A3)                      ;user wants to goto translate
+            BNE.S      STMclr                    ;yes
+;
+; go to transparent mode
+;
+            BSR        ClrEnhc                   ;turn off all enhancements
+            BTST       #BufMTY,1(A4)             ;is the buffer empty?
+            BON.S      STMchng                   ;yes
+            BSR        SendBuf                   ;no, send out chars in buf
+            CLR.W      STATE(A4)        ;*112883 force state = 0
+STMchng     BSET       #TransPar,1(A4)           ;*110383 set transparent mode
+            RTS
+;
+; go to translate mode
+;
+STMclr      BCLR       #TransPar,1(A4)           ;*110383 set translate mode
+            RTS
+  page
+;
+; STPITCH - Select pitch
+;      Entry : A3 = pointer to parameter
+;                   (1 = 10 pitch, 0 = 12 pitch)
+;
+STPITCH     CMPI.W     #MAXPITCH, (A3)           ;Valid parameter
+            BHI.S      BadParam                  ;No
+
+            MOVEQ      #Pitch, D0                ;Bit number for Pitch
+            TST.W      (A3)
+            BNE.S      SETFlgBit
+
+CLRFlgBit   BCLR       D0,1(A4)                  ;*110283
+            RTS
+
+SETFlgBit   BSET       D0,1(A4)                  ;*110283 set bit (D0 = bit number)
+            RTS
+;
+; STLINES - Select lines per inct
+;      Entry : A3 = pointer to parameter
+;                   (1 = 6 lines per inch, 0 = 8 lines per inch)
+;
+STLINES     CMPI.W     #MAXLINES, (A3)           ;Valid parameter
+            BHI.S      BadParam                  ;No
+
+            MOVEQ      #LinesIn, D0              ;Bit number for Lines per Inch
+            TST.W      (A3)
+            BNE.S      SETFlgBit
+            BRA.S      CLRFlgBit
+
+; Bad parameter exit - sets error code
+;
+BadParam    MOVEQ      #INVPRM,D7
+            RTS
+;
+; STCLPIST - return state of Pitch and LinesIn flags
+;      Entry : A3 = pointer to parameter block
+;                      record   Pitch : integer;
+;                               Lines : integer; end;
+; Pitch = 1 for 10 pitch and 0 for 12 pitch
+; Lines = 1 for 6 lines per inch and 0 for 8 lines per inch
+;
+STCLPIST    BTST       #Pitch,1(A4)
+            BSR.S      CLPIbool
+            BTST       #LinesIn,1(A4)
+CLPIbool    SNE        D0
+            ANDI.W     #TRUE, D0
+            MOVE.W     D0, (A3)+
+            RTS
+  page
+;
+; STALTTBL - Install a new Alternate Character Translation table
+;      Entry : A3 = pointer to table
+;                   if A3 = 0 then use default table   *kb 1-5-82*
+;
+STALTTBL    LEA        pSttTbl, A0               ;*110283 install State/Translate Table
+            LEA        StTable,A1                ;*112883 default local table
+            BRA.S      SavePtr
+;
+; STPRNTBL - Install a new Printer Action table
+;      Entry : A3 = pointer to table
+;                   if A3 = 0 then use default table   *kb 1-5-82*
+;
+STPRNTBL    LEA        pPrntTbl, A0              ;install Printer Action Table
+            LEA        dPrntTbl, A1              ;default local table  *kb 1-5-82*
+
+SavePtr     MOVE.L     A3, (A0)                  ;*kb 12-20-82*
+            TST.L      (A0)                      ;Nil pointer?         *kb 1-5-82*
+            BNE.S      SVPexit                   ;yes, exit            *kb 1-5-82*
+            MOVE.L     A1, (A0)                  ;no, use default table*kb 1-5-82*
+SVPexit     RTS                                  ;                     *kb 1-5-82*
+
+; ST2BUF - Route output to buffer or device (driver)
+;      Entry: A3==> buffer address
+;                   if address=0, send output to attached device
+;
+ST2buf      MOVE.L     (A3),BUFAD(A4)   ;*112883 save buffer address
+            BEQ.S      ST2DEV           ;*112883 if address<>0
+            BSET       #Out2Buf,1(A4)   ;*112883    then it's a buffer address
+            RTS
+
+ST2dev      BCLR       #Out2Buf,1(A4)   ;*112883    else device
+            RTS
+  page
+;----------------------------------------------------------------------
+; GETDEVTBL: sets A0==> 1st device in device table, D0=MAXDEV
+;
+GETDEVTBL   MOVEA.L    PSYSCOM.W,A0
+            MOVE.L     SCdevtab(A0),A0           ; A0=> device table
+            MOVE.W     (A0)+,D0                  ; D0 = #device entries, A0=> 1st entry
+            RTS
+
+; GETDRVR: input- A0==> 1st device in device table, D0=unit#
+;          returns A0 = address of unit driver
+;          and D0 = index to entry
+;
+GETDRVR     MULU       #UTlen,D0                 ; calc offset of device entry
+            MOVE.L     UTiodrv(A0,D0.W),A0       ; A0 = address of driver
+            RTS
+;---------------------------------------------------------------------
+; GoAttUnit - call attached unit
+;
+GoAttUnit   BSR.S      GETDEVTBL                 ; get table address in A0
+            MOVE.W     AttUnitNo, D0             ; unit to find
+            BSR.S      GETDRVR                   ; get driver entry address
+            MOVE.W     AttUnitNo, D0             ; get unit number
+            JMP        (A0)                      ; call unit
+
+  page
+            LIST       ON
+;----------------------------------------------------------------------
+;Constants
+; default UART values for setuart function. parameter values for
+; attached unit.
+;           values for the NEC 7710 printer
+;
+DefUART     DATA.W     2                         ;BAUD RATE - 1200
+DBDlen      EQU        %-DefUART                 ;length of Baud rate field
+xyz01       DATA.W     4                         ;PARITY - SPACE/Disable Rcv check
+DPTlen      EQU        %-xyz01                   ;length of Parity field
+xyz02       DATA.W     1                         ;WORD SIZE = 7 BITS (0=8 BITS)
+DWSlen      EQU        %-xyz02                   ;length of Word size field
+xyz03       DATA.W     6                         ;HANDSHAKE - XON/XOFF
+DHSlen      EQU        %-xyz03                   ;length of Handshake field
+;
+; default Flag word
+;  buffer empty, 10 pitch, 6 lines per inch
+;
+DefFlags    DATA.W     $0007
+;
+; default Unit number
+;
+DefUnit     DATA.W     DTACOM2
+  page
+;----------------------------------------------------------------------
+StTable     DATA.W     STTLEN           ; total length in bytes
+            DATA.W     TrT              ; offset of StrngTbl
+            ; default state table: each entry = 4 bytes
+            ;         min, max, new state (integer)
+            DATA.W     $1B1B,32         ; 1 - ESC: goto state 32
+            DATA.W     $A1A3,-40        ; 2 - alt! - alt#: proc 1
+            DATA.W     $A4A4,-2         ; 3 - alt$:        $0E
+            DATA.W     $A5BF,-40        ; 4 - alt% - alt?: proc 1
+            DATA.W     $C0C3,-4         ; 5 - alt@ - altC: 'A'
+            DATA.W     $C4C7,-6         ; 6 - altD - altG: 'E'
+            DATA.W     $C8CB,-8         ; 7 - altH - altK: 'I'
+            DATA.W     $CCCC,-10        ; 8 - altL:        'AE'
+            DATA.W     $CDCD,-13        ; 9 - altM:        'O'
+            DATA.W     $CECE,-40        ;10 - altN:        proc 1
+            DATA.W     $CFD2,-13        ;11 - altO - altR: 'O'
+            DATA.W     $D3D3,-4         ;12 - altS:        'A'
+            DATA.W     $D4D7,-15        ;13 - altT - altW: 'U'
+            DATA.W     $D8D8,-17        ;14 - altX:        'OE'
+            DATA.W     $D9D9,-40        ;15 - altY:        proc 1
+            DATA.W     $DADA,-20        ;16 - altZ:        'c'
+            DATA.W     $DBDC,-40        ;17 - alt{ - alt\: proc 1
+            DATA.W     $DDDE,-22        ;18 - alt] - alt^: ' '
+            DATA.W     $DFDF,-40        ;19 - alt-:        proc1
+            DATA.W     $E0E3,-24        ;20 - alt` - altc: 'a'
+            DATA.W     $E4E7,-26        ;21 - altd - altg: 'e'
+            DATA.W     $E8EB,-28        ;22 - alth - altk: 'i'
+            DATA.W     $ECEC,-30        ;23 - altl:        'ae'
+            DATA.W     $EDED,-33        ;24 - altm:        'o'
+            DATA.W     $EEEE,-40        ;25 - altn:        proc 1
+            DATA.W     $EFF2,-33        ;26 - alto - altr: 'o'
+            DATA.W     $F3F3,-24        ;27 - alts:        'a'
+            DATA.W     $F4F7,-35        ;28 - altt - altw: 'u'
+            DATA.W     $F8F8,-37        ;29 - altx:        'oe'
+            DATA.W     $F9FE,-40        ;30 - alty - alt~: proc 1
+            DATA.W     $FFFF,-22        ;31 - DEL:         ' '
+      ; char after escape
+            DATA.W     $4F4F,36         ;32 - 'O': goto state 36
+            DATA.W     $5050,38         ;33 - 'P': goto state 38
+            DATA.W     $6565,40         ;34 - 'e': goto state 40
+            DATA.W     $00FF,0          ;35 - otherwise: no match
+      ; 2 overstrike chars
+            DATA.W     $00FF,37         ;36 - 1st overstrike char
+            DATA.W     $00FF,-41        ;37 - 2nd overstrike char: proc2
+      ; 2 proportional spacing chars
+            DATA.W     $00FF,39         ;38 - 1st prop sp char
+            DATA.W     $00FF,-42        ;39 - 2nd prop sp char: proc3
+      ; 1 enhancement char
+            DATA.W     $00FF,-43        ;40 - 'e': proc 4
+
+; default Translate table has 2 kinds of entry:
+  ;   -string:           1st byte >= 0  (length=1+len)
+  ;   -procedure number: 1st byte < 0   (length=1 byte)
+TrT         EQU        %-StTable        ; offset from StTable
+            DATA.W     0                ; offset must be < 0
+            DATA.B     1,$0E            ;   2
+            DATA.B     1,'A'            ;   4
+            DATA.B     1,'E'            ;   6
+            DATA.B     1,'I'            ;   8
+            DATA.B     2,'AE'           ;  10
+            DATA.B     1,'O'            ;  13
+            DATA.B     1,'U'            ;  15
+            DATA.B     2,'OE'           ;  17
+            DATA.B     1,'c'            ;  20
+            DATA.B     1,' '            ;  22
+            DATA.B     1,'a'            ;  24
+            DATA.B     1,'e'            ;  26
+            DATA.B     1,'i'            ;  28
+            DATA.B     2,'ae'           ;  30
+            DATA.B     1,'o'            ;  33
+            DATA.B     1,'u'            ;  35
+            DATA.B     2,'oe'           ;  37
+            DATA.B     $FF              ;  40  proc1  (-1)
+            DATA.B     $FE              ;  41  proc2  (-2)
+            DATA.B     $FD              ;  42  proc3  (-3)
+            DATA.B     $FC              ;  43  proc4  (-4)
+      ; end of state table
+STTLEN      EQU        %-STTABLE
+  page
+;----------------------------------------------------------------------
+; default Printer Action Table  (*12-7-83*)
+;
+dPrntTbl
+PrntIndx    ; *12-7-83* index to action strings
+            DATA.W     PTbaksp          ; backspace must be first
+            DATA.W     PTulOn
+            DATA.W     PTulOff
+            DATA.W     PTbdOn
+            DATA.W     PTbdOff
+PT6rec      EQU        %-PrntIndx
+            DATA.W     PT6subOn
+            DATA.W     PT6subOff
+            DATA.W     PT6ssOn
+            DATA.W     PT6ssOff
+PT8rec      EQU        %-PrntIndx
+            DATA.W     PT8subOn
+            DATA.W     PT8subOff
+            DATA.W     PT8ssOn
+            DATA.W     PT8ssOff
+LPIsize     EQU        8
+PT10pt      EQU        %-PrntIndx
+            DATA.W     PT10nrm
+            DATA.W     PT10ms1
+            DATA.W     PT10ms2
+            DATA.W     PT10ms3
+PT12pt      EQU        %-PrntIndx
+            DATA.W     PT12nrm
+            DATA.W     PT12ms1
+            DATA.W     PT12ms2
+            DATA.W     PT12ms3
+Pitsize     EQU        8
+            DATA.W     0,0,0            ; room for expansion
+IndxLen     EQU        %-PrntIndx       ; length of index in bytes
+
+PrntData    ; *12-7-83* action strings themselves
+PTbaksp     EQU        %-PrntIndx                ; BackSpace must be 1st
+            DATA.B     1,BS                      ;BackSpace string
+PTulOn      EQU        %-PrntIndx                ;index to UnderLineOn string
+            DATA.B     2,Escape,Minus            ;UnderLineOn string
+PTulOff     EQU        %-PrntIndx                ;index to UnderLineOff string
+            DATA.B     2,Escape,Apstrf           ;UnderLineOff string
+PTbdOn      EQU        %-PrntIndx                ;index to BoldOn string
+            DATA.B     2,Escape,'+'              ;BoldOn string
+PTbdOff     EQU        %-PrntIndx                ;index to BoldOff string
+            DATA.B     2,Escape,','              ;BoldOff string
+         ; 6 LPI sub-record
+PT6subOn    EQU        %-PrntIndx                ;index to Subscript On
+            DATA.B     7,Escape,']Q',LF,Escape,']W'
+PT6subOff   EQU        %-PrntIndx                ;index to Subscript Off
+            DATA.B     8,Escape,']Q',Escape,'9',Escape,']W'
+PT6ssOn     EQU        %-PrntIndx                ;index to Superscript On
+            DATA.B     8,Escape,']Q',Escape,'9',Escape,']W'
+PT6ssOff    EQU        %-PrntIndx                ;index to Superscript Off
+            DATA.B     7,Escape,']Q',LF,Escape,']W'
+         ; 8 LPI sub-record
+PT8subOn    EQU        %-PrntIndx                ;index to Subscript On
+            DATA.B     7,Escape,']R',LF,Escape,']U'
+PT8subOff   EQU        %-PrntIndx                ;index to Subscript Off
+            DATA.B     8,Escape,']R',Escape,'9',Escape,']U'
+PT8ssOn     EQU        %-PrntIndx                ;index to Superscript On
+            DATA.B     8,Escape,']R',Escape,'9',Escape,']U'
+PT8ssOff    EQU        %-PrntIndx                ;index to Superscript Off
+            DATA.B     7,Escape,']R',LF,Escape,']U'
+         ; 10 Pitch sub-record
+PT10nrm     EQU        %-PrntIndx
+            DATA.B     3,Escape,']L'             ;NormalSpacing string
+PT10ms1     EQU        %-PrntIndx
+            DATA.B     3,Escape,']M'             ;Add1MicroSpace string
+PT10ms2     EQU        %-PrntIndx
+            DATA.B     3,Escape,']N'             ;Add2MicroSpace string
+PT10ms3     EQU        %-PrntIndx
+            DATA.B     3,Escape,']O'             ;Add3MicroSpace string
+         ; 12 Pitch sub-record
+PT12nrm     EQU        %-PrntIndx
+            DATA.B     3,Escape,']J'             ;NormalSpacing string
+PT12ms1     EQU        %-PrntIndx
+            DATA.B     3,Escape,']K'             ;Add1MicroSpace string
+PT12ms2     EQU        %-PrntIndx
+            DATA.B     3,Escape,']L'             ;Add2MicroSpace string
+PT12ms3     EQU        %-PrntIndx
+            DATA.B     3,Escape,']M'             ;Add3MicroSpace string
+
+PTleng      EQU        %-PrntIndx                ;length of Printer Action Table
+
+; index offsets
+PIbaksp     EQU        0
+PIulon      EQU        2
+PIuloff     EQU        4
+PIbdon      EQU        6
+PIbdoff     EQU        8
+
+PIsubon     EQU        0                ; index from PT6rec or PT8rec
+PIsuboff    EQU        2
+PIsson      EQU        4
+PIssoff     EQU        6
+
+PInrmSP     EQU        0                ; index from PT10pt or PT12pt
+PI1msp      EQU        2
+PI2msp      EQU        4
+PI3msp      EQU        6
+
+  page
+; line feed string for superscript and subscript
+;
+LFstrng     DATA.B     1,LF                      ;length, line feed character
+;
+;Variables
+; Table Pointers
+;
+pSttTbl     DATA.L     0                         ;*110283 pointer to State/Translation table
+pPrntTbl    DATA.L     0                         ;pointer to Printer Action table
+;
+; Attached unit number
+;
+AttUnitNo   DATA.W     0
+;
+; proportional spacing control variable record
+;
+PSPctlrec
+PSPcurrent  EQU        %-PSPctlrec               ;index to current count of chars
+PSPcurcnt   DATA.W     0                         ;count of chars under current spacing
+PSPCRc2     EQU        %-PSPctlrec               ;index to count of chars to use 2nd spacing
+PSPcnt2     DATA.W     0                         ;count of chars under 2nd spacing
+PSPCRs2     EQU        %-PSPctlrec               ;index to sequence 2 pointer
+PSPseq2     DATA.L     0                         ;pointer to 2nd spacing string
+PSPnumch    EQU        %-PSPctlrec               ;index to # chars in line *kb 1/24/83*
+PSPnch      DATA.W     0                         ;number of chars in lines *kb 1/24/83*
+;
+; BIT FLAGS
+;
+FLAGS       DATA.W     0                         ;INTERNAL FLAGS
+TMPFLGS     DATA.W     0                         ;hi byte, temp hold of new flags
+            DATA.W     0                         ;*110283 state from lookup
+            DATA.W     0                         ;*112883 buffer offset (WR2BUF=1)
+            DATA.L     0                         ;*112883 buffer address (")
+            DATA.W     0                         ;*112883 #chars in buffer
+STATE       EQU        4
+BUFOFS      EQU        6                         ;*112883
+BUFAD       EQU        8                         ;*112883
+COUNT       EQU        12                        ;*112883
+;
+; buffer variables
+;
+MARK        DATA.L     0                         ;*112883 current char in buffer
+FRONT       DATA.L     0                         ;BUFFER QUEUE FRONT POINTER
+REAR        DATA.L     0                         ;BUFFER QUEUE REAR POINTER
+;
+; The Printer Driver look ahead Buffer - 8 bytes
+;
+BUFFER      DATA.L     0,0,0,0,0,0,0,0           ;*112883 32 bytes long
+BUFLEN      EQU        %-BUFFER                  ;BUFFER LENGTH
+
+            LIST       OFF
+            END        PRNTRDRV

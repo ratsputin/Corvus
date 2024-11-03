@@ -1,0 +1,26 @@
+
+Directory of UCSD disk image file 'fccsys3.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCSYS3 has 18 files,  0 to 6 (6), eov 500, size 25, free 18
+
+ 1: ASM68K          Data  4-Feb-83    6-  80(  74), 37888+512= 38400 bytes
+ 2: LINKER          Data  4-Feb-83   80- 131(  51), 26112+512= 26624 bytes
+ 3: LIBRARY         Data  4-Feb-83  131- 156(  25), 12800+512= 13312 bytes
+ 4: LOADER.IMAGE    Data  4-Feb-83  156- 157(   1),   512+512=  1024 bytes
+ 5: CC.EDCHAR       Data  4-Feb-83  157- 206(  49), 25088+512= 25600 bytes
+ 6: CC.HELP         Data  4-Feb-83  206- 215(   9),  4608+512=  5120 bytes
+ 7: CC.SETDCP       Data  4-Feb-83  215- 267(  52), 26624+512= 27136 bytes
+ 8: CS.CONVERT      Data  4-Feb-83  267- 275(   8),  4096+512=  4608 bytes
+ 9: SPOOL           Data  4-Feb-83  275- 351(  76), 38912+512= 39424 bytes
+10: HELP.TEXT       Text  4-Feb-83  351- 373(  22), 11264+512= 11776 bytes
+11: FDIAG           Data  4-Feb-83  373- 393(  20), 10240+512= 10752 bytes
+12: FFRMT           Data  4-Feb-83  393- 405(  12),  6144+512=  6656 bytes
+13: OTEST           Data  4-Feb-83  405- 451(  46), 23552+512= 24064 bytes
+14: PRTWND          Data  4-Feb-83  451- 460(   9),  4608+512=  5120 bytes
+15: WRITEBOOT       Data  4-Feb-83  460- 465(   5),  2560+512=  3072 bytes
+16: FLPY.BOOT       Data  4-Feb-83  465- 467(   2),  1024+512=  1536 bytes
+17: USERKEYS.TEXT   Text  4-Feb-83  467- 471(   4),  2048+512=  2560 bytes
+18: SYSTEM.UPDATE   Text  4-Feb-83  471- 475(   4),  2048+512=  2560 bytes

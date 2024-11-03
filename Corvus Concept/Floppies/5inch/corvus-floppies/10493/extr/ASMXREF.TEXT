@@ -1,0 +1,918 @@
+PROGRAM Asm68KXref;
+{$I-}
+
+CONST
+   ESCAPE      = '\1B';
+   TABCHAR     = '\09';
+   FORMFEED    = '\0C';
+   COMMENTCHAR = ';';
+   CLRTOEOL    = '\1BK';{escape K}
+
+   DEFAULTDEST = '/CONSOLE';
+
+   MAXOUTLENGTH = 110;
+   MINOUTLENGTH =  80;
+
+   MAXLABELLEN  =   8;  {max. symbol size allowed by assembler}
+
+   LITERAL  = ''''; {single quote}
+   HEX      = '$';  {beginning of hex constant}
+   ABSOLUTE = '.';  {absolute address specification, e.g. ADDR.L}
+
+TYPE
+   strg3  = STRING[3];
+   strg40 = STRING[40];
+
+   LineStrg = STRING[255];
+   pLineStrg = ^LineStrg;
+
+   prefrec = ^refrec;
+   refrec =  RECORD
+                ln : INTEGER;
+                IsLabel : BOOLEAN;
+                Nextln : prefrec;
+             END;
+
+   plblrec = ^lblrec;
+   lblrec =  RECORD
+                ALabel : STRING[ MAXLABELLEN ];
+                Linenos : prefrec;
+                Left,Right  : plblrec;
+             END;
+
+   pDateRecd = ^DateRecd;
+   DateRecd = PACKED RECORD
+                Yr : 0..100;
+                Day: 0..31;
+                Mo : 0..12;
+                END;{RECORD}
+
+VAR
+   ior,ln,OutLength : INTEGER;
+
+   UseFile,IncludeFile : BOOLEAN;
+   debug,DoInclude,DoPagEject,DoRegs,DoSrcList : BOOLEAN;
+
+   Line : LineStrg;
+   srcfile,destfile : strg40;
+
+   topheap : ^INTEGER;
+   LabelList : plblrec;
+
+   f1,f2,inclf : TEXT;
+
+FUNCTION pOSdate : pDateRecd;
+   EXTERNAL;
+
+PROCEDURE header(ToFile,FirstTime : BOOLEAN);
+CONST
+   VERNUMB = '0.01d';
+   VERDATE = '07 Sep 1982';
+
+VAR
+   DR : pDateRecd;
+   Month : strg3;
+
+PROCEDURE GetMonth( M : INTEGER; VAR Mon : strg3 );
+  BEGIN
+    CASE M OF
+      0  :  Mon := '???';
+      1  :  Mon := 'Jan';
+      2  :  Mon := 'Feb';
+      3  :  Mon := 'Mar';
+      4  :  Mon := 'Apr';
+      5  :  Mon := 'May';
+      6  :  Mon := 'Jun';
+      7  :  Mon := 'Jul';
+      8  :  Mon := 'Aug';
+      9  :  Mon := 'Sep';
+      10 :  Mon := 'Oct';
+      11 :  Mon := 'Nov';
+      12 :  Mon := 'Dec';
+      OTHERWISE : IF debug THEN WRITELN('Month not in range of 0..12');
+      END;{CASE}
+    IF debug THEN WRITELN('LENGTH(Mon) = ',LENGTH(Mon) );
+  END;{GetMonth}
+
+BEGIN
+  DR := pOSdate;
+  WITH DR^ DO BEGIN
+       GetMonth( Mo, Month );
+       IF ToFile THEN BEGIN
+            IF NOT FirstTime THEN WRITE(f2,FORMFEED);
+            WRITELN(f2); WRITE(f2,'ASM68K Cross Reference  ',VERNUMB,' ':5,VERDATE);
+            WRITELN(f2,' ':10,'Date: ',Month,' ',Day:1,', 19',Yr:2);
+            END{THEN}
+       ELSE BEGIN
+            IF NOT debug THEN WRITE(ESCAPE,'J');
+            WRITELN; WRITE('ASM68K Cross Reference  ',VERNUMB,' ':5,VERDATE);
+            WRITELN(' ':10,'Date: ',Month,' ',Day:1,', 19',Yr:2);
+            END;{ELSE}
+       END;{WITH}
+END;{header}
+
+PROCEDURE DspFileName( srcfile : strg40; ToFile : BOOLEAN );
+BEGIN
+  IF ToFile THEN BEGIN
+       WRITELN(f2,'File ID: ',srcfile);
+       WRITELN(f2);
+       END {THEN}
+  ELSE BEGIN
+       WRITELN('File ID: ',srcfile);
+       WRITELN;
+       END;{ELSE}
+END;{DspFileName}
+
+PROCEDURE bcksp( numbs : INTEGER );
+CONST
+   BS = '\08';
+
+VAR
+   i : INTEGER;
+
+BEGIN
+  FOR i := 1 TO numbs DO WRITE(BS);
+END;{bcksp}
+
+PROCEDURE UpperCase( sp : pLineStrg);
+CONST
+   UPCASE = $20;
+
+VAR
+   i : INTEGER;
+
+BEGIN
+  FOR i := 1 TO LENGTH(sp^) DO
+       IF ( (sp^[i]>='a') AND (sp^[i]<='z') ) THEN sp^[i] := CHR( ORD(sp^[i]) - UPCASE );
+END;{UpperCase}
+
+FUNCTION Max( i,j : INTEGER ) : INTEGER;
+BEGIN
+  IF i>=j THEN Max := i
+          ELSE Max := j;
+END;{Max}
+
+FUNCTION MIN( i,j : INTEGER ) : INTEGER;
+BEGIN
+  IF i<=j THEN Min := i
+          ELSE Min := j;
+END;{MIN}
+
+PROCEDURE AddText( VAR fn : strg40 );
+CONST
+   TEXTADDON = '.TEXT';
+
+VAR
+   lt : INTEGER;
+
+BEGIN
+  lt := LENGTH(TEXTADDON);
+  IF LENGTH(fn)>lt THEN BEGIN
+       IF COPY(fn,(LENGTH(fn)-lt),lt)<>TEXTADDON THEN
+            fn := CONCAT(fn,TEXTADDON);
+       END
+  ELSE fn := CONCAT(fn,TEXTADDON);
+END; {AddText}
+
+PROCEDURE ChkCmdLine;
+{check argc and argv for command line input}
+{uses GLOBAL VARIABLES : BOOLEANS - debug, DoInclude    }
+{                                 - DoPagEject, DoRegs  }
+{                                 - DoSrcList           }
+{                        STRINGS  - srcfile,destfile    }
+
+CONST
+   CMDSTART = '-';
+   ONCHAR   = '+';
+
+VAR
+   i,lai : INTEGER;
+
+PROCEDURE InitDefault;
+  BEGIN
+    debug := FALSE;
+    DoInclude := FALSE;
+    DoPagEject := TRUE;
+    DoRegs := FALSE;
+    DoSrcList := TRUE;
+    srcfile := '';
+    destfile := '';
+  END;{InitDefault}
+
+FUNCTION SetOrClear( c : char ) : BOOLEAN;
+{if char is "+" then turn on flag}
+  BEGIN
+    SetOrClear := ( c = ONCHAR );
+  END;{SetOrClear}
+
+PROCEDURE MoveStr( indx,start,number,len : INTEGER; VAR str : strg40 );
+  VAR
+     j : INTEGER;
+
+  BEGIN
+    j := 1;
+    WHILE (start<=len) AND (j<=number) DO BEGIN
+         str := CONCAT(str,' ');
+         str[ LENGTH(str) ] := argv[indx]^[ start ];
+         j := j+1;  start := start+1;
+         END;{WHILE}
+  END; {MoveStr}
+
+BEGIN {ChkCmdLine}
+  InitDefault;
+  FOR i := 1 TO argc DO BEGIN
+       UpperCase( @argv[i]^ );   {make it all upper case}
+       lai := LENGTH(argv[i]^);
+
+       CASE argv[i]^[1] OF
+
+         'D' : debug := TRUE;
+
+         'I' : IF (lai >= 2) THEN
+                    DoInclude := SetOrClear( argv[i]^[2] );
+
+         'L' : IF (lai >= 2) THEN  {list - see if have a dest file name}
+                    MoveStr( i, 2, lai-2+1, lai, destfile );
+
+         'S' : IF (lai >= 2) THEN  {see if have a src file name}
+                    MoveStr( i, 2, lai-2+1, lai, srcfile );
+
+         'P' : IF (lai >= 2) THEN
+                    DoPagEject := SetOrClear( argv[i]^[2] );
+
+         'R' : IF (lai >= 2) THEN DoRegs := SetOrClear( argv[i]^[2] );
+
+         'Z' : IF (lai >= 2) THEN DoSrcList := SetOrClear( argv[i]^[2] );
+
+         END;{CASE}
+       IF debug THEN WRITELN('arg #',i:1,' = ',argv[i]^);
+       END;{FOR}
+END;{ChkCmdLine}
+
+FUNCTION GetFiles( VAR f1name,f2name : strg40 ) : BOOLEAN;
+{Returns whether using a user specified file (f2) or the}
+{standard output file.                                  }
+{Will EXIT program if user says to or Open error.  <=== **********      }
+
+  VAR
+   UseFile : BOOLEAN;
+   ior : INTEGER;
+
+  PROCEDURE ReadFL( VAR fn : strg40 );
+    VAR
+       s1 : STRING[1];
+
+    BEGIN
+      READ(s1);
+      IF NOT EOLN THEN BEGIN
+           WRITE( CLRTOEOL );  {if not return then remove default from screen}
+           READLN( fn );       {get rest of file name}
+           fn :=   concat(s1,fn);
+           END {THEN}
+      ELSE BEGIN
+           READLN;
+           fn := '';
+           END;
+    END;{ReadFL}
+
+  BEGIN
+    IF LENGTH(f1name) = 0 THEN BEGIN  {if no file from cmd line then get from user}
+         WRITELN; WRITE('Enter source file name: '); READLN(f1name);
+         IF LENGTH(f1name)=0 THEN EXIT(Asm68KXref);
+         IF f1name[1]=ESCAPE THEN EXIT(Asm68KXref);
+         END;{THEN}
+
+    AddText(f1name);
+    IF debug THEN WRITELN('f1name = ',f1name);
+    RESET(f1,f1name); ior := IORESULT;
+    IF ior<>0 THEN BEGIN
+         WRITELN('Cannot open file: ',f1name,'.  IORESULT = ',ior:1);
+         EXIT(Asm68KXref);
+         END;
+
+    UseFile := FALSE;
+    IF LENGTH(f2name) = 0 THEN BEGIN  {if no file from cmd line then get from user}
+         WRITELN; WRITE('Enter destination file name: ',DEFAULTDEST);
+         bcksp( LENGTH(DEFAULTDEST) );
+         ReadFL(f2name);
+         UpperCase(@f2name);
+         END;{THEN}
+
+    IF (LENGTH(f2name)<>0) THEN BEGIN
+         UseFile := TRUE;
+         AddText(f2name);
+         REWRITE(f2,f2name); ior := IORESULT;
+         IF ior<>0 THEN BEGIN
+              WRITELN('Cannot open file: ',f2name,'.  IORESULT = ',ior:1);
+              EXIT(Asm68KXref);
+              END;
+         END;
+
+    UpperCase(@f1name);
+    GetFiles := UseFile;
+  END;{GetFiles}
+
+FUNCTION GetLineLength : INTEGER;
+{Returns Output line length}
+  VAR
+     ans : char;
+
+  BEGIN
+    GetLineLength := MAXOUTLENGTH; {assume user wants max}
+
+    WRITELN; WRITE('Do you want Cross-Reference output line length of ',MAXOUTLENGTH:1,'? [Y/N] Y');
+    bcksp(1); READLN(ans);
+
+    IF (ans='N') OR (ans='n') THEN GetLineLength := MINOUTLENGTH;
+  END;{GetLineLength}
+
+PROCEDURE ReadNextLine( VAR Line : LineStrg );
+  BEGIN
+    IF IncludeFile THEN BEGIN                {if open include file then read from it}
+         READLN(inclf,Line);
+         IF EOF(inclf) THEN BEGIN             {when done continue read from main file}
+              WRITELN;
+              WRITELN('END of Include File.');
+              WRITELN;
+              IF UseFile AND DoSrcList THEN BEGIN
+                   WRITELN(f2);
+                   WRITELN(f2,'END of Include File.');
+                   WRITELN(f2);
+                   END;{THEN}
+              CLOSE(inclf);
+              READLN(f1,Line);
+              IncludeFile := FALSE;
+              END;{THEN}
+         END {THEN}
+
+    ELSE READLN(f1,Line);                    {read from main file}
+  END;{ReadNextLine}
+
+PROCEDURE InsertLR( VAR LabelList : plblrec; lbl : strg40; lineno : INTEGER; IsL : boolean);
+
+FUNCTION InitLbl(lbl : strg40 ) : plblrec;
+  VAR
+     LRtmp : plblrec;
+
+  BEGIN
+    NEW(LRtmp);
+    WITH LRtmp^ DO BEGIN
+        ALabel := COPY( lbl,1,LENGTH(lbl) );
+        Linenos := NIL;
+        Left := NIL;
+        Right := NIL;
+        IF debug THEN WRITELN('Initialized a Label entry.  Label = ',ALabel);
+        END;{WITH}
+    InitLbl := LRtmp;
+  END; {InitLbl}
+
+PROCEDURE AttachLine(LRList : plblrec; lineno : INTEGER; IsLbl : BOOLEAN);
+  VAR
+     Ltmp,X : prefrec;
+
+  BEGIN
+    NEW(Ltmp);
+    WITH Ltmp^ DO BEGIN
+         ln := lineno;
+         IsLabel := IsLbl;
+         Nextln := NIL;
+         IF debug THEN WRITELN('New lineno record.  ln = ',ln:1);
+         END;{WITH}
+
+    IF LRList^.Linenos=NIL THEN LRList^.Linenos := Ltmp
+    ELSE BEGIN
+         X := LRList^.Linenos;
+         WHILE(X^.Nextln<>NIL) DO X := X^.Nextln;
+         X^.Nextln := Ltmp;
+         END;{ELSE}
+  END; {AttachLine}
+
+BEGIN {InsertLR}
+   WITH LabelList^ DO BEGIN
+        IF LabelList=NIL THEN BEGIN
+             LabelList := InitLbl(lbl);
+             AttachLine(LabelList,lineno,IsL);
+             IF debug THEN WRITELN('Insert ENTRY');
+             END
+        ELSE
+             IF ALabel=COPY( lbl,1,LENGTH(lbl) ) THEN AttachLine(LabelList,lineno,IsL)
+             ELSE BEGIN
+                  IF debug THEN WRITELN('GOING RECURSIVE.');
+                  IF ALabel<COPY( lbl,1,LENGTH(lbl) ) THEN InsertLR(Left,lbl,lineno,IsL)
+                                                      ELSE InsertLR(Right,lbl,lineno,IsL);
+                  END;{ELSE}
+        END;{WITH}
+END;{InsertLR}
+
+FUNCTION StartSymb(ch : CHAR) : BOOLEAN;
+  BEGIN
+    StartSymb := (ch>='A') AND (ch<='Z');
+  END; {StartSymb}
+
+FUNCTION InSymb(ch : CHAR) : BOOLEAN;
+  BEGIN
+    InSymb := ( (ch>='A') AND (ch<='Z') ) OR ( (ch>='0') AND (ch<='9') ) OR (ch = '_');
+  END;{InSymb}
+
+FUNCTION BlankTab( Line : LineStrg; index : INTEGER ) : INTEGER;
+{returns position of first blank or tab char, whichever is first, in Line}
+{returns 0 if no blank and no tab}
+  VAR
+     ib,it : INTEGER;
+     s1 : LineStrg;
+
+  BEGIN
+    s1 := COPY(Line,index,(LENGTH(Line)-index)+1);
+    ib := POS( ' ',s1 );
+    it := POS( TABCHAR,s1 );
+    IF debug THEN WRITELN('s1 in bt = ',s1,'  length = ',LENGTH(s1));
+    IF (ib=0) OR (it=0) THEN IF ib=0 THEN BlankTab := it {if both are 0 then BlankTab <- 0}
+                                     ELSE BlankTab := ib
+    ELSE BlankTab := Max(it,ib);
+  END;{BlankTab}
+
+FUNCTION NonBTchar( Line : LineStrg; index : INTEGER ) : INTEGER;
+{returns the index to first char in line after index which is not a blank or a tab.}
+{if no non-blank and non-tab then returns 0}
+  VAR
+     l,ib,it,i : INTEGER;
+     s1 : LineStrg;
+
+  BEGIN
+    l := (LENGTH(Line)-index)+1;
+    IF l=0 THEN NonBTchar := 0 {null string}
+    ELSE BEGIN
+         s1 :=  COPY(Line,index,l);
+
+         i := 1; {find non blank}
+         WHILE (i<l) AND (s1[i]=' ') DO i := i+1;
+         IF s1[i]=' ' THEN ib := 0
+                      ELSE ib := i;
+
+         i := 1; {find non tab}
+         WHILE (i<l) AND (s1[i]=TABCHAR) DO i := i+1;
+         IF s1[i]=TABCHAR THEN it := 0
+                          ELSE it := i;
+
+         IF debug THEN BEGIN
+              WRITELN('the sub string = ',s1,'  length = ',l:1,'  first non-blank = ',ib:1);
+              WRITELN('first non tab = ',it:1,'   max of the two = ',Max(ib,it));
+              END;
+
+         IF (ib=0) OR (it=0) THEN NonBTchar := 0
+                             ELSE NonBTchar := Max(ib,it);
+         END;{ELSE}
+  END;{NonBTchar}
+
+ PROCEDURE BuildLabel( Line : LineStrg; index : INTEGER; VAR lbl : strg40 );
+   {Line always at least one character of Non blank or non tab}
+   VAR
+      pb : INTEGER;
+
+   BEGIN
+      {get sub string concerned with}
+      Line := COPY(Line,index,(LENGTH(Line)-index+1) );
+
+      {find end of symbol}
+      pb := BlankTab(Line,1);
+      IF pb=0 THEN pb := LENGTH(Line)  {whole string is a label}
+              ELSE pb := pb-1;  {do not use blank after label}
+
+      IF pb>40 THEN pb := 40; {make sure label not to long}
+      lbl := COPY(Line,1,pb);
+   END;{BuildLabel}
+
+FUNCTION FindLabel(VAR LabelList : plblrec; Line : LineStrg;
+                   lineno : INTEGER ) : BOOLEAN;
+{Returns TRUE only if Line is NOT a null line and NOT a comment line}
+VAR
+   index : INTEGER;
+   LRtmp : plblrec;
+   lbl : strg40;
+
+BEGIN {FindLabel}
+  FindLabel := FALSE; {assume is null Line}
+  index := NonBTchar(Line,1); {first non blank or non tab char cannot be a comment char}
+  IF index <> 0 THEN BEGIN {have chars on line}
+      FindLabel := (Line[ index ] <> COMMENTCHAR); {say if is comment line}
+
+      IF index=1 THEN       {if first char then see if have a label}
+          IF ( StartSymb(Line[ index ]) ) THEN BEGIN
+               BuildLabel(Line,index,lbl);
+               IF LENGTH(lbl)>MAXLABELLEN THEN DELETE(lbl,MAXLABELLEN+1,(LENGTH(lbl)-MAXLABELLEN));
+               IF debug THEN WRITELN('Label: ',lbl,'  length: ',LENGTH(lbl));
+               InsertLR(LabelList,lbl,lineno,TRUE); {this is a label}
+               END;{THEN}
+      END;{THEN}
+END; {FindLabel}
+
+PROCEDURE FindPseudoOps( Line : LineStrg );
+{uses GLOBAL variable UseFile, IncludeFile and IFileName}
+VAR
+  first : INTEGER;
+  pop : strg40;
+
+FUNCTION FirstPseudoOp( Line : LineStrg ) : INTEGER;
+{Returns index to first char of possible pseudo op}
+{returns 0 if no possible pseudo op}
+  VAR
+    index,k : INTEGER;
+
+  BEGIN
+    index := BlankTab(Line,1);
+    IF index <> 0 THEN BEGIN
+         k := NonBTchar(Line,index);         {find opcode}
+         IF k <> 0 THEN BEGIN
+              index := index+k-1; {backup one for index}
+              IF Line[ index ] = COMMENTCHAR THEN index := 0; {it is a comment}
+              END {THEN}
+         ELSE index := 0; {no opcode}
+         END;{THEN}
+
+    FirstPseudoOp := index;
+  END;{FirstPseudoOp}
+
+PROCEDURE ProcessInclude( Line : LineStrg; first : INTEGER );
+
+  {                1) get file name from operand area              }
+  {                2) open file fib=inclf                          }
+  {                3) if it works                                  }
+  {                        a) print msg                            }
+  {                        b) set IncludeFile True                 }
+  {                4) if didn't work                               }
+  {                        a) print error msg                      }
+  VAR
+     IncFileName : strg40;
+     ior : INTEGER;
+
+  FUNCTION GetIncFName( VAR fn : strg40; Line : LineStrg; first : INTEGER) : BOOLEAN;
+    {returns true if found a string after include}
+    VAR
+       index : INTEGER;
+
+    BEGIN
+      GetIncFName := FALSE; {assume no file name}
+      fn := '';
+
+      index := BlankTab( Line, first ); {find begin of file name literal}
+      IF index <> 0 THEN BEGIN
+           first := first+index;
+           index := NonBTchar( Line, first );
+           IF index <> 0 THEN BEGIN
+                first := first+index-1;
+                IF Line[ first ] = LITERAL THEN BEGIN
+                     BuildLabel( Line, first, fn );   {now, remove file name literal}
+                     IF LENGTH(fn) > 2 THEN BEGIN     {remove quotes if valid}
+                          GetIncFName := TRUE;
+                          DELETE( fn, 1, 1);          {remove first quote}
+                          DELETE( fn, LENGTH(fn), 1); {remove second quote}
+                          END {THEN}
+                     ELSE fn := '';  {bad literal}
+                     END;{THEN}
+                END;{THEN}
+           END;{THEN}
+
+      IF debug THEN WRITELN('fn of include file = ',fn,'   length = ',LENGTH(fn));
+    END; {GetIncFName}
+
+  BEGIN {ProcessInclude}
+    IF GetIncFName( IncFileName, Line, first ) THEN BEGIN
+         RESET(inclf, IncFileName ); ior := IORESULT;
+         WRITELN;
+         IF ior <> 0 THEN WRITELN('Failed to open Include File: ',IncFileName,'  IORESULT = ',ior:1)
+         ELSE BEGIN
+              WRITELN('Processing Include File: ',IncFileName);
+              IncludeFile := TRUE;
+              END;{ELSE}
+         WRITELN;
+         END {THEN}
+    ELSE IF debug THEN WRITELN('Found an Include without a valid filename.');
+  END;{ProcessInclude}
+
+BEGIN {FindPseudoOps}
+  {find first non-blank or non-tab after first blank or tab}
+  IF debug THEN WRITELN('Looking for pseudo ops.');
+  first := FirstPseudoOp( Line );
+  IF debug THEN WRITELN('First pseudo op index into Line: ',first);
+  IF first <> 0 THEN BEGIN
+       {see if symbol at non-blank is one of the pseudo ops}
+       BuildLabel(Line,first,pop);
+       IF debug THEN WRITELN('symbol: ',pop,'  length: ',LENGTH(pop));
+
+       IF (pop='PAGE') AND UseFile AND DoPagEject AND DoSrcList THEN BEGIN
+            header(UseFile,FALSE);
+            DspFileName(srcfile,UseFile);
+            END;{THEN}
+
+       {if ok to do includes and not already doing one and op=include then}
+       IF DoInclude AND (NOT IncludeFile) AND (pop='INCLUDE') THEN
+            ProcessInclude(Line,first);
+
+       END;{THEN}
+END; {FindPseudoOps}
+
+PROCEDURE FindOperands(VAR LabelList : plblrec; Line : LineStrg; lineno : INTEGER );
+VAR
+   first : INTEGER;
+
+FUNCTION FirstOpChar( Line : LineStrg ) : INTEGER;
+  VAR
+    index,k : INTEGER;
+
+  BEGIN{FirstOpChar}
+    index := BlankTab(Line,1);
+    IF index <> 0 THEN BEGIN
+         k := NonBTchar(Line,index);         {find opcode}
+         IF k <> 0 THEN BEGIN
+              index := index+k-1; {backup one for index}
+              IF Line[index]=COMMENTCHAR THEN index := 0  {it is a comment}
+              ELSE BEGIN
+                   k := BlankTab(Line,index);
+                   IF k <> 0 THEN BEGIN
+                        index := index+k;
+                        k := NonBTchar(Line,index);           {find operand list}
+                        IF k <> 0 THEN BEGIN                      {V it is a comment}
+                             IF Line[index+k-1]=COMMENTCHAR THEN index := 0
+                                                            ELSE index := index+k-1;
+                             END
+                        ELSE index := 0;
+                        END {THEN}
+                   ELSE index := 0; {eol-no operand list}
+                   END;{ELSE}
+              END {THEN}
+         ELSE index := 0; {eol-no opcode}
+         END;{THEN}
+   FirstOpChar := index;
+  END;{FirstOpChar}
+
+PROCEDURE ParseOperands(VAR LabelList : plblrec; Line : LineStrg; opindex : INTEGER; ln : INTEGER);
+
+  VAR
+     State,curindx : INTEGER;
+     Stop,NoChars : BOOLEAN;
+     symbol : strg40;
+
+  FUNCTION IgnoreString( ch : CHAR ) : BOOLEAN;
+  {returns true if beginning of string to ignore}
+    BEGIN
+      IgnoreString := (ch=LITERAL) OR (ch=HEX) OR (ch=ABSOLUTE);
+    END;{IgnoreString}
+
+  FUNCTION RegSymbol( symb : strg40 ) : BOOLEAN;
+  {returns true if is a 68000 register symbol :  A0 - A7, D0 - D7, SP.}
+    CONST
+       RegSymLen = 2;
+    VAR
+       s1,s2 : char;
+
+    BEGIN
+      RegSymbol := FALSE; {assume is not a register symbol}
+      IF LENGTH(symb)=RegSymLen THEN BEGIN
+           s1 := symb[1]; s2 := symb[2];
+           RegSymbol := ( ((s1='A') OR (s1='D')) AND ((s2>='0') AND (s2<='7')) ) OR (symb='SP');
+           END;{THEN}
+    END;{RegSymbol}
+
+  FUNCTION EatChars( Line : LineStrg; index : INTEGER ) : INTEGER;
+  {returns index to next char of valid operand list.         }
+  {bypasses Literals,Hex numbers, and absolute address specifications.}
+
+    FUNCTION EatLiteral( Line : LineStrg; index : INTEGER ) : INTEGER;
+      VAR
+         InLit : BOOLEAN;
+
+      BEGIN
+        IF debug THEN WRITELN('EatLiteral  entry: index = ',index:1);
+        InLit := TRUE;
+        WHILE (index<=LENGTH(Line) ) AND (InLit) DO BEGIN
+             InLit := (Line[index]<>LITERAL);
+             index := index+1;
+             END;{WHILE}
+        IF debug THEN WRITELN('EatLiteral exit: index = ',index:1);
+        EatLiteral := index;
+      END; {EatLiteral}
+
+    FUNCTION EatHex( Line : LineStrg; index : INTEGER ) : INTEGER;
+      VAR
+         InHex : BOOLEAN;
+         ch : CHAR;
+
+      BEGIN
+        IF debug THEN WRITELN('EatHex entry: index = ',index:1);
+        InHex := TRUE;
+        WHILE (index<=LENGTH(Line) ) AND (InHex) DO BEGIN
+             ch := Line[index];
+             InHex := ((ch>='0') AND (ch<='9')) OR ((ch>='A') AND (ch<='F'));
+             IF InHex THEN index := index+1;
+             END;{WHILE}
+        IF debug THEN WRITELN('EatHex exit: index = ',index:1);
+        EatHex := index;
+      END; {EatHex}
+
+    FUNCTION EatAbsolut( Line : LineStrg; index : INTEGER ) : INTEGER;
+    {make sure ignore .L and .W on symbols.}
+      BEGIN
+        IF debug THEN WRITELN('EatAbsolute entry: index = ',index:1);
+        IF (index<=LENGTH(Line) ) THEN
+           IF (Line[index]='L') OR (Line[index]='W') THEN BEGIN
+                index := index+1;
+                IF (index<=LENGTH(Line) ) THEN       {check if symbol if more in Line}
+                     IF InSymb(Line[index]) THEN index := index-1;{this is a symbol, backup}
+                END;{THEN}
+
+        IF debug THEN WRITELN('EatAbsolute exit: index = ',index:1);
+        EatAbsolut := index;
+      END; {EatAbsolut}
+
+    BEGIN {EatChars}
+      CASE Line[index] OF
+           LITERAL  : index := EatLiteral(Line,index+1);
+
+           HEX      : index := EatHex(Line,index+1);
+
+           ABSOLUTE : index := EatAbsolut(Line,index+1);
+
+           END;{CASE}
+      EatChars := index;
+    END;{EatChars}
+
+  BEGIN {ParseOperands}
+    IF debug THEN WRITELN('Length of Line: ',LENGTH(Line));
+    State := 0; curindx := opindex; Stop := FALSE;
+    WHILE (NOT Stop) DO BEGIN
+         CASE State OF
+           0 : BEGIN
+                 IF StartSymb(Line[curindx]) THEN BEGIN
+                      symbol := ' ';
+                      symbol[1] := Line[curindx];
+                      State := 1;  {collect chars for symbol}
+                      curindx := curindx+1;
+                      IF debug THEN WRITELN('starting symbol: ',symbol);
+                      END
+                 ELSE IF IgnoreString(Line[curindx]) THEN State := 3
+                      ELSE BEGIN
+                           Stop := (Line[curindx]=COMMENTCHAR); {begin of comment field}
+                           curindx := curindx+1;
+                           END;{ELSE}
+                 END;{state 0}
+           1 : BEGIN
+                 IF InSymb(Line[curindx]) THEN BEGIN
+                      symbol := CONCAT(symbol,' ');   {add char to symbol}
+                      symbol[LENGTH(symbol)] := Line[curindx];
+                      curindx := curindx+1;
+                      IF debug THEN WRITELN('added char: ',symbol,'  length= ',LENGTH(symbol));
+                      END
+                 ELSE State := 2;{end of symbol put in table}
+                 END;{state 1}
+           2 : BEGIN
+                 {make sure not register unless user wants them}
+                 {put symbol in table}
+                 IF (NOT RegSymbol(symbol) ) OR DoRegs THEN BEGIN
+                      IF LENGTH(symbol)>MAXLABELLEN THEN
+                           DELETE(symbol,MAXLABELLEN+1,(LENGTH(symbol)-MAXLABELLEN));
+                      IF debug THEN WRITELN('put symbol in table :  ',symbol);
+                      InsertLR(LabelList,symbol,ln,FALSE); {not a label}
+                      END
+                 ELSE IF debug THEN WRITELN('Register symbol :  ',symbol);
+                 State := 0;
+                 END;{state 2}
+           3 : BEGIN
+                 curindx := EatChars(Line,curindx);
+                 State := 0;
+                 END;{state 3}
+           END;{CASE}
+
+         IF NOT Stop THEN BEGIN
+              NoChars := (curindx>LENGTH(Line));
+              IF debug AND NoChars THEN
+                WRITELN('Done with chars: length = ',curindx,'  STATE= ',State);
+              Stop := NoChars AND ( (State=0) OR (State=3) );
+              IF NoChars AND (State=1) THEN State := 2;
+              END;
+
+         END;{WHILE}
+
+  END; {ParseOperands}
+
+BEGIN {FindOperands}
+  first := FirstOpChar(Line);
+  IF debug THEN BEGIN
+       WRITELN('First char of operand list at index = ',first:1);
+       IF first<>0 THEN
+         WRITELN('The string at operand : ',COPY(Line,first,(LENGTH(Line)-first+1)) );
+       END;
+  IF first<>0 THEN ParseOperands(LabelList,Line,first,lineno);
+END;{FindOperands}
+
+PROCEDURE PrintXref( LblList : plblrec );
+{Uses GLOBAL variables: UseFile         }
+
+PROCEDURE PrintNode( lrec : lblrec );
+   VAR
+     LineLength : INTEGER;
+     X : prefrec;
+
+   BEGIN
+     WITH lrec DO BEGIN
+          IF UseFile THEN BEGIN
+               WRITE('.');
+               WRITE( f2,ALabel,' ':(MAXLABELLEN+2-LENGTH(ALabel)) );
+               END {THEN}
+          ELSE WRITE( ALabel,' ':(MAXLABELLEN+2-LENGTH(ALabel)) );
+
+          X := Linenos;
+          LineLength := MAXLABELLEN+2;
+          IF UseFile THEN BEGIN {write to user specified file}
+               REPEAT
+                  IF LineLength>=(OutLength-6) THEN BEGIN
+                       WRITELN(f2);
+                       WRITE(f2,' ':MAXLABELLEN+2);
+                       LineLength := MAXLABELLEN+2;
+                       END;{THEN}
+                  WRITE(f2,X^.ln:4);
+                  IF X^.IsLabel THEN WRITE(f2,'* ')
+                                ELSE WRITE(f2,'  ');
+                  LineLength := LineLength+6;
+                  X := X^.Nextln;
+                  UNTIL(X=NIL);
+               WRITELN(f2);
+               END {THEN}
+          ELSE BEGIN {write to standard out}
+               REPEAT
+                  IF LineLength>=(OutLength-6) THEN BEGIN
+                       WRITELN;
+                       WRITE(' ':MAXLABELLEN+2);
+                       LineLength := MAXLABELLEN+2;
+                       END;{THEN}
+                  WRITE(X^.ln:4);
+                  IF X^.IsLabel THEN WRITE('* ')
+                                ELSE WRITE('  ');
+                  LineLength := LineLength+6;
+                  X := X^.Nextln;
+                  UNTIL(X=NIL);
+               WRITELN;
+               END;{ELSE}
+          END;{WITH}
+   END;{PrintNode}
+
+BEGIN {PrintXref}
+  IF LblList<>NIL THEN BEGIN
+       PrintXref( LblList^.Right );
+       PrintNode( LblList^ );
+       PrintXref( LblList^.Left );
+       END;{THEN}
+END;{PrintXref}
+
+BEGIN {Asm68KXref}
+
+  ChkCmdLine;{uses and sets all global input state variables}
+
+  header(FALSE,TRUE);  {send header to screen, don't do formfeed}
+  MARK(topheap);
+  LabelList := NIL; IncludeFile := FALSE;
+
+  UseFile := GetFiles( srcfile, destfile ); {will exit pgm if user says so or file error}
+
+  OutLength := GetLineLength;
+
+  IF DoSrcList OR (NOT UseFile) THEN BEGIN
+       header(UseFile,FALSE);
+       DspFileName( srcfile,UseFile );
+       END;{THEN}
+
+  ln := 0;      {read in src file and build symbol tree}
+  READLN(f1,Line);
+  WHILE (NOT EOF(f1)) DO BEGIN
+       IF LENGTH(Line)>OutLength THEN DELETE( Line,OutLength+1,(LENGTH(Line)-OutLength) );
+
+       ln := ln+1;
+       IF ((NOT debug) AND (UseFile)) OR (NOT DoSrcList) THEN WRITE('.');
+       IF DoSrcList THEN IF UseFile THEN WRITELN(f2,ln:4,'. ',Line)
+                                    ELSE WRITELN(ln:4,'. ',Line);
+
+       UpperCase(@Line);
+       IF FindLabel(LabelList,Line,ln) THEN BEGIN {have a parseable line}
+            FindPseudoOps(Line); {look for pseudo ops like include and page}
+            FindOperands(LabelList,Line,ln);
+            END;{THEN}
+
+       ReadNextLine( Line );
+       END; {WHILE}
+
+  header(UseFile,NOT DoSrcList);
+  WRITELN;
+  IF UseFile THEN WRITELN(f2,'Cross-Reference Listing')
+             ELSE WRITELN('Cross-Reference Listing');
+  DspFileName( srcfile,UseFile );
+  PrintXref(LabelList);
+
+  IF UseFile THEN BEGIN
+       WRITELN;
+       CLOSE(f2,LOCK); ior := IORESULT;
+       IF ior<>0 THEN BEGIN
+            WRITELN('Error Closing output file:  IORESULT = ',ior:1);
+            CLOSE(f2,PURGE);
+            END;{THEN}
+       END;{THEN}
+  RELEASE(topheap);
+END. {Asm68KXref}

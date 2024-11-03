@@ -1,0 +1,28 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY2 has 21 files,  0 to 6 (6), eov 1440, size 661, free 21
+
+ 1: BUILDIMAGE.TEXT Text 19-Jul-82    6-  30(  24), 12288+512= 12800 bytes
+ 2: CC.BI.ASM.TEXT  Text 21-Jul-82   30-  34(   4),  2048+512=  2560 bytes
+ 3: CC.BLDIMGE.TEXT Text 19-Jul-82   34-  72(  38), 19456+512= 19968 bytes
+ 4: CCDRVHDR.TEXT   Text  2-Sep-82   72-  84(  12),  6144+512=  6656 bytes
+ 5: COPYMASTER.TEXT Text 21-Jul-82   84-  96(  12),  6144+512=  6656 bytes
+ 6: DUPMASTER.TEXT  Text 21-Jul-82   96- 108(  12),  6144+512=  6656 bytes
+ 7: FORMINIT        Data 20-Nov-82  108- 126(  18),  9216+512=  9728 bytes
+ 8: FORMINIT.TEXT   Text 20-Nov-82  126- 138(  12),  6144+512=  6656 bytes
+ 9: HJELP           Data 20-Nov-82  138- 151(  13),  6656+512=  7168 bytes
+10: HJELP.TEXT      Text 20-Nov-82  151- 161(  10),  5120+512=  5632 bytes
+11: IECBUS2.TEXT    Text 11-Dec-82  161- 177(  16),  8192+512=  8704 bytes
+12: M.COPY.TEXT     Ux2003 18-Jan-83  177- 181(   4),  2048+512=  2560 bytes
+13: MBUG.CCPT.TEXT  Text 17-Aug-82  181- 405( 224), 114688+512= 115200 bytes
+14: MBUG.NEW.PROM   Data 21-Aug-82  405- 421(  16),  8192+512=  8704 bytes
+15: MBUG.PROM1.TEXT Text 21-Aug-82  421- 553( 132), 67584+512= 68096 bytes
+16: MBUG.PROM2.TEXT Text 19-Aug-82  553- 659( 106), 54272+512= 54784 bytes
+17: OCS.TEXT        Text 20-Nov-82  659- 691(  32), 16384+512= 16896 bytes
+18: OCSFILE.TEXT    Text 20-Nov-82  691- 705(  14),  7168+512=  7680 bytes
+19: OCSLIB.OBJ      Data 20-Nov-82  705- 744(  39), 19968+512= 20480 bytes
+20: OLDVT           Data 22-Jul-82  744- 775(  31), 15872+512= 16384 bytes
+21: RANDOM.TEXT     Text 15-Mar-82  775- 779(   4),  2048+512=  2560 bytes

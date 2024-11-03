@@ -1,0 +1,16 @@
+
+Directory of UCSD disk image file 'floppy9.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY9 has 9 files,  0 to 6 (6), eov 1440, size 562, free 9
+
+ 1: SUPER           Data 12-Mar-84    6- 197( 191), 97792+512= 98304 bytes
+ 2: SBOOT.40.1.TEXT Text 26-Jan-84  197- 221(  24), 12288+512= 12800 bytes
+ 3: SBOOT.40.2.TEXT Text 26-Jan-84  221- 259(  38), 19456+512= 19968 bytes
+ 4: SBOOT.40.3.TEXT Text  8-Feb-84  259- 355(  96), 49152+512= 49664 bytes
+ 5: SBOOT.40.4.TEXT Text 26-Jan-84  355- 401(  46), 23552+512= 24064 bytes
+ 6: SBOOT.40.OBJ    Data  8-Feb-84  401- 411(  10),  5120+512=  5632 bytes
+ 7: SBOOT.40.TEXT   Text  8-Feb-84  411- 451(  40), 20480+512= 20992 bytes
+ 8: UP.PROM         Ux2005  9-Feb-84  451- 466(  15),  7680+512=  8192 bytes
+ 9: UP.PROM.TEXT    Text  9-Feb-84  466- 878( 412), 210944+512= 211456 bytes

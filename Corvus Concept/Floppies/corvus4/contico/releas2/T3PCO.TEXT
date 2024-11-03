@@ -1,0 +1,170 @@
+
+
+
+
+
+                                                21-Jul-82
+T3PCO
+
+This pco covers the TRS-80 Mod III software release.
+
+There are three floppies in this release.  The contents of each
+floppy are listed on the next page.
+
+                                  Media is 104/1D Soft-sectored
+
+Files changed in this release:
+------------------------------
+File changes made to volumes 1 of 3 and 2 of 3 only.
+
+INIT/JCL: No longer copies SYS0/DAT from NEWDOS boot floppy to SYSTEM01
+          on Corvus disk because this step has been done during option
+          three of INIT/BAS.
+
+Files added:
+------------
+
+CBOOT3/BAS: To handle ROM Boot.
+
+            This program has two functions:
+
+            1.  Copies CBOOT3/CMD from a user volume to Virt file
+                CBOOT3 in the set-up of the TRS-80 and Corvus disk
+                to accept ROM boot.
+
+            2.  Installs automatic user logon name and password.
+
+CBOOT3/CMD: Object file performing logon during ROM boot.
+
+FBOOT/CMD : Floppy boot if user has ROM boot.
+
+Known problems:
+---------------
+
+CONFIG/BAS:  The version of CONFIG/BAS included in this release
+             allows a maximum of 25 users.
+
+The current floppy labels are listed below:
+
+  T3 Utilities-vol 1 of 3          T3 Utilities-vol 3 of 3
+        NEWDOS-80                        NEWDOS-80
+  Release date:  21-Jul-82          Release date:  29-Apr-82
+        INIT/DAT                         DIAG/DAT
+
+  T3 Utilities-vol 2 of 3
+        NEWDOS-80
+  Release date:  21-Jul-82
+        BASE/DAT
+
+$P
+
+Copy instructions
+-----------------
+
+Assume that there is a Corvus drive set up with 3 volumes:
+INIT/DAT, BASE/DAT and DIAG/DAT.
+
+STEP 1. Format.  Format all new diskettes.
+
+        Type : Format,1
+
+Step 2. Initialize.  Mount the source volumes on the Corvus drive.
+
+        Type: Mount,1,INIT3
+              Mount,2,BASE3
+              Mount,3,DIAG3
+
+Step 3. Copy.  Copy from the floppy drive to the Corvus drive.
+
+        Put the diskette labeled INIT/DAT in the floppy drive. Type the
+        following command.
+
+        FCOPY < :1 TO :1
+
+        Put the diskette labeled BASE/DAT in the floppy drive. Type
+        the following command.
+
+        FCOPY < :1 TO :2
+
+        Put the diskette labeled DIAG/DAT in the floppy drive. Type
+        the following command.
+
+        FCOPY < :1 TO :3
+
+Step 4. Copy.  Copy from the Corvus drive to the floppy drive.
+
+        To copy INIT/DAT type the following.
+
+        FCOPY > :1 TO :1
+
+        To copy BASE/DAT type the following.
+
+        FCOPY > :2 TO :1
+
+        To copy DIAG/DAT type the following.
+
+        FCOPY > :3 TO :1
+
+$P
+
+The contents of the INIT/DAT floppy are listed below.
+
+File:              Version:        Size:                   Date:
+
+NUC3     /  DAT       -            20/000                  1/1/81
+LOGON    /  CMD       -             3/178                  1/1/81
+INIT     /  BAS       -            20/185                  1/1/81
+XFER     /  ILF       -             0/061                  1/1/81
+FDRIVE   /  BAS       1.1           4/157                  1/1/81
+BASE3    /  DAT       -             3/000                  1/1/81
+INCLUDE  /  ILF       -             0/183                  1/1/81
+
+The files on the BASE/DAT floppy are listed below.
+
+LOGON    / CMD        -             3/178                  1/1/81
+PIPECOPY / CMD        -             2/163                  1/1/81
+PIPEOFF  / CMD        -             0/174                  1/1/81
+MIRRORB               3.4          46/127                  1/1/81
+FBOOT    / CMD        -             0/201                 7/21/82
+PIPEDISP / CMD        -             0/146                  1/1/81
+VOLDIR   / CMD        -             2/203                  1/1/81
+FDIR     / CMD        -             0/216                  1/1/81
+MIRROR   / DAT        -             2/000                  1/1/81
+FDRIVE   / BAS        -             4/157                  1/1/81
+SEMAFORE / BAS        -             7/066                  1/1/81
+CBOOT3   / BAS        -             5/251                 7/21/82
+MOUNT    / CMD        -             1/190                  1/1/81
+FCOPY    / CMD        -             4/085                  1/1/81
+INIT     / JCL        -             0/252                 7/21/82
+BASE3    / DAT        -             3/000                  1/1/81
+PIPEPRIT / CMD        -             1/223                  1/1/81
+CBOOT3   / CMD        -             4/093                 7/21/82
+PIPEINIT / CMD        -             1/073                  1/1/81
+PIPEON   / CMD        -             2/069                  1/1/81
+CONFIG   / BAS        -            49/118                  1/1/81
+
+The contents of the DIAG/DAT floppy are listed below.
+
+PREPCODE   / HEX      17.3          2/000                11/20/81
+CF173                 17.3        120/000                11/20/81
+DIAGB      / CMD      -            22/132                 4/29/82
+
+
+$P
+
+Previous releases:
+------------------
+
+29-Apr-82.  T3 Utilities - vol 1 of 3 and 2 of 3.
+
+The floppy labels are listed below.
+
+
+  T3 Utilities - vol 1 of 3            T3 Utilities - vol 2 of 3
+         NEWDOS-80                            NEWDOS-80
+  Release date:   29-Apr-82            Release date:   29-Apr-82
+         INIT/DAT                             BASE/DAT
+
+
+
+$P

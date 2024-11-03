@@ -1,0 +1,371 @@
+; file : sboot.40.2.text
+; last modified:  12/08/83
+;
+; this section of code contains the main boot code that asks for the user name and
+; password, and then loads the o.s.
+
+        page
+
+;
+; print the CORVUS CONSTELLATION II banner
+;
+c2main0 tst.b   CPextcrt.w      ;*4.0 if external crt then
+        bne.s   c2main0a        ;*4.0   don't init drivers
+        move.w  #$2500, sr      ;turn on keyboard  *4.0
+c2main0a                        ;   interrupts     *4.0
+        bsr     c2greet         ;dump greeting msg
+        lea     homesrv,a4      ;save the responding boot server
+        move.b  bootsrv,(a4)
+;
+; get corvus volume information for primary drive
+;
+C2restr lea     bootsrv,a4      ;reinitialize boot server (needed for errors)
+        move.b  homesrv,(a4)
+        clr.l   $780.w          ;clear password save area to zeros    *3.6
+        clr.l   $784.w          ;  indicates no password, ie device   *3.6
+        moveq   #1,d0           ;lets read the corvus volume info from drive 1
+        move.b  bootsrv,d1      ;get disk server station address
+        lea     c2DUlen,a1      ;ptr to corvus volume control block
+        bsr     c2CVinf         ;get corvus volume info from DRIVE.INFO block
+        beq.s   c2main1         ;got it, continue                    *3.6
+        tst.w   d7              ;if d7=$FFFFFFFF then invalid table  *3.6
+        bpl     start           ;else read error, restart boot sequence
+        moveq   #er24,d0        ;d0 <= contains error code invalid tbl     *4.0
+        bsr     c2erprt         ;write error message                       *4.0
+        moveq   #-1,d0          ;wait a little in case competing           *4.0
+c2r10a  dbra    d0, c2r10a      ; for disk and using 0.6 boot roms         *4.0
+        bra.s   c2restr         ;restart                                   *4.0
+;
+; check for a device boot instead of a user boot
+;
+c2main1 bsr     c2devboot       ;will find user and server name if device  *4.0
+        beq.s   c2mn1a1         ;no error                                  *4.0
+        moveq   #er25,d0        ;d0 <= contains error code                 *4.0
+        bsr     c2erprt         ;write error message                       *4.0
+        bra.s   c2restr         ;restart                                   *4.0
+c2mn1a1 tst.w   d0              ;is this a user or device boot?            *4.0
+        bne.s   c2m1            ;device boot                               *4.0
+;
+; prompt operator for user name
+;
+c2mn1a  lea     c2nmbuf,a0      ;get address of user name buffer
+        bsr     c2getnm         ;prompt oerator for user name
+                                ;
+        lea     c2nmbuf,a1      ;get address of user name buffer
+        lea     mtchitm,a0      ;a0 <= address to store matched Network.User entry
+        clr.l   d7              ;
+        bsr     c2vernm         ;search network.user table for entry match
+        tst.w   d7              ;does the user exist on this network
+        beq.s   c2main2         ;YES - Continue
+        moveq   #er11,d0        ;d0 <= contains error code (User not found)
+        bsr     c2erprt         ;write error message
+        bra.s   c2main1         ;reprompt user for user name
+;
+; prompt operator for user password
+;
+c2main2 lea     c2pwbuf,a0      ;a0 <= address of user password buffer
+        bsr     c2getpw         ;get user password (encrypts it)
+        lea     mtchitm+NUusrpw,a0   ;a0 <= address of password from tables
+        lea     c2pwbuf,a1      ;a1 <= address of password entered
+        bsr     c2verpw         ;check for password match
+        tst.w   d7              ;passwords match
+        beq.s   c2m0            ;password match
+        move.l  d7,d0           ;d0 <= contains error code for c2erptr
+        bsr     c2erprt         ;write error message
+        bra     c2main1         ;reprompt user for user name
+
+c2m0    moveq   #pswlen-1, d0   ;length of password - 1           *3.6
+        lea     $780.w, a0      ;where to save password           *3.6
+        lea     c2pwbuf,a1      ;encrypted password from C2getpw  *3.6
+c2m0a   move.b  (a1)+, (a0)+    ;move it                          *3.6
+        dbra    d0, c2m0a       ;                                 *3.6
+;
+; determine if booting from omninet or booting from the flat
+; cable.  If booting from the flat cable, the boot slot must not
+; be slot 5.
+;
+C2m1    move.b  bootslt,d0
+        cmpi.b  #5,d0           ;is the omninet the boot slot
+        bne     C2main3         ;branch if the flat cable is used
+;
+; For Omninet boot, once we have the user name and password, we have to find
+; the user's boot system.  This is done by broadcasting a "Where are you?"
+; message, asking for the designated server.  If one is not found, an error
+; is generated, and the user is reprompted for the user name.
+;
+C2m11   lea     Data_area,a1      ;initialize pointer to data area
+        moveq   #4,D1             ;set loop count for number of tries  *3.6
+        bsr     EndRecv           ;make sure socket is clear
+        tst.w   D0                ;check for errors
+        bne.s   omnierror
+        bsr     SetupRecv         ;set up receive for My Id is ...
+        tst.w   D0                ;check for errors
+        bne.s   omnierror
+C2m12   bsr     Sendit            ;send the Where are you?
+        tst.w   D0                ; check for errors
+        bne.s   omnierror
+C2m12a  move.w  #32000,d3         ;*3.6
+C2m13   tst.b   RHdr(A1)          ;check if result is received
+        beq.s   C2mOk             ;yes...
+        dbra    D3,C2m13          ;wait some more
+        dbra    D1,C2m12          ;timeout ... try again
+        bra     c2main3           ;no reply, so just boot from the responding disk server
+
+C2mOK   cmpi.w  #$1FE,C2x_proto(A1);correct PID?                 *4.0
+        bne.s   C2wrong           ;no, setup recv again and wait *4.0
+        cmpi.w  #$1000,C2x_msgtype(A1) ;right msg type?          *3.6
+        bne.s   C2wrong           ;no, setup recv again and wait *3.6
+        cmpi.w  #1,C2x_devtype(A1);from right device?            *3.6
+        beq.s   C2mOK10           ;yes, get drive.info from drive*3.6
+        cmpi.w  #6,C2x_devtype(A1);from omnidrive?               *3.8
+        beq.s   C2mOK10           ;yes, get drive.info from drive*3.8
+C2wrong bsr     SetupRecv         ;wrong msg, setup recv again   *3.6
+        tst.w   d0                ;get error?                    *3.6
+        bne.s   omnierror         ;yes                           *3.6
+        bra.s   C2m12a            ;no, wait for right msg        *3.6
+C2mOK10 lea     bootsrv,A0        ;get ready to store new bootsrv number
+        move.b  Source(A1),(A0)   ;store it
+
+; reinitialize C2CVinfo
+
+        moveq   #1,d0             ;drive is 1
+        move.b  bootsrv,d1        ;set server number
+        lea     c2DUlen,a1        ;ptr to corvus volume control block
+        bsr     c2CVinf           ;get corvus volume info from DRIVE.INFO block
+        beq.s   c2main3           ;got it, so continue with boot
+
+                             ;drive.info error
+        moveq   #er24,d0          ;assume invalid drive.info        *3.6
+        tst.w   D7                ;                                 *3.6
+        bmi.s   c2wrermsg         ;invalid drive.info table         *3.6
+        moveq   #er15,d0          ;report error code --             *3.6
+        bra.s   c2wrermsg         ;   disk server not responding    *3.6
+
+omnierror
+        moveq   #er16,d0          ;any omninet error (timeout, no transporter, etc.)
+c2wrermsg
+        bsr     c2erprt           ;write error message              *3.6
+        bra     c2restr           ;reprompt for user name           *3.6
+
+;
+; determine no. of drives on current cluster
+;
+c2main3 moveq   #Drmax,d0       ;d0 <= maximum no. of drives to look for
+        lea     bootsrv,a0      ;d1 <= boot server station number
+        move.b  (a0),d1         ;
+        bsr     c2chkdr         ;check the number of drives on network
+        lea     c2totdr,a1      ;
+        move.w  d0,(a1)         ;store maximum drive count
+
+;
+; determine if user boot volume is on this drive
+;
+
+c2main4 move.l  d0,d5           ;d5 <= maximum no. of drives
+        subq.l  #1,d5           ;substract one because of DBRA instruction
+        moveq   #1,d0           ;start with drive 1
+c2main5 lea     bootsrv,a1
+        move.b  (a1),d1
+        lea     c2nmbuf,a1      ;get address of user name buffer
+        lea     mtchitm,a0      ;a0 <= address to store matched Drive.User entry
+        bsr     c2verdu         ;search Drive.User table for entry match
+        tst.w   d7              ;does user have access to volumes on this drive
+        bne.s   c2main7         ;no, try again
+;
+; found drive for which user has access
+; determine if user has any volumes mounted on drive
+; determine if this is the user boot volume
+;
+c2main6 lea     mtchitm,a5      ;
+        tst.w   DUmtcnt(a5)     ;test no. of volumes user has mounted on drive
+        beq     c2main7         ;if equal zero, user has no volumes
+        tst.w   DUbtflg(a5)     ;test boot flag in DRIVE.USER entry
+        beq     c2main7         ;this is not the BOOT volume drive
+;
+;
+; the DRIVE.USER entry indicates that this drive contains
+; the user's boot volume....
+;
+;
+        move.w  DUusrid(a5),CpUserid.w ;save user DRIVE.USER id
+        lea     c2curdr,a0      ;
+        move.w  d0,(a0)         ;store current boot drive
+;
+; find the DRIVE.ACCESS table entry for this user's
+; boot volume. This entry will indicate the starting disk
+; block address of the boot volume...
+;
+        lea     bootsrv,a0
+        move.b  (a0),d1         ;D1 <= pass disk server station no.
+        move.w  DUusrId(a5),a1  ;A1 <= pass drive.user id
+        lea     mtchitm,a0      ;A0 <= pass address of DRIVE.ACCESS
+                                ;entry located as boot volume entry
+                                ;D0 <= pass drive number
+        bsr     c2verDa         ;find starting block of volume
+        tst.w   d7              ;test find boot volume return code
+        beq.s   C2main8         ;boot volume found
+;
+;
+; loop through each drive on this network until the
+; no. of drives is exhausted. when this number is
+; exhausted, print error message, and reprompt user.
+;
+;
+c2main7 addq    #1,d0           ;increment current drive number
+        dbra    d5,c2m7         ;no more drives???
+        moveq   #er14,d0        ;write no user boot volume error message
+        bsr     c2erprt         ;
+        bra     c2restr         ;reprompt user for user name
+c2m7    move.b  bootsrv,d1      ;read DRIVE.INFO from next drive
+        lea     c2DUlen,a1
+        bsr     C2CVinf         ;*3.6 checks for invaild drive.info
+        bne.s   C2main7         ;uninitialized drive, go on to next 1
+        bra     C2main5         ;look for boot volume on new drive
+;
+;
+; YES WE HAVE BANANAS.  The boot volume has been located.
+;
+;
+c2main8 lea     bootdrv,a1      ;store computer boot drive no. in local storage
+        move.b  d0,(a1)         ;boot drive is in register D0
+        lea     mtchitm,a1      ;get address of DRIVE.ACCESS entry
+        lea     bootblk,a2      ;
+        move.l  DAvolad(a1),(a2);store boot volume
+        lea     bootdev,a2      ;
+        move.b  DAmtdev(a1),(a2);store boot volume unit number
+;
+;
+; copy user logon name
+;
+;
+        move.l  #CPusernm,a0    ;get address of location of user name
+        lea     c2nmbuf,a1      ;get address of user name entered by operator
+c2main9 move.l  (a1)+,(a0)+     ;copy buffer from boot area to OS area
+        move.l  (a1)+,(a0)+     ;
+        move.w  (a1),(a0)       ;
+;
+;
+; read the operating system into memory.
+;
+;
+c2mainA lea     DirBuf,a0       ;Get pointer to buffer
+        move.l  bootblk,d0      ;Get directory block number
+        addq    #2,d0           ;*
+        move.w  #2048,d2        ;Get directory length
+        bsr     DskRd           ;Read directory
+        beq.s   c2mainB         ;good read
+        move.w  #er20,d0        ;err, output error message
+        bsr     c2erprt         ;
+        bra     c2restr         ;get new user name
+                                ;
+c2mainB lea     DirBuf,a3       ;Get pointer to buffer
+        move.w  2(a3),d4        ;Set flipped directory flag
+        lsr.w   #8,d4           ;*
+        moveq   #0, d0          ;zero out d0
+        move.w  16(a3),d0       ;d0 = number of files
+        tst.w   d4              ;Is directory flipped?
+        beq.s   c2mainD         ;No, check first file
+        rol.w   #8,d0           ;Unflip number of files
+        bra.s   c2mainD         ;Check first file
+                                ;
+c2mainC adda.w  #26,a3          ;Advance a3 to next entry
+        lea     6(a3),a0        ;(a0) = file name
+        cmpi.l  #$0943432E,(a0)+;'\09CC.'
+        bne.s   c2mainD         ;
+        cmpi.l  #$4B45524E,(a0)+;'KERN'
+        bne.s   c2mainD         ;
+        cmpi.w  #$454C,(a0)+    ;'EL'
+        beq.s   c2mainE         ;
+                                ;
+c2mainD dbra    d0,c2mainC      ;More files?
+        move.w  #er21,d0        ;no, can't find
+        bsr     c2erprt         ;      cc.kernel
+        bra     c2restr         ;
+
+; Found the file CC.KERNEL. Read the first block to see if it is
+; a quick-load file, and if so, how big it is.
+;
+c2mainE lea     OSBuf,a0        ;Get pointer to buffer
+        move.w  (a3),d0         ;Get block number
+        tst.w   d4              ;Is directory flipped?
+        beq.s   c2mainI         ;No, read first part of file
+        rol.w   #8,d0           ;Unflip block number
+                                ;
+c2mainI add.l   bootblk,d0      ;Get absolute block number
+        moveq   #16,d2          ;Get number of bytes to read
+        bsr     DskRd           ;Read first part of file
+        beq.s   c2mainF         ;read was successful
+                                ;
+        move.w  #er22,d0        ;error reading CC.KERNEL file
+        bsr     c2erprt         ;
+        bra     c2restr         ;new new user name
+                                ;
+c2mainF lea     OSBuf,a4        ;Get pointer to buffer
+        cmpi.b  #$8e,(a4)+      ;Is it a quick-file?
+        beq.s   c2mainH         ;YES
+        move.w  #er23,d0        ;print not a quick file error message
+        bsr     c2erprt         ;
+        bra     c2restr         ;get a new user name
+
+c2mainH clr.l   d2              ;d2 = size                 *4.0
+        move.b  (a4)+, d2       ;size is next 3 bytes (hi) *4.0
+        swap    d2              ;put hi byte in hi word    *4.0
+        move.w  (a4)+,d2        ;(mid,lo) in low word      *4.0
+        move.l  (a4)+,d6        ;d6 = relative starting address
+        move.l  (a4)+,d5        ;d5 = unit global data size
+        move.l  HICODE,d1       ;d1 = top of memory
+        sub.l   d2,d1           ;d1 = location to load CC.KERNEL
+        move.l  d1,a0           ;
+        move.l  d1,-(sp)        ;Save highest free memory
+        add.l   d1,d6           ;
+        add.l   #12,d6          ;d6 = absolute starting address
+        moveq   #0, d0          ;zero out upper bits
+        move.w  (a3),d0         ;Get block number
+        tst.w   d4              ;Is directory flipped?
+        beq.s   c2mainJ         ;No, read OS into memory
+        rol.w   #8,d0           ;Unflip block number
+                                ;
+c2mainJ add.l   bootblk,d0      ;Get absolute block number
+        bsr     DskRd           ;Read CC.KERNEL into memory
+        beq.s   c2mainK         ;YES read successful?
+        move.w  #er22,d0        ;NO, output message
+        bsr     c2erprt         ;
+        bra     c2restr         ;get new user name
+    page
+;
+;everything is set -- issue the logon command
+;                  -- if this is omninet boot
+;
+c2mainK move.b  bootslt,d0      ;                              *4.0
+        cmpi.b  #5,d0           ;is the omninet the boot slot  *4.0
+        bne.s   C2mainL         ;branch if local drive boot    *4.0
+        lea     Data_area,a1    ;set up for call
+        bsr     Logon           ;broadcasts a hello message
+
+c2mainL move.l  d6,a0           ;Get CC.KERNEL starting address
+        move.l  LODATA,d0       ;D0 - Low data address
+        move.l  HIDATA,d1       ;D1 - High data address
+        move.l  LOCODE,d2       ;D2 - Low code address
+        move.l  (sp)+,d3        ;D3 - Highest free code address
+        move.b  ORB.l,d4        ;D4 - VIA ORB
+        lsl.w   #8,d4           ;
+        move.b  bootdev,d4      ;D4 - Boot device
+        swap    d4              ;
+        move.b  bootslt,d4      ;D4 - Boot slot
+        lsl.w   #8,d4           ;
+        move.b  bootsrv,d4      ;D4 - Boot server
+        clr.l   d5
+        move.b  extcrt,d5       ;D5 - External CRT flag
+        lsl.w   #8,d5           ;
+        move.b  bootdrv,d5      ;D5 - OS system volume drive
+        swap    d5              ;
+        move.l  bootblk,d6      ;D6 - OS system volume block   *3.6
+        cmpi.l  #65536,d6       ;if greater than 64K use d6    *3.6
+        bge.s   c2mainM         ;is so continue                *3.6
+        move.w  d6,d5           ;if less than 64K use low word *3.6
+        clr.l   d6              ; of d5 and d6 = 0             *3.6
+c2mainM clr.l   d7              ;No unit globals allowed
+
+        move.l  d1,sp           ;Set up initial stack pointer
+        addq.l  #4,sp           ;to be correct after LINK inst.
+        jmp     (a0)            ;Start the sucker up!

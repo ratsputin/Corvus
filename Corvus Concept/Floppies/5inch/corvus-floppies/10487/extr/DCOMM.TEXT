@@ -1,0 +1,1160 @@
+{ DCOMM.TEXT ----------------------------------------------------------}
+{
+{       DCOMM -- Corvus CONCEPT Data Communications Program
+{
+{       (c) Copyright 1983 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  09-01-83  LEF  Original program (from Pcomm)
+{       v 1.1  04-04-84  jdr  Special version for Cycle Guide
+{----------------------------------------------------------------------}
+{ DComm is based on program Pcomm by ErgoSoft (R F Belanger)
+{----------------------------------------------------------------------}
+{ Legal stuff for Pcomm follows:
+{
+{ Notice: All rights reserved by ErgoSoft, R F Belanger and Corvus
+{         Systems, Inc.  The notices, trademark and copyright notices
+{         placed in the program code are not to be altered or removed.
+{
+{$T Copyright (c) 1983 by R F Belanger & Corvus Systems - Pcomm (tm)   }
+{$C Pcomm (tm) - Copyright (c) 1983 by R F Belanger & Corvus Systems   }
+{----------------------------------------------------------------------}
+{$I-}
+{$R-}
+
+PROGRAM DComm;
+
+USES {$U /ccutil/cclib} CCDefn, CCclkIO, CCdcpIO, CClblIO, CCwndIO,
+                        CCcrtIO, ccHEXOUT,
+     {$U remunit.obj}   REMUNIT;
+
+CONST version   = '1.1 CG';
+      crtInvVdo = '\1BG4';
+      crtNorVdo = '\1BG0';
+      crtCurOFF = '\1Bb';
+      crtCurON  = '\1Bc';
+      crtEraALL = '\1BJ';
+      crtEraEOL = '\1BK';
+      crtEraEOS = '\1BY';
+      crtGoToXY = '\1B=';
+      crtInvrse = '\1Bz';
+
+      OPTversion = 01; {Version number          }
+      OPTautoDTR = 02; {Auto DTR on/off         }
+      OPTecho    = 03; {Echo locally            }
+      OPTquiet   = 04; {Quiet mode (no beeps)   }
+      OPTxonXoff = 05; {XON/XOFF enabled        }
+      OPTtrmType = 06; {Terminal type           }
+      OPTdefVol  = 07; {DComm default volume    }
+      OPTdialCmd = 08; {Auto dialing command    }
+      OPTthrotle = 09; {"throttle" setting      }
+      OPTbaud    = 10; {Baud rate               }
+      OPTparity  = 11; {Parity                  }
+      OPTdtaBits = 12; {Data bits               }
+      OPTstpBits = 13; {Stop bits               }
+      OPTport    = 14; {DataComm Port 1 or 2    }
+      OPTdelay   = 15; {Pacing delay (1/10 sec) }
+      OPTpaceChr = 16; {ASCII val of pacing chr }
+      OPTpfx1    = 17; {Value of prefix  +      }
+      OPTpfx2    = 18; {Value of prefix  &      }
+      OPTpfx3    = 19; {Value of prefix  #      }
+      OPTpfx4    = 20; {Value of prefix  $      }
+
+TYPE  nuisance  = 0..31;             { special chars to be discarded }
+      pacing    = ( pace, nopace );    { SendText's pacing on or off }
+      xfrtype   = ( plaintext, pacetext, binary, xmodem, kermit, any );
+      filetype  = ( txt, bin );
+      opn_cls   = ( opn, cls );
+      rd_wr     = ( rd, wr );
+      string255 = string[255];
+      TermType  = (Concept,TTY,VT100);
+
+VAR   RcordFlag,       { TRUE if recording is on }
+      fileopen,        { TRUE if rcd file is open }
+      PrintFlag,       { TRUE if session going to printer }
+      ESCFLAG,         { TRUE if last KB char was ESC }
+      CRFLAG,          { TRUE if last rcvd char was a CR }
+      quiet,           { TRUE if quiet option selected }
+      offlag,          { TRUE if remin buffer full and XOFF has been sent }
+      echo,            { TRUE if local echo option selected }
+      msgflag,         { TRUE if "Resume Comm" msg to appear on exit Service }
+      printerexists,   { TRUE if local printer available }
+      reminder,        { TRUE if logon msg to be printed  }
+      autodtr: boolean;{ TRUE if autoDTR on/off option is selected }
+
+      PrintFile: text; { the local printer }
+      RcordFile: text; { file used to record session }
+
+      commres: cr_baud_result;
+
+      FUNCPFX, CR, LF, FF, ACK, NAK,
+      EOT, SOH, CAN, ESC, XON, XOFF, NULL: char;
+
+      pace_char,                  { remote sys pacing char }
+      keychar,                    { input from keyboard }
+      remchar: char;              { input from remote port }
+
+      dirPswd: string80;          { DComm dialer password }
+      tempstr,                    { you guessed it ! }
+      lastfile,                   { name of file last passed to FileAgent }
+      rcdfile,                    { name of RcdFile }
+      filename,                   { yup }
+      volname,                    { DComm's default volume name }
+      dialcmd,                    { default dialer command }
+      logon,                      { logon sequence from Dialer }
+      pswd:      string80;        { password sequence from Dialer }
+      lastname:  string80;        { last name called }
+      lastnum:   string80;        { last phone number dialed }
+
+      date: ClkStr40;             { date }
+      time: ClkStr40;             { time }
+
+      rawflag,                    { used to set RAW on or off }
+      pace_delay,                 { delay twixt text lines sent (1/10ths sec)}
+      pace_ascii,                 { ascii value of remote sys pacing char }
+      DCport,                     { i.e DC1 or DC2 }
+      iores,                      { note results of IO calls }
+      bufspc,                     { free bytes in datacom read buf }
+      temp,                       { temporary integer }
+      throttle,                   { option setting for SendText xmt delay }
+      buffsize,                   { size of record buffer }
+      startime: integer;          { contains startime of dialed call }
+
+      baud:     array [1..3] of integer; { 1 - Options file settings      }
+      databits: array [1..3] of integer; { 2 - Current "working" settings }
+      stopbits: array [1..3] of integer; { 3 - Current "temp" setting     }
+      handshk:  array [1..3] of integer;
+      parity:   array [1..3] of char;
+      XON_XOFF: array [1..3] of char;
+
+      special: set of nuisance;   { special chars to be discarded }
+      how: xfrtype;               { type of file xfer }
+      option: array [1..19] of string80; { settings from DCOMM.OPTIONS }
+      prefix: array [1..5] of string80;  { autodialer prefixes ( 4 + NULL ) }
+      pfx: string[1];             { pfx for input fm funkeys }
+
+      LevelName: string[16];    { current level name                   }
+      ws:        integer;       { window function status               }
+      cst:       CrtStatus;     { temporary CRT unit status            }
+      CurrTerm:  TermType;      { current terminal type                }
+
+             { Forward Declarations Below }
+
+FUNCTION  brkpress: boolean; external;
+FUNCTION  OSinISYS: boolean; external;
+FUNCTION  OSvrtCrt: boolean; external;
+FUNCTION  pOSdevNam (dev: integer): pString80; external;
+FUNCTION  Notetime: longint; Forward;
+PROCEDURE ExitPgm; forward;
+
+{$P}
+{ curpos --------------------------------------------------------------}
+{ Positions the cursor on the line requested
+{----------------------------------------------------------------------}
+PROCEDURE curpos (line: integer);
+      begin
+      GoToXY (0,line);
+      end;
+
+{ ClrFrom -------------------------------------------------------------}
+{ Clears the screen from "line" to bottom
+{----------------------------------------------------------------------}
+PROCEDURE ClrFrom (line: integer);
+      begin
+      GoToXY (0,line); write (crtEraEOS);
+      end;
+
+{ StatMsg -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE StatMsg (st: string80);
+      begin
+      write (crtCurOff,crtInvVdo,' ',st,crtEraEOL,
+                       crtNorVdo,CR,crtCurON);
+      end;
+
+{ CntlQdisable --------------------------------------------------------}
+{ Set keyboard to RAW so ^S & ^Q unmolested
+{----------------------------------------------------------------------}
+PROCEDURE CntlQdisable;
+      var rawflag: integer;
+      begin
+      rawflag := 1; UnitStatus (35,rawflag,0);
+      end;
+
+{ CntlQenable ---------------------------------------------------------}
+{ Reset keyboard to intercept ^S & ^Q
+{----------------------------------------------------------------------}
+PROCEDURE CntlQenable;
+      var rawflag: integer;
+      begin
+      rawflag := 0; UnitStatus (35,rawflag,0);
+      end;
+
+{$P}
+{ ClrCmdWnd -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ClrCmdWnd;
+      begin
+      ws := WinSystem (WsysCmd);
+      write (crtEraALL);
+      ws := WinSystem (WsysCurr);
+      end;
+
+{ HoldComm ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE HoldComm;
+      begin
+    { if XON_XOFF[3] = 'X' then CR_PUTREM (XOFF); }
+      writeln (crtCurOFF);
+      StatMsg ('C o m m u n i c a t i o n s   o n   H o l d');
+      write (crtInvVdo);
+      CntlQenable;
+      msgflag := TRUE;
+      end;
+
+{ ResumeComm ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ResumeComm;
+      begin
+      if msgflag then begin
+          StatMsg ('R e s u m i n g   C o m m u n i c a t i o n s');
+          writeln;
+          end;
+      write (crtCurON);
+    { if XON_XOFF[3] = 'X' then CR_PUTREM (XON); }
+      CntlQdisable;
+      msgflag := FALSE;
+      end;
+
+{$P}
+{ ShortStat -----------------------------------------------------------}
+{ Prints short status report in the command window
+{----------------------------------------------------------------------}
+PROCEDURE ShortStat;
+      begin
+      ws := WinSystem (WsysCmd);
+      write (crtCurOFF,crtInvVdo,crtEraALL);
+      GoToXY (01,0); write ('Name: ',lastname);
+      GoToXY (01,1); write ('Nmbr: ',lastnum);
+      gotoxy (30,0); write ('|Rcord: ');
+      if RcordFlag then write (lastfile) else write ('OFF');
+      gotoxy (30,1); write ('|Print: ');
+      if printerexists
+          then if PrintFlag
+              then write ('ON')
+              else write ('OFF')
+          else write ('None');
+      GoToXY (53,0); write ('|Port: ',DCport:1);
+      GoToXY (53,1); write ('|Term: ');
+      case CurrTerm of
+          Concept: write ('Concept');
+              TTY: write ('TTY');
+            VT100: write ('VT100');
+              end; {case}
+      GoToXY (67,0); write ('|Baud: ',baud[3]:1);
+      GoToXY (67,1); write ('|Bits: ',databits[3]:1);
+      GoToXY (79,0); write ('|Parity: ',parity[3]);
+      GoToXY (79,1); write ('|HndShk: ');
+      if OSvrtCrt
+          then write (XON_XOFF[3])
+          else case XON_XOFF[3] of
+              'X': write ('XonXoff');
+              'N': write ('None');
+              end; {case}
+      GoToXY (0,0); write (crtNorVdo,crtCurON);
+      ws := WinSystem (WsysCurr);
+      end;
+
+{$P}
+{ LongStat ------------------------------------------------------------}
+{ Prints status report in main window
+{----------------------------------------------------------------------}
+PROCEDURE LongStat;
+      begin
+      writeln; HoldComm;
+      ClkTime1 (time); ClkDate3 (date);
+      time := copy (time, 1, 5);
+      writeln (' DComm status on ',date,' at ',time,crtEraEOL);
+      if fileopen
+          then writeln (' Record save file is "',rcdfile,'"',crtEraEOL);
+      write (' Recording is ');
+      if RcordFlag then write ('ON') else write ('OFF'); writeln (crtEraEOL);
+      write (' Local printer is ');
+      if not printerexists
+          then write ('not available')
+          else if PrintFlag then write ('ON') else write ('OFF');
+      writeln (crtEraEOL);
+      writeln (' Comm set to ',baud[3]:5,' baud, ',parity[3]:1,
+          ' parity, ', databits[3]:1,' databits, ',
+          stopbits[3]:1,' stopbits',crtEraEOL);
+      write (' Character protocol (handshake) is ');
+      case XON_XOFF[3] of
+          'X': write ('XonXoff');
+          'N': write ('None');
+          end; {case}
+      writeln (crtEraEOL);
+      writeln (' Throttle = ',throttle:1,crtEraEOL);
+      if length(lastnum) > 0
+          then write (' Last number dialed was ',lastname,' at ',lastnum)
+          else write (' No numbers have been dialed');
+      writeln (crtEraEOL);
+      writeln (' Communications port is Datacomm',DCport:1,crtEraEOL);
+      end;
+
+{ pbeep ---------------------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION pbeep: char;
+      var k: integer;
+      begin
+      if not quiet then for k := 1 to 2 do begin
+          iores := BellTone (120, 1, 192);  { Concept FUNCTION }
+          iores := BellTone (120, 1, 236);
+          end;
+      pbeep := null;
+      end;
+
+{$P}
+{ GetYN ---------------------------------------------------------------}
+{ returns TRUE if a Y, y or CR is typed, FALSE otherwise
+{----------------------------------------------------------------------}
+FUNCTION GetYN (txt,pmt: string80): boolean;
+      var ch: char;
+      begin
+      LblsOff;
+      ws := WinSystem (WsysCmd); CrtAction (CursorOFF);
+      GoToXY (0,0); write (' ',txt,crtEraEOL);
+      GoToXY (0,1); write (crtInvVdo,' ',LevelName,
+                                     ' ':9-length(LevelName),
+                           crtNorVdo,' ',pmt,'? [Y/N]: N',crtEraEOL,
+                           crtCurON,pbeep);
+      CrtAction (CursorLeft);
+      ch := GetByte;
+      if ch = 'Y'
+          then GetYN := TRUE else GetYN := FALSE;
+      if ch = FUNCPFX then ch := GetByte;
+      CrtAction (EraseALL); ws := WinSystem (WsysCurr);
+      end;
+
+{ ChgChar -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ChgChar (var ch: char; level,txt,pmt: string80);
+      var tn: char;
+      begin
+      LevelName := level;
+      ws := WinSystem (WsysCmd); CrtAction (CursorOFF);
+      GoToXY (0,0); write (' ',txt,crtEraEOL);
+      GoToXY (0,1); write (crtInvVdo,' ',level,' ':9-length(level),
+                           crtNorVdo,' ',pmt,': ',crtEraEOL,crtCurON);
+      ch := GetByte; cst := Normal;
+      if ch = '!' then cst := Escape;
+      CrtAction (EraseALL); LblsOff; ws := WinSystem (WsysCurr);
+      end;
+
+{$P}
+{ ChgInteger ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ChgInteger (var ival: integer; level,txt,pmt: string80);
+      var tn: integer;
+      begin
+      LevelName := level;
+      ws := WinSystem (WsysCmd); CrtAction (CursorOFF);
+      GoToXY (0,0); write (' ',txt,crtEraEOL);
+      GoToXY (0,1); write (crtInvVdo,' ',level,' ':9-length(level),
+                           crtNorVdo,' ',pmt,': ',crtEraEOL,crtCurON);
+      tn := ival; cst := GetNum (tn);
+      if cst = Normal then ival := tn;
+      CrtAction (EraseALL); LblsOff; ws := WinSystem (WsysCurr);
+      end;
+
+{ ChgString -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ChgString (var st: string80; level,txt,pmt: string80);
+      var tn: string80;
+      begin
+      LevelName := level;
+      ws := WinSystem (WsysCmd); CrtAction (CursorOFF);
+      GoToXY (0,0); write (' ',txt,crtEraEOL);
+      GoToXY (0,1); write (crtInvVdo,' ',level,' ':9-length(level),
+                           crtNorVdo,' ',pmt,': ',crtEraEOL,crtCurON);
+      tn := st; cst := GetString (tn);
+      if cst = Normal then st := tn;
+      CrtAction (EraseALL); LblsOff; ws := WinSystem (WsysCurr);
+      end;
+
+{ IOmsg ---------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE IOmsg (result: integer);
+      begin
+      case result of
+           5: StatMsg ('Volume went offline');
+           6: StatMsg ('File no longer in directory');
+           7: StatMsg ('Bad file name');
+           8: StatMsg ('No room on volume');
+           9: StatMsg ('Volume not found');
+          10: StatMsg ('File not found');
+          11: StatMsg ('Duplicate directory entry');
+          12: StatMsg ('File already open');
+          16: StatMsg ('File write protected');
+          1,2,3,4,13,14,15,17,18 :
+              StatMsg ('Problem with file or disk drive');
+          end; {case}
+      end;
+
+{ ModemOK -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION ModemOK: boolean;
+      begin
+      ws := 6000; remchar := '-';
+      repeat
+          if CR_REMSTAT
+              then begin
+                  remchar := CR_GETREM;
+                  ws := 3000;
+                  end
+              else ws := ws-1;
+          until (ws = 0) or (remchar = 'K');
+      if ws <> 0 then remchar := CR_GETREM;
+      ModemOK := ws <> 0;
+      end;
+
+{ SndModemStr ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SndModemStr (st: string80);
+      var i: integer;
+      begin
+      for i := 1 to length(st) do CR_PUTREM (st[i]);
+      CR_PUTREM (CR); CR_DELAY (13);
+      end;
+
+{$P}
+{$S filagseg}
+{ FileAgent -----------------------------------------------------------}
+{ opens/closes files and does local error checking
+{----------------------------------------------------------------------}
+FUNCTION FileAgent (var int_fname: text; var ext_fname: string80;
+                    oc: opn_cls; rw: rd_wr; ftype: filetype) : integer;
+      var result: integer; cf: boolean;
+      begin
+      cf := TRUE;
+      if ext_fname = '/printer' then ext_fname := '/PRINTER';
+      if (ext_fname <> '/PRINTER') and (ftype = txt )
+                                   and (pos('.',ext_fname) = 0) then
+          ext_fname := concat (ext_fname,'.TEXT');
+      if oc = opn
+          then if rw <> wr
+              then reset (int_fname,ext_fname)
+              else if ext_fname <> '/PRINTER' then begin
+                  reset (int_fname,ext_fname); result := ioresult;
+                  if result = 0 then begin
+                      cf := GetYN ('File already exists',
+                                   'Write over existing file');
+                      end;
+                  if (cf) or (result <> 0)
+                      then begin
+                          if result = 0 then close (int_fname);
+                          rewrite (int_fname,ext_fname);
+                          end
+                      else begin
+                          fileagent := 2;
+                          close (int_fname);
+                          exit (fileagent);
+                          end;
+                  end;
+      if oc = cls then
+          if rw = wr
+              then close (int_fname,lock)
+              else close (int_fname);
+      if (ext_fname = '/PRINTER') and (oc = opn) then begin
+          rewrite (int_fname,ext_fname);
+          {  @@@ need printer ready check here }
+          end;
+      result := ioresult;
+      if result = 0 then begin fileagent := 1; exit (fileagent); end;
+      fileagent := 0;
+      IOmsg (result);
+      end;
+{$S}
+
+{$P}
+{ SetComm -------------------------------------------------------------}
+{ Sets comm parms according to global variables using CR_SETCOM..
+{----------------------------------------------------------------------}
+PROCEDURE SetComm (n: integer);
+      begin
+      iores := CC_SETPORT (DCport);
+      baud[3]     := baud[n];
+      parity[3]   := parity[n];
+      databits[3] := databits[n];
+      stopbits[3] := stopbits[n];
+      XON_XOFF[3] := XON_XOFF[n];
+      CR_SETCOMMUNICATIONS (parity[3],
+                            baud[3],
+                            databits[3],
+                            stopbits[3],
+                            XON_XOFF[3],
+                            cr_orig,
+                            'Concept',
+                            commres);
+      CR_SET_DTR (cr_on);
+      if (commres <> cr_set_ok) or (iores <> 0) then begin
+          StatMsg ('Unable to set requested DataComm parameters');
+          CR_DELAY (50);
+          end;
+      ShortStat;
+      end;
+
+{$P}
+{ MapRecNum -----------------------------------------------------------}
+{ takes character input from keyboard and maps to screen
+{ record number ( 1..19 ) which is being specified.
+{ returns a 0 if character is not in
+{ ranges a..q or A..Q or if record is empty
+{----------------------------------------------------------------------}
+FUNCTION MapRecNum (which: char) : integer;
+      var loc: integer;
+      begin
+      if ord(which) < 97
+          then loc := ord(which)-64
+          else loc := ord(which)-96;
+      if (loc < 1) or (loc > 19) then begin
+          MapRecNum := 0; exit (MapRecNum); end;
+      MapRecNum := loc;
+      end;
+
+{$P}
+{ LabelsMain ----------------------------------------------------------}
+{ Sets Concept Labels for Main Menu
+{----------------------------------------------------------------------}
+PROCEDURE LabelsMain;
+      var i: integer;
+      begin
+      LblsInit;
+      i := lblset (10, 'RcordOff', concat (pfx,'^'));
+      i := lblset (00, 'RcordOn',  concat (pfx,';'));
+
+      i := lblset (11, 'PrintOff', concat (pfx,'`'));
+      i := lblset (01, 'PrintOn',  concat (pfx,'='));
+
+      i := lblset (12, 'NewFile',  concat (pfx,'_'));
+      i := lblset (02, 'SaveFile', concat (pfx,'<'));
+
+      i := lblset (13, 'RecvFile', concat (pfx,'F'));
+      i := lblset (03, 'SendFile', concat (pfx,'>'));
+
+      i := lblset (14, 'Options',  concat (pfx,'k'));
+      i := lblset (04, 'Dialer',   concat (pfx,'?'));
+
+      i := lblset (15, 'TermType', concat (pfx,'T'));
+      i := lblset (05, 'ClrWndow', concat (pfx,'Z'));
+
+      i := lblset (16, 'Echo',     concat (pfx,'j'));
+      i := lblset (06, 'Status',   concat (pfx,'B'));
+
+      i := lblset (17, 'HangUp',   concat (pfx,'S'));
+      i := lblset (07, 'Timer',    concat (pfx,'C'));
+
+      i := lblset (19, 'Exit',     concat (pfx,'D'));
+
+      if logon <> '' then
+      i := lblset (25, 'SndLogon', concat (pfx,'@'));
+      if pswd <> '' then
+      i := lblset (26, 'SndPaswd', concat (pfx,'A'));
+      if OSinISYS then
+      i := lblset (29, 'Suspend',  concat (pfx,'c'));
+      LblsOn; LevelName := 'DComm';
+      end;
+
+{$P}
+{ IOchk ---------------------------------------------------------------}
+{ Returns TRUE if last IO was OK, otherwise, prints appropriate
+{ error msg and returns FALSE
+{----------------------------------------------------------------------}
+FUNCTION IOchk: boolean;
+      var res: integer;
+      begin
+      IOchk := TRUE; res := ioresult;
+      if res = 0 then exit (IOchk);
+      write (pbeep);
+      IOmsg (res);
+      IOchk := FALSE;
+      end;
+
+{ NoteTime ------------------------------------------------------------}
+{ Returns a longint value which is the number of seconds into the year.
+{----------------------------------------------------------------------}
+FUNCTION NoteTime {: longint}; { declared  Forward }
+      var ClkRcd: ClkPB;
+      begin
+      ClkRead(ClkRcd);
+      NoteTime := (ClkRcd.Day  * 24 * 60 * 60 ) +
+                  (ClkRcd.Hour * 60 * 60 ) +
+                  (ClkRcd.Mins * 60 ) +
+                   ClkRcd.Secs;
+      end;
+
+{ p_escape ------------------------------------------------------------}
+{ Called to check if user wants to escape from a process
+{ in progress.  if user types Esc, then this queries user
+{ and returns appropriate boolean value.
+{----------------------------------------------------------------------}
+FUNCTION p_escape (whichfunc: string80): boolean;
+      begin
+      if CR_KBSTAT then begin
+          keychar := CR_GETKB;
+          if keychar = ESC then begin
+              writeln;
+              write (pbeep,' ',whichfunc,' pausing -- A(bort  C(ontinue - ');
+              read (keychar);
+              while keychar = ESC do keychar := CR_GETKB;
+              writeln;
+              if (keychar='A') or (keychar='a') then
+                  p_escape := TRUE else p_escape := FALSE;
+              end;
+          end;
+      end;
+
+{$P}
+{ SendLin -------------------------------------------------------------}
+{ Sends one line of text to the remote line.  For every character sent,
+{ it tries 'throttle' reads on incoming port and prints what's coming
+{ in.  If echo is on, it echoes what is being sent.  This routine
+{ terminates each line with a CR.  If the pacing character defined in
+{ "options" file is not null and "how=pacing", then it waits for the
+{ pacing character to arrive from the remote system, THEN waits
+{ "pace_delay"/10ths of a second for lineturnaround before sending next
+{ line.  If the pacing character is missed, then the transmit session
+{ can be unstuck by hitting any key on the xmit end which will cause
+{ the next line to be sent.  This arcane protocol useful for archaic
+{ systems.  Each blank line is preceeded by a SPACE to prevent
+{ termination of the EDIT session on the TSO editor.
+{----------------------------------------------------------------------}
+PROCEDURE sendlin (txtlin: string255; how: pacing);
+      var k,j: integer; goflag: boolean; SPACE: char;
+      begin
+      goflag := FALSE; SPACE := ' ';
+      if throttle < 1 then throttle := 1;
+      for k := 1 to length(txtlin) do begin
+          for j := 1 to throttle do
+           if CR_REMSTAT then begin
+               remchar := CR_GETREM;
+               if remchar = pace_char then goflag := TRUE;
+               write (remchar);
+               end;
+          if CR_CLEARTOSEND then CR_PUTREM (txtlin[k]);
+          if echo then write (txtlin[k]);
+          end;
+      if (length(txtlin) = 0) and (how=pace) then CR_PUTREM (SPACE);
+      if CR_CLEARTOSEND then CR_PUTREM (' ');   { Cycle Guide }
+      if echo then writeln;
+      remchar := NULL;
+      if goflag
+          then goflag := FALSE
+          else if (how = pace) and (pace_ascii <> 0) then
+              repeat
+                  if CR_KBSTAT then begin
+                     keychar := CR_GETKB;
+                     exit (sendlin);
+                     end;
+                  if CR_REMSTAT then begin
+                     remchar := CR_GETREM;
+                     write (remchar);
+                     end;
+                  until remchar = pace_char;
+      if how = pace then CR_DELAY (pace_delay);
+      end;
+
+{$P}
+{ SendStrng -----------------------------------------------------------}
+{ Sends one line of text to the remote line. For every character sent,
+{ it tries 'throttle' reads on incoming port and prints what's coming in.
+{ If echo is on it echoes what is being sent.
+{----------------------------------------------------------------------}
+PROCEDURE SendStrng (txtlin: string255);
+      var k,j: integer; goflag: boolean;
+      begin
+      for k := 1 to length(txtlin) do begin
+          for j := 1 to throttle do
+              if CR_REMSTAT then begin
+                 remchar := CR_GETREM;
+                 write (remchar);
+                 end;
+          if CR_CLEARTOSEND then CR_PUTREM (txtlin[k]);
+          if echo then write (txtlin[k]);
+          end;
+      end;
+
+{$P}
+{ RcdOpen -------------------------------------------------------------}
+{ Opens file into which session recording will be made.  if file
+{ by same name exists, warns user
+{----------------------------------------------------------------------}
+PROCEDURE RcdOpen;
+      var st: string80;
+      begin
+      st := '';
+      repeat
+          ChgString (st,'DComm','','Record to which file');
+          if cst <> Normal then exit (RcdOpen);
+          if st = '' then exit (RcdOpen);
+          rcdfile := st;
+          iores := FileAgent (RcordFile,rcdfile,opn,wr,txt);
+          until iores > 0;
+      if iores = 2 then exit (RcdOpen);
+      fileopen := TRUE;
+      lastfile := rcdfile;
+      StatMsg (concat('Record file "',rcdfile,'" opened'));
+      end;
+
+{ RcdSave -------------------------------------------------------------}
+{ Saves the RcdFile
+{----------------------------------------------------------------------}
+PROCEDURE RcdSave;
+      begin
+      write (RcordFile,CR);      { tidy up last line }
+      iores := FileAgent (RcordFile,rcdfile,cls,wr,txt);
+      fileopen := FALSE;
+      lastfile := rcdfile;
+      StatMsg (concat('Record file "',rcdfile,'" closed'));
+      ShortStat;
+      end;
+
+{$P}
+{ HangUp --------------------------------------------------------------}
+{ Sends "hangup" command to Hayes Smartmodem (tm), unless
+{ autoDTR is set, in which case it merely turns off DTR
+{ with same effect
+{----------------------------------------------------------------------}
+PROCEDURE HangUp;
+      var k: integer; st: string80;
+      begin
+      StatMsg ('Initiating disconnect');
+      if lastnum <> '' then begin
+          if autodtr
+              then CR_SET_DTR (cr_off)
+              else begin
+                  CR_PUTREM ('+'); CR_PUTREM ('+'); CR_PUTREM ('+');
+                  CR_DELAY (13); { wait for modem to switch modes }
+                  SndModemStr ('ATH');
+                  if NOT ModemOK then StatMsg ('Modem not responding');
+                  end;
+          end;
+      StatMsg ('Comm line disconnected');
+      startime := 0;
+      end;
+
+{ TickTock ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Ticktock;
+      var elapsed,m,s: integer; time,date: ClkStr40;
+      begin
+      ClkDate1 (date); ClkTime1 (time);
+      if startime = 0
+          then elapsed := 0
+          else elapsed := notetime-startime;
+      m := elapsed div 60; s := elapsed mod 60;
+      writeln (CR,crtInvVdo,
+               date,'  ',time,'  ',
+               m:3,'.',s div 6:1,' minutes this call',
+               crtEraEOL,crtNorVdo,CR);
+      end;
+
+{$I DCOMM1.TEXT} { Dialer   processing }
+{$I DCOMM2.TEXT} { SendFile processing }
+{$I DCOMM3.TEXT} { RecvFile processing }
+{$I DCOMM4.TEXT} { Option   processing }
+{ I DCOMM5.TEXT} { Help     processing }
+
+{$P}
+{$S INITSEG}
+{ InitPgm -------------------------------------------------------------}
+{ initializes variables, checks modem, reads and sets option settings
+{----------------------------------------------------------------------}
+PROCEDURE InitPgm;
+
+      type
+        SixteenK = Array[1..8192] of Integer;
+        p16k     = ^SixteenK;
+        PB       = Record
+                     Address : p16k;
+                     Size    : Integer
+                     End;
+        stringtable = array[1..10] of pstring64;
+
+      var k,result: integer; remexists: boolean;
+          p: pString80; s1,s2,s3: string64; st: stringtable;
+
+
+   Procedure BufFail;
+
+   Begin
+     WriteLn(chr(7),'Failed to increase input buffer size');
+     Exit(DComm)
+   End;
+
+   Procedure MakeBuffer;
+
+   Var
+     ParmBlk : PB;
+     ptr1,
+     ptr2    : p16k;
+     parm,
+     ior     : Integer;
+
+   Begin
+     With ParmBlk Do Begin
+       New(ptr1);
+       New(ptr2);
+       If (ptr1 = Nil) or (ptr2 = Nil) then BufFail;
+       Address := ptr1;
+       Size := SizeOf(SixteenK) + (SizeOf(SixteenK)-1);
+       UnitStatus(31,ParmBlk,FCRDALTBUF);
+       ior := IOResult;
+       If ior = 0 Then Begin
+         Parm := (Size div 3) * 2;
+         UnitStatus(31,parm,FCSETHIWATER);
+         Parm := Size div 3;
+         UnitStatus(31,parm,FCSETLOWATER)
+         End
+       Else BufFail
+       End
+   End;
+
+      begin
+      ccCLKioinit;  { Init the clock support routine }
+      ccCRTioinit;  { Init the CRT bells & whistles routine }
+      ccDCPioInit;
+      ccLBLioInit;  { Init the func labels routine }
+      ccWNDioinit;  { Init the window unit }
+      ccHEXinit;
+
+      MakeBuffer;
+      crtTpgm := 'DCOMM'; crtTvrs := version;
+      CrtTitle ('Corvus CONCEPT Data Communications Program');
+      ClrCmdWnd;
+
+      NULL := chr(0);
+      SOH  := chr(1);
+      EOT  := chr(4);
+      ACK  := chr(6);
+      LF   := chr(10);
+      CR   := chr(13);
+      XON  := chr(17);
+      XOFF := chr(19);
+      NAK  := chr(21);
+      CAN  := chr(24);
+      ESC  := chr(27);
+      FUNCPFX := chr(255);
+
+      RcordFlag := FALSE; msgflag := FALSE;
+      CRFLAG  := FALSE; ESCFLAG := FALSE;
+      PrintFlag := FALSE; fileopen := FALSE;
+
+      pfx := '*'; pfx[1] := FUNCPFX;
+
+      how        := any;  { default type of file xfer }
+      CurrTerm   := Concept;
+      LevelName  := 'DComm';
+      pace_ascii := 0;
+      pace_delay := 0;
+      pace_char  := NULL;
+      startime   := 0;
+      DCport     := 1;
+      dirPswd    := '\00';
+
+      for k := 1 to 3 do begin
+          baud[k]     := 300;
+          parity[k]   := 'N';
+          databits[k] := 8;
+          stopbits[k] := 1;
+          XON_XOFF[k] := 'N';
+          end;
+
+      special := [0..2] + [4..6] + [9] + [11] + [14..26] + [28..31];
+
+      volname := ''; logon := ''; pswd := '';  rcdfile := '';
+      lastnum := ''; lastname := '';  prefix[5] := ''; lastfile := '';
+
+      CC_COMMINIT (DCport,remexists);  { init comm }
+      if not remexists then begin
+          write (pbeep);
+          StatMsg ('DataComm driver is not loaded, loading it now ....');
+          st[1] := @s1; st[2] := @s2; st[3] := @s3;
+          p := pOSdevNam (31); p^ := '';
+          s1 := '!DRV.DTACOM'; s2 := 'DTACOM1'; s3 := '31';
+          result := call ('!ASSIGN',input,output,st,3);
+          CC_COMMINIT (DCport,remexists);
+          if not remexists then begin
+              StatMsg (''); write (pbeep);
+              StatMsg ('DataComm driver could not be loaded, DComm quits!');
+              StatMsg (''); write (pbeep);
+              ExitPgm;
+              end;
+          end;
+
+      ChkOpFil;  { see if DCOMM.OPTIONS exists... create one if none there }
+      SetOpts;   { set options settings from DCOMM.OPTIONS }
+
+    { if not CR_CLEARTOSEND then begin  { check status of modem }
+      SndModemStr ('AT');
+      if NOT ModemOK then
+          if NOT GetYN ('Modem is not reponding',
+                        'Start DComm without modem') then ExitPgm;
+
+      if not PrtAvail
+          then printerexists := FALSE
+          else begin
+              printerexists := TRUE;
+              tempstr := '/PRINTER';
+              iores := FileAgent (PrintFile,tempstr,opn,wr,bin);
+              if iores <> 1 then printerexists := FALSE;
+              end;
+
+      CntlQdisable; { set keyboard to RAW so ^S & ^Q unmolested }
+
+      CR_DELAY (5);   { give comm parms time to settle down }
+    { if CR_CLEARTOSEND then StatMsg ('Modem ready.')            }
+    {                   else StatMsg ('Modem still not ready.'); }
+      StatMsg ('C o m m u n i c a t i o n s   R e a d y . . . .');
+      writeln;
+      ShortStat; LabelsMain;
+      end;
+{$S}
+
+{$P}
+{$S EXITSEG}
+{ ExitPgm -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ExitPgm;
+      begin
+      HoldComm;
+      if fileopen then RcdSave;
+      StatMsg ('D C o m m   E n d i n g');
+      if autodtr then CR_SET_DTR (cr_off);
+      CC_COMMQUIT;
+      CntlQenable; { return KB to "no RAW" }
+      ClrCmdWnd;
+      CClblIOterm;
+      HALT;
+      end;
+{$S}
+
+{$P}
+{ Service -------------------------------------------------------------}
+{ This routine services all keyboard input prefixed with a FUNCPFX,
+{ ie FUNCTION and special key input
+{----------------------------------------------------------------------}
+PROCEDURE Service;
+      var choice: char; i: integer; p: pBytes;
+      begin
+      write (crtCurOFF); msgflag := FALSE;
+      choice := CR_GETKB;
+      case choice of
+
+ ';': begin     { RcordOn - turn on record buffer }
+      if not fileopen then begin
+          HoldComm;
+          RcdOpen;          { open the rcd file if not already open }
+          end;
+      if fileopen then begin
+          if RcordFlag
+              then StatMsg ('Record buffer already ON')
+              else begin
+                  StatMsg ('Record buffer ON');
+                  RcordFlag := TRUE;
+                  end;
+          end;
+      ShortStat;
+      end;
+
+ '^': begin     { RcordOff - turn off record buffer }
+      if not RcordFlag
+          then StatMsg ('Record buffer already OFF')
+          else StatMsg ('Record buffer OFF');
+      RcordFlag := FALSE;
+      ShortStat;
+      end;
+
+ '=': begin     { PrintOn - turn on local printer }
+      if not printerexists
+          then StatMsg ('There is no local printer')
+          else begin
+              if PrintFlag
+                  then StatMsg ('Printer already ON')
+                  else StatMsg ('Printer ON');
+              PrintFlag := TRUE;
+              end;
+      ShortStat;
+      end;
+
+ '`': begin     { PrintOff - turn off printer }
+      if not printerexists
+          then StatMsg ('There is no local printer')
+          else begin
+              if not PrintFlag
+                  then StatMsg ('Printer already OFF')
+                  else StatMsg ('Printer OFF');
+              PrintFlag := FALSE;
+              end;
+      ShortStat;
+      end;
+
+ '_': begin     { NewFile - Open a new RcdFile }
+      HoldComm;
+      if fileopen then RcdSave;
+      RcdOpen;
+      ShortStat;
+      end;
+
+ '<': begin     { SaveFile - Save the RcdFile }
+      if fileopen then begin
+          RcordFlag := FALSE;
+          RcdSave;
+          StatMsg ('Recording is OFF');
+          end;
+      end;
+
+ 'B': LongStat; { Status - status report }
+
+ 'k': begin     { Options - adjust Option settings }
+      ChgOpts;
+      ShortStat; LabelsMain;
+      end;
+
+ '?': begin     { Dialer - Dialer }
+      Dialer;
+      ShortStat; LabelsMain;
+      end;
+
+ 'C': Ticktock; { Timer - Elapsed Time }
+
+ 'j': begin { Echo - toggle echo }
+      msgflag := FALSE; echo := not echo;
+      if echo then StatMsg ('Echo is ON')
+              else StatMsg ('Echo is OFF');
+      end;
+
+{'P': Help; { Help - Help }
+
+ 'S': Hangup; { HangUp - Hangup Hayes modem }
+
+ 'D': begin { Exit - Exit }
+      if GetYN ('','Confirm DComm exit') then ExitPgm;
+      ShortStat; LblsOn;
+      end;
+
+ '$': begin { xxxxxxx - Change baudrate }
+      HoldComm;
+      commres := cr_bad_parameter;
+      repeat
+          write ('  Enter new BaudRate -  ');
+          readln (temp); {@@@} baud[2] := temp;
+          SetComm (2);
+          if commres = cr_set_ok
+              then writeln ('  ',baud[3], ' Baud has been set -- ')
+              else writeln (' Speed NOT changed -- invalid input');
+          until commres = cr_set_ok;
+      end;
+
+ '@': begin { SndLogon - Send Logon Sequence }
+      SendStrng (logon);
+      end;
+
+ 'A': begin { SndPaswd - Send Passwd Sequence }
+      SendStrng (pswd);
+      end;
+
+ '>': begin { SendFile - transmit a file }
+      SendFile;
+      end;
+
+ 'F': begin { RecvFile - Receive File }
+      RcvFile;
+      end;
+
+ 'Z': begin { ClrWndow - Clear Screen }
+      write (crtEraALL);
+      end;
+
+ 'c': begin { Suspend - Call ISYS}
+      HoldComm;
+      ws := WinSystem (WsysCmd);
+      write (crtEraALL);
+      ws := WinSystem (WsysCurr);
+      write (crtNorVdo);
+      p := NIL; i := call ('!CC.ISYS',input,output,p,0);
+      write (crtInvVdo);
+      ShortStat; LabelsMain;
+      end;
+
+ 'T': begin { TermType - Select terminal type }
+      if CurrTerm = Concept then CurrTerm := VT100
+                            else CurrTerm := Concept;
+      ShortStat; LabelsMain;
+      end;
+
+ end; {case}
+
+      ResumeComm;
+      LblsOn;
+      write (crtCurON);
+      end;
+
+{$P}
+{ DoConcept -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DoConcept;
+      begin
+      while TRUE do begin
+          if (CurrTerm <> Concept) AND
+             (CurrTerm <> TTY) then exit (DoConcept);
+          if CR_KBSTAT then begin          { keybd --> remout }
+              keychar := CR_GETKB;
+              if (ESCFLAG) and (keychar = ESC)
+                  then ESCFLAG := FALSE
+                  else begin
+                      if keychar = ESC
+                          then ESCFLAG := TRUE
+                          else ESCFLAG := FALSE;
+                      if keychar = FUNCPFX
+                          then service
+                          else begin
+                              if CR_CLEARTOSEND then CR_PUTREM (keychar);
+                              if echo then begin
+                                  write (keychar);
+                                  if RcordFlag then write (RcordFile,keychar);
+                                  end;
+                              if PrintFlag then write (PrintFile,keychar);
+                              end;
+                      end;
+              end;
+          if CR_REMSTAT then begin           { remin --> CRT / rcdfile }
+              remchar := CR_GETREM;
+              if (CRFLAG) and (remchar = LF) then begin
+                 remchar := NULL; CRFLAG := FALSE;
+                 end;
+              if remchar = CR then CRFLAG := TRUE;
+              write (remchar);
+              if not (ord(remchar) in special) and RcordFlag then
+                  write (RcordFile,remchar);
+              if PrintFlag then write (PrintFile,remchar);
+              end;
+          end;
+      end;
+
+{$I DCOMM9.TEXT}  { VT100 processing }
+
+{$P}
+{----------------------------------------------------------------------}
+{ Main Program Starts here
+{----------------------------------------------------------------------}
+      begin
+      InitPgm;
+      while TRUE do begin
+          if CurrTerm = Concept then DoConcept;
+          if CurrTerm = TTY     then DoConcept;
+          if CurrTerm = VT100   then DoVT100;
+          end;
+      end.
+

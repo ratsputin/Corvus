@@ -1,0 +1,13 @@
+clrwnd
+;
+; BLD.DCOMM -- Build DCOMM program
+;
+delfil -q dcomm.obj dcomm
+crunch -q /DCOMM
+pascal dcomm
+linker dcomm remunit /ccutil/cclib !paslib
+delfil -q dcomm.obj
+crunch -q /DCOMM
+;
+; Finished ....
+;

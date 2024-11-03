@@ -1,0 +1,18 @@
+
+Directory of UCSD disk image file 'image'
+
+Unknown density, disk image size 630784, 1232 blocks of 512 bytes each
+
+Volume BACKUP2 has 11 files,  0 to 6 (6), eov 1280, size 986, free 11
+
+ 1: 2CC.WP          Data  1-Feb-84    6-  63(  57), 29184+512= 29696 bytes
+ 2: CPMD.ADM3       Data 21-Mar-83   63-  64(   1),   512+512=  1024 bytes
+ 3: CPMD.SOROC      Data 21-Mar-83   64-  65(   1),   512+512=  1024 bytes
+ 4: CPMD.TELEV      Data 20-Mar-83   65-  66(   1),   512+512=  1024 bytes
+ 5: DICT.TEXT       Text 13-Jun-83   66- 144(  78), 39936+512= 40448 bytes
+ 6: KEYS.XED.TEXT   Text 30-Aug-83  144- 158(  14),  7168+512=  7680 bytes
+ 7: PAMS.TEXT       Text 19-Sep-83  158- 248(  90), 46080+512= 46592 bytes
+ 8: PGM.IPC.TEXT    Text 27-Sep-83  248- 280(  32), 16384+512= 16896 bytes
+ 9: LASER           Ux3e5 20-Nov-85  280- 286(   6),  3072+512=  3584 bytes
+10: LASER.TEXT      Ux3e3 20-Nov-85  286- 290(   4),  2048+512=  2560 bytes
+11: LASERLIST.TEXT  Ux3e3 20-Nov-85  290- 294(   4),  2048+512=  2560 bytes

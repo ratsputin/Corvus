@@ -1,0 +1,61 @@
+
+
+         To:   Distribution
+         From: Keith Ball
+         date: 14-February-1984
+
+         Re:   Spooler driver for CCOS
+
+
+
+         Four files are needed to use the spooler driver.  They are
+         DRV.SPOOL, LOADSPOOLER, PIPES, and CTRLZ.TEXT.  DRV.SPOOL is
+         the spooler driver.  It is assigned to unit 3 with the name
+         SPOOLER.  It must be put in volume /CCSYS.  LOADSPOOLER loads
+         the enhanced printer driver, if it isn't already assigned,
+         and the spooler driver.  It also forces the enhanced printer
+         driver to send it's data to the spooler driver and not to the
+         data comm driver.  This allows enhanced text to be spooled by
+         the spooler driver.  PIPES allows the user to change the
+         default configuration of the spooler driver and close the
+         current pipe if it is open.  CTRLZ.TEXT contains 2 control-Z
+         characters which cause the spooler driver to close the
+         current pipe.  LOADSPOOLER, PIPES, and CTRLZ.TEXT should be
+         put in volume /CCUTIL.
+
+         To assign the spooler driver run LOADSPOOLER.  It uses no
+         command line parameters.  This program could be executed from
+         the user's STARTUP.TEXT file.
+
+         The user can send files to the network printer as if it were
+         a local printer.  For example, from the File Manager, press
+         [ListFile] then type a text file name, such as XYZ.TEXT, and
+         /CCUTIL/CTRLZ.TEXT >/PRINTER.  This will spool the file
+         XYZ.TEXT to the pipe PRINTER on your boot server.  The
+         control-z's in CTRLZ.TEXT will cause the spooler driver to
+         close the pipe; they will not be printed.
+
+         If you cannot append the CTRLZ.TEXT file to the output to
+         the spooler driver then run PIPES CLOSE to close the pipe.
+
+         The spooler driver has 3 defaults that are modifiable with
+         the PIPES program.  They are the pipe name, the slot and
+         server number used, and the message.  The default pipe name
+         is PRINTER.  To change it run PIPES with the n= parameter.
+         For example, to change pipe name to NEC7 type PIPES N=NEC7.
+         It is ok to use lower case.  The default slot and server are
+         your boot slot and server.  To change it use the s=
+         parameter.  The s= parameter has the form :  s=X/OO, wherre X
+         is the slot number, 1 through 5, and OO is the omninet host
+         number of the server, 0 through 63.  If the pipe area is on a
+         local driver, slots 1 through 4, then only use the slot
+         number.  For example, pipes area is on a drive connected to
+         slot 3 then type PIPES s=3; for pipes area on a disk server
+         with omninet host number 0 type PIPES s=5/0.
+
+         For the PIPES program, as many command line parameters the
+         user wants to change can be typed on the line.  The program
+         PIPES can be used in a command file, like STARTUP.TEXT.  This
+         would be useful if, for example, you always want to spool to
+         a disk server with omninet host number 0 but you boot off a
+         local drive or another disk server.

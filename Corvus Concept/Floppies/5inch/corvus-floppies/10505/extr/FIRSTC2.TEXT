@@ -1,0 +1,89 @@
+
+
+         To:   Distribution
+         From: Keith Ball
+         Re:   November 28 Constellation II meeting
+
+
+         The first regular meeting for Constellation II was
+         held at the Paragon building on Monday November 28,
+         1983 from 1 to 3 pm.  The next meeting will be
+         specified by me at later time.  It is based on the
+         completion of action items by attendees.
+
+         Phil Belanger handed out a preliminary version of the
+         NIS specification.  His main action item is to complete
+         it.  Main points consisted of a physical transporter
+         driver, similar to the one on the Concept, and a socket
+         manager to handle multiple protocols sharing a socket.
+         A flexible interface usable by both single and multi-
+         tasking systems to all functions of the two pieces is
+         also specified.  The NIS is built to work with buffered
+         or unbuffered and interrupt or non-interrupt driven
+         transporters hiding hardware idiosyncracies from the
+         rest of the system.  NIS is partitionable so a minimal
+         amount of system resident code is necessary for small
+         systems.  Performance concerns were raised for disk
+         server protocols; the interface may need streamlining
+         for normal system block I/O.
+
+         Phil's other action item was to collect and record all
+         device types used by the Constellation II lookup
+         protocol.  We must assist him in specifying blocks of
+         device numbers reserved for general device types.
+
+         A standardization of the Constellation II boot process
+         was discussed.  Denise volunteered to write a document
+         describing the Constellation II standard boot procedure.
+
+         My action items are developing a specification for the
+         transporter driver for both buffered and unbuffered
+         transporters, especially the IBM, and one for the disk
+         driver changes to correct for the 8A transporter
+         problems.  The transporter driver specification will
+         also contain a buffer management algorithm.  It's
+         definition will be based on the NIS specification for
+         the physical transporter driver.
+
+         We mentioned the importance of fixing the IBM transporter
+         ROM to work with both the IBM and TI systems and fix the
+         timeout bug in the current version.  However a hardware
+         change is necessary to allow the software to be able to
+         read the card's configuration.
+
+         Bruce suggested the disk status command should be
+         changed to reserve space for the host system to save the
+         device's timeout period.  This could be used by the
+         system manager to configure the host systems disk driver
+         for different net environments.
+
+         Command line driven user utilities (spool and mount
+         manager) were considered necessary for the next
+         Constellation II release.  If volumes on secondary disk
+         servers are not mounted at boot time then this facility
+         is a must.  Tri is currently working on the MSDOS and
+         CP/M86 versions of the spooler.  It was suggested that
+         Bill Kline could perform the mount manager changes.
+
+         Denise suggested, for a later release, batch file driven
+         capabilities added to the system utilities.
+
+         We agreed we should develop and publish a Constellation
+         II manual to go along with our Transporter Technical
+         Reference manual.  The Constellation II manual should
+         include a description of the two disk server protocols
+         and the lookup protocol.  An OEM addendum should have a
+         complete description of the all the Constellation II
+         tables.
+
+         Distribution
+
+         Phil Belanger
+         Sean Finley
+         Bruce Kendall
+         Denise Pitsch
+         Steve Schwartz
+         Mark Warshaw
+         Bob Wohnoutka
+
+

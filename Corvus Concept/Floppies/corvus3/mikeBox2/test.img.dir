@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'test.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCSYS4 has 7 files,  0 to 6 (6), eov 500, size 14, free 7
+
+ 1: CODE            Data  4-Feb-83    6-  93(  87), 44544+512= 45056 bytes
+ 2: PASLIB.OBJ      Data  4-Feb-83   93- 188(  95), 48640+512= 49152 bytes
+ 3: CCLIB.OBJ       Data  4-Feb-83  188- 371( 183), 93696+512= 94208 bytes
+ 4: CFLIB.OBJ       Data  4-Feb-83  371- 412(  41), 20992+512= 21504 bytes
+ 5: C2LIB.OBJ       Data  4-Feb-83  412- 460(  48), 24576+512= 25088 bytes
+ 6: OS.GBL.ASM.TEXT Text  4-Feb-83  460- 482(  22), 11264+512= 11776 bytes
+ 7: SYSTEM.UPDATE   Text  4-Feb-83  482- 486(   4),  2048+512=  2560 bytes

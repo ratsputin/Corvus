@@ -1,0 +1,61 @@
+
+Directory of UCSD disk image file 'floppy6.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY6 has 54 files,  0 to 6 (6), eov 1440, size 666, free 54
+
+ 1: BLDTST          Data 26-Jul-83    6-  13(   7),  3584+512=  4096 bytes
+ 2: BLDTST.TEXT     Text 26-Jul-83   13-  19(   6),  3072+512=  3584 bytes
+ 3: CC.EXEC         Data 18-Jan-84   19-  36(  17),  8704+512=  9216 bytes
+ 4: CC.OTEST.TEXT   Text  2-Nov-83   36-  84(  48), 24576+512= 25088 bytes
+ 5: CCOVIEW         Data  8-Nov-83   84- 158(  74), 37888+512= 38400 bytes
+ 6: CHKPRNTR.TEXT   Text 18-Nov-82  158- 182(  24), 12288+512= 12800 bytes
+ 7: CHKZERO         Data 30-Jun-83  182- 188(   6),  3072+512=  3584 bytes
+ 8: CHKZERO.TEXT    Text 30-Jun-83  188- 194(   6),  3072+512=  3584 bytes
+ 9: CLOCK           Data 29-Dec-83  194- 205(  11),  5632+512=  6144 bytes
+10: CLOCKTST.TEXT   Text 22-Oct-82  205- 217(  12),  6144+512=  6656 bytes
+11: CTRLZ.TEXT      Text  4-Jan-83  217- 221(   4),  2048+  1=  2049 bytes
+12: DEMOBELL.TEXT   Text 11-Mar-82  221- 233(  12),  6144+512=  6656 bytes
+13: DEMOTIMER.TEXT  Text 11-Mar-82  233- 237(   4),  2048+512=  2560 bytes
+14: DISKX.TEXT      Text 29-Jul-83  237- 243(   6),  3072+512=  3584 bytes
+15: DISKX1          Data 10-Aug-83  243- 249(   6),  3072+512=  3584 bytes
+16: DISKX1.TEXT     Text 10-Aug-83  249- 257(   8),  4096+512=  4608 bytes
+17: DONADA.OBJ      Data 24-May-82  257- 258(   1),   512+512=  1024 bytes
+18: DONADA.TEXT     Text 19-Jan-82  258- 262(   4),  2048+512=  2560 bytes
+19: LC.LST.TEXT     Text 12-Jan-84  262- 280(  18),  9216+496=  9712 bytes
+20: LINKT.TEXT      Text 20-Jan-82  280- 284(   4),  2048+512=  2560 bytes
+21: MOVEBOOT        Data  7-Sep-83  284- 289(   5),  2560+512=  3072 bytes
+22: MOVEBOOT.TEXT   Text  7-Sep-83  289- 293(   4),  2048+512=  2560 bytes
+23: MS.LINKCHK.TEXT Ux2003 13-Jan-84  293- 301(   8),  4096+512=  4608 bytes
+24: MV11.OBJ        Data 13-Jan-84  301- 302(   1),   512+512=  1024 bytes
+25: MV11.TEXT       Text 13-Jan-84  302- 306(   4),  2048+512=  2560 bytes
+26: OD              Data  6-Jan-84  306- 370(  64), 32768+512= 33280 bytes
+27: OD.DOC.TEXT     Text 24-Aug-82  370- 382(  12),  6144+512=  6656 bytes
+28: OD.MAIN.TEXT    Text  6-Jan-83  382- 438(  56), 28672+512= 29184 bytes
+29: OD.SCREEN.TEXT  Text 30-Dec-83  438- 460(  22), 11264+512= 11776 bytes
+30: OD.UTILS.TEXT   Text 30-Dec-83  460- 480(  20), 10240+512= 10752 bytes
+31: OD1             Data 11-Jan-84  480- 545(  65), 33280+512= 33792 bytes
+32: ODMAKE.TEXT     Text  6-Jan-84  545- 549(   4),  2048+512=  2560 bytes
+33: ODWIN.TEXT      Text 21-Feb-83  549- 553(   4),  2048+512=  2560 bytes
+34: PEEK.TEXT       Text  9-Jan-82  553- 557(   4),  2048+512=  2560 bytes
+35: READKBRD        Data 19-Aug-82  557- 561(   4),  2048+512=  2560 bytes
+36: READKBRD.TEXT   Text 25-Oct-82  561- 567(   6),  3072+512=  3584 bytes
+37: SETKBRD.TEXT    Text 25-Jan-82  567- 571(   4),  2048+512=  2560 bytes
+38: TESTBOOT        Data 28-Sep-83  571- 577(   6),  3072+512=  3584 bytes
+39: TESTBOOT.TEXT   Text 28-Sep-83  577- 587(  10),  5120+512=  5632 bytes
+40: TIMER1          Data 10-Feb-82  587- 597(  10),  5120+512=  5632 bytes
+41: TIMER1.TEXT     Text 11-Mar-82  597- 609(  12),  6144+512=  6656 bytes
+42: TIMER2          Data 24-May-82  609- 619(  10),  5120+512=  5632 bytes
+43: TIMER2.TEXT     Text 24-May-82  619- 631(  12),  6144+512=  6656 bytes
+44: TIMERRTNS       Data  2-Aug-83  631- 636(   5),  2560+512=  3072 bytes
+45: TIMERRTNS.TEXT  Text  2-Aug-83  636- 646(  10),  5120+512=  5632 bytes
+46: TRAP            Data 18-Aug-82  646- 648(   2),  1024+512=  1536 bytes
+47: TRAP.TEXT       Text 18-Aug-82  648- 652(   4),  2048+512=  2560 bytes
+48: UNITST.TEXT     Text 19-Jan-82  652- 658(   6),  3072+512=  3584 bytes
+49: USTAT           Data 17-May-83  658- 663(   5),  2560+512=  3072 bytes
+50: USTAT.OBJ       Data 17-May-83  663- 666(   3),  1536+512=  2048 bytes
+51: USTAT.TEXT      Text 17-May-83  666- 672(   6),  3072+512=  3584 bytes
+52: VEC6            Data 19-Jan-82  672- 674(   2),  1024+512=  1536 bytes
+53: VEC6.TEXT       Text 19-Jan-82  674- 678(   4),  2048+512=  2560 bytes
+54: ZED             Data  1-May-82  678- 774(  96), 49152+512= 49664 bytes

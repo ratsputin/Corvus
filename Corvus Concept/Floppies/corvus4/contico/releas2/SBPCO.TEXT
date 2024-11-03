@@ -1,0 +1,247 @@
+
+CP/M Utilities                                        2 Mar 82
+
+This PCO covers CP/M Utilities for the Superbrain.
+
+                6/10/20 SB (5 1/4" soft-sectored media - 104/1D)
+
+This release supercedes all previous releases.  Note that there is now
+one set of floppies for all 3 drive sizes.
+
+This release was tested with a 64k version 2.2 (DOS ver 3.0) of CP/M.
+
+This release includes support for pipes and spooling; it also includes
+firmware version 17.3.
+
+CLINK2.ASM is set up as follows:
+
+  - link below
+  - Z80B
+  - 10 MB drive
+  - 2 pseudo drives
+  - pipes area starting at block 64
+  - block size of 8k
+  - memory size of 64k
+
+DELTA from a standard CP/M is 1C00H.
+
+Files changed:
+-------------
+
+  Note that floppies are now quad density (512 bytes/sector); previously
+  we shipped single-density floppies (128 bytes/sector).
+
+
+$P
+The floppy labels are listed below including Corvus part number.
+
+5 1/4" floppies
+---------------
+  SB Utilities-vol 1 of 2               SB Source Utilities-vol 1 of 1
+  for CP/M 2.2                          for CP/M 2.2
+  Release date:  17-Feb-82              Release date:  17-Feb-82
+  CP#: 8100-0
+
+  SB Utilities-vol 2 of 2
+  for CP/M 2.2
+  Release date:  17-Feb-82
+  CP#: 8100-0
+
+To copy floppies:
+----------------
+
+  SB floppies are copied on the Superbrain using the dual floppy drives.
+
+  Boot from the SB boot disk.
+
+  Use FORMAT30 to format new floppies.
+
+  Use COPY30 DATA to copy.
+
+  Use CRCK4 to verify.
+
+
+$P
+Files on each floppy are shown below:       (formatted size = 164k)
+
+SB Utilities - vol 1         Version             CRC
+  SB/1                                           00 00
+  INDEX   .DOC               2/15/82             E2 6E
+  CERROR  .DOC               -   -               34 81
+  PUTGET  .COM               1.4SB               15 D5
+  CLINK2FV.COM               -   -               91 1A
+  CLINK2TN.COM               -   -               C5 81
+  CLINK2TW.COM               -   -               15 0A
+  CLINK7FV.COM               -   -               3E 2F
+  CLINK7TN.COM               -   -               E9 55
+  CLINK7TW.COM               -   -               5F 7A
+  CDIAGNOS.COM               2.3SB               31 54
+  CDIAGNOS.DOC               -   -               6C BE
+  CORVB173.CLR               17.3                A1 21
+  MIRROR  .COM               1.32SB              B4 9E
+  SEMA4   .COM               1.3SB               BC A8
+  PMGR    .COM               1.1                 E0 87
+  SPOOL   .COM               2.0                 F6 AD
+  DRIVEL  .COM               1.0                 22 D7
+
+  Bytes remaining = 16k                      sum=C9 EB
+
+SB Utilities - Vol 2
+  SB/2                                           00 00
+  CLINK2  .ASM               1.09SB              D5 E9
+  SEMA4   .ASM               1.3SB               E4 FB
+  SPOOLGEN.SUB               -   -               4A FF
+  SPOOL   .SRC               -   -               74 75
+  SPOOL   .DEF               -   -               40 8E
+  SPOOLC  .PAS               -   -               D6 44
+  SPOOL   .PAS               -   -               17 01
+  SPOOLM  .PAS               -   -               17 51
+
+  PIPEGEN .SUB               -   -               39 9F
+  PIPES   .SRC               -   -               81 14
+  PIPED   .PAS               -   -               FD 0D
+  PIPEC   .PAS               -   -               C8 C0
+  PIPES   .PAS               -   -               00 73
+
+  CPMIO   .MAC               -   -               9F 13
+  CLOADR  .ASM               1.4SB               69 02
+  CBOOT   .ASM               1.3SB               70 31
+  BIOSC   .ASM               1.22                86 A3
+
+  Bytes remaining = 22k                      sum=3F 58
+
+SB Source Utilities - Vol 1
+  SB/SRC1                                        00 00
+  MIRROR  .ASM               1.32SB              48 CA
+  CDIAGNOS.ASM               2.3SB               53 8A
+  PUTGET  .ASM               1.4SB               BA 36
+
+  Bytes remaining = 48k                      sum=56 8A
+
+$P
+
+REL:SBPCO
+---------
+
+
+
+CP/M Utilities                                        2 Mar 82
+
+This PCO covers CP/M Utilities for the Superbrain.
+
+                6/10/20 SB (5 1/4" soft-sectored media - 104/1D)
+
+This release supercedes all previous releases.  Note that there is now
+one set of floppies for all 3 drive sizes.
+
+This release was tested with a 64k version 2.2 (DOS ver 3.0) of CP/M.
+
+This release includes support for pipes and spooling; it also includes
+firmware version 17.3.
+
+CLINK2.ASM is set up as follows:
+
+  - link below
+  - Z80B
+  - 10 MB drive
+  - 2 pseudo drives
+  - pipes area starting at block 64
+  - block size of 8k
+  - memory size of 64k
+
+DELTA from a standard CP/M is 1C00H.
+
+Files changed:
+-------------
+
+  Note that floppies are now quad density (512 bytes/sector); previously
+  we shipped single-density floppies (128 bytes/sector).
+
+
+$P
+The floppy labels are listed below.
+
+5 1/4" floppies
+---------------
+  SB Utilities-vol 1 of 2               SB Source Utilities-vol 1 of 1
+  for CP/M 2.2                          for CP/M 2.2
+  Release date:  17-Feb-82              Release date:  17-Feb-82
+
+  SB Utilities-vol 2 of 2
+  for CP/M 2.2
+  Release date:  17-Feb-82
+
+
+To copy floppies:
+----------------
+
+  SB floppies are copied on the Superbrain using the dual floppy drives.
+
+  Boot from the SB boot disk.
+
+  Use FORMAT30 to format new floppies.
+
+  Use COPY30 DATA to copy.
+
+  Use CRCK4 to verify.
+
+
+$P
+Files on each floppy are shown below:       (formatted size = 164k)
+
+SB Utilities - vol 1         Version             CRC
+  SB/1                                           00 00
+  INDEX   .DOC               2/15/82             E2 6E
+  CERROR  .DOC               -   -               34 81
+  PUTGET  .COM               1.4SB               15 D5
+  CLINK2FV.COM               -   -               91 1A
+  CLINK2TN.COM               -   -               C5 81
+  CLINK2TW.COM               -   -               15 0A
+  CLINK7FV.COM               -   -               3E 2F
+  CLINK7TN.COM               -   -               E9 55
+  CLINK7TW.COM               -   -               5F 7A
+  CDIAGNOS.COM               2.3SB               31 54
+  CDIAGNOS.DOC               -   -               6C BE
+  CORVB173.CLR               17.3                A1 21
+  MIRROR  .COM               1.32SB              B4 9E
+  SEMA4   .COM               1.3SB               BC A8
+  PMGR    .COM               1.1                 E0 87
+  SPOOL   .COM               2.0                 F6 AD
+  DRIVEL  .COM               1.0                 22 D7
+
+  Bytes remaining = 16k                      sum=C9 EB
+
+SB Utilities - Vol 2
+  SB/2                                           00 00
+  CLINK2  .ASM               1.09SB              D5 E9
+  SEMA4   .ASM               1.3SB               E4 FB
+  SPOOLGEN.SUB               -   -               4A FF
+  SPOOL   .SRC               -   -               74 75
+  SPOOL   .DEF               -   -               40 8E
+  SPOOLC  .PAS               -   -               D6 44
+  SPOOL   .PAS               -   -               17 01
+  SPOOLM  .PAS               -   -               17 51
+
+  PIPEGEN .SUB               -   -               39 9F
+  PIPES   .SRC               -   -               81 14
+  PIPED   .PAS               -   -               FD 0D
+  PIPEC   .PAS               -   -               C8 C0
+  PIPES   .PAS               -   -               00 73
+
+  CPMIO   .MAC               -   -               9F 13
+  CLOADR  .ASM               1.4SB               69 02
+  CBOOT   .ASM               1.3SB               70 31
+  BIOSC   .ASM               1.22                86 A3
+
+  Bytes remaining = 22k                      sum=3F 58
+
+SB Source Utilities - Vol 1
+  SB/SRC1                                        00 00
+  MIRROR  .ASM               1.32SB              48 CA
+  CDIAGNOS.ASM               2.3SB               53 8A
+  PUTGET  .ASM               1.4SB               BA 36
+
+  Bytes remaining = 48k                      sum=56 8A
+
+
+

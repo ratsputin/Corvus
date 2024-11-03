@@ -1,0 +1,48 @@
+
+To : Concept Group
+From : Keith Ball
+Date : December 1, 1982
+
+Re :   Incompatibilities between the CCOS versions 1.0c and final 1.0d
+
+       The January release will have certain systemic incompatibilities
+with the current system.  Software developers, internal and external,
+must be made aware of them.  Probably, for all cases, recompiling Pascal
+and FORTRAN software using the new libraries and compilers will remove
+any danger from the imcompatibles.
+
+       The following is a preliminary list of changes to the system which
+will have a compatibility impact on system and application software.
+
+       1) The addition of double precision floating point data types to
+          the Pascal compiler.  This feature is touted by SVS to be
+          compatible with the FORTRAN double precision data type.
+
+
+       2) The new display driver has window records which are 4 bytes
+          longer than the old driver's window records.
+
+       It is necessary to update this list and make it represent
+accurately the impact the new release have on all software developers.
+Therefore, please report in writing to me any other potential changes
+that fall into this category.  The reports may be handwritten and need
+be only a few lines.
+
+
+CONCEPT GROUP DISTRIBUTION:
+
+Keith Ball
+Mary Boetcher
+Michael Cook
+Michael Earley
+Brett Eastman
+Lynn Franklin
+Lee Frohman
+Al Grueneich
+Karl Lew
+William Manning
+Greg Schroeder
+David Smith
+Michael P Smith
+Dan Torres
+Robert M Wohnoutka

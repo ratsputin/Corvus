@@ -1,0 +1,46 @@
+                     BURN-IN CHANGE DOCUMENT
+
+                           REVISION E7
+
+
+
+
+DATE: DEC.15, '82 REVISION E7
+
+       REV. E7 allows the operator to create a text file report of more
+than one address.  The process is:
+       Report
+       Ask for a text file
+       Specify first address
+       Keep responding 'yes' and giving address until done
+       When there is no more, the text file will be closed.
+
+
+
+DATE: DEC. 14, '82 REVISION E6
+
+       REV. E6 clears the confusing display of the "AUTOFILE" flag in
+the command window.
+
+
+
+DATE: DEC. 8-10, '82  REVISION E4, E5
+
+       REV. E4, E5  made to add the "INVALID DATA" line to the printed
+reports and to prompt the user for firmware level CF18.4 during update.
+
+
+
+
+DATE: DEC. 6, '82   REVISION E3
+
+
+       Change made to OBMSTR & OBINT to permanently record the
+number of "INVALID REPORTS" received during the burn-in run for
+each disk.  The older revision, E2, cleared the count when a
+valid report was received.
+
+       The display for number of invalid reports was moved over
+to prevent a collision with a large number of seeks.
+
+

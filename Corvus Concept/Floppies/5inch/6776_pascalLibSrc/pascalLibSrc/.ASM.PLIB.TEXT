@@ -1,0 +1,24 @@
+;
+; .ASM.PLIB -- assemble PASLIB routines
+;
+asm68k ccosgotoxy
+asm68k mercall
+asm68k merinit
+asm68k merio
+asm68k mermem
+asm68k mermisc
+asm68k merrange
+asm68k mertexti
+asm68k mertexto
+asm68k pasdpwr10
+asm68k pasmath
+asm68k pasmchk
+asm68k pasmove
+asm68k paspwr10
+asm68k passcomp
+asm68k passet
+asm68k pastring
+pascal pasrio
+;
+; Finished ....
+;

@@ -1,0 +1,176 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                           File: NFTN1:REAL8.TEXT                          *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               22-Apr-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+procedure dblfloat(var d: real8; i: integer); external;
+
+procedure dbladd(var d1,d2,d3: real8); external;
+
+procedure dblmul(var d1,d2,d3: real8); external;
+
+procedure dbldiv(var d1,d2,d3: real8); external;
+
+procedure dblneg(var d: real8); external;
+
+function dbl2sngl(var d: real8): real; external;
+
+procedure sngl2dbl(var d: real8; r: real); external;
+
+function dblcmp(var d1,d2: real8): integer; external;
+
+function dbl2int(var d: real8): longint; external;
+
+
+(* Convert a real8 to a real4 *)
+
+procedure single(var r: real4; var d: real8);
+begin
+r := dbl2sngl(d);
+end;
+
+
+(* Convert a real4 to a real8 *)
+
+procedure double(var d: real8; r: real4);
+begin
+sngl2dbl(d,r);
+end;
+
+
+(* Multiple freal8 by 10.0 and add fint *)
+
+procedure r8x10plusi(var d: real8; i: integer);
+  var d2: real8;
+begin
+dblfloat(d2,10);
+dblmul(d,d,d2);
+dblfloat(d2,i);
+dbladd(d,d,d2);
+end;
+
+
+(* Divide freal8 by 10.0 *)
+
+procedure r8slash10(var d: real8);
+  var d2: real8;
+begin
+dblfloat(d2,10);
+dbldiv(d,d,d2);
+end;
+
+
+(* Multiple freal8 by 10.0 *)
+
+procedure r8times10(var d: real8);
+  var d2: real8;
+begin
+dblfloat(d2,10);
+dblmul(d,d,d2);
+end;
+
+
+(* Negate freal8 *)
+
+procedure r8negate(var d: real8);
+begin
+dblneg(d);
+end;
+
+
+procedure pwrten8(var d: real8; i: integer);
+  var t: real8;
+begin
+dblfloat(t,10);
+dblfloat(d,1);
+while i <> 0 do begin
+  if odd(i) then dblmul(d,d,t);
+  dblmul(t,t,t);
+  i := i div 2;
+  end;
+end;
+
+
+(* Divide freal8 by the 10 to the power fint *)
+
+procedure r8divbypwrten(var d1: real8; d2: real8; i: integer);
+begin
+pwrten8(d1,i);
+dbldiv(d1,d2,d1);
+end;
+
+
+(* Multiplies freal8 by the 10 to the power fint *)
+
+procedure r8mulbypwrten(var d1: real8; d2: real8; i: integer);
+begin
+pwrten8(d1,i);
+dblmul(d1,d1,d2);
+end;
+
+
+procedure r8removedigit(var d: real8; i: integer);
+  var d2: real8;
+begin
+dblfloat(d2,i);
+dblneg(d2);
+dbladd(d,d,d2);
+dblfloat(d2,10);
+dblmul(d,d,d2);
+end;
+
+
+procedure r8round(var d: real8; i: integer);
+  var d2,d3: real8;
+begin
+dblfloat(d2,5);
+pwrten8(d3,i);
+dbldiv(d2,d2,d3);
+dbladd(d,d,d2);
+end;
+
+
+function DNonZero(d: real8): Boolean;
+  var d2: real8;
+begin (* DNonZero *)
+dblfloat(d2,0);
+DNonZero := dblcmp(d,d2) <> 0;
+end; (* DNonZero *)
+
+
+(* Less than comparision between double and real *)
+
+function DRLT(d: real8; r: real4): Boolean;
+  var d2: real8;
+begin (* DRLT *)
+sngl2dbl(d2,r);
+DRLT := dblcmp(d,d2) < 0;
+end; (* DRLT *)
+
+
+(* Compare a double greater or equal to the power of ten of fint *)
+
+function DPwrTenGE(d: real8; i: integer): Boolean;
+  var d2: real8;
+begin (* DPwrTenGE *)
+pwrten8(d2,i);
+DPwrTenGE := dblcmp(d,d2) >= 0;
+end; (* DPwrTenGE *)
+
+
+function DInvPwrTenLT(d: real8; i: integer): Boolean;
+  var d2,d3: real8;
+begin (* DInvPwrTenLT *)
+dblfloat(d2,1);
+pwrten8(d3,i - 1);
+dbldiv(d2,d2,d3);
+DInvPwrTenLT := dblcmp(d,d2) < 0;
+end; (* DInvPwrTenLT *)
+
+

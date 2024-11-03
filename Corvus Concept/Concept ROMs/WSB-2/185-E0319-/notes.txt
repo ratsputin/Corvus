@@ -1,0 +1,13 @@
+Corvus Concept w/printed model/serial/rev plate
+  serial 185-E0319-
+  model WSB-2
+  revision F
+
+Contains:
+  Corvus Systems Processor board
+    handwritten "8010-11938-01 REV 1"
+    rev A
+  Corvus Systems Corvus Concept Memory 8051 REV. daughterboard 
+     "8051 REV." crossed out
+     handwritten "8010-11937-01"
+     w/1.25MB installed (full board)

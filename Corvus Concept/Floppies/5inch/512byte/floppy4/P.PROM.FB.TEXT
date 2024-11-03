@@ -1,0 +1,1219 @@
+;
+; File: CC.PROM.FB.TEXT
+; Date: 13-June-83
+;       Keith Ball
+;
+; Floppy driver for the new controller.
+;
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D0, D7 & A0
+; INTERNAL REGISTER USEAGE :
+;
+;        D0 = temporary register
+;        D1 = temporary register
+;        D2 = count of bytes user wants then number of bytes in
+;              partial sector - if no partial then = sector size
+;        D3 = temporary register
+;        D4 = # of sectors to read/write (loop counter)
+;        D5 = starting block then current logical sector number
+;        D6 = count of bytes in command or result array
+;        D7 = current IOresult code
+;
+;        A0 = temporary register
+;        A1 = temporary register
+;        A2 = pointer to local temporary variables (even word boundary)
+;        A3 = pointer to user's buffer or parameter block
+;        A4 = workstaton ram pointer
+;        A5 = Slot base address
+;        A6 = Static ram Base pg pointer - local data
+;
+  page
+;
+;       FBboot -- Rev B floppy disk boot processing
+;
+FBboot
+        move.b  d0,CPbtslot.w       ;set boot slot number
+        move.b  d0,CPosslot.w       ;set OS slot number
+        clr.b   CPbtsrvr.w          ;set boot server number
+        pea     FBblkIO             ;set boot disk blk i/o subr pointer
+        move.l  (sp)+,CPblkio.w     ;*
+        pea     FBsctIO             ;set boot disk sector i/o subr pointer
+        move.l  (sp)+,CPdskio.w     ;*
+        moveq   #0,d0               ;
+        move.b  d0,CPossrvr.w       ;set OS server number
+        move.w  d0,CPosblk+1.w      ;set OS volume block number
+        move.b  d0,CPosdrv.w        ;set OS volume drive number
+        clr.l   d1                  ;access drive 0
+        bsr     FBinit              ;initialize floppy drive
+        blt.s   FBboot9             ;just return if error
+                                    ;
+FBboot1 move.l  #USRbase,a0         ;get block buffer pointer
+        moveq   #0,d0               ;1st boot block
+        move.w  d0,d1               ;drive number
+        moveq   #DskRead,d5         ;get read block function code
+                                    ;
+        bsr.s   FBblkIO             ;read block 0 of boot code
+        blt.s   FBboot9             ;just return if error
+        bsr.s   FBblkIO             ;read block 1 of boot code
+        blt.s   FBboot9             ;just return if error
+        move.l  #USRbase,a0         ;get block buffer pointer
+                                    ;
+FBboot9 rts                         ;return
+  page
+;
+; FBblkIO - Read a Rev B floppy controller disk block subroutine
+;
+;       Enter:  A0.L - Buffer address
+;               D0.W - Block number
+;               D1.W - Drive number
+;               D5.W - Read ($32) or Write ($33) command
+;
+;       Exit:   A0.L - Next free location in buffer
+;               D0.W - Updated block number
+;               D7.W - IORESULT
+;
+;       All other registers are preserved.
+;
+FBblkIO  MOVEQ     #IOEioreq, D7                 ;assume not read
+         CMPI.W    #DskRead, D5                  ;is it a read?
+         BNE.S     FBBerror                      ;no, exit
+
+         CLR.L     D7
+         MOVEM.L   D0-D6/A1-A6,-(SP)             ;setup regs for driver
+         MOVE.L    A0, A3                        ;put buffer adr and
+         MOVE.W    D0, D5                        ;block number in right regs
+         MOVE.W    #BLKSZ, D2                    ;read 1 block
+         SUBA.W    #LocalFrame, SP               ;allocate local stack frame
+         MOVE.L    SP, A2                        ;must be even # of bytes
+         MOVE.B    D1, DrvNumb(A2)               ;save drive number
+
+; Get data Ram(A6), Slot(A5), and workstation Ram(A4) pointers
+;
+         BSR       FBbaseAdr
+
+         BSR       FBread                        ;
+         ADDA.W    #LocalFrame, SP               ;release local stack frame
+         MOVE.L    A3, A0                        ; save next free location
+         MOVEM.L   (SP)+,D0-D6/A1-A6             ;restore registers
+         ADDQ.W    #1,D0                         ;INC BASE BLOCK
+FBBerror TST.W     D7                            ;set return condition code
+         RTS
+  page
+;
+; FBsctIO - Read a Corvus floppy disk sector
+;
+;       Enter:  A0.L - Buffer address
+;               D1.W - Drive number
+;               D3.B - Track number
+;               D4.B - Sector number
+;               D5.W - Read ($32) or Write ($33) command
+;               D6.B - side number (0 or 1)
+;
+;       Exit:   D7.W - IORESULT
+;
+;       All other registers are preserved.
+;
+FBsctIO  MOVEM.L   D0-D6/A0-A6,-(SP)             ;save registers
+         MOVE.L    A0, A3                        ;put buffer adr in right reg
+         SUBA.W    #LocalFrame, SP               ;allocate local stack frame
+         MOVE.L    SP, A2                        ;must be even # of bytes
+         MOVE.B    D1, DrvNumb(A2)               ;save drive number
+         MOVE.B    D3, Ptrack(A2)                ;save track number
+         MOVE.B    D6, Pside(A2)                 ;save side
+         MOVE.L    D4, D5                        ;keep sector number
+
+; Get data Ram(A6), Slot(A5), and workstation Ram(A4) pointers
+;
+         BSR       FBbaseAdr                     ; on Entry: D0 = unit number
+
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       FBMtrON                       ;turn on motor and setup controller
+
+; check for disk change
+;
+         BSR       FBdChng
+         BNE.S     FBsio9                        ;I/O error, turn motor off & exit
+
+         BSR       FBseek                        ;get to track
+         BNE.S     FBsio9                        ;if error, return
+
+FBsio2   BSR       FBsecRd                       ;read sector
+         BNE.S     FBsio9                        ;failed
+         BSR       FBmvOUT                       ;move data to user's space
+
+FBsio9   BSR       FBmtrOFF                      ;turn off motor
+         ADDA.W    #LocalFrame, SP               ;release local stack frame
+         MOVEM.L   (SP)+,D0-D6/A0-A6             ;restore registers
+         TST.W     D7                            ;set return condition code
+         RTS
+  page
+; FBinit - init device ram and internal variables.
+;          initialize controller
+;        Entry: D1.W - Drive number
+;
+; Get local data(A2), data Ram(A6), Slot(A5), and workstation Ram(A4) pointers
+;
+FBinit   SUBA.W    #LocalFrame, SP               ;allocate local stack frame
+         MOVE.L    SP, A2                        ;must be even # of bytes
+         MOVE.B    D1, DrvNumb(A2)               ;save drive number
+         BSR       FBbaseAdr
+
+; Put default values in device table entry
+;
+         BSR.S     FBsltinit
+
+; Bug in FDC - must specify step rate 1 ms. faster than want it
+;
+         MOVE.W    #4, (A6)                      ;3 millisecond step rate
+         MOVE.L    #FDDTimeOut, RdyTO(A6)        ;init ready timeout counter
+         CLR.W     FBflags(A6)                   ;clear all flags
+         BSR.S     FBctlinit                     ;init controller
+         BNE.S     FBIerror                      ;if failed try to recover
+
+; restore
+;
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       FBMtrON                       ;turn on motor and wait for Read
+         BNE.S     FBIexit1                      ;timed out waiting for ready
+         BSR       FBrstor                       ;restore to track 0
+         BNE.S     FBIerror                      ;failed, D7 has error code
+
+; do read id and sense drive status to get disk and drive info
+;
+         BSR       FBdrvInfo                     ;assumes motor is on
+
+FBIexit1 BSR       FBmtrOFF                      ;turn off motor and deselect dri
+FBIexit  ADDA.W    #LocalFrame, SP               ;release stack frame
+         TST.W     D7
+         RTS
+
+; possible serious I/O error reset chip again to try to recover
+;
+FBIerror BSR.S     FBctlinit                     ;init controller also turns off
+         BEQ.S     FBIexit                       ;if ok exit
+         BSR.S     FBintFDC                      ;else reset controller and leave
+         BRA.S     FBIexit
+
+; FBctlinit - init the FDC and do a Specify command
+;
+FBctlinit
+         BSR.S     FBintFDC                      ;reset the FDC
+         BRA       FBspecify                     ;do a specify command
+  page
+;
+;FBintFDC - reset the floppy disk controller
+;        Entry : (A5) = Slot base address
+;
+FBintFDC MOVE.B    #MRstFDC, FDClocl(A5)         ;reset FDC
+         MOVE.B    #MMtrOFF, FDClocl(A5)         ;set it back to normal
+         RTS
+
+; FBsltinit - init variables based on floppy type
+;
+FBsltinit
+         MOVE.B    #D8TYPE, CPftyp.W             ; single density and 1 side
+         MOVE.B    #D8TRKSID, CPftps.W           ; default TRACKS PER SIDE
+         MOVE.B    #D8SECTRK,CPfspt.W            ; default SECTORS PER TRACK
+         MOVE.W    #D8SctrLn, CPfbps.W           ; default sector length
+
+         BTST      #LSeight, FDClocl(A5)         ;is it 8 inch?
+         BON.S     FBSINex                       ;yes, exit else do for 5 1/4 inch
+
+         MOVE.B    #D5TYPE, CPftyp.W             ; double density and 2 sides
+         MOVE.B    #D5TRKSID, CPftps.W           ; default TRACKS PER SIDE
+         MOVE.B    #D5SECTRK,CPfspt.W            ; default SECTORS PER TRACK
+         MOVE.W    #D5SctrLn, CPfbps.W           ; default sector length
+FBSINex  RTS
+  page
+;
+; FBread - read block of floppy
+;
+; Turn on motor
+;
+FBread   MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       FBMtrON
+         BNE.S     FBRmtrOFF                     ;drive not come ready
+
+; check for disk change
+;
+         BSR.S     FBdChng
+         BNE.S     FBRmtrOFF                     ;I/O error, exit
+
+; get starting sector, track and side and # of sectors to read
+;
+         BSR       FBstSTS
+         BNE.S     FBRmtrOFF                     ;invalid block number
+         BSR       FBnumbSctr
+         SUBQ.W    #1, D4                        ;turn into loop counter
+
+; seek to track and build interleave table
+;
+         BSR       FBseek
+         BNE.S     FBRmtrOFF
+
+; for i := 1 to (# of sectors to read) do
+; read sector, move data to user's buffer, update sector,track and side
+;
+FBRread  BSR.S     FBsecRd                       ;read sector
+         BNE.S     FBRmtrOFF                     ;I/O error exit
+         BSR       FBmvOUT                       ;move data to user's space
+         BSR       FBupSTS                       ;update sector,track and side
+         DBNE      D4, FBRread                   ;do until(bad block) or (read al
+
+; turn motor off and exit
+;
+FBRmtrOFF
+         BRA       FBmtrOFF
+  page
+;common functions - put in groups so can make include files if necessary
+;routines to do macro I/O operations
+
+;
+; FBdChng - check if disk has changed.  If it has then find out diskette
+;           state and restore the drive.
+; ASSUMES motor is alreay on and up to speed.
+;
+;        Exit  : (NE) = failed, I/O error
+;                (EQ) = worked
+;
+FBdChng  BTST      #LSdskchng, FDClocl(A5)       ;disk changed?
+         BOFF.S    FBDCexit                      ;no, exit (cc = EQ)
+
+; restore drive
+;
+         BSR       FBrstor                       ;restore to track 0
+         BNE.S     FBDCexit                      ;failed, D7 has error code
+
+; get diskette info
+; Drop into drive info routine.
+  page
+; FBdrvInfo  - get sector length, density and number of sides.
+;              get sides from sense drive status command and get sector
+;              length and density from read id command.
+;        try read id with current density if fails flip density flag.
+;        if that fails report error and stop.
+;
+;        Exit  : (NE) = failed, I/O error or no density????
+;                (EQ) = worked
+; do read id to find density
+;
+FBdrvInfo
+         MOVEQ     #3, D0                        ;try each density at least twice
+
+FBDIagn  MOVE.W    D0, -(SP)                     ;save retry count
+         MOVEQ     #Mside0, D3                   ;need look at side 0 only
+         BSR       FBrdid                        ;if works will clear D7
+         BEQ.S     FBDIok                        ;did command
+         BRA.S     FBDIex1                       ;timedout, error exit
+
+FBDIok   BSR       FBrdidST                      ;see if command worked
+         BEQ.S     FBDIsav                       ;worked, save state
+         BCHG      #TYPdnsty, CPftyp.W         ;try other density
+         MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, FBDIagn                   ;do until no more retries
+         BRA.S     FBDIext                       ;failed, exit
+
+;save sector length from read id result
+;
+FBDIsav  BSR       FBcnvSLCd                     ;convert sector length code and
+         BNE.S     FBDIex1                       ;sector size to large error
+
+; see if drive has side 1
+;
+         MOVEQ     #Mside0, D0                   ;need look at side 0 only
+         BSR       FBsnsDrvSt                    ;do drive status to get # of sid
+         BNE.S     FBDIex1                       ;timed out, exit
+         BSET      #TYPsides, CPftyp.W         ;assume single sided
+         BTST      #ST32sid, (A2)                ;test for number of sides
+         BOFF.S    FBDIex1                       ;is single sided (1=2 sided)
+
+; make sure can read side 1
+;
+         MOVEQ     #Mside1, D3                   ;look at side 1
+         BSR       FBrdid                        ;if works will clear D7
+         BNE.S     FBDIex1                       ;command failed timeout, exit
+         BSR       FBrdidST                      ;see if command worked
+         BNE.S     FBDIclr                       ;failed leave as 1 sided
+         BCLR      #TYPsides, CPftyp.W         ;is double sided
+FBDIclr  CLR.L     D7                            ;if read of side 1 failed - igno
+
+FBDIex1  MOVE.W    (SP)+, D0                     ;remove D0 from stack
+FBDIext  TST.W     D7                            ;show error state
+FBDCexit RTS
+  page
+;
+; FBsecRd    - read 1 sector.  Finds disk parameters if read function
+;              returns an "UNFORMATTED" error.
+;
+;        Entry : (D5) = logical sector number
+;                (A2) = pointer to local stack frame
+;        Exit  : (NE) = failed, I/O error
+;                (EQ) = worked
+;
+FBsecRd
+         MOVEQ     #RTRYread, D0                 ;read sector retry count
+
+; if read fails and get "UNFORMATTED" error then retry with other density
+;
+FBSRrtry MOVE.W    D0, -(SP)                     ;save retry count
+         CLR.L     D7                            ;make sure error code cleared
+
+         MOVEQ     #CMDread, D0                  ;get in command
+         BSR       FBrd1                         ;do read operation
+         BNE.S     FBSRex1                       ;timedout, error exit
+
+         BSR       FBreadST                      ;see if worked
+         BEQ.S     FBSRex1                       ;read sector, all done
+         CMPI.W    #IOEnfmtd, D7                 ;not formatted error
+         BNE.S     FBSRnot                       ;no, retry with same density
+         BSR.S     FBdrvInfo                     ;get drive parameters
+         BNE.S     FBSRext                       ;maybe drive is not formatted
+
+FBSRnot  MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, FBSRrtry                  ;do until no more retries then
+         BRA.S     FBSRext                       ;exit with error in D7
+
+FBSRex1  MOVE.W    (SP)+, D0                     ;remove retry count from stack
+FBSRext  TST.W     D7                            ;show error condition
+         RTS
+  page
+;FDC, FDD commands
+;
+; FBspecify  - do a specify command to FDC
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = prom data space pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+FBspecify
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDspcfy, (A0)+              ;put specify in command buffer
+
+; 2nd byte is step rate code in bits D7 to D4 inclusive, HUT in D3 to D0 inclusiv
+; 3rd byte is HLT code in bits D7 to D1 and NOT DMA in bit D0
+;
+         MOVE.B    #HLT8code+NDMAcode, D3        ;HLT code is pre-shifted, assume 8 inch
+         MOVEQ     #16, D1                       ;step rate code goes
+         MOVE.W    (A6), D0                      ;from F to 0 where F = 1 ms.,
+                                                 ;E = 2 ms., D = 3 ms. and so on
+         BTST      #LSeight, FDClocl(A5)         ;is it 8 inch?
+         BON.S     FBSPis8                       ;yes, leave step as is else step div 2
+         LSR.W     #1, D0                        ;5 goes 2,4,6,..,32 milliseconds
+         MOVE.B    #HLT5code+NDMAcode, D3        ;use 5 inch HLT code
+
+FBSPis8  SUB.B     D0, D1                        ;formula = 16 - step rate
+         LSL.B     #4, D1                        ;put step rate in correct bits
+         ORI.B     #HUTcode, D1                  ;add head unload time code
+         MOVE.B    D1, (A0)+                     ;put 2nd byte in command array
+         MOVE.B    D3, (A0)                      ;put 3rd byte in command array
+
+         MOVEQ     #3-1, D6                      ;specify command is 3 bytes
+         BRA       FBwritCtl                     ;write command array to cntrllr
+                                                 ;FBwritCtl sets cc for error
+  page
+; FBsnsIntSt - do a Sense Interrupt Status command to FDC.  Find out cause of
+;               interrupt.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = prom data space pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;                IF completed THEN at (A2) is result array of command
+;                                          (2 bytes)
+;
+FBsnsIntSt
+         MOVE.B    #CMDsnsint, (A2)              ;put command byte in buffer
+         MOVEQ     #1-1, D6                      ;only 1 byte to command
+         BSR       FBwritCtl                     ;send command
+         BNE.S     FBSISex                       ;if timed out exit
+         MOVEQ     #RSLTsnsint-1, D6             ;length of result array
+         BSR       FBctlRead                     ;read result
+FBSISex
+FBSDSex  RTS
+
+; FBsnsDrvSt  - do a Sense Drive Status command to FDC.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;                (D0) = side select: side 1=Mside1, side 0=Mside0
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;                IF completed THEN at (A2) is result array of command
+;                                          (1 byte: ST3)
+;
+FBsnsDrvSt
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDsnsdrv, (A0)+             ;put command byte in buffer
+
+; 2nd byte:  bit D2 is side and bits D1 and D0 are the device select
+;
+         OR.B      DrvNumb(A6), D0               ;put side select in drive number
+         MOVE.B    D0, (A0)                      ;put in command array
+
+         MOVEQ     #2-1, D6                      ;2 bytes to command
+         BSR       FBwritCtl                     ;send command
+         BNE.S     FBSDSex                       ;if timed out exit
+
+         MOVEQ     #RSLTsnsdrv-1, D6             ;length of result array
+         BRA       FBctlRead                     ;read result
+  page
+;
+; FBrstor - do a recalibrate command to FDC.  Puts head on Track 0.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+FBrstor  MOVEQ     #RTRYrstr, D0                 ;restore retry count
+
+FBRSrtry MOVE.W    D0, -(SP)                     ;save retry count
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDrclbrt, (A0)+             ;put recalibrate in command buff
+
+; 2nd byte is drive selected in bits D1 and D0, the other bits are 0
+;
+         MOVE.B    DrvNumb(A6), (A0)             ;get drive number, put in command array
+         MOVEQ     #2-1, D6                      ;2 bytes in command array
+
+         BSR       FBwritCtl                     ;write command array to controller
+         BNE.S     FBRSexit                      ;command timed out
+
+; wait for command to complete
+;
+FBRSwait BSR       FBw8FDC
+         BNE.S     FBRSexit                      ;should there be a timeout on cm
+
+; do Sense Interrupt Status command to get command results
+;
+         BSR.S     FBsnsIntSt
+         BNE.S     FBRSexit
+
+; first byte of result array (pointed at by A2) is ST0, see if seek end is good
+;
+         BSR       FBrstrST                      ;find out type of error
+         BCS.S     FBRSwait                      ;wrong drive wait for correct one
+         BEQ.S     FBRSexit                      ;was good, so exit
+         MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, FBRSrtry                  ;do until no more retries then
+         BRA.S     FBRSext1                      ;return failuere
+
+FBRSexit MOVE.W    (SP)+, D0                     ;remove retry count from stack
+FBRSext1 TST.W     D7                            ;show error condition
+         RTS
+  page
+;
+; FBseek - do a seek to track command to FDC.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to local stack frame
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;                physical side and track setup
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+FBseek   MOVEQ     #RTRYseek, D0                 ;restore retry count
+
+FBSKrtry MOVE.W    D0, -(SP)                     ;save retry count
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDseek, (A0)+               ;put seek cmd in command buffer
+
+; 2nd byte is drive selected in bits D1 and D0 and head select in D2
+;
+         BSR       FBdselHD                      ;get device and head select byte
+
+         MOVE.B    Ptrack(A2), (A0)              ;3rd byte: track wanted
+
+         MOVEQ     #3-1, D6                      ;2 bytes in command array
+         BSR       FBwritCtl                     ;write command array to controll
+         BNE.S     FBSKexit                      ;command timed out
+
+; wait for command to complete
+;
+FBSKwait BSR       FBw8FDC
+         BNE.S     FBSKexit                      ;should there be a timeout on cm
+
+; do Sense Interrupt Status command to get command results
+;
+         BSR       FBsnsIntSt
+         BNE.S     FBSKexit
+
+; see if seek end is good
+;
+         BSR       FBskSTAT                      ;find out type of error
+         BCS.S     FBSKwait                      ;wrong drive wait for correct one
+         BEQ.S     FBSKexit                      ;was good, so exit
+         DBRA      D0, FBSKrtry                  ;do until no more retries then
+         BRA.S     FBSKext1                      ;report error
+
+FBSKexit MOVE.W    (SP)+, D0                     ;remove retry count from stack
+FBSKext1 TST.W     D7                            ;show error condition
+         RTS
+  page
+;
+; FBrdid - do a read id command to FDC.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;                (D3) = side select: side 1=Mside1, side 0=Mside0
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+FBrdid   MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVEQ     #CMDredID, D0                 ;get in command
+         BSR       FBadDnsty                     ;combine command and MFM/FM bit
+
+; 2nd byte:  bit D2 is side and bits D1 and D0 are the device select
+;
+         MOVE.B    DrvNumb(A6), D1               ;get drive number
+         OR.B      D3, D1                        ;put in side select
+         MOVE.B    D1, (A0)                      ;put in command array
+
+         MOVEQ     #2-1, D6                      ;2 bytes to command
+         BSR       FBwritCtl                     ;send command
+         BNE.S     FBRIext                       ;if timed out exit
+
+; wait for command to complete
+;
+         BSR       FBw8FDC
+         BNE.S     FBRIext                       ;rts on next page
+
+; get results of operation
+;
+         MOVEQ     #RSLTredID-1, D6              ;length of result array
+         BRA       FBctlRead                     ;read result
+  page
+;
+; FBrd1 - do 1 read or write sector operation.
+; ASSUMES motor is on and up to speed and on correct track.
+;        Entry : D0   = command byte
+;                (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base pg pointer - local data
+;                D5 = logical sector number
+;        Exit  : (NE) = failed, time out
+;                (EQ) = completed
+;
+FBrd1    MOVE.L    A2, A0                        ;save addr of cmd array
+         BSR.S     FBsetrdcmd                    ;setup the rest of the cmd array
+         BNE.S     FBR1exit                      ;invalid sector length error
+
+         BSR       FBbufCntr                     ;setup controller counter
+
+; send command
+;
+         MOVEQ     #RWcmdlen-1, D6               ;9 bytes to command
+         BSR       FBwritCtl                     ;send command
+         BNE.S     FBR1exit                      ;if timed out exit
+
+; wait for command to complete
+;
+         BSR       FBw8FDC
+         BNE.S     FBR1exit                      ;should there be a timeout on cm
+
+; get results of operation
+;
+         MOVEQ     #RSLTrdwr-1, D6               ;length of result array
+         BSR       FBctlRead                     ;read result
+FBRIext
+FBR1exit RTS
+  page
+;command operations support functions
+
+;
+; FBsetrdcmd - setup common portions of Read and Write command arrays.
+;
+;        Entry : A0 = points at 2nd byte of command array
+;                A2 = local stack frame pointer
+;                A4 = device table entry pointer
+;                D0 = command byte
+;                D5 = logical sector number
+;        Exit  : (NE) = invalid length error
+;                (EQ) = got code
+;
+; 2nd byte:  bit D2 is side and bits D1 and D0 are the device select
+;
+FBsetrdcmd
+         BSR.S     FBadDnsty                     ;expects D0 to have command byte
+         BSR.S     FBdselHD                      ;device sel and head sel byte
+
+         MOVE.B    Ptrack(A2), (A0)+             ; 3rd byte: track number
+         MOVE.B    Pside(A2), (A0)+              ; 4th byte: head number
+         MOVE.B    D5, (A0)+                     ; 5th byte: sector number
+
+         BSR.S     FBcnv2slc                     ; 6th byte: sector size code
+         BNE.S     FBSCexit                      ; invalid length
+         MOVE.B    D0, (A0)+
+
+         MOVE.B    CPfspt.W, (A0)+               ; 7th byte: EOT
+
+         EXT.W     D0                            ; 8th byte: GPL, gap 3 length co
+         MOVE.B    GPLtable(D0.W), (A0)+
+
+         MOVEQ     #-128, D1                     ; 9th byte: DTL
+         TST.B     D0                            ;use a DTL value ($80) if code
+         BEQ.S     FBSCmin                       ;is 0, = 128 bytes sector
+         MOVEQ     #-1, D1                       ;use FF if length code > 0
+FBSCmin  MOVE.B    D1, (A0)+
+
+FBSCexit TST.W     D7
+         RTS
+
+; Gap 3 length code translation table
+;
+GPLtable DATA.B    $07                 ;for  128 byte sectors
+         DATA.B    $0E                 ;for  256 byte sectors
+         DATA.B    $1B                 ;for  512 byte sectors
+         DATA.B    $35                 ;for 1024 byte sectors
+  page
+;
+; FBdselHD - put device and head select values in byte of command array
+;        Entry : A0 = pointer to byte in command array
+;
+FBdselHD
+         MOVE.B    Pside(A2), D0                 ;get head select
+         LSL.B     #2, D0                        ;put in correct position
+         OR.B      DrvNumb(A6), D0               ;add drive select
+FBdsel10 MOVE.B    D0, (A0)+                     ;put in command array
+         RTS
+;
+; FBadDnsty - add density bit to command
+;CANNOT use D3
+;        Entry : D0 = command byte
+;                A0 = pointer to byte in command array
+;
+FBadDnsty
+         MOVEQ     #MfmBit, D1                   ;assume is FM
+         BTST      #TYPdnsty, CPftyp.W           ;is it FM?
+         BON.S     FBADfm                        ;yes (1=FM)
+         MOVEQ     #Mmfmbit, D1                  ;no then use MFM
+FBADfm   OR.B      D1, D0                        ;combine command and MFM/FM bit
+         BRA.S     FBdsel10                      ;put it in command array
+  page
+; FBcnv2slc - convert sector length to sector length code.
+;CANNOT use A0
+;        Entry : (A4) = device table entry pointer
+;        Exit  : (D0) = sector length code
+;                (NE) = invalid length error
+;                (EQ) = got code
+;                             FM        MFM
+;        sector lengths      code      code
+;               128           00        --
+;               256           01        01       controller's buffer is 512 bytes
+;               512           02        02       therefore it can not read/write
+;              1024           --        03       1024 byte sectors
+;
+FBcnv2slc
+         MOVE.W    CPfbps.W, D1                ;get sector length in device tab
+         CLR.B     D0                            ;start with code = 0
+         LSR.W     #7, D1                        ;put 4 possible bits in low orde
+
+FBC2find LSR.W     #1, D1                        ;shift out next bit
+         BCS.S     FBC2tst                       ;if set then D0 = correct code
+         BEQ.S     FBC2err                       ;if word clear then invalid leng
+         ADDQ.B    #1, D0                        ;do next code
+         BRA.S     FBC2find
+
+FBC2tst  CMPI.B    #2, D0                        ;is code in range - 512 <= sector
+         BLS.S     FBC2exit                      ;yes
+FBC2err  MOVEQ     #IOEinvsct, D7                ;invalid sector length error
+
+FBC2exit TST.W     D7                            ;show error status
+         RTS
+;
+; FBcnvSLCd - convert sector length code to a number and save in device table.
+;        Entry : (A2) = address of result array from READ ID command
+;                (A4) = device table entry pointer
+;        Exit  : (NE) = sector to long
+;                (EQ) = ok
+;                             FM        MFM
+;        sector length       code      code
+;               128           00        --
+;               256           01        01       controller's buffer is 512 bytes
+;               512           02        02       therefore it can not read/write
+;              1024           --        03       1024 byte sectors
+;
+FBcnvSLCd
+         MOVE.W    #SLfmLow, D0                  ;get min. sector length(128)
+         CLR.W     D1                            ;make sure high order byte is cl
+         MOVE.B    RSLTsctrl(A2), D1             ;get sector length code
+         LSL.W     D1, D0                        ;length = multiply of integral o
+         MOVE.W    D0, CPfbps.W                  ;save length in device table
+         MOVE.B    D1, D0                        ;check if value is greater than
+         BRA.S     FBC2tst                       ;512 byte sectors
+  page
+; FBbaseAdr   - Get static ram base pg address for this slot, get slot base
+;               address and device table entry address
+;
+;
+;        Exit : A5 = Slot base address
+;               A6 = Static ram Base pg pointer - local data
+;
+FBbaseAdr
+;
+; FBSlotRam - calculate base pg address of static ram data area
+;
+;        Exit  : (A6) = Base pg address (a page = 256 bytes)
+;
+FBSlotRam
+         LEA       CPsl1ram.W, A6                ;address of I/O slot Static Ram
+         MOVE.B    CPbtslot.W, D0                ;Slot number
+         EXT.W     D0                            ;base :=
+         MOVE.W    D0, D1
+         SUBQ.W    #1,D0                         ;   ((slot - 1) *
+         MULU      #DBPoffst, D0                 ;   (pg length)) +
+         ADDA.L    D0, A6                        ;   (Slot Static ram base address)
+;
+;FBSltAdr - Fetches the slot base address.
+;
+;        Entry : (D1) = slot number
+;        Exit  : (A5) = Slot base address
+;
+FBSltAdr LEA       IOSbase.L, A5                 ;slot 0 BaseBadrs
+         MULU      #IOSoffst, D1                 ;slot * offset + slot 0 base
+         ADDA.L    D1, A5                        ;equals this slot's base address
+         RTS
+  page
+;
+; FBctlRead - read n bytes from controller into command/result buffer
+;
+;        Entry : (A2) = pointer to command/result array
+;                (A5) = slot base address
+;                (D6) = number of bytes to read - 1
+;        Exit  : (D6) = number of bytes not sent - 1
+;                (NE) = timed out and array AND (D6) are invalid
+;                (EQ) = worked array is valid
+;
+FBctlRead
+         MOVE.L    A2, A0                        ;get address of array
+
+; while (not timeout) and (haven't sent all the bytes) do
+;
+FBCRloop MOVE.W    #FDCTimeOut, D0               ;time out counter
+
+;repeat until(timeout) or (FDC is ready)
+;
+FBCRrdy  BTST      #FDCready, FDCstat(A5)        ;Ready := FDC is ready
+         SNE       D3                            ;         and
+         BTST      #DataDir, FDCstat(A5)         ;         Data direction is READ
+         SNE       D1
+         AND.B     D3, D1
+         BNE.S     FBCRok                        ;Ready so stop waiting
+         SUBQ.W    #1, D0                        ;count down timeout
+         BMI.S     FBCRrdy                       ;no, check again
+         MOVEQ     #IOEflpto, D7                 ;timeout error
+         BRA.S     FBCRexit                      ;timed out so exit (also NE)
+
+FBCRok   MOVE.B    FDCdata(A5), (A0)+            ;get data from reg into array
+         DBRA      D6, FBCRloop                  ;see if more to get
+         CLR.L     D7                            ;got all the data show no error
+FBCRexit RTS
+  page
+;
+; FBwritCtl - write n bytes to controller from command/result buffer
+;
+;        Entry : (A2) = pointer to command/result array
+;                (A5) = slot base address
+;                (D6) = number of bytes to write - 1
+;        Exit  : (NE) = timed out and did not finish sending array
+;                (EQ) = worked array is sent
+;
+FBwritCtl
+         MOVE.L    A2, A0                        ;get address of array
+
+; while (not timeout) and (haven't sent all the bytes) do
+;
+FBWCloop MOVE.W    #FDCTimeOut, D0               ;time out counter
+
+;repeat until(timeout) or (FDC is ready)
+;
+FBWCrdy  BTST      #FDCready, FDCstat(A5)        ;Ready := FDC is ready
+         SNE       D3                            ;         and
+         BTST      #DataDir, FDCstat(A5)         ;         Data direction is WRIT
+         SEQ       D1
+         AND.B     D3, D1
+         BNE.S     FBWCok                        ;Ready so stop waiting
+         SUBQ.W    #1, D0                        ;count down timeout
+         BNE.S     FBWCrdy                       ;no, check again
+         MOVEQ     #IOEflpto, D7                 ;timeout error
+         BRA.S     FBWCexit                      ;timed out so exit (also NE)
+
+FBWCok   MOVE.B    (A0)+, FDCdata(A5)            ;get data from array into reg
+
+;FDC will not give a valid ready state for 12 microseconds after
+;after issuing the COMMAND byte of the command array
+;code is probably slow enough to compensate w/o a wait loop (????)
+;;         MOVEQ     #5, D1                        ;wait 12 microsecs. for RQM
+;;WRCwait  DBRA      D1, WRCwait                   ;to settle to correct state
+
+         DBRA      D6, FBWCloop                  ;see if more to get
+         CLR.L     D7                            ;got all the data show no error
+FBWCexit RTS
+  page
+; FBMtrON - select drive, dma direction and turn motor on.  Wait til
+;           drive comes ready.
+;CANNOT use D3.
+;
+;        Entry : (A2) = local stack frame pointer
+;                (A5) = Slot base address
+;                (D0) = DMARWdir bit = 1 if read dma, = 0 if write dma
+;                            all other bits of low order byte clear!!
+;        Exit  : (NE) = timed out waiting for drive
+;                (EQ) = worked array is sent
+;
+; Add to DMA direction bit Enable device select,motor on, disable INTS
+;        and NOT reset FDC
+;
+FBMtrON  ORI.B     #MMtrON, D0
+         OR.B      DrvNumb(A2), D0               ;get drive number (0..3)
+                                                 ;put as dev sel 0 and 1
+         MOVE.B    D0, FDClocl(A5)               ;put in local command register
+
+; wait until ready or timeout
+;
+         MOVE.L    RdyTO(A6), D1                 ;time out counter
+
+FBMOwait BTST      #LSNdrRdy, FDClocl(A5)        ;is drive(FDD) ready?
+         BOFF.S    FBMOexit                      ;Ready so stop waiting
+         SUBQ.L    #1, D1                        ;count down timeout
+         BPL.S     FBMOwait                      ;not timed out so continue
+         MOVEQ     #IOEflpto, D7                 ;show timeout error
+FBMOexit RTS
+;
+; FBmtrOFF - deselect drive
+;
+;        Entry : (A4) = device table entry pointer
+;                (A5) = Slot base address
+;
+FBmtrOFF MOVE.B    #DisblDS, FDClocl(A5)         ;deselect drive
+         RTS
+  page
+;
+; FBw8FDC - wait for a command to finish.  FDC generates an IRQ when done.
+;
+;        Entry : (A5) = Slot base address
+;        Exit  : (NE) = timed out waiting for command to finish
+;                (EQ) = command completed
+;
+FBw8FDC  MOVE.L    #CMDTimeOut, D0               ;timeout counter
+
+FBW8wait BTST      #LSNirq, FDClocl(A5)          ;did IRQ happen
+         BOFF.S    FBW8exit                      ;yes, command done
+         SUBQ.L    #1, D0                        ;no, see if ran out of time
+         BPL.S     FBW8wait                      ;if more counts do again else
+         MOVEQ     #IOEflpto, D7                 ;show timeout error
+
+FBW8exit RTS
+;
+; FBbufCntr - setup controller counter to point to big enough buffer
+;   Counter is 8 bit interface to a 9 bit down count register which is used
+;   as address selector for the controller's buffer.
+;   D7 thru D1, inclsive, of interface goto D8 thru D2 of register.
+;   D0 of interface goes to D1 and D0 of counter register.
+;
+;        Entry : (A5) = Slot base address
+;
+FBbufCntr
+         MOVE.W    CPfbps.W, D0                ;counter := (SectorSize
+         SUBQ.W    #1, D0                        ;             - 1)
+         LSR.W     #1, D0                        ;           DIV 2
+         MOVE.B    D0, FDCcntr(A5)
+         RTS
+  page
+;
+; FBmvOUT - move data out of controller buffer into user's buffer
+;
+;        Entry : (D2) = number of bytes in partial sector
+;                (D4) = current sector loop counter
+;
+FBmvOUT  MOVE.W    CPfbps.W, D1                ;if full sector move full sector
+         TST.W     D4                            ;is this last sector
+         BNE.S     FBMVOful                      ;no
+         MOVE.W    D2, D1                        ;then use partial length
+FBMVOful SUBQ.W    #1, D1                        ;make into loop counter
+         BSR.S     FBbufCntr                     ;init buffer counter
+
+FBMVOmov MOVE.B    FDCbffr(A5), (A3)+            ;get data from buffer to user
+         DBRA      D1, FBMVOmov
+         RTS
+  page
+; sector,track,side calc support routines
+
+;
+; FBstSTS - calculate starting side, track, and sector from starting block
+;           do logical track and sector and physical side and track
+;
+;        Entry : (D5) = starting block
+;        Exit  : (NE) = invalid block, other return params invalid
+;                (EQ) = worked
+;                (D3) = logical track  (word)
+;                (D5) = logical sector (word)
+;                Pside and Ptrack inited with physical side and track
+;
+FBstSTS  CMPI.L    #$7FFF, D5                    ;block bigger than maxint
+         BHI.S     FBSSinvblk                    ;yes, invalid block number
+
+; Logical Track := ( ((block #) * (block size)) DIV (sector size) ) DIV (sectors/
+;
+         MULU      #BLKSZ, D5                  ;sector size divides evenly into
+         DIVU      CPfbps.W, D5                ;sector size must be 128,256, or
+         CLR.L     D1                            ;get byte and make it a word
+         MOVE.B    CPfspt.W, D1                ;
+         DIVU      D1, D5                        ;D5 low word is logical track
+         MOVE.W    D5, D1                        ;save for later use and validation
+         MOVE.B    D1, CurTrack(A2)              ;keep logical track for update
+         MOVE.W    D1, D3                        ;save logical track
+
+; logical sector number := remainder + 1
+;
+         CLR.W     D5                            ;hi word of D5 is logical sector
+         SWAP      D5                            ; minus 1.  must add one to it
+         ADDQ.W    #1, D5
+
+; Calc physical side and track
+;
+         BRA.S     FBphysTS
+
+FBSSinvblk
+         MOVEQ     #IOEinvblk, D7                ;invalid block number
+         RTS
+  page
+; FBphysTS - calculate physical track and side from logical track
+;        Entry : D1 = logical track number
+;        Exit  : Pside and Ptrack set up
+;                (NE) = invalid block, other return params invalid
+;                (EQ) = worked
+;
+FBphysTS
+         CLR.W     Ptrack(A2)                    ;clear track and side, assume si
+         BTST      #TYPsides, CPftyp.W
+         BON.S     FBPsd0                        ;is side 0 only.
+
+         LSR.W     #1, D1                        ;ptrack := track div 2
+         ROXL.W    Ptrack(A2)                    ;pside := track mod 2  shift in
+
+FBPsd0   CLR.L     D0                            ;get max # of tracks per side in
+         MOVE.B    CPftps.W, D0                ;a word
+         CMP.W     D0, D1                        ;is physical track greater than
+         BHI.S     FBSSinvblk                    ;yes, invalid block number
+         MOVE.B    D1, Ptrack(A2)                ;save physical track number
+FBUexit  TST.W     D7
+         RTS
+;
+; FBupSTS - update side, track and sector
+;        Entry : (D5) = current logical sector number
+;                (D4) = loop counter of sectors to read/write
+;        Exit  : (NE) = invalid block or I/O error
+;                (EQ) = worked
+;                (D5) = updated logical sector number
+;                Pside and Ptrack set up
+;                Did seek if track changed
+;
+FBupSTS  TST.W     D4                            ;was this the last sector?
+         BEQ.S     FBUexit                       ;yes, exit
+         ADDQ.W    #1, D5                        ;treat as word but value is a byte
+         CMP.B     CPfspt.W, D5                ;still in same track
+         BLS.S     FBUexit                       ;yes, then all done
+
+; must update track and side
+;
+         MOVEQ     #1, D5                        ;reset sector number back to 1
+         CLR.L     D1                            ;holds logical track number
+         ADDQ.B    #1, CurTrack(A2)              ;inc logical track number
+         MOVE.B    CurTrack(A2), D1              ;get updated track number
+         BSR.S     FBphysTS                      ;calc physical side and track
+         BNE.S     FBUexit                       ;invalid block error,track out of range
+
+; do seek then calc new interleave table
+;
+         BRA       FBseek                        ;seek physical track
+  page
+;
+; FBnumbSctr - calculate number of sectors to read/write and number
+;              of bytes in partial sector
+;
+;        Entry : D2 = number of bytes to read (word)
+;        Exit  : D2 = number of bytes in partial sector - if no partial then = sector length
+;                D4 = total number of sectors to read,
+;                     includes the partial sector
+;
+FBnumbSctr
+         MOVE.W    CPfbps.W, D0                  ;D0 = bytes per sector
+         CLR.L     D1                            ;make sure no garbage in hi word
+         MOVE.W    D2, D1                        ;# of full sectors :=
+         DIVU      D0, D1                        ;(# of bytes) DIV (sector size)
+         MOVE.W    D1, D4                        ;save # of full sectors
+         CLR.W     D1                            ;the remainder is the number
+         SWAP      D1                            ;of bytes in partial sector
+         TST.W     D1                            ;if partial is empty
+         BEQ.S     FBNpart                       ;then use full sector size for last
+         ADDQ.W    #1, D4                        ;else total := (# of full sectors) + 1
+         MOVE.W    D1, D0                        ;and use partial byte count for last
+FBNpart  MOVE.W    D0, D2                        ;if no partial then set it to sector
+         RTS                                     ;size else use partial count
+  page
+; error routines
+
+;
+; FBrstrST   - check error for restore operation
+;
+;        Entry : (A2) = address of result array from sense int command
+;                       2 bytes. 1st is ST0, 2nd is cylinder number.
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;                (C)  = wrong drive
+;
+FBrstrST BSR       FBchkST0
+         BCS.S     FBrstrex                      ;wrong drive, exit
+         BEQ.S     FBrstrex                      ;no error, exit
+         CMPI.W    #IOEnoT0, D7                  ;is it type w/ equipment error
+         BNE.S     FBrstrex                      ;no
+         BTST      #ST0equp, (A2)                ;yes,drive won't ack Track 0 aft
+         BON.S     FBrstrex                      ;77 step pulses
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+FBrstrex RTS
+;
+; FBskSTAT - check error for seek operation
+;
+;        Entry : (A2) = address of result array from sense int command
+;                       2 bytes. 1st is ST0, 2nd is cylinder number.
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;                (C)  = wrong drive
+;
+FBskSTAT BSR.S     FBchkST0                      ;check ST0 for operation state
+         BCS.S     FBsksex                       ;wrong drive, exit
+         BEQ.S     FBsksex                       ;no error, exit
+         CMPI.W    #IOEnoT0, D7                  ;did cmd stop in middle?
+         BNE.S     FBsksex                       ;no, give IOresult FBchkST0 found
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+FBsksex  RTS
+  page
+;
+;FBrdidST - check error for read ID operation
+;        Entry : (A2) = address of result array of read id command
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;
+FBrdidST BSR.S     FBchkST0                      ;see if command worked
+         BEQ.S     FBRIDSex                      ;worked so exit
+         CMPI.W    #IOEnoT0, D7                  ;did cntrllr not finish cmd?
+         BNE.S     FBRIDSex                      ;no, then exit
+
+; check if can't read disk - maybe unformatted?  {check ST1}
+;
+         MOVEQ     #IOEnfmtd, D7                 ;assume not formatted
+         MOVE.W    (A2), D0                      ;get 2nd byte of array in low by
+         BTST      #ST1snfnd, D0                 ;sector not found?
+         BON.S     FBRIDSex                      ;yes, maybe unformatted
+         BTST      #ST1nadrm, D0                 ;missing address mark?
+         BON.S     FBRIDSex                      ;yes, maybe unformatted
+
+; see if CRC error
+;
+         MOVEQ     #IOEcrcer, D7                 ;assume have CRC error
+         BTST      #ST1dataer, D0                ;CRC error?
+         BON.S     FBRIDSex                      ;yes
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+
+FBRIDSex TST.W     D7
+         RTS
+  page
+;
+;FBreadST - check error for read sector operation
+;
+;        Entry : (A2) = address of result array of read id command
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;
+FBreadST BSR.S     FBrdidST                      ;do same tests as Read ID operat
+         BEQ.S     FBRDSTex                      ;no errors, read worked
+
+; always try wrong cylinder. if is then restore and re-seek
+;
+         MOVE.B    ST2(A2), D0                   ;get status register 2 from resu
+         BTST      #ST2wrngC, D0                 ;read the wrong track?
+         BOFF.S    FBRDST10                      ;no
+         BSR       FBrstor                       ;do restore
+         BNE.S     FBRDSTex                      ;I/O error
+         BSR       FBseek                        ;do seek
+         BNE.S     FBRDSTex                      ;I/O error
+         MOVEQ     #IOEwrngC, D7                 ;tell higher level what failed
+         BRA.S     FBRDSTex
+
+; try read/write on bad track, write protect or missing data address mark
+;
+FBRDST10 CMPI.W    #IOEnebhrd, D7                ;did FBrdidST fail to find cause
+         BNE.S     FBRDSTex                      ;no, then exit
+
+         MOVEQ     #IOEbdtrk, D7                 ;track marked as bad (IBM spec)
+         BTST      #ST2bdtrk, D0
+         BON.S     FBRDSTex
+
+         MOVEQ     #IOEnfmtd, D7                 ;missing data address mark
+         BTST      #ST2ndtam, D0                 ;if is disk needs formatting
+         BON.S     FBRDSTex                      ;yes disk in bad shape
+
+;not doing write
+;        MOVEQ     #IOEwrprot, D7                ;disk write protected?
+;        BTST      #ST1wrpro, ST1(A2)            ;
+;        BON.S     FBRDSTex                      ;yes
+
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+
+FBRDSTex TST.W     D7
+         RTS
+  page
+;
+;FBchkST0 - check ST0 to see if command failed or succeded
+;        Entry : (A2) = address of ST0 byte
+;        Exit  : (D7) = IOresult code from ST0 check
+;                (NE) = I/O error
+;                (EQ) = no error
+;                (C)  = wrong drive
+;
+FBchkST0 MOVE.B    (A2), D0                      ;get ST0
+         ANDI.B    #MIntCod, D0                  ;check interrupt code
+
+; see if controller tried but didn't finish
+;
+         MOVEQ     #IOEnoT0, D7                  ;give can't get to Track 0
+         CMPI.B    #MABstp, D0                   ;if cmd stopped in middle
+         BEQ.S     FBC0exit                      ;yes
+
+; see if drive changed ready line
+;
+         CMPI.B    #MABrdy, D0
+         BNE.S     FBC0inv
+         MOVEQ     #IOEoffln, D7                 ;drive went off line, lost ready
+         MOVEQ     #3, D0                        ;see if have correct drive response
+         AND.B     (A2), D0                      ;leave just drive sel bits
+         CMP.B     DrvNumb(A6), D0               ;is drive the same?
+         BEQ.S     FBC0exit                      ;correct drive, exit carry clear
+         MOVE.W    #1, CCR                       ;set NE and C got wrong drive
+         BRA.S     FBC0ex1                       ;exit
+
+; see if invalid code, if is then have either severe hardware error or software b
+;
+FBC0inv  MOVEQ     #IOEunknwn, D7                ;give unknown hardware err code
+         CMPI.B    #MInvCod, D0                  ;is it invalid?
+         BEQ.S     FBC0exit                      ;no, exit no errors
+         CLR.L     D7                            ;show no error
+
+FBC0exit TST.W     D7                            ;should clear carry flag
+FBC0ex1  RTS

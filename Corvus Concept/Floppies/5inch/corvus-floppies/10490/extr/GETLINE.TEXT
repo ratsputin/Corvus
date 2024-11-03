@@ -1,0 +1,100 @@
+{ This is the get-line-with-input-editing procedure. Enter with }
+{ the cusor position passed to CursX and CursY, and any default }
+{ input you want in CmdLine. Default input (if supplied) can    }
+{ always be restored with ALT/<Return>.                         }
+
+
+Procedure GetLine(CursX,CursY : Integer; VAR CmdLine: Str132);
+
+Var
+  ch        : Packed Array[1..1] of Char;
+  EdtCmdLine,                  { Previous command             }
+  TS1,
+  Raskin    : Str132;          { Temp storage                 }
+  CPos      : Integer;         { Current cursor x co-ordinate }
+  CmdFinished: Boolean;
+
+Begin
+  GotoXY(CursX,CursY);
+  Write(CmdLine);              { Display default command line }
+  GotoXY(CursX,CursY);
+  CPos := CursX;
+  cmdfinished := FALSE;
+  EdtCmdLine := CmdLine;       { Save default command line    }
+  repeat
+      unitread (2,ch,1);
+      if length(cmdline) = 0 then CrtAction(ErasEOL);
+      case ord(ch[1]) of
+       {bs} $08,$7F: if CPos > CursX then begin
+                       Raskin := Copy(CmdLine,(CPos-CursX)+1,1000);
+                       Delete(CmdLine,CPos-CursX,1);
+                       CPos := CPos - 1;
+                       GotoXY(CPos,CursY);
+                       Write(Raskin,' ');
+                       GotoXY(CPos,CursY)
+                       end;
+      { ALT/bs }136: Begin
+                       CrtAction(ErasEOL);
+                       Delete(CmdLine,(CPos-CursX+1),1000)
+                       End;
+            {cr} 13: Begin
+                       EdtCmdLine := CmdLine;
+                       CmdFinished := True
+                       End;
+    {ALT/return}141: begin               { Restore last command }
+                       if length(edtcmdline)>0 then begin
+                         cmdline := edtcmdline;
+                         gotoxy(CursX,CursY);
+                         write(EdtCmdLine);
+                         CrtAction(ErasEOL);
+                         gotoxy(CursX,CursY);
+                         CPos := CursX
+                         end
+                       end;
+           {esc} 27: begin
+                     unitread (2,ch,1);
+                     if ch[1] in ['A'..'D'] Then Begin
+                       Case ch[1] of   { Process cursor key }
+                         'D': Begin    { Move cursor left }
+                                If CPos > CursX Then CPos := CPos - 1
+                              End;
+                         'C': Begin    { Move cursor right }
+                                If CPos < (length(cmdline)+CursX) Then
+                                  CPos := CPos + 1
+                              End;
+                         'A': Begin    { Move to right end of line }
+                                If CPos < (Length(CmdLine)+CursX) Then
+                                  CPos := Length(CmdLine)+CursX
+                              End;
+                         'B': Begin    { Move to start of line }
+                                If CPos > CursX Then CPos := CursX
+                              End
+                           End;           { Case }
+                        GotoXY(CPos,CursY) { Position cursor }
+                        End;              { Process cursor key }
+                     if ch[1] = '#' then unitread (2,ch,2);
+                     if ch[1] = chr(27) then cmdfinished := TRUE;
+                     end;
+                $80: Begin     { Stub for function key processing }
+                     End;
+          otherwise: if length(cmdline) < 100 then
+                         If (CPos-CursX)=Length(CmdLine) Then Begin
+                           unitwrite (2,ch,1);
+                           CPos := CPos + 1;  { Update cursor location }
+                           cmdline := concat (cmdline,' ');
+                           cmdline[length(cmdline)] := ch[1];
+                           end
+                         Else Begin
+                           Raskin := Copy(CmdLine,(CPos-CursX)+1,1000);
+                           TS1 := Copy(CmdLine,1,(CPos-CursX));
+                           CmdLine := Concat(TS1,' ',Raskin);
+                           CmdLine[CPos-CursX+1] := ch[1];
+                           GotoXY(CPos,CursY);
+                           Write(ch[1],Raskin);
+                           CPos := CPos+1;
+                           GotoXY(CPos,CursY)
+                           End
+                end; {case}
+      until cmdfinished
+  End;
+

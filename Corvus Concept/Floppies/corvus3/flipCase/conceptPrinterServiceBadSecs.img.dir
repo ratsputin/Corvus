@@ -1,0 +1,23 @@
+
+Directory of UCSD disk image file 'conceptPrinterServiceBadSecs.im'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 15 files,  0 to 6 (6), eov 500, size 70, free 15
+
+ 1: SYSTEM.COMSRV   Data 13-Mar-84    6-  29(  23), 11776+512= 12288 bytes
+ 2: SYSTEM.PASCAL   Data  9-Dec-81   29-  63(  34), 17408+512= 17920 bytes
+ 3: SYSTEM.STARTUP  Code 13-Mar-84   63-  94(  31), 15872+512= 16384 bytes
+ 4: SYSTEM.UPDATE   Text 27-Apr-84   94-  98(   4),  2048+512=  2560 bytes
+ 5: SYSTEM.MISCINFO Data 29-Mar-83   98-  99(   1),   512+512=  1024 bytes
+ 6: P.CONFG         Data 21-Mar-84   99- 100(   1),   512+512=  1024 bytes
+ 7: P.SERV.TBL      Data 19-Mar-84  100- 101(   1),   512+512=  1024 bytes
+ 8: P.SERVER.BOOT   Data 15-Mar-84  101- 103(   2),  1024+512=  1536 bytes
+ 9: PSMGR           Data 22-Sep-83  103- 187(  84), 43008+512= 43520 bytes
+10: TSMGR           Data 24-Jan-84  187- 231(  44), 22528+512= 23040 bytes
+11: BOOTMGR         Data  2-Feb-84  231- 324(  93), 47616+512= 48128 bytes
+12: CC.C2MGR        Data 17-Mar-84  324- 414(  90), 46080+512= 46592 bytes
+13: C2.MENU.TEXT    Text  1-Aug-83  414- 422(   8),  4096+512=  4608 bytes
+14: C2.MISC.TEXT    Text  8-Dec-83  422- 426(   4),  2048+512=  2560 bytes
+15: C2.HELP.TEXT    Text 30-Jun-83  426- 430(   4),  2048+512=  2560 bytes

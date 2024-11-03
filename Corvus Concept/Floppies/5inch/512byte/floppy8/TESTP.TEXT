@@ -1,0 +1,15 @@
+program testp;
+type x = record
+               p,l : integer;
+               end;
+var pb : x;
+
+begin
+  unitstatus(6,pb,$86);
+  with pb do begin
+    if p = 1 then writeln(' 10 pitch')
+             else writeln(' 12 pitch');
+    if l = 1 then writeln(' 6 LPI')
+             else writeln(' 8 LPI');
+    end;
+end.

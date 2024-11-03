@@ -1,0 +1,492 @@
+{omninet burn-in prep block interface code and monitor procedure}
+{getrpt - request a report block from a specified station}
+{allow a specified time in which to get a report back}
+
+
+FUNCTION getaddr: INTEGER;
+   LABEL 1;
+   VAR i : integer;
+   BEGIN {gets a valid omninet address and checks to see if the station is active}
+         {will not exit unless station address is valid or = -99}
+         getaddr := 0;
+     1:  i := 0;
+         REPEAT
+           WRITE('Enter station address : ');
+         UNTIL GETNUM( i ) = NORMAL;
+         IF i = -99 THEN EXIT(getaddr); {special exit case}
+         IF ((i<0) OR (i>maxadr)) THEN
+           BEGIN
+             WRITELN('Illegal OmniNet address: ',i:2);
+             GOTO 1;
+           END;
+         getaddr := i;
+   END;
+
+PROCEDURE badrslt( rslt,stn: integer);
+   BEGIN
+     CRTACTION( vdoinv  );
+     IF rslt = -2 THEN BEGIN WRITE(beep,'Station ',stn:2,' timed out'); CRTACTION(vdonor); writeln; END
+     ELSE BEGIN WRITE(beep,'OMNINET ERROR '); rcd := rslt; puthexbyte(rcd); CRTACTION(vdonor); writeln; END;
+   END;
+
+PROCEDURE dumpcmd( VAR c: cdaddr; VAR v: sndrcvstr; VAR rc: ocrsltrcd );
+   VAR i: INTEGER;
+   BEGIN
+     WRITELN('dumping omni message');
+     WRITE('Omni ret code: '); puthexbyte( rc.rcode ); writeln;
+     WRITE('source: '); puthexbyte( rc.sourc ); writeln;
+     WRITELN('addr: ',c.stationno);
+     WRITELN('ctrl: ',o.ctrl.int[1],o.ctrl.int[2] );
+     WRITELN('slen : ',v.sln,' rlen: ',v.rln);
+     WRITELN('vector: ');
+     FOR i := 1 TO 15 DO BEGIN WRITE(i:2,':'); puthexbyte( v.b[i] ); write('|'); END;
+     writeln;
+   END;
+
+FUNCTION osend( VAR stn: cdaddr; VAR xcv: sndrcvstr  ): integer;
+   BEGIN
+     occurrp := @r.rslt;
+     ocendrecv( dscskt );
+     {send the vector to the disk specified by stn.stationno}
+     {osend is for short commands}
+     occurbp := @xcv.b[2];
+     occurrp := @r.rslt;
+     r.rslt.rcode := waiting;
+     ocsetrecv(dscskt, mxretlen, 3);
+     REPEAT  UNTIL r.rslt.rcode <> waiting;
+     occurbp := @xcv.b[1];
+     occurrp := @o.rslt;
+     o.rslt.rcode := waiting;
+     o.ctrl.int[1] := xcv.sln;
+     o.ctrl.int[2] := xcv.rln-1;
+     ocsndmesg( dscskt, xcv.sln, 4, stn.stationno );
+     REPEAT UNTIL o.rslt.rcode < waiting;
+     IF o.rslt.rcode <  0 THEN
+       BEGIN
+        osend := o.rslt.rcode; EXIT( osend );
+       END;
+     timeout( r.rslt.rcode ); {wait until specified time or rcode goes to 0}
+     IF debug THEN dumpcmd( stn, xcv, r.rslt );
+     osend := r.rslt.rcode ;
+     xcv.rln := r.rslt.len;
+     xcv.b[1] := r.ctrl.byt[3];
+     ocendrecv( dscskt );
+   END;
+
+FUNCTION lsend( VAR stn: cdaddr; VAR xcv: sndrcvstr ): integer;
+   VAR data: array[1..5] of byte;
+       rval : INTEGER;
+   BEGIN
+     {send the vector to the disk specified by stn.stationno}
+     {lsend is for long commands}
+     occurrp := @r.rslt;
+     ocendrecv( dscskt );
+     occurbp := @data[1];
+     occurrp := @r.rslt;
+     r.rslt.rcode := waiting;
+     ocsetrecv(dscskt, 5{must be same as defn. of data}, 0);
+     REPEAT  UNTIL r.rslt.rcode <> waiting;
+     occurbp := @xcv.b[1];
+     occurrp := @o.rslt;
+     o.ctrl.int[1] := xcv.sln;
+     o.ctrl.int[2] := 512;
+     o.rslt.rcode := waiting;
+     ocsndmesg( dscskt, 4, 4, stn.stationno );
+     REPEAT UNTIL o.rslt.rcode < waiting;
+     IF o.rslt.rcode < 0 THEN
+       BEGIN lsend := o.rslt.rcode; EXIT( lsend ); END;
+     timeout( r.rslt.rcode ); {wait until specified time or rcode goes to 0}
+     rval :=  r.rslt.rcode ;
+     IF rval <> 0 THEN BEGIN lsend := rval; EXIT( lsend );  END;
+     IF (data[1] <> 71 {G} ) OR (data[2] <> 79 {O}) THEN
+       BEGIN
+         WRITELN('Did not get the GO command: ',data[1]:3,data[2]:3);
+         lsend := -1;
+         EXIT(lsend);
+       END;
+     ocendrecv( dscskt );
+     occurbp := @xcv.b[2];
+     occurrp := @r.rslt;
+     r.rslt.rcode := waiting;
+     ocsetrecv(dscskt, mxretlen, 3);
+     REPEAT  UNTIL r.rslt.rcode <> waiting;
+     occurbp := @xcv.b[5];
+     occurrp := @o.rslt;
+     o.rslt.rcode := waiting;
+     ocsndmesg( dsdskt, xcv.sln-4, 0, stn.stationno );
+     REPEAT UNTIL o.rslt.rcode < waiting;
+     IF o.rslt.rcode < 0 THEN
+       BEGIN lsend := o.rslt.rcode ; EXIT( lsend ); END;
+     timeout( r.rslt.rcode ); {wait until specified time or rcode goes to 0}
+     lsend := r.rslt.rcode;
+     xcv.rln := r.ctrl.int[1];
+     xcv.b[1] := r.ctrl.byt[3]; {disk return code}
+   END;
+
+PROCEDURE startbi( stno: integer );
+  BEGIN
+    stn.stationno := stno;
+    vectr.sln := 1;
+    vectr.rln := 1;
+    vectr.c[1] := sctrquiet;
+    rslt := osend( stn, vectr );
+    IF rslt <> 0 THEN badrslt( rslt, stno );
+  END;
+
+FUNCTION prepdisk( VAR stn: cdaddr;  fname: STRING80 ): integer;
+   VAR xcv: sndrcvstr;
+       pfil: FILE;
+   BEGIN
+      xcv.sln := 514;
+      xcv.rln := 1;
+      xcv.b[1] := 17 ; {prep command}
+      xcv.b[2] := stn.driveno;
+      RESET ( pfil, fname );
+      rslt := ioresult;
+      IF rslt <> 0 THEN prepdisk := rslt
+      ELSE
+        BEGIN {read file}
+          IF BLOCKREAD( pfil, xcv.b[3],1,0 ) <> 1 THEN prepdisk := 10
+          ELSE
+            BEGIN
+              CLOSE(pfil);
+              rslt := lsend( stn, xcv );
+              IF rslt < 0 THEN prepdisk := rslt
+              ELSE
+                IF ORD( xcv.c[1] ) < 128 THEN prepdisk := xcv.b[1]
+                ELSE prepdisk := 0;
+            END;
+         END;
+    END;
+
+ PROCEDURE deprep( VAR stn: cdaddr );
+   VAR
+     xcv: sndrcvstr;
+   BEGIN
+     xcv.sln := 1;
+     xcv.rln := 1;
+     xcv.b[1] := 0;
+     rslt := osend( stn, xcv );
+   END;
+
+
+ FUNCTION getrpt( stno: INTEGER ): INTEGER;
+   VAR
+     xcv: sndrcvstr;
+     cd: cdaddr;
+     found: boolean;
+     i,j,k,m: INTEGER;
+     sks: longint;
+     d: clkstr40;
+   BEGIN
+     {get an errors report from burn-in}
+     xcv.sln := 1; {send one bytes}
+     xcv.rln := SIZEOF( rptimg );
+     xcv.c[1] := dumperr;
+     cd.slotno := slt;
+     cd.driveno := driv;
+     cd.kind := omninetdisk;
+     cd.stationno := stno;
+     cd.blkno := 0;
+     cd.netno := 0;
+     rslt := osend( cd,  xcv );
+     IF rslt <> 0 THEN  BEGIN getrpt := rslt; badrslt( rslt,stno ); EXIT(getrpt); END
+     ELSE {no timeout or other error}
+       BEGIN
+         FOR i := 1 TO 512 DO dreport.blk[i] := xcv.b[i+1];
+         {transfer report}
+         IF debug THEN
+          WITH dreport.rpt DO
+           BEGIN
+             WRITELN('dump report');
+             WRITE('seekbytes: '); puthexbyte(seeks.lsb1); puthexbyte(seeks.lsb2);
+             puthexbyte(seeks.msb1); puthexbyte(seeks.msb2); writeln;
+             sks := cnvrtlw( seeks );
+             WRITELN('rcode: ',rcode,'  num: ',num,' seeks: ',sks);
+             FOR i := 1 TO num DO
+              BEGIN
+                WRITELN('t= ',cvtint(err[i].trk),' s= ',cvtint(err[i].sft),' h= ',cvtint(err[i].hrd));
+              END;
+             FOR i := 1 to (6*num)+6 DO
+               BEGIN
+                 WRITE(i:4,':') ; puthexbyte( dreport.blk[i] );
+                 IF ( i MOD 15 ) = 0 THEN writeln;
+               END;
+             writeln;
+             WRITELN('send len: ',xcv.sln,' recv len: ',xcv.rln);
+           END;
+         IF xcv.rln <> (6*xcv.b[3])+6 THEN
+           BEGIN
+             WRITELN(beep,beep,'Report contains invalid data');
+             netwrk[stno].status := netwrk[stno].status -1;{ holds count of bad reports, <-1 is invalid stuff}
+             startbi( stno );
+             getrpt := -2; {signal bad return}
+             EXIT( getrpt );
+           END;
+         {update current info}
+         IF dreport.rpt.rcode < 0 THEN
+            BEGIN
+             netwrk[stno].status := netwrk[stno].status -1;{ holds count of bad reports, <-1 is invalid stuff}
+              WRITELN('Track error table error: ',dreport.rpt.rcode);
+              getrpt := dreport.rpt.rcode;
+              EXIT( getrpt );
+            END;
+         {table did not overflow}
+       END;
+     {     netwrk[stno].status := -1; }   {signify valid data received}
+     {start sector quiet again}
+     startbi( stno );
+     netwrk[stno].seeks := cnvrtlw( dreport.rpt.seeks );
+     clkdate1(d);   netwrk[stno].rdate := d;
+     clktime1(d);   netwrk[stno].rtime := d;
+     WRITELN('Station ',stno:2,' reporting ',dreport.rpt.num:3,' errors');
+     IF DEBUG THEN WRITELN('SAVING ',DREPORT.RPT.NUM:3,' BAD TRACKS');
+     FOR i := 1 TO dreport.rpt.num DO
+       BEGIN
+         found := FALSE;
+         FOR j := 1 TO mxerr DO
+          BEGIN
+           WITH netwrk[stno].errs[j] DO
+            BEGIN
+             IF (used AND (dreport.rpt.err[i].trk = trk)) THEN
+                BEGIN
+                  IF DEBUG THEN WRITELN('FOUND EXISTING ENTRY: ',CVTINT(TRK):5,J:3);
+                  found := TRUE;
+                  sft := dreport.rpt.err[i].sft;
+                  hrd := dreport.rpt.err[i].hrd;
+                END;
+            END;
+          END;
+          IF NOT found THEN
+             BEGIN
+                j := 1;
+                WHILE j <= mxerr DO
+                  BEGIN
+                   WITH netwrk[stno].errs[j] DO
+                     BEGIN
+                       IF NOT used THEN
+                         BEGIN
+                           IF ((dreport.rpt.err[i].trk >= 0) AND (cvtint(dreport.rpt.err[i].trk) <= 1835)) THEN
+                              BEGIN
+                                used := TRUE;
+                                IF DEBUG THEN WRITELN('FND NEW ENTRY: ',CVTINT(DREPORT.RPT.ERR[I].TRK):5,J:3);
+                                trk := dreport.rpt.err[i].trk;
+                                sft := dreport.rpt.err[i].sft;
+                                hrd := dreport.rpt.err[i].hrd;
+                                j := mxerr; {force loop termination}
+                              END;
+                          END;
+                        j := j + 1;
+                     END;
+                  END;
+              END;
+       END;
+      getrpt := 0;
+   END;
+
+   FUNCTION keypress: BOOLEAN;
+     CONST systerm = 2;
+     VAR kp: BOOLEAN;
+     BEGIN
+       kp := UNITBUSY( systerm );
+       IF kp THEN
+         BEGIN
+           ch := getbyte;
+           WRITE( chr(8) );
+         END;
+       keypress := kp;
+     END;
+
+    FUNCTION wait15: BOOLEAN;
+      VAR begclk: clkpb;
+          keyhit: boolean;
+          tckdone: BOOLEAN;
+      BEGIN
+        {wait for 15 mins or key press}
+
+        clkread( clock );
+        begclk := clock;
+        tckdone := FALSE;
+        keyhit := FALSE;
+        REPEAT
+          WRITE('running',chr(8),chr(8),chr(8),chr(8),chr(8),chr(8),chr(8));
+          clkread( clock );
+          clock.hour := clock.hour - begclk.hour;
+          IF ((clock.hour > 0) OR (clock.hour < 0 )) THEN clock.mins := clock.mins + 60;
+          clock.mins := clock.mins - begclk.mins;
+          IF clock.mins < 0 THEN clock.secs := clock.secs + 60;
+          clock.secs := clock.secs - begclk.secs;
+          keyhit := keypress;
+          IF ((clock.mins >= 15) OR keyhit) THEN tckdone := TRUE;
+        UNTIL tckdone;
+        IF keyhit THEN wait15 := TRUE ELSE wait15 := FALSE;
+        {true if key was pressed else false}
+      END;
+
+  PROCEDURE monitor;
+     VAR forever: boolean;
+       j,i: integer;
+     BEGIN
+      forever := FALSE;
+      writeln('OmniNet Disk Burn-In Monitor recording mode...hit any key to discontinue');
+      REPEAT
+        IF wait15 THEN EXIT( monitor );
+        FOR i := 0 TO maxadr DO
+          IF netwrk[i].status < 0 {logged in} THEN j := getrpt( i );
+        IF autofile THEN
+          BEGIN
+            REWRITE(reprt, filstr);
+            rslt := ioresult;
+            IF rslt <> 0 THEN
+              BEGIN
+                filout := FALSE;
+                WRITELN('Unable to open ',filstr,', error = ',rslt);
+              END
+            ELSE
+             BEGIN
+               filout := TRUE;
+               FOR i := 0 TO maxadr DO IF netwrk[i].status < 0 THEN display(i);
+               CLOSE( reprt, LOCK );
+             END;
+           END;
+      UNTIL forever;
+     END;
+
+
+
+{bi program debug interface}
+{debugging commands are sent as specified by the user and ascii is returned}
+PROCEDURE biversion;
+  VAR
+    i,j : INTEGER;
+  BEGIN
+    FOR i := 2 TO 512 DO vectr.c[i] := ' ';
+    j := getaddr;
+    stn.stationno := j;
+    stn.slotno := slt;
+    stn.driveno := driv;
+    stn.kind := omninetdisk;
+    stn.blkno := 0;
+    stn.netno := 0;
+    vectr.sln := 1;
+    vectr.rln := 40;
+    vectr.c[1] := bivrzn;
+    rslt := osend( stn, vectr );
+    IF rslt <> 0 THEN badrslt(rslt,j)
+    ELSE
+      BEGIN
+        WRITE('DBI version: ');
+        FOR i := 2 TO 41 DO WRITE(vectr.c[i]);
+        WRITELN;
+      END;
+    startbi( j );
+  END;
+
+
+  PROCEDURE bidebug;
+    VAR j,i: integer;
+        bigvec: RECORD CASE BOOLEAN OF
+                TRUE: (a: array[1..1030] of byte);
+               FALSE: (s: sndrcvstr);
+                END;
+    BEGIN
+      WRITE('Enter BI debugging command: V)iew memory  B)IVersion  Q)uit: ');
+      ch := getbyte;
+      writeln;
+      CASE ch OF
+       'Q': EXIT( bidebug );
+       'B': biversion;
+       'V': BEGIN
+              j := getaddr;
+              stn.stationno := j;
+              WRITE('Enter page to display(nibble 1): ');
+              bigvec.s.c[1] := getbyte;
+              writeln;
+              WRITE('Enter page to display(nibble 2): ');
+              bigvec.s.c[2] := getbyte;
+              writeln;
+              bigvec.s.c[3] := dumpmem;
+              bigvec.s.sln := 3;
+              bigvec.s.rln := 1025;
+              rslt := osend( stn, bigvec.s );
+              IF rslt <> 0 THEN badrslt( rslt, stn.stationno )
+              ELSE FOR i := 2 TO 1025 DO
+                BEGIN WRITE( bigvec.s.c[i],' '); IF (i MOD 50) = 0 THEN writeln; END;
+              startbi( j );
+            END;
+       END;
+
+    END;
+
+
+
+ PROCEDURE ohelp;
+   BEGIN
+     {list omni net error explanations}
+     WRITELN('OmniNet Error Descriptions:');
+     WRITELN;
+     WRITELN('Error:  -2 - Aborted an OmniNet command when no response was received in 5 seconds');
+     WRITELN;
+     WRITELN('Error:-128 - Aborted a send command after the maximum number of retries');
+     WRITELN('             (This often means there is no disk server there)');
+     WRITELN;
+     WRITELN('Error: $FE - Aborted an OmniNet command when no response was received in 5 seconds');
+     WRITELN;
+     WRITELN('Error: $80 - Aborted a send command after the maximum number of retries');
+     WRITELN('             (This often means there is no disk server there)');
+     WRITELN;
+     WRITELN('The presence of OmniNet errors typically indicates something more than');
+     WRITELN('a superficial problem.  If these errors do occur, please get help from');
+     WRITELN('qualified individuals.');
+     WRITELN;
+     WRITELN(' BI HELP');
+     WRITELN;
+     WRITELN('LOGON   --- Loads the Burn-in program into a new drive and will prompt for a serial# if necessary');
+     WRITELN;
+     WRITELN('RESUME  --- Gets data from any drive already running and creates an internal record');
+     WRITELN;
+     WRITELN('LOGOFF  --- Closes internal record and creates a report if desired');
+     WRITELN;
+     WRITELN('AUTOFIL --- Automatically writes to a text file every 15 minutes in MONITOR mode.');
+     WRITELN;
+     WRITELN('REPORT  --- Generates a report of BI status on screen or in text file (for any or all)');
+     WRITELN;
+     WRITELN('MONITOR --- Starts a 15 min. loop and gets reports from the servers.');
+     WRITELN;
+     WRITELN('BI HELP --- Prints this screen');
+     WRITELN;
+     WRITELN('SHOWNET --- Displays all active servers on the net. (not necessarily all drives)');
+     WRITELN;
+     WRITELN('EXIT    --- Exits the Burn-in Program and will create a report if desired.');
+     WRITELN;
+     WRITELN('SETSRL  --- Allows the writing of a serial number to a READY drive on any server');
+     WRITELN;
+     WRITELN('FORMAT  --- Allows the formatting and update of a  drive on the net');
+     writeln;
+     writeln;
+  END;
+
+{show whos is on the net}
+PROCEDURE shownet;
+  VAR me,j: integer;
+      all: array[0..maxadr] of byte;
+  BEGIN
+    FOR j := 0 TO maxadr DO all[j] := 0;
+    ocwhoami;
+    me := ocresult;
+    FOR j := 0 TO maxadr DO
+      BEGIN
+        ocechotrans( j );
+        IF ocresult = echoed THEN all[j] := -1;
+      END;
+
+    WRITELN('Monitor station address: ',me:2); writeln;
+    WRITELN('Active OmniNet nodes');
+    FOR j := 0 TO maxadr DO
+      BEGIN
+        IF (j MOD 20) = 0 THEN WRITELN;
+        IF all[j] <> 0 THEN WRITE(j:2,'  ') ELSE WRITE('    ');
+      END;
+    WRITELN;
+    END;
+

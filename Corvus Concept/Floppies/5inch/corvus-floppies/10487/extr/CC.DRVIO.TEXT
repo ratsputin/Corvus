@@ -1,0 +1,510 @@
+{ DRVIO.TEXT ----------------------------------------------------------}
+{
+{       DRVIO -- Corvus Disk Drive I/O unit
+{
+{       (c) Copyright 1982 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  28-May-82  DP   Original unit
+{         1.0e 23-Sep-82  DP   Fixed firmware message
+{       v 2.0  16-Sep-82  cr/jk revh mods
+{       v 2.1  02-Dec-82  LEF  Redefine host_types
+{       v 2.2  19-Feb-84  jdr  Segment for WordProc
+{
+{ Purpose: This unit is used by all of the Corvus utilities which talk
+{          directly to the Corvus drive (i.e., not through the operating
+{          system driver).  It can be used for both OMNINET and local
+{          disks.  It can access any slot and any server.
+{
+{----------------------------------------------------------------------}
+
+{!CC} UNIT CCdrvIO;
+
+{$S filetask }
+
+INTERFACE
+
+USES
+{!CC} {$U /CCUTIL/CCLIB} CCdefn, CCLngInt;
+
+CONST
+      DrvIOversion = '2.2 ';    { Unit revision level                     }
+      CDbuf_max    = 1023;      { max. no of bytes on send to OMNINET + 1 }
+      DrvBlkSize   = 512;
+      SndRcvMax    = 530;
+{!CC} low_slot     = 1;
+{!CC} high_slot    = 5;
+      low_server   = 0;
+      high_server  = 63;
+      MUX          = 64;    { max server + 1 }
+      DrMax        = 7;     { Max nmbr of drives on disk server or Mux}
+
+
+TYPE
+    SndRcvStr   = RECORD
+                  sln: INTEGER; {send length}
+                  rln: INTEGER; {recv length}
+                  CASE integer OF
+                      1: (c:   PACKED ARRAY [1..SndRcvMax] OF CHAR);
+{!CC}                 2: (b:          ARRAY [1..SndRcvMax] OF byte);
+                  END;
+
+    DrvBlk      = RECORD CASE INTEGER OF
+                      1: (c:   PACKED ARRAY [1..DrvBlkSize] OF CHAR);
+{!CC}                 2: (b:          ARRAY [1..DrvBlkSize] OF byte);
+                  END;
+
+{!CC} cd_buf      = ARRAY [0..cdbuf_max] OF byte;
+
+     host_types  = (user_station,      {00}    { Server types }
+                    file_server,       {01}
+                    printer_server,    {02}
+                    Comm_server,       {03}
+                    Mirror_server,     {04}
+                    Bank,              {05}
+                    Omnidrive,         {06}
+                    name_server,
+                    modem_server,
+                    db_server,
+                    ON_interconnect,
+                    X25_gateway,
+                    SNA_gateway);
+
+    valid_slot  = low_slot..high_slot;
+
+    valid_server= low_server..high_server;
+
+    CDaddr      = RECORD
+                      Slotno:    Byte;       { Slot number               }
+                      Kind:      SlotType;   { Type of interface in slot }
+                      Netno:     Byte;       { Network number (UNUSED)   }
+                      Stationno: Byte;       { OMNINET station address   }
+                      Driveno:   Byte;       { Disk drive number         }
+                      Blkno:     longint;    { Disk block number         }
+                      END;
+
+    DrRev      = (NoDrv,RevA,RevB,RevH);
+    DrSizes    = (OldTenMB,FiveMB,TenMB,TwentyMB,FortyMB,SixtyMB,HundredMB);
+    PhysDrInfo = RECORD
+                 spt:       INTEGER;    { Sectors/track                  }
+                 tpc:       INTEGER;    { Tracks/Sector                  }
+                 cpd:       INTEGER;    { Cylinders/Drive                }
+                 Capacity:  LONGINT;    { Total nmbr of 512 byte blocks  }
+                 DrSize:    DrSizes;    { Drive size                     }
+                 DrType:    DrRev;      { Drive controller revision      }
+                 PhysDr:    BOOLEAN;    { true if a physical drive       }
+                 ROMvers:   INTEGER;    { ROM version                    }
+                 FirmMsg:   STRING[8];  { Firmware message (i.e. CF17.3) }
+                 FirmVers:  INTEGER;    { Firmware version number        }
+                 END;
+    PDrArray   = ARRAY [1..DrMax] OF PhysDrInfo;
+
+    Sprtrks    = ARRAY [1..DrMax] OF INTEGER;
+
+
+VAR
+    spares  :  Sprtrks;
+
+FUNCTION  CDSlot     (    Slotnum: integer): BOOLEAN;
+FUNCTION  CDSlotInfo (    Slotnum: integer): SlotType;
+FUNCTION  CDBootInfo (VAR Slotnum: integer;
+                      VAR Srvrnum: integer): SlotType;
+FUNCTION  CDServer   (    Server: integer ): BOOLEAN;
+PROCEDURE Initslot   (VAR NetLoc: CDaddr  );
+PROCEDURE CDsend     (    NetLoc: CDaddr; VAR st: SndRcvStr);
+PROCEDURE CDrecv     (    NetLoc: CDaddr; VAR st: SndRcvStr);
+FUNCTION  CDread     (    NetLoc:  CDaddr; { network address of drive    }
+                      VAR buf:     CD_buf; { data that is read           }
+                          len:     integer { number of bytes to read     }
+                      ):  integer;         { returns disk error code     }
+FUNCTION  CDwrite    (    NetLoc:  CDaddr; { network address of drive    }
+                      VAR buf:     CD_buf; { data to be written          }
+                          len:     integer { number of bytes to write    }
+                      ):  integer;         { returns disk error code     }
+PROCEDURE DrvInit  (NetLoc:         CDaddr;
+                    VAR NumDrives:  INTEGER;
+                    VAR PhysDrives: PDrArray);
+PROCEDURE CCdrvIOinit;
+
+
+IMPLEMENTATION
+{$S filetask}
+{$P}
+
+CONST
+    Broadcast_add   = 255;
+
+    Misc_Error      = 255;    { Miscellaneous IO error      }
+    Misc_Omni_Error = 254;    { Miscellaneous OMNINET error }
+    Inv_srvr        = 253;    { Invalid server number       }
+    Inv_Slot        = 252;    { Invalid slot number         }
+
+    TenMBSize = 18936; { Nmbr of blocks on a ten megabyte drive }
+
+VAR
+{!CC}  Active_slot:  Valid_slot; { Current IO slot in use              }
+{!CC}                         { must be global with this name for Apple version }
+       Cur_Kind:     SlotType;   { Current interface media type        }
+{!CC}  Disk_server:  integer;    { Current OMNINET disk server address }
+{!CC}                         { must be global with this name for Apple version }
+
+{!CC}  FUNCTION OSactSlt: integer;                      EXTERNAL;
+{!CC}  FUNCTION OSactSrv: integer;                      EXTERNAL;
+{!CC}  FUNCTION OSsltType (slotnum: integer): SlotType; EXTERNAL;
+{!CC}  FUNCTION OSSltDv : integer;                      EXTERNAL;
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CDBOOTINFO                                                   }
+{                                                                           }
+{ Description: This procedure returns the boot slot number and type         }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+FUNCTION CDBootInfo {(VAR Slotnum: integer;
+                      VAR Srvrnum: integer): SlotType};
+    BEGIN
+    Slotnum := OSActSlt;
+    Srvrnum := OSActSrv;
+    IF (Slotnum < low_slot) OR (Slotnum > high_slot)
+{!CC}  THEN CDBootInfo := NoDisk ELSE CDBootInfo := OSSltType (slotnum);
+    END;
+
+
+{---------------------------------------------------------------------------}
+{ Procedure:   CDSLOTINFO                                                   }
+{                                                                           }
+{ Description: This procedure when given a slot number determine the type   }
+{              of interface it any the slot is allocated to....             }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+FUNCTION CDSlotInfo {(Slotnum: Valid_Slot): SlotType};
+    BEGIN
+{!CC} CDSlotInfo := OSSltType (Slotnum);
+    END;
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CDSLOT                                                       }
+{                                                                           }
+{ Description:                                                              }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+FUNCTION CDSlot {(slotnum: valid_slot): BOOLEAN };
+    BEGIN
+{!CC} IF OSslttype(slotnum) IN [LocalDisk, OmninetDisk]
+        THEN BEGIN
+            Active_slot := slotnum;
+            CDSlot := TRUE;
+            END
+        ELSE CDSlot := FALSE;
+    END;
+
+
+{---------------------------------------------------------------------------}
+{ Procedure:   CDSERVER                                                     }
+{                                                                           }
+{ Description:                                                              }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+FUNCTION CDServer { Server: valid_server ): BOOLEAN };
+    BEGIN
+    {                                          }
+    { validate that servernum is a disk server }
+    {                                          }
+    Disk_server := Server;
+    END;
+
+
+{---------------------------------------------------------------------}
+{---------------------------------------------------------------------}
+
+PROCEDURE Initslot {(VAR Netloc: CDaddr)};
+    VAR x,y: INTEGER;
+    BEGIN
+    WITH Netloc DO BEGIN
+        Kind      := CDbootInfo (x,y);
+        Slotno    := x;
+        Driveno   := 1;
+        Netno     := 0;
+        Stationno := y;
+        Blkno     := 0;
+        END;
+    END;
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CDSEND                                                       }
+{                                                                           }
+{ Description: This procedure send a disk command to the specified drive    }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+PROCEDURE CDSend {(NetLoc: CDaddr; VAR st: SndRcvStr)};
+    VAR Drive_unit:   INTEGER;    { unit for sending/receiving commands }
+
+    BEGIN
+    IF (Netloc.Slotno >= Low_slot) OR (Netloc.Slotno <= high_slot)
+       THEN BEGIN
+          Active_slot := NetLoc.Slotno;
+{!CC}     Drive_unit := OSSltDv;
+
+          Cur_Kind := NetLoc.Kind;
+          IF Cur_Kind = LocalDisk
+{!CC}        THEN UNITWRITE (Drive_unit,st.c,st.sln,0,Active_slot)
+             ELSE
+          IF Cur_kind = Omninetdisk
+             THEN BEGIN
+               IF (NetLoc.Stationno >= Low_server) OR (NetLoc.Stationno <= High_server)
+                  THEN BEGIN
+                     Disk_server := NetLoc.Stationno;
+{!CC}                UNITWRITE (Drive_unit,st.c,st.sln,0,Disk_server*256+Active_slot);
+                     END
+               END;
+          END;
+    END;
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CDRECV                                                       }
+{                                                                           }
+{ Description: This procedure receives the response from the drive after    }
+{              sending a drive command.                                     }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+PROCEDURE CDRecv {(NetLoc: CDaddr; VAR st: SndRcvStr)};
+    VAR Drive_unit:   INTEGER;    { unit for sending/receiving commands }
+{!CC}   ior:          INTEGER;
+
+    BEGIN
+{!CC}  ior := 0;
+    IF (Netloc.Slotno < Low_slot) OR (Netloc.Slotno > High_slot)
+       THEN BEGIN St.c[1] := CHR(Inv_slot); st.rln := 1; END
+       ELSE BEGIN
+          Active_slot := NetLoc.Slotno;
+{!CC}     Drive_unit := OSSltDv;
+
+          Cur_Kind := NetLoc.Kind;
+          IF Cur_Kind = LocalDisk
+{!CC}        THEN BEGIN UNITREAD (Drive_unit,st.c,st.rln,0,Active_slot); ior := IORESULT; END
+             ELSE
+               IF Cur_kind = Omninetdisk
+                  THEN BEGIN
+                    IF (NetLoc.Stationno < Low_server) OR (NetLoc.Stationno > High_server)
+                       THEN BEGIN St.c[1] := CHR(Inv_srvr); st.rln := 1; END
+                       ELSE BEGIN
+                          Disk_server := NetLoc.Stationno;
+{!CC}                     UNITREAD (Drive_unit,st.c,st.rln,0,Disk_server*256+Active_slot);
+{!CC}                     ior := IORESULT;
+                          END
+                    END
+                  ELSE BEGIN St.c[1] := CHR(Inv_slot); st.rln := 1; END;
+          END;
+{!CC}  IF (ior <> 0) AND (ior <> 4)  { 4 is disk error > 127 }
+{!CC}     THEN BEGIN st.c[1] := CHR(misc_error);  st.rln := 1; END;
+    END;
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CDREAD                                                       }
+{                                                                           }
+{ Description:                                                              }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+FUNCTION CDread {(NetLoc: CDaddr; VAR buf: CD_buf; len: integer): integer};
+    VAR xcv: SndRcvStr; Move_len,Count,T: integer;
+    BEGIN
+    Count := 0;
+    REPEAT
+        WITH NetLoc DO BEGIN
+            {                             }
+            { build read command...       }
+            {                             }
+            xcv.sln := 4;  xcv.rln := 513;
+            xcv.b[1] := 50;
+            T := LIntByte (1,Blkno);
+            T := T MOD 16;              { save lower four bits         }
+            xcv.b[2] := t*16 + Driveno; { and store in upper four bits }
+            xcv.b[3] := LIntByte (3,Blkno);
+            xcv.b[4] := LIntByte (2,Blkno);
+
+            CDsend (NetLoc,xcv); CDrecv (NetLoc,xcv);
+
+            IF Len > 512 THEN Move_len := 512
+                         ELSE Move_len := Len;
+            {$R-} MOVELEFT (xcv.b[2],Buf[Count*512],Move_len); {$R+}
+            Count := Count+1;
+            Blkno := Blkno+1;
+            len:= len-512;
+            END;
+        UNTIL (ORD(xcv.c[1]) > 127) OR (len <= 0);
+    IF ORD(xcv.c[1]) > 127 THEN CDRead := ORD(xcv.c[1]) ELSE CDRead := 0;
+    END;
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CDWRITE                                                      }
+{                                                                           }
+{ Description:                                                              }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+FUNCTION CDwrite {(NetLoc: CDaddr; VAR buf: CD_buf; len: integer): integer};
+    VAR xcv: SndRcvStr; Move_len,Count,T: integer;
+    BEGIN
+    Count := 0;
+    WITH NetLoc DO BEGIN
+        REPEAT
+        {                                 }
+        { build write command...          }
+        {                                 }
+        xcv.sln := 516; xcv.rln := 1;
+        xcv.b[1] := 51;
+        T := LIntByte(1,Blkno);
+        T := T MOD 16;              { save lower four bits         }
+        xcv.b[2] := T*16 + Driveno; { and store in upper four bits }
+        xcv.b[3] := LIntByte (3,Blkno);
+        xcv.b[4] := LIntByte (2,Blkno);
+        {$R-} MOVELEFT (Buf[Count*512],xcv.b[5],512); {$R+}
+
+        CDsend (NetLoc,xcv); CDrecv (NetLoc,xcv);
+
+        Count := Count+1;
+        Blkno := Blkno+1;
+        Len := Len-512;
+        UNTIL (ORD(xcv.c[1]) > 127) OR (len <= 0);
+        END;
+    IF ORD(xcv.c[1]) > 127 THEN CDWrite := ORD(xcv.c[1]) ELSE CDWrite := 0;
+    END;
+
+{$P}
+PROCEDURE DrvInit {(    NetLoc: CDaddr;
+                    VAR NumDrives:  INTEGER;
+                    VAR PhysDrives: PDrArray)};
+    VAR x: INTEGER; xcv: SndRcvStr; MaxSpTrk: INTEGER;
+
+    PROCEDURE SetRevA;
+        VAR i: integer;
+        BEGIN
+        NumDrives := xcv.b[1] mod 8;
+        FOR i := 1 TO NumDrives DO
+           WITH PhysDrives[NumDrives] DO BEGIN
+               Spt := 18;
+               Tpc := 3;
+               Cpd := 350;
+               Capacity := TenMBSize;
+               DrType := RevA;
+               spares[i] := 7;
+               DrSize := OldTenMB;
+               END;
+        END; {SetRevA}
+
+    PROCEDURE SetDrv;
+        Var i: integer;
+        BEGIN
+        FOR i := 1 TO DrMax DO BEGIN
+           xcv.sln := 2; xcv.rln := 129;
+           xcv.b[1] := 16;   {status command}
+           xcv.b[2] := i;
+           CDSend (NetLoc,xcv); CDRecv (NetLoc,xcv);
+           IF ORD(xcv.c[1]) > 127
+               THEN WITH PhysDrives[i] DO BEGIN
+                   DrType := Nodrv;
+                   PhysDr := FALSE;
+                   Capacity := 0;
+                   RomVers := 0;  FirmVers := 0;
+                   FirmMsg := '       ';
+                   END
+               ELSE WITH PhysDrives[i] DO BEGIN
+                   NumDrives := i;
+                   Spt := ORD(xcv.c[35]);
+                   Tpc := ORD(xcv.c[36]);
+                   Cpd := ORD(xcv.c[38]);
+                   x   := ORD(xcv.c[37]);
+                   Cpd := (Cpd*256)+x;
+
+                 IF Cpd = 358 THEN
+                   BEGIN
+                      DrType := RevB;
+                      MaxSpTrk:= 7;
+                      DrSize := TenMB; END   ELSE
+                    IF Cpd = 144 THEN
+                      BEGIN
+                         DrType := RevB;
+                         MaxSpTrk:= 7;
+                         DrSize := FiveMB; END  ELSE
+                        IF Cpd = 388 THEN
+                          BEGIN
+                           DrType := RevB;
+                           MaxSpTrk:= 7;
+                           DrSize := TwentyMB; END ELSE
+
+                          IF cpd = 306 THEN
+                            BEGIN
+                              DrType := RevH;
+                              IF Tpc = 2 THEN
+                               BEGIN
+                                MaxSpTrk:= 31;
+                                DrSize := FiveMB; END ELSE
+                              IF Tpc = 4 THEN
+                                BEGIN
+                                 MaxSpTrk:= 31;
+                                 DrSize := TenMB; END ELSE
+                              IF Tpc = 6 THEN
+                                  BEGIN
+                                   MaxSpTrk:= 31;
+                                   DrSize := TwentyMB;
+                            END;
+                    END;
+                   IF xcv.b[107] = i THEN BEGIN
+                       PhysDr := TRUE;
+                       ByteLInt (Capacity,0,xcv.b[41],xcv.b[40],xcv.b[39]);
+                       END
+                    ELSE BEGIN
+                       PhysDr := FALSE;
+                       ByteLInt (Capacity,0,xcv.b[110],xcv.b[109],xcv.b[108]);
+                       END;
+                   ROMvers := ORD(xcv.c[34]);
+                   FirmVers := ORD(xcv.c[33]);
+                   FirmMsg := '        ';
+{!CC}              MOVELEFT(xcv.b[1],FirmMsg,9);
+{!CC}              FirmMsg[0] := CHR(8);
+                   END;
+             spares[i] := MaxSpTrk;
+           END; {FOR}
+        END; {SetDrv}
+
+   BEGIN
+   {                                                }
+   { send old reset command to determine drive type }
+   {                                                }
+   xcv.sln := 1; xcv.rln := 1;
+   xcv.b[1] := 0;
+   CDSend (NetLoc,xcv); CDRecv (NetLoc,xcv);
+   IF ORD(xcv.c[1]) > 127 then SetDrv
+                          else SetRevA;
+   END; {DrvInit}
+
+{$P}
+{---------------------------------------------------------------------------}
+{ Procedure:   CCdrvIOinit                                                  }
+{                                                                           }
+{ Description: CCdrvIO unit initialization                                  }
+{                                                                           }
+{---------------------------------------------------------------------------}
+
+PROCEDURE CCdrvIOinit;
+    BEGIN END;
+
+END.
+
+
+
+

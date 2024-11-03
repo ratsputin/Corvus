@@ -1,0 +1,2006 @@
+; file :  drv.dtacom.text
+; date :  10-August-1983
+;
+; This is the datacom driver source
+;
+;     date          by         rev level             comments
+;________________________________________________________________
+;
+;   10/12/82       rpk          1            initial version    no protocols-nothin
+;   10/21/82       rpk          2            added auto line feed flag on writes
+;   10/27/82       rpk          3            MADE BUSY ONLY TELL ABOUT READ BUFFER
+;   11/29/82       kb           4a           Started additions for protocols and
+;                                              compatibility with old printer driver
+;                                              unitstatus interface.
+;   01/05/83       kb           4e           changed auto line feed flag useage
+;   01/06/83       kb           4f           added switch of water marks when switch back
+;                                              to default read buffer.
+;   01/12/83       kb                        fixed bug in FINDLIN routine, using
+;                                              wrong register for bit test. changed
+;                                              bit number register from D0 to D5.
+;   02/09/83       kb                        added setup of UART base reg in DCTLINT
+;                                               in ChkLines
+;   03/15/83       kb           5.1          Fixed COMWR to do auto lf if flag set
+;   04/11/83       kb           5.2          added tracking of Escape sequences to
+;                                               prevent from sending ETX or ENQ in
+;                                               middle of Esc seq.
+;   05/02/83       kb           5.3          Added clear of Full falg in UGETCHR
+;                                               to fix bug.  CHANGED BLS.S to BCS.S
+;                                               in buffer wrap code so don't use buffer
+;                                               plus 1.
+;
+;   07/28/83       kb           5.4          Added clear of read and write buffer to
+;                                                unitstatus.
+;   08/10/83       kb           5.5          Added send 1/4 second of BREAK to
+;                                                unitstatus.
+;
+;*******************************************************************************
+;
+; INCLUDE FILES USED :
+;       /ccos/os.gbl.asm.text                    ;OS GLOBAL EQUATES
+;       dcom.equ.text                            ;definitions for driver
+;
+; INCLUDE OS GLOBALS HERE
+            LIST       0
+            INCLUDE    '/ccos/OS.GBL.ASM.TEXT'
+;;;;;;;;;;  INCLUDE    'OS.GBL.ASM.TEXT'       ;for Home system - no CCOS volume
+            LIST       1
+            INCLUDE    'DCOM.EQU.TEXT'
+  page
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.W                     D7.W
+; 2 - WRITE       D0.W   D1.L   D2.W                     D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W       D0.W
+; 5 - STATUS      D0.W   D1.L   D2.W <--FUNCTION CODE    D7.W
+; 6 - UNMOUNT     D0.W                                   D7.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D0 & D7
+; INTERNAL REGISTER USEAGE :
+;
+;      D0      =       temp reg
+;      D1      =       temp reg
+;      D2      =       user's count
+;      D3      =       character to or from buffer
+;      D4      =       unit number
+;      D5      =       Mode flag & in DC ctl int rtns - VIA line bit #
+;      D6      =       save of SR
+;      A0      =       temp reg
+;      A1      =       temp reg
+;      A2      =       temp reg
+;      A3      =       Parameter block address (user's data)
+;      A4      =       buffer address in SetupWB and SetupRB
+;      A5      =       UART base address
+;      A6      =       Pointer to port's data area
+;
+  page
+            GLOBAL     COMDRV
+;
+; DATACOM DRIVER
+;
+COMDRV
+            BRA.S      COM001                    ;JUMP AROUND HEADER
+            DATA.B     0                         ;DEVICE NOT BLOCKED
+            DATA.B     31                        ;VALID CMDS - ALL VALID
+            DATA.B     83,08,10,00               ;DATE  July 28, 1983
+            DATA.B     hmlen                     ;HEADER MSG LENGTH
+xxx010      DATA.B     'DATACOMM driver (v 5.5)' ;HEADER MSG
+hmlen       EQU        %-xxx010
+;
+COM001      MOVEQ      #INVCMD,D7                ;assume invalid command
+            CMPI.W     #UNMCMD,D4                ;VALID COMMAND?
+            BHI.S      PRNDERR                   ;NO
+            MOVEM.L    D1-D6/A0-A6,-(SP)         ;SAVE REGISTERS
+            CLR.L      D7                        ;CLEAR IORESULT
+            MOVEA.L    D1,A3                     ;ADDRESS OF USERS BUFFER
+            CLR.L      D6                        ;Clear save of SR register
+            LEA        PORT0Data, A6             ; assume talking to Port 0
+            CMP.W      UnitP0, D0                ;is it Port 0?
+            BEQ.S      COMisP0                   ;yes
+            LEA        PORT1Data, A6             ;NO, talking to port 1
+;
+COMisP0     EXG        D0, D4                    ;save unit number
+            LEA        COMTBL,A1                 ;TURN THE COMMAND INTO A
+            LSL.W      #1,D0                     ;INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D0.W),D0
+            JSR        0(A1,D0.W)                ;DO FUNCTION
+            MOVEM.L    (SP)+,D1-D6/A0-A6         ;Restore registers
+PRNDERR     RTS
+;
+; THE PRINTER DRIVER JUMP TABLE
+;
+COMTBL      DATA.W     COMINST-COMTBL           ;UNITINSTALL
+            DATA.W     COMRD-COMTBL             ;UNITREAD
+            DATA.W     COMWR-COMTBL             ;UNITWRITE
+            DATA.W     COMCLR-COMTBL            ;UNITCLEAR
+            DATA.W     COMBSY-COMTBL            ;UNITBUSY
+            DATA.W     COMST-COMTBL             ;UNITSTATUS
+            DATA.W     COMUNMT-COMTBL           ;UNITUNMOUNT
+  page
+;
+; COMINST - UNITINSTALL ==> SETUP THE DEFAULT BUFFER CONTROL FEATURES
+;   Assumes that a spurrious DataCom Control interrupt is benign and will
+;   be handled by the DataCom Control interrupt service routine correctly.
+;
+; save unit number and toggle common flag
+;
+COMINST     BSR.S      SaveUnit
+            BSR.S      DISINTS                   ;DISABLE DATACOM INTERRUPTS
+
+; init buffer control table
+;
+            LEA        BFRCTL(A6), A0           ;beginning of table
+            LEA        DEFBWRT(A6), A1          ;beginning of default table
+            MOVEQ      #DEFBCTLN-1, D0          ;number of words in table
+
+CINbufctl   MOVE.W     (A1)+, (A0)+             ;move from default to real
+            DBF        D0, CINbufctl            ;table is even number of words
+;
+; Initialize UART from constants and Printer Control Table & Initialize VIA
+;
+            MOVE.B     #IODDRA,DDRA.L           ;INITIALIZE DATA DIRECTION REG FOR PORT A
+            BSR.S      SETUART
+;
+; Initialize READ, WRITE AND CONTROL BUFFER CONTROL TABLES
+;
+            BSR        INIWRBF                 ;init write buffer
+            BSR        INIRDBF                 ;init read buffer
+            BSR        INITCTLB                ;init control buffer
+;
+; Setup interrupt vectors
+;
+            BSR        SETVECS
+;
+; If saved SR then restore it
+;
+            BSR.S      ENBINTS
+            RTS
+  page
+;
+; DISINTS - disable interrupts for Port selected.  If Port 0 then disable up to
+;           level 4.  If Port 1 selected than disable up to level 2.
+;
+;      Entry : D6 = saved SR if not zero
+;              D4 = unit number
+;      Exit  : D6 = saved SR or zero
+;
+DISINTS     MOVE.W     #INT4, D1                 ;assume Port 0, level 4 int
+            CMP.W      UnitP0, D4                ;is it Port 0?
+            BEQ.S      DITisP0                   ;yes
+            MOVE.W     #INT2, D1                 ;no, use Port 1 level 2 int
+DITisP0     MOVE.W     SR,D0                     ;get current status register
+            ANDI.W     #INTMSK,D0                ;GET ONLY INTERRUPT LEVELS
+            CMP.W      D1, D0                    ;is current < current Port's level
+            BCC.S      DITexit                   ;no, exit
+;
+;    NOW set up disable with minimum disturbance of upper level
+;               status bits --- this too wont work if user and
+;               supervisor space are both utilised.
+;
+            MOVE.W     SR, D6                    ;save current SR
+            MOVE.W     SR, D0                    ;get current status register for change
+            ANDI.W     #UPRMSK,D0                ;KEEP ONLY UPPER BITS
+            OR.W       D1, D0                    ;disable current Port's level
+            MOVE.W     D0,SR                     ;turn off the ints in the SR
+DITEXIT     RTS
+;
+; ENBINTS - Restore saved SR if saved it
+;      Entry : D6 = saved SR if not zero
+;      Exit  : D6 = if D6 was not zero then SR <- D6 and D6 <- 0
+;                   otherwise SR remains untouched and D6 stays 0
+;
+ENBINTS     TST.W      D6                        ;Does D6 have a saved SR
+            BEQ.S      EITEXIT                   ;DIDN'T SAVE SO EXIT
+            MOVE.W     D6,SR                     ;restore SR
+            CLR.L      D6                        ;always leave D6 = to zero
+EITEXIT     RTS
+  page
+;
+; SaveUnit - determine if this is Port 0 or Port 1 and save unit number
+;            also initialize A6 to address of port's data area
+;
+;      Entry : D4 = unit number
+;      Exit  : A6 = address of port's data area
+;
+SaveUnit    LEA        UnitP0, A1               ;assume is Port 0
+            LEA        Port0Data, A6
+
+            LEA        CMNFLGS, A0              ;if portflg flag was
+            BCHG       #PORTFLG, (A0)           ; zero then is port 0
+            BOFF.S     SVUisP0                  ;else it is now port 1
+
+            LEA        UnitP1, A1               ;Port 1 addresses
+            LEA        Port1Data, A6
+
+SVUisP0     MOVE.W     D4, (A1)                 ;save unit number
+            RTS
+  page
+;
+; SETUART - Initialize UART from constants and Buffer Control Table
+;
+; Get UART Register Base address
+;
+SETUART     BSR.S      GETBASE                   ;RETURNS BASE IN A0
+;
+; Setup UART's Control register - index = 7  from Base
+;
+            MOVEQ      #CTLRC,D0                 ;1 STOP BIT,BAUD RATE GEN
+            MOVE.B     BF_WRDS(A6), D1           ;ADD WORD SIZE-7 OR 8 BITS
+            LSL.B      #5,D1                     ;MOVE INTO HI ORDER BITS
+            OR.B       D1,D0                     ;00=8 BITS,01=7 BITS
+            OR.B       BF_RDBD(A6), D0           ;ADD BAUD RATE FROM TABLE
+            MOVE.B     D0,CTLREGI(A5)            ;PUT IN CONTROL REGISTER
+;
+; Setup UART's Command register - index = 5 from Base
+; make transmit buffer empty interrupt enabled - when occurs int rtn will
+;  turn off if buffers are empty.
+;
+            MOVEQ      #CMDRWC, D0               ;CMD CONSTANTS xmit int enabled
+            MOVE.B     BF_PART(A6), D1           ;GET TABLE PARITY
+            LSL.B      #5,D1                     ;PUT IN CORRECT BIT POSITION
+            OR.B       D1,D0
+            MOVE.B     D0,CMDREGI(A5)            ;PUT IN COMMAND REGISTER
+;
+; Read the Data Port and Status Register to clear all Status flags
+;
+            MOVE.B     DATAREG(A5),D0            ;DATA PORT AT INDEX = 1
+            MOVE.B     STATRI(A5),D0             ;STATUS REG AT INDEX = 3
+            RTS
+ page
+;
+; GETBASE - Get address of UART's register Base address in memory
+;           Entry : D4 = unit number
+;           EXIT : (A5) = Base address
+;
+GETBASE     LEA        UARTDC0.L, A5             ;ASSUME USING DATACOM 0
+            CMP.W      UnitP0, D4                ;is it Port 0?
+            BEQ.S      GBSisP0                   ;yes
+            ADDA.W     #DC1OFF, A5               ;No, BASE := OFFSET+UART DC0 BASE ADDR
+GBSisP0     RTS
+;
+; SETVECS - Put interrupt routine's entry addresses into the interrupt vectors
+;           If Port 0 put in DC 0 int rtn address in Vector 4
+;           otherwise assume is port 1
+;           Saves old level 1 interrupt vector if it is not = to this driver's
+;              interrupt routines address.
+;
+;           Entry : D4 = unit number
+;                   Interrupts disabled to level for current Port
+;
+SETVECS     LEA        DCTLINT,A0                ;PUT DATA COM CONTROL
+            MOVEA.L    VEC1.W, A1                ;Get old vector
+            MOVE.L     A0,VEC1.W                 ;INT ROUTINE IN VEC 1
+            CMPA.L     A0, A1                    ;should save old vector
+            BEQ.S      SVCsame                   ;no, they're the same
+            LEA        SaveLvl1, A0              ;yes save in common area
+            MOVE.L     A1, (A0)
+
+SVCsame     CMP.W      UnitP0, D4                ;is it Port 0?
+            BNE.S      SVCdoP1                   ;no, do level 2 for Port 1
+
+            LEA        DC0INT,A0                 ;ADDR OF DC0 entry point to XMIT/RCV INT ROUTINE
+            MOVE.L     A0,VEC4.W                 ;put it in VEC 4
+            BRA.S      SVCexit
+
+SVCdoP1     LEA        DC1INT,A0                 ;ADDR OF DC1 entry point to XMIT/RCV INT ROUTINE
+            MOVE.L     A0,VEC2.W                 ;put it in VEC 2
+
+SVCexit     RTS
+  page
+;
+; INIWRBF - Initialize Write Buffer variables to EMPTY Buffer also ENQ, BUSY and
+;           SENDLF are cleared to false.  Use default buffer.
+;
+INIWRBF     LEA        WRTCTL(A6),A0             ;WRITE BUFFER CONTROL TABLE
+            CLR.W      (A0)+                     ;RESET ALL FLAG 1
+            CLR.W      (A0)                      ;RESET ALL FLAG 2 except *4/11/83 kb*
+            TST.B      (A0)+                     ;Bump pointer            *4/11/83 kb*
+            BSET       #AULF_W2,(A0)             ; DO AUTO LINE FEED and *kb 1/5/83*
+            BSET       #EMPT_W2,(A0)+            ; BUFFER IS EMPTY
+            LEA        WRTBUF(A6), A1            ;WRITE BUFFER
+            MOVE.L     A1,(A0)+                  ;FILL POINTER (USED TO FILL CHARACTERS IN)
+            MOVE.L     A1,(A0)+                  ;EMPTY POINTER (USED TO EMPTY CHARACTERS OUT)
+            MOVE.L     A1,(A0)+                  ;Save buffer address
+            MOVE.W     #WBFLEN,(A0)+             ;MAXIMUM SIZE OF BUFFER
+            MOVE.W     #WBFLEN,(A0)+             ;NUMBER OF LOCATIONS AVAILABLE TO FILL
+            RTS
+;
+; INIRDBF - Initialize READ Buffer variables to EMPTY Buffer also ENQ, BUSY and
+;           SENDLF are cleared to false.  Use default buffer
+;
+INIRDBF     LEA        RDCTL(A6), A0             ;READ BUFFER CONTROL TABLE
+            CLR.W      (A0)+                     ;RESET ALL FLAG 1
+            CLR.B      (A0)+                     ;RESET ALL FLAG 2 except,
+            BSET       #EMPT_W2,(A0)+            ;   BUFFER IS EMPTY
+            LEA        RDBUF(A6),A1              ;READ BUFFER
+            MOVE.L     A1,(A0)+                  ;FILL POINTER (USED TO FILL CHARACTERS IN)
+            MOVE.L     A1,(A0)+                  ;EMPTY POINTER (USED TO EMPTY CHARACTERS OUT)
+            MOVE.L     A1,(A0)+                  ;Save buffer address
+            MOVE.W     #RBFLEN,(A0)+             ;MAXIMUM SIZE OF BUFFER
+            MOVE.W     #RBFLEN,(A0)+             ;NUMBER OF LOCATIONS AVAILABLE TO FILL
+            CLR.L      (A0)+                     ;Clear alternate buffer address
+            CLR.W      (A0)+                     ;Clear alternate buffer length
+            MOVE.W     #MAXRHI,(A0)+             ;NUMBER OF CHARACTERS FOR HIGH WATER MARK
+            MOVE.W     #MAXRLO,(A0)+             ;NUMBER OF CHARACTERS FOR LOW WATER MARK
+            CLR.W      (A0)+                     ;CLEAR ENQ COUNT
+            RTS
+;
+; INITCTLB  - Initialize the control character buffer to empty
+;
+INITCTLB    LEA        CTLBUF(A6), A0             ;CONTROL CHARACTER BUFFER
+            LEA        CB_FRONT(A6), A1           ;CTL CHAR BUF TABLE ADDRESS
+            MOVE.L     A0, (A1)+                  ;set front and
+            MOVE.L     A0, (A1)+                  ;rear pointers to begin of buffer
+            CLR.W      (A1)                       ;clear all flags except
+            BSET       #EMPT_CB, 1(A1)            ;buffer empty
+            RTS
+  page
+; COMRD - UNITREAD   READ FROM THE DATACOM BUFFER
+;
+;           INPUTS......D2 COUNT OF CHARACTERS THE USER WANTS TO READ
+;                       D4 unit number
+;                       A3 ADDRESS OF USER'S BUFFER
+;                       A6 Address of ports data area
+;
+;  NOTES: For reading, interrupts will occur when the input buffer is full -no
+;         priming is necessary as is with writing. Also if full duplex activities
+;         then a read and write interrupt may be the same interrupt -have to check
+;         status flags of UART.
+; First see if user's count is exhausted if not attempt a read
+;
+COMRD       TST.W      D2
+            BEQ.S      COMREX                   ;COMREX GENERAL EXIT ROUTINE
+
+; Check if the user has disabled output - Buffer to User
+;
+REREAD      BTST       #OUTE_R1,RB_FLG1+1(A6)   ;IS BUFFER TO USER TRANSFER ENABLED?
+            BEQ.S      CKRdErr                  ; YES, check for input error on UART
+            MOVEQ      #IOEordsbl,D7            ;no, tell user can't => ERROR
+            BRA.S      COMREX
+
+; Check for a UART error
+;
+CKRdErr     BCLR       #Err_R1, RB_FLG1+1(A6)   ;Have a read error
+            BOFF.S     CKPORT                   ;no, see if have data
+            MOVEQ      #IOEuarter,D7            ;yes, tell user and exit
+            BRA.S      COMREX
+
+; if there is any data in the buffer, give it to user. If there is no data and
+;  the user has disabled the inbound read, remind him. However if there is no data
+;  put him in a loop waiting for data.
+;
+CKPORT      BTST       #EMPT_R2,RB_FLG2+1(A6)   ;BUFFER IS EMPTY?
+            BOFF.S     READONE                  ; NO, GO READ A CHARACTER
+            BTST       #INPE_R1,RB_FLG1+1(A6)   ; yes, INPUT ENABLED?
+            BOFF.S     REREAD                   ; YES, wait for a char
+            MOVEQ      #IOEirdsbl,D7            ;no, tell user input is disabled
+            BRA.S      COMREX
+
+; get user his characters and manage buffer
+;
+READONE     BSR.S      UGETCHR                  ;GET THE CHARACTER FOR THE USER FROM THE BUFFER
+            BCS.S      COMREX                   ;exit if error, D7 has error code
+
+; Put character in user's buffer and update
+;
+            MOVE.B     D3,(A3)+                 ;update buffer pointer
+            SUBQ.W     #1,D2                    ;subtract one from user count
+            BRA.S      COMRD                    ;GETSMOA IF AVAILABLE
+;
+COMREX      RTS
+ page
+; UGETCHR  --- User level get character routine, gets the character from the read buffer.
+;
+;      Entry   : A6  = pointer to ports data area
+;                D2  = user count
+;                D4  = unit number
+;                buffer is NOT empty
+;      Exit    : D3  = character if one gotten
+;                (C) = Error, D7 has error code
+;               (NC) = got a character no error
+;
+UGETCHR     BSR        DISINTS                  ;disable interupts
+
+            MOVE.L     RB_EMPTY(A6), A0         ;A0 => EMPTYING POSITION OF RD BUFFER
+            MOVE.B     (A0)+,D3                 ;Get chars
+            MOVE.L     A0, RB_EMPTY(A6)         ;Save the new Front pointer in rb_empty
+;
+; Update buffer variables
+;
+            MOVE.L     RB_BADR(A6), A1          ;A1 = ADDRESS OF BUFFER BEGIN
+            ADDA.W     RB_SIZE(A6), A1          ;A1 = ADDRESS OF END OF BUFFER + 1
+            CMPA.L     A1, A0                   ;Is Front pointing beyond buffer?
+            BCS.S      UGCnowrp                 ;No, don't do wrap around *5/2/83 KB*
+;                                               ;Yes, set front = addr 1st byte of buffer
+            MOVE.L     RB_BADR(A6), RB_EMPTY(A6) ;Save the new Front pointer in rb_empty
+;
+UGCnowrp    ADDQ.W     #1, RB_FREE(A6)          ;SINCE WE GOT CHAR, ONE MORE FREE SPACE
+            BCLR       #FULL_R2, RB_FLG2+1(A6)  ;always clear full flag   *5/2/83 KB*
+;
+; see if buffer is empty
+;
+            MOVE.W     RB_FREE(A6), D1
+            CMP.W      RB_SIZE(A6), D1          ; # OF FREE LOCATIONS - BUFFER SIZE
+            BCS.S      UGCnotmt                 ; not empty if free < size
+            BHI.S      HELPRD                   ; HELPRD IS SERIOUS ERROR (free > size)
+;
+            BSET       #EMPT_R2, RB_FLG2+1(A6)  ; BUFFER empty
+            BSR.S      RChkAltBf                ; see if should switch to an Alternate buffer
+;
+; Do protocol control, see if can turn off Read Busy
+;
+UGCnotmt    BSR.S      ChkProto                 ;check protocol
+            BSR        ENBINTS                  ;enable interrupts
+            CLR.L      D0                       ; clear carry
+            RTS
+;
+HELPRD      BSR        ENBINTS                  ; SERIOUS BUMMER BUG
+            MOVEQ      #IOEbszerr,D7            ;SIZING ERROR
+            MOVE.W     #1,CCR                   ;SET CARRY
+            RTS
+  page
+;
+;  ChkProto  - checks low water mark for reading to see if should turn off read busy
+;  GoUnbusy - entry point to turn off busy state on receives.
+;
+;           NOTES: This routine assumes that interrupts are disabled prior
+;                  to its being invoked.
+ChkProto
+;
+; check if input disabled. Cannot turn off busy if is disabled.
+;
+            BTST       #INPE_R1, RB_FLG1+1(A6)
+            BON.S      CPRexit                  ;Input disabled exit
+;
+; if (protocols enabled) and (NOT Line type) then check if busy
+;
+            BTST       #PROT_P2, BF_PROF(A6)    ;protocol enabled?
+            BOFF.S     CPRexit                  ;no, exit
+            BTST       #LINE, BF_PROF+1(A6)     ;Line type
+            BON.S      CPRexit                  ;yes, exit
+;
+; if busy then check if buffer at or below low water mark
+;
+            BTST       #BUSY_R1, RB_FLG1+1(A6)
+            BOFF.S     CPRexit                  ;not busy exit
+;
+; if buffer at or below low water mark then turn off busy
+;
+            MOVE.W     RB_SIZE(A6), D1          ;BUFFER SIZE (ADDRESS OF)
+            SUB.W      RB_FREE(A6), D1          ;D1 = number of chars in buffer
+            CMP.W      RB_LOWA(A6), D1          ; at or below low water mark?
+            BHI.S      CPRexit                  ; No, exit
+;
+; is at or below when busy so turn off busy
+;
+GoUnbusy    BCLR       #BUSY_R1, RB_FLG1+1(A6)  ;clear busy state
+            MOVEQ      #XON, D0                 ;assume XON/XOFF protocol
+            BTST       #XONXOFF, BF_PROF+1(A6)  ;send byte to other side saying not busy
+            BON.S      CPRxon                   ;send XON
+            MOVEQ      #ACK, D0                 ;either ETX/ACK or ENQ/ACK so send ACK
+CPRxon      BSR        PutCtl                   ;send the control char
+CPRexit     RTS
+  page
+;
+; RChkAltBf - check if alternate buffer switch on read buffer
+;      Rcv input is automatically disabled when user calls unitstatus
+;      switch buffers.
+;
+;      Entry :  A6 = address of port's datat area
+;               interrupts disabled
+;
+RChkAltBf   BTST       #EMPT_R2, RB_FLG2+1(A6)  ;is buffer empty?
+            BOFF.S     rCABexit                 ;no, can't switch
+            BCLR       #ALTBF_R1, RB_FLG1+1(A6) ;is an alternate buffer available?
+            BOFF.S     rCABexit                 ;no, nothing to switch
+;
+; Switch buffers by making the Alternate buffer the main buffer
+;
+            MOVE.L     RB_ABADR(A6), A0          ;get new buffer address
+            MOVE.W     RB_ASIZE(A6), D0          ;and length
+            BSR        SetupRB                   ;switch buffer in table
+;
+; if user is NOT controlling the input disable bit then enable RCV input
+;
+            LEA        RB_FLG1+1(A6), A0         ;EnbRcvIn needs A0 -> flag byte
+            BTST       #INPC_R1, (A0)            ;is user controlling input disable?
+            BON.S      rCABexit                  ;user is controlling, exit
+            BSR        EnbRcvIn                  ;enable recevie input
+;
+rCABexit    RTS
+  page
+; COMWR - UNITWRITE
+;
+;           INPUTS......D2 COUNT OF CHARACTERS THE USER WANTS TO WRITE
+;                       D4 unit number
+;                       A3 ADDRESS OF USER'S CHARACTERS
+;                       A6 Address of ports data area
+;
+; NOTE: For writing, the UART has to be primed to interrupting when the xmit buffer
+;       is empty by enabling the xmit interrupt. If no xmissions then of course its empty
+;       and it interrupts forever. Hence trickery only when sending first of a stream
+;       (starting interrupts) and last of a stream (stopping the little dears)
+;
+COMWR       ;*kb 3/15/83*
+            BTST       #SNDLF_W2, WB_FLG2+1(A6)  ;need to send an Line Feed char?
+            BON.S      REWRITE                   ;yes, then do it
+            ;*kb 3/15/83*
+            TST.W      D2                        ;IS USER COUNT DONE?
+            BEQ.S      COMWEX                    ;YES,EXIT
+
+; if input to buffer disabled input
+;
+REWRITE     BTST       #INPE_W1, WB_FLG1+1(A6)  ;IS USER TO BUFFER TRANSFER ENABLED?(INBOUND WRITE)
+            BOFF.S     CKbuferr                 ;YES, chk if buffer size err found in xmit int rtn
+            MOVEQ      #IOEiwdsbl,D7            ;input disabled give error
+            BRA.S      WRPROB                   ;exit
+
+; check write error flag for error during xmit interrupt
+;
+CKbuferr    BCLR       #ERR_W1, WB_FLG1+1(A6)   ;Error?
+            BOFF.S     CKWRTP                   ;No, chk if buffer is full
+            MOVEQ      #IOEwszerr,D7            ;SIZING ERROR with write buffer
+            BRA.S      WRPROB                   ;exit
+
+; Check if Buffer is full. If is and output is NOT disabled then spin wheels
+;
+CKWRTP      BTST       #FULL_W2, WB_FLG2+1(A6)  ;Buffer full?
+            BEQ.S      WRTONE                   ;NO, GO WRITE A CHAR TO THE BUFFER
+
+            BTST       #OUTE_W1, WB_FLG1+1(A6)  ; Yes, OUTPUT IS AT ALL ENABLED?
+            BOFF.S     REWRITE                  ; YES, spin wheels while buffer emptys
+            MOVEQ      #IOEowdsbl,D7            ;can't send tell user ERROR
+            BRA.S      WRPROB                   ;exit
+
+; Buffer not full so put user characters or LF into write buffer
+;
+WRTONE      MOVEQ      #LF, D3                  ;assume just sent an CR so must send a LF
+            BCLR       #SNDLF_W2, WB_FLG2+1(A6)  ;should send an Line Feed char?
+            BON.S      WRTanLF                  ;yes
+            MOVE.B     (A3)+,D3                 ;no, then get 1 user char
+            SUBQ.W     #1,D2                    ;subtract 1 from user's count
+WRTanLF     BSR.S      UPUTCHR                  ;PUT THE USER'S CHARACTER INTO THE WRITE BUFFER
+            BRA.S      COMWR
+COMWEX
+WRPROB      RTS
+ page
+; UPUTCHR  --- User level put character routine, puts the character into the write buffer.
+;
+;      Entry : (D3) = character to put in write buffer
+;               Buffer is NOT full
+;
+UPUTCHR     BSR        DISINTS                  ;disable interrupts
+
+            MOVE.L     WB_FILLP(A6), A0         ;A0 => FILLING POSITION OF WRITE BUFFER
+            MOVE.B     D3, (A0)+                ;PUT char
+            MOVE.L     A0, WB_FILLP(A6)         ;Save the new Rear pointer in wb_fillp
+;
+; Update buffer variables
+;
+            MOVE.L     WB_BADR(A6), A1          ;A1 = ADDRESS OF BUFFER BEGIN
+            ADDA.W     WB_SIZE(A6), A1          ;A1 = ADDRESS OF END OF BUFFER + 1
+            CMPA.L     A1, A0                   ;Is Rear pointing beyond buffer?
+            BCS.S      UPCnowrp                 ;No, don't do wrap around   *5/2/83 KB*
+;                                               ;Yes, set front = addr 1st byte of buffer
+            MOVE.L     WB_BADR(A6), WB_FILLP(A6) ;Save the new Rear pointer in wb_fillp
+;
+UPCnowrp    SUBQ.W     #1, WB_FREE(A6)          ;SINCE WE TOOK CHAR, ONE LESS FREE SPACE
+;
+; see if buffer is full  (WB_FREE is an unsigned word)
+;
+            BNE.S      UPCnotfl                 ;not full, subtract sets or clears ZERO bit
+            BSET       #FULL_W2, WB_FLG2+1(A6)  ; BUFFER full
+;
+; check if last char is CR.  If is see if should send an LF next time
+;
+UPCnotfl    CMPI.B     #CR, D3
+            BNE.S      UPCnotCR                 ;not a CR
+            BTST       #AULF_W2, WB_FLG2+1(A6)  ;is it auto LF mode
+            BOFF.S     UPCnotCR                 ;no, don't send an LF  *kb 1/5/82*
+            MOVE.W     D5, D0                   ;save mode flag  *kb 1/24/83*
+            ANDI.W     #LFsprsflg, D0           ;if LF suppress flag set *kb 1/24/83*
+            BNE.S      UPCnotCR                 ;then don't send a LF
+UPCisaLF    BSET       #SNDLF_W2, WB_FLG2+1(A6) ;send LF only if D5=0 and AULF set
+
+; show buffer not empty.  If was output char and and turn on xmit interrupts
+;
+UPCnotCR    BCLR       #EMPT_W2, WB_FLG2+1(A6)  ;test and clear
+            BOFF.S     UPCison                  ;wasn't empty before
+            BTST       #OUTE_W1, WB_FLG1+1(A6)  ;if output to user is disabled
+            BON.S      UPCison                  ;then don't start xmit int
+
+; interrupt will occur without sending a char
+            BSR.S      STRTXMIT                 ;turn on interrupt
+
+; enable interrupts and exit
+;
+UPCison     BRA        ENBINTS
+  page
+;           NOTE:    it is assumed that these routines are protected from interrupts
+;
+; STRTXMIT - start xmit interrupt process by enabling UART to interrupt
+;            on transmit buffer empty.
+; STOPXMIT - stop xmit interrupt process by disabling UART to interrupt
+;            on transmit buffer empty.
+;      Entry : D4 = unit number
+;
+STRTXMIT
+            MOVEQ      #XMITENB,D1               ;ENABLE XMIT INT
+            BRA.S      SXTGETB
+STOPXMIT
+            MOVEQ      #XMITDIS,D1               ;DISABLE XMIT INT
+;
+SXTGETB     BSR        GETBASE                   ;GET UART BASE ADDRESS
+            MOVE.B     CMDREGI(A5),D0            ;GET CURRENT CMD REG
+            ANDI.B     #CLRD3D2,D0               ;CLEAR BITS D3 & D2
+            OR.B       D1,D0                     ;DON'T CHANGE OTHER BITS
+            MOVE.B     D0,CMDREGI(A5)            ;SAVE CHANGED CMD REG
+            RTS
+  page
+;
+; PutCtl - put a character in the control character buffer
+;      Entry : (D0) = character to put in control char buffer
+;                     interrupts disabled
+;
+PutCtl      MOVEA.L    CB_REAR(A6), A0          ;A0 = Rear pointer
+            MOVE.B     D0, (A0)+                ;put char in buffer and inc ptr
+            MOVE.L     A0, CB_REAR(A6)          ;put Rear pointer in save loc
+            BCLR       #EMPT_CB, CB_FLAGS+1(A6) ;show not empty
+            BRA.S      STRTXMIT                 ;make sure will send character
+;
+; GetCtl - get a character from the control character buffer
+;      Exit  : (D3) = character to from control char buffer
+;                     interrupts disabled
+; Assumption :  The control buffer should never get full.
+;
+GetCtl      MOVEA.L    CB_FRONT(A6), A0         ;A0 = Front pointer
+            MOVE.B     (A0)+, D3                ;get char from buffer and inc ptr
+            MOVE.L     A0, CB_FRONT(A6)         ;put Front pointer in save loc
+
+            MOVE.L     CB_REAR(A6), D1          ;D1 = Rear pointer
+            CMP.L      A0, D1                   ;Front = Rear?
+            BHI.S      GCLexit                  ;no, still more chars in buffer
+                                                ;yes, buffer empty
+            BSR        INITCTLB                 ;init control buffer to empty
+
+GCLexit     RTS
+  page
+;
+; DCOMINT - DataCom Interrupt routine for XMIT/RCV interrupts.
+;
+; CRITICAL: if an interrupt occurs, then both the receive buffer full and the xmit
+;           buffer empty could be true simultaneously, so we must test both.
+;               However, only once thru the test then rte
+;           Currently the priority is reads then writes
+
+; Entry for Port 0 interrupt
+;
+DC0INT      MOVEM.L    D0-A6,-(SP)               ;SAVE ALL REGISTERS
+            LEA        Port0Data, A6             ;Address of Port 0 data
+            MOVE.W     UnitP0, D4                ;Port 0 unit number
+            BRA.S      DCIcomn
+
+; Entry for Port 1 interrupt
+;
+DC1INT      MOVEM.L    D0-A6,-(SP)               ;SAVE ALL REGISTERS
+            LEA        Port1Data, A6             ;Address of Port 1 data
+            MOVE.W     UnitP1, D4                ;Port 1 unit number
+
+; begin of Common port interrupt code
+;
+DCIcomn     BSR        GETBASE                   ;get UART base address
+            MOVE.B     STATRI(A5),D7             ;GET STATUS OF UART
+;
+; If Receive interrupt then see if should process character.
+;
+DCIrcv      BTST       #S_RCVF, D7               ;TEST FOR RECEIVE BUFFER FULL
+            BOFF.S     DCIxmit                   ;isn't, try Xmit buffer empty
+            BSR.S      PRcvChar                  ;yes, process receive character
+;
+; Not Receive, if Transmit interrupt then see if can send character
+;        NOTE: THIS TESTS D7 WHICH ALLOWS US TO COME THRU HERE AFTER A READ CHECK DONE
+
+DCIxmit     BTST       #S_WRTE,D7                ;XMIT BUFFER EMPTY?
+            BOFF.S     DCIexit                   ;NO, UNKNOWN INTERRUPT - EXIT
+DCIPX       BSR        PRXMIT                    ;YES, PROCESS XMIT
+DCIexit     MOVEM.L    (SP)+,D0-A6               ;EXIT-RESTORE REGISTERS
+            RTE                                  ;EXIT INTERRUPT
+  page
+; PRcvChar - process received character
+;      Entry : D7 = status register
+;              D4 = unit number
+;              A5 = UART Base address
+;              A6 = port's data area address
+;
+PRcvChar    MOVE.B     DATAREG(A5), D3           ;GET CHAR/CLEARS INTERRUPT
+;;;;;;;;    BCLR       #BITD7,D3        ;don't so can send 8 bit characters
+
+; check for any errors with receive
+;
+            MOVE.B     D7, D0                    ;get status register
+            ANDI.B     #S_ErrBits, D0            ;remove all but error bits
+            BNE.S      PRCerror                  ;have an error
+
+; is this a control char and (protocols enabled) and (NOT Line type)
+;   if yes then process com control char
+;
+            BTST       #PROT_P2, BF_PROF(A6)     ; SEE IF ANY PROTOCOLS AT ALL--CHECK HI BYTE
+            BOFF.S     PRCnoctl                  ; No protocol enabled, see if can put in buffer
+            BTST       #Line, BF_PROF+1(A6)      ; is it a Line protocol?
+            BON.S      PRCnoctl                  ; Yes
+            CMPI.B     #' ', D3                  ; is it a control character?
+            BCC.S      PRCnoctl                  ; No, not in range 0 - $1F
+            BSR.S      PDCcontl                  ; Yes, process a possible DC control char
+            BEQ.S      PRCexit                   ; returns zero if processed a ctl char
+
+; check to see if input disabled or buffer full
+;
+PRCnoctl    BTST       #FULL_R2, RB_FLG2+1(A6)   ;is it Full?
+            BON.S      PRClstdt                  ;Lost data error
+            BTST       #INPE_R1, RB_FLG1+1(A6)   ;is input disabled?
+            BON.S      PRClstdt
+
+; put char in buffer
+;
+            BRA        PutChrBf
+
+; receive errors
+;
+PRCerror    BSET       #ERR_R1, RB_FLG1+1(A6)    ;UART error
+            BRA.S      PRCexit
+PRClstdt    BSET       #LOST_R2, RB_FLG2+1(A6)   ;Lost data error
+PRCexit     RTS
+ page
+;
+; PDCcontl - check for Data Com control characters - ENQ, ETX, ACK, XON, and XOFF.
+;
+;      Entry : A6 = address of port's data area
+;              D3 = character
+;      Exit  : (NE) = char not one of the control characters
+;              (EQ) = char was one of the control characters
+;
+PDCcontl    BTST       #XONXOFF, BF_PROF+1(A6)  ; is it XON/XOFF protocol?
+            BON.S      PDCLchkx                 ; yes, chk for those chars
+
+; is either ENQ/ACK or ETX/ACK   both work the same way
+;
+            CMPI.B     #ACK, D3                 ;is it an ACK?
+            BEQ.S      PDCLack                  ;yes, write is not busy now
+            CMPI.B     #ENQ, D3                 ;is it an ENQ?
+            BEQ.S      PDCLenq                  ;yes, see if read should go busy
+            CMPI.B     #ETX, D3                 ;is it an ETX?
+            BNE.S      PDCLexit                 ;no, not a control character
+
+; PROCESS an ENQ or ETX - send ACK if read not busy
+;
+PDCLenq     BTST       #BUSY_R1, RB_FLG1+1(A6)  ;is read busy?
+            BON.S      PDCLdidit                ;yes, send ACK when clear Busy
+            MOVEQ      #ACK, D0                 ;no, then send ACK to other side
+PDCLsend    BSR        PutCtl
+            BRA.S      PDCLdidit
+
+; PROCESS an ACK and a XON - clear write busy
+;
+PDCLxon
+PDCLack     BCLR       #BUSY_W1, WB_FLG1+1(A6)
+            BSR        STRTXMIT                 ;start sending again
+            BRA.S      PDCLdidit
+
+; Check for a XON or a XOFF
+;
+PDCLchkx    CMPI.B     #XON, D3                 ;is it an XON?
+            BEQ.S      PDCLxon                  ;yes, write is not busy now
+            CMPI.B     #XOFF, D3                ;is it an ENQ?
+            BNE.S      PDCLexit                 ;no, not a control character
+
+; PROCESS a XOFF character - set write busy
+;
+PDCLxoff    BSET       #BUSY_W1, WB_FLG1+1(A6)
+
+PDCLdidit   CLR.L      D3                       ;show processed
+PDCLexit    RTS
+ page
+;PutChrBf --PUT A CHARACTER INTO THE READ BUFFER AND RETURN -ADJUST COUNTERS/POINTERS AS REQUIRED
+;           COMING IN  D7- CONTAINS STATUS WORD  D3 CONTAINS CHARACTRER
+;                      A5 POINTS TO UART
+;
+; BUFFER HAS ENUF SPACE, JUST ADD CHARACTER
+;
+PutChrBf    MOVEA.L    RB_FILLP(A6), A0          ; address where to put character
+            MOVE.B     D3, (A0)+                 ; AUTO ADJUST POINTER
+            MOVE.L     A0, RB_FILLP(A6)          ; RESET THE FILL POINTER RB_FILLP
+;
+; Update buffer variables
+;
+            MOVE.L     RB_BADR(A6), A1          ;A1 = ADDRESS OF BUFFER BEGIN
+            ADDA.W     RB_SIZE(A6), A1          ;A1 = ADDRESS OF END OF BUFFER + 1
+            CMPA.L     A1, A0                   ;Is Rear pointing beyond buffer?
+            BCS.S      PCBnowrp                 ;No, don't do wrap around   *5/2/83 KB*
+;                                               ;Yes, set front = addr 1st byte of buffer
+            MOVE.L     RB_BADR(A6), RB_FILLP(A6) ;Save the new Rear pointer in rb_fillp
+;
+PCBnowrp    SUBQ.W     #1, RB_FREE(A6)          ;SINCE WE put in a CHAR, 1 LESS FREE SPACE
+
+; see if buffer is full  (RB_FREE is an unsigned word)
+;
+            BNE.S      PCBnotfl                 ;not full, subtract sets or clears ZERO bit
+            BSET       #FULL_R2, RB_FLG2+1(A6)  ; BUFFER full
+
+; buffer for sure is not empty
+;
+PCBnotfl    BCLR       #EMPT_R2, RB_FLG2+1(A6)   ;RESET EMPTY FLAG ANYHOO
+
+; if protocols enabled and NOT Line type protocol then check buffer for hi water mark
+;
+            BTST       #PROT_P2, BF_PROF(A6)     ; SEE IF ANY PROTOCOLS AT ALL--CHECK HI BYTE
+            BOFF.S     PCBexit                   ; No protocol enabled, exit
+            BTST       #Line, BF_PROF+1(A6)      ; is it a Line protocol?
+            BON.S      PCBexit                   ; Yes, exit
+            BSR.S      ChkRcvBusy                ; check for receive busy state
+;
+PCBexit     RTS
+ page
+;
+; ChkRcvBusy - check for receive busy
+
+; is size of buffer now at or above high water mark
+;
+ChkRcvBusy  MOVE.W     RB_SIZE(A6), D1          ;BUFFER SIZE (ADDRESS OF)
+            SUB.W      RB_FREE(A6), D1          ;D1 = number of chars in buffer
+            CMP.W      RB_HIWA(A6), D1          ; at or above hi water mark?
+            BCC.S      GoRcvBusy                ; Yes, goto busy state
+CRBYexit    RTS                                 ;No, then exit
+;
+; GoRcvBusy - goto the Receive busy state
+; assumes interrupts are turned off
+;
+GoRcvBusy   BSET       #BUSY_R1, RB_FLG1+1(A6)  ;set busy state
+            BON.S      GRBSexit                 ; already busy so dont send char, exit
+            BTST       #XONXOFF, BF_PROF+1(A6)  ;send byte to other side saying not busy
+            BOFF.S     GRBSexit                 ;only if XON/XOFF protocol
+            MOVEQ      #XOFF, D0                ;send XOFF
+            BSR        PutCtl                   ;put in control char buffer
+GRBSexit    RTS                                 ;if ETX/ACK or ENQ/ACK nothing else to do
+  page
+; PRXMIT - process transmission interrupt
+;           Just send the next character if possible
+;
+;           ENTRY : (A5) = UART Base address
+;                   (A6) = address of port's data ares
+;                   (D4) = unit number
+;                   (D7) = status byte from UART
+;
+PRXMIT      BTST       #EMPT_CB, CB_FLAGS+1(A6)  ;control char available?
+            BOFF.S     PRXgetctl                 ;yes, send it out next
+
+; if NOT Busy or Buffer not empty send out next character
+;
+            BTST       #BUSY_W1, WB_FLG1+1(A6)   ;Busy?
+            BON.S      PRXoff                    ;yes, turn off xmit int
+            BTST       #EMPT_W2, WB_FLG2+1(A6)   ;buffer empty?
+            BOFF.S     PRXsend                   ;NO, send next char
+
+; check for an Alternate buffer available
+;
+            BSR        wChkAltBf
+
+; turn off xmit ints
+;
+PRXoff      BSR        STOPXMIT
+            BRA.S      PRXexit
+
+; get next character in buffer and send out
+;
+PRXsend     BSR.S      SendNext
+            BRA.S      PRXexit
+
+; get next control character and send it out
+;
+PRXgetctl   BSR.S      SendCtl
+;
+PRXexit     RTS
+  page
+;
+; SendCtl - send next control character from control character buffer
+;           ENTRY : (A5) = UART Base address
+;                   (A6) = address of port's data ares
+;                   (D4) = unit number
+;
+SendCtl     BSR        GetCtl                  ;Get char and update ptrs
+            MOVE.B     D3, DATAREG(A5)         ; PUSH CHARACTER OUT
+            RTS
+  page
+; SendNext - Put next character in write buffer in UART transmit bufer.
+;           ENTRY : (A5) = UART Base address
+;                   (A6) = address of port's data ares
+;                   (D4) = unit number
+;
+SendNext    MOVE.L     WB_EMPTY(A6), A0         ;A0 => EMPTYING POSITION OF RD BUFFER
+            MOVE.B     (A0)+, D0                ;save char for ESC check *4/11/83 kb*
+            MOVE.B     D0, DATAREG(A5)          ; send out the next character
+            MOVE.L     A0, WB_EMPTY(A6)         ;Save the new Front pointer in rb_empty
+
+; Update buffer variables
+;
+            MOVE.L     WB_BADR(A6), A1          ;A1 = ADDRESS OF BUFFER BEGIN
+            ADDA.W     WB_SIZE(A6), A1          ;A1 = ADDRESS OF END OF BUFFER + 1
+            CMPA.L     A1, A0                   ;Is Front pointing beyond buffer?
+            BCS.S      SNXnowrp                 ;No, don't do wrap around   *5/2/83 KB*
+;                                               ;Yes, set front = addr 1st byte of buffer
+            MOVE.L     WB_BADR(A6), WB_EMPTY(A6) ;Save the new Front pointer in wb_empty
+;
+SNXnowrp    ADDQ.W     #1, WB_FREE(A6)          ;SINCE WE GOT CHAR, ONE MORE FREE SPACE
+            BCLR       #FULL_W2, WB_FLG2+1(A6)  ;always not full
+
+; Escape sequence processing
+;
+            BSR        ChkEscSeq
+
+; see if buffer is empty
+;
+            MOVE.W     WB_FREE(A6), D1
+            CMP.W      WB_SIZE(A6), D1          ; # OF FREE LOCATIONS - BUFFER SIZE
+            BCS.S      SNXnotmt                 ; not empty if free < size
+            BHI.S      SNXszerr                 ; size error *BUG if happens* (free > size)
+
+            BSET       #EMPT_W2, WB_FLG2+1(A6)  ; BUFFER empty/turn off int next occurance in PRXMIT
+            BSR.S      WChkAltBf                ; see if should switch to an Alternate buffer
+
+; if Protocols enabled and either ENQ/ACK or ETX/ACK then check
+;      if should send an ENQ or ETX
+;
+SNXnotmt    LEA        BF_PROF(A6), A0
+            BTST       #PROT_P2, (A0)+          ;protocol enabled?
+            BOFF.S     SNXexit                  ;no, exit
+            BTST       #ENQACK, (A0)            ;ENQ/ACK protocol?
+            BON.S      SNXcnt                   ;yes, see if should send an ENQ
+            BTST       #ETXACK, (A0)            ;ETX/ACK protocol?
+            BOFF.S     SNXexit                  ;no, exitt
+SNXcnt      BRA.S      CntChars                 ;check if time to send ENQ or ETX
+
+; Size error - set Error flag and split
+;
+SNXszerr    BSET       #ERR_W1, WB_FLG1+1(A6)   ;show size error
+            BSET       #EMPT_W2, WB_FLG2+1(A6)  ;  mark BUFFER empty
+SNXexit     RTS
+ page
+;
+; WChkAltBf - check if alternate buffer switch on write buffer
+;      Xmit input is automatically disabled when user calls unitstatus
+;      to switch buffers.
+;
+;      Entry :  A6 = address of port's data area
+;               interrupts disabled
+;
+WChkAltBf   BTST       #EMPT_W2, WB_FLG2+1(A6)  ;is buffer empty?
+            BOFF.S     wCABexit                 ;no, can't switch
+            LEA        WB_FLG1+1(A6), A2        ;A2 = address of write buffer flags 1
+            BCLR       #ALTBF_W1, (A2)          ;is an alternate buffer available?
+            BOFF.S     wCABexit                 ;no, nothing to switch
+;
+; Switch buffers by making the Alternate buffer the main buffer
+;
+            MOVE.L     WB_ABADR(A6), A0          ;get new buffer address
+            MOVE.W     WB_ASIZE(A6), D0          ;and length
+            BSR        SetupWB                   ;switch buffer in table (doesnt use A2)
+;
+; if user is NOT controlling the Xmit input disable bit then enable
+;
+            BTST       #INPC_W1, (A2)            ;is user controlling input disable?
+            BON.S      wCABexit                  ;user is controlling, exit
+            BCLR       #INPE_W1, (A2)            ;no, enable input to buffer from user
+;
+wCABexit    RTS
+  page
+;
+; CntChars - see if sent enough characters to send out an ENQ or ETX
+;
+;      Entry :   A6 = address of port's data area
+;                (A5) = UART Base address
+;                (D4) = unit number
+;                Protocol is either ENQ/ACK or ETX/ACK
+;
+CntChars    ADDQ.W     #1, WB_BENQ(A6)          ;add 1 to char count between ctl chars
+            MOVE.W     BF_BTWNEA(A6), D0        ;get max allowed between
+            CMP.W      WB_BENQ(A6), D0          ;did send max?
+            BHI.S      CNTexit                  ;no, then exit
+            BTST       #ESCSEQ_W2, WB_FLG2+1(A6) ;in middle of Escape seq *4/11/83 kb*
+            BON.S      CNTexit                  ;yes, don't send control chars*4/11/83 kb*
+
+; set max chars between last ENQ or ETX, send another and go busy until receive ACK
+;
+            MOVEQ      #ENQ, D0                 ;assume send an ENQ
+            BTST       #ENQACK, BF_PROF+1(A6)   ;ENQ/ACK protocol?
+            BON.S      CNTenq                   ;yes
+            MOVEQ      #ETX, D0                 ;is ETX/ACK protocol, send an ETX
+CNTenq      BSR        PutCtl                   ;put char in control char buffer
+            CLR.W      WB_BENQ(A6)              ;clear in between count
+            BSET       #BUSY_W1, WB_FLG1+1(A6)  ;go write busy
+CNTexit     RTS
+;
+;routine added *4/11/83 kb*
+; ChkEscSeq - do Escape sequence processing.  Count chars of escape sequence OR
+;             see if start of escape sequence.
+;
+;      Entry :   D0 = character just put in Port data register
+;
+ChkEscSeq   CMP.B      #ESC, D0                 ;if char <> Escape then
+            BNE.S      CEScntch                 ;see if in middle of escape seq
+;
+            BSET       #ESCSEQ_W2, WB_FLG2+1(A6) ;starting Escape seq
+            MOVE.W     #EscSeqLen, WB_ESCCNT(A6) ;init down counter to max length
+            BRA.S      CESexit
+;
+CEScntch    BTST       #ESCSEQ_W2, WB_FLG2+1(A6) ;in middle of Escape seq
+            BOFF.S     CESexit                  ;no, exit else
+            SUBQ.W     #1, WB_ESCCNT(A6)        ;down count
+            BNE.S      CESexit                  ;clear esc flag when down to zero
+            BCLR       #ESCSEQ_W2, WB_FLG2+1(A6) ;finished Escape seq
+CESexit     RTS
+  page
+;
+; DCTLINT - Data Com Control interrupt service routine.
+;
+;           Makes check for both Ports.
+;           Calls the routine at address saved in SETVECS routine during install.
+;           Assumes it will clear the interrupt, toggle IOX.  The last routine in the
+;           chain should be the OS Level 1 routine which does turn off the interrupt.
+;
+;           Ignores the interrupt if wasn't a DataCom Control interrupt,
+;           therefore an Apple slot interrupt, or if NOT Line type
+;           handshake method.
+;
+DCTLINT     MOVEM.L    D0-A6,-(SP)               ;SAVE REGISTERS
+            LEA        Port0Data, A6             ;do for Port 0 first
+            MOVE.W     UnitP0, D4                ;unit number of Port 0
+            BSR.S      ChkLines
+            LEA        Port1Data, A6             ;do for Port 1 first
+            MOVE.W     UnitP1, D4                ;unit number of Port 1
+            BSR.S      ChkLines
+
+; exit by restoring registers and then going to routine at saved address
+;
+            MOVEM.L    (SP)+,D0-A6               ;EXIT-RESTORE REGISTERS
+            MOVE.L     SaveLvl1, -(SP)           ;fake interrupt start
+            RTS
+  page
+;
+; ChkLines - see if change in lines for the port specified by A6 and D4
+;
+;      Entry : D4 = unit number for the current port
+;              A6 = address of data area for the current port
+;
+ChkLines    CLR.L      D6                        ;for disabling interrupts
+            BSR        GETBASE                   ;setup UART base reg (A5) *2/9/83*
+
+;  See if any protocols at all and if so if any are line prots
+;
+            BTST       #PROT_P2, BF_PROF(A6)
+            BOFF.S     CLNexit                   ;NO PROTOCOLS--GET OUT
+;
+; If (type of handshake <> Line) then exit
+;
+            BTST       #LINE, BF_PROF+1(A6)
+            BOFF.S     CLNexit                   ;NOT LINE HANDSHAKE, EXIT
+
+; Determine which Line is used as Busy line Port A
+;
+            BSR.S      FINDLIN                   ;NEEDS D4 = Unit number of current port
+                                                 ;returns bit number to check in D5
+;
+;set or clear Busy depending on state of line and whether it's Busy inverted or not
+;
+            MOVE.B     WB_FLG1+1(A6), D3         ;SAVE BUSY FLAG
+            BSR        DISINTS                   ;DISABLE INTS
+            BSET       #BUSY_W1, WB_FLG1+1(A6)   ;ASSUME LINE IS BUSY = TRUE
+            BSR.S      TSTLINE                   ;TEST LINE & INVERTED FLAG (clobbers D1 & D2)
+            BNE.S      CLNenbl                   ;IS BUSY
+            BCLR       #BUSY_W1, WB_FLG1+1(A6)   ;not busy
+;
+; if wasn't Busy before then start up transmission process
+;
+            BTST       #BUSY_W1,D3               ;TEST SAVED BUSY STATE
+            BOFF.S     CLNenbl                   ;WASN'T BUSY
+            BSR        STRTXMIT                  ;START XMIT IF BUFFER NOT EMPTY
+;
+; enable interrupts
+;
+CLNenbl     BSR        ENBINTS
+;
+CLNexit     RTS
+  page
+;
+; changed function to return value in D5 *1-12-83 kb*
+; FINDLIN - Find which Line is used for Handshaking in Port A
+;           ENTRY : (D4) = unit number
+;                   Is a Line type protocol.
+;           EXIT  : (D5) = Bit # in Port A specifying line used for Busy
+;
+FINDLIN     MOVEQ      #1,D5                     ;BIT NUMBER IN PORT A CORRESPONDING TO
+            MOVEQ      #CTSLIN,D1                ;FLAG BIT NUMBER
+;
+; Assumes that it will always find a line flag set
+;
+FLNLOOK     BTST       D1, BF_PROF+1(A6)         ;IS BIT SET? *1-12-83 kb*
+            BON.S      FLNGOT                    ;YES, D3 PORT A BIT FOR DC 0
+            ADDQ.B     #2,D5
+            ADDQ.B     #1,D1                     ;TRY NEXT BIT FLAG
+            CMPI.B     #DCDLIN+1, D1             ;DID LAST FLAG
+            BNE.S      FLNLOOK                   ;NO
+;
+; if (Port 1 is unit number) then bit# := bit# + 1 - DC 1 bits in Port A are next bit up
+;
+FLNGOT      CMP.W      UnitP0, D4                ;is it Port 0?
+            BEQ.S      FLNEXIT                   ;yes, then exit
+            ADDQ.B     #1,D5                     ;no, then  Port 1 and add 1 to bit number
+FLNEXIT     RTS
+;
+; changed function to receive bit number parameter in D5 *1-12-83 kb*
+; TSTLINE - test Port A line used for Busy and the inverted flag to show if
+;           Busy or NOT Busy.
+;           ENTRY : (D5) = bit number in Port A of Line used by Busy
+;           EXIT  : (NE) = Busy - D2 = $FF
+;                   (EQ) = NOT Busy - D2 = $00
+;
+TSTLINE     BTST       D5, NHIRA.L               ;Create Line Boolean
+            SNE        D1
+            BTST       #INVBUSY, BF_PROF+1(A6)   ;Create Inverted Boolean
+            SNE        D2
+            EOR.B      D1,D2                     ;IF RESULT IS $FF THEN BUSY
+            RTS
+  page
+; COMCLR - UNITCLEAR
+;           Initialize Buffers to empty.  Initialize Communications control
+;           variables.  Initialize UART from Printer Control Table.
+;
+COMCLR      BSR        DISINTS                   ;DISABLE INTERRUPTS
+            BSR        SETUART                   ;INIT UART FROM CONSTANTS & TABLE
+            BSR.S      InitBufs                  ;initialize read and write buffers to empty
+            BSR.S      ClrBusy                   ;clear busy flags
+            BSR        ENBINTS                   ;ENABLE INTERRUPTS
+            RTS
+;
+; InitBufs - initialize read, write and control buffers to empty
+;            enable out and in bound on both buffers, remove alt buffers
+;      Exit : (D0) = old busy flag for read buffer
+;             (D1) = old busy flag for write buffer
+;
+InitBufs    MOVE.L     RB_BADR(A6), RB_FILLP(A6) ;initialize front and
+            MOVE.L     RB_BADR(A6), RB_EMPTY(A6) ; rear pointers
+            MOVE.W     RB_SIZE(A6), RB_FREE(A6)  ;show count as all free
+            CLR.W      RB_FLG2(A6)               ; reset AutoLf, send LF, Full and Lost
+            BSET       #EMPT_R2, RB_FLG2+1(A6)   ; BUFFER IS EMPTY
+            MOVE.W     RB_FLG1(A6), D0           ;GET old busy flag
+            CLR.W      RB_FLG1(A6)               ;reset all flags
+
+            MOVE.L     WB_BADR(A6), WB_FILLP(A6) ;initialize front and
+            MOVE.L     WB_BADR(A6), WB_EMPTY(A6) ; rear pointers
+            MOVE.W     WB_SIZE(A6), WB_FREE(A6)  ;show count as all free
+            CLR.W      WB_FLG2(A6)               ; reset send LF, Full and Lost
+            BSET       #AULF_W2, WB_FLG2+1(A6)   ; DO AUTO LF and *kb 1/5/83*
+            BSET       #EMPT_W2, WB_FLG2+1(A6)   ; BUFFER IS EMPTY
+            MOVE.W     WB_FLG1(A6), D1           ;GET old busy flag
+            CLR.W      WB_FLG1(A6)               ;reset all flags
+
+            BRA        INITCTLB                  ;init ctl char buffer
+;
+; ClrBusy - if Read buffer was busy then send out NOT busy state
+;           ignore write busy for now
+;
+;      Entry : (D0) = old busy flag for read buffer
+;              (D1) = old busy flag for write buffer
+;
+ClrBusy     BTST       #BUSY_R1, D0
+            BOFF.S     CBSexit                   ;may have to check if have
+            BSR        GoUnBusy                  ;protocols and not line type
+CBSexit     RTS
+  page
+;
+; COMBSY - UNITBUSY
+;           PASCAL BOOLEAN TRUE RETURNED IN D0 IF THERE ARE ANY CHARACTERS IN READ BUFFER
+;
+COMBSY
+            BTST       #EMPT_R2, RB_FLG2+1(A6)
+            SEQ        D0                        ;IF BIT NOT SET THEN = 0; CHARACTRERS EXIST D0 =111111
+            ANDI.B     #TRUE,D0                  ;CONVERT FROM BOOLEAN TO PASCAL BOOLEAN-
+            RTS
+;
+; COMUNMT - UNITUNMOUNT
+;           Turnoff interrupt capabilities of COMM  driver.
+;           Restore vectors.
+;
+COMUNMT     BSR        DISINTS                   ;DISABLE INTERRUPTS
+;
+            BSR        GETBASE                   ;GET UART BASE
+            MOVE.B     #TURNOFF,CMDREGI(A5)      ;TURNOFF UART
+;
+; have vectors point to a RTE instruction
+;
+            LEA        VEC4.W, A0                ;assume it is Port 0
+            LEA        VEC2.W, A1
+            LEA        THERTE, A2                ;address of the RTE instruction
+            CMP.W      UnitP0, D4                ;is it Port 0?
+            BEQ.S      CUMisP0                   ;yes, change level 4
+            EXG        A0, A1                    ;no, change level 2
+CUMisP0     MOVE.L     A2, (A0)                  ;set vector to point at RTE
+;
+; if both vectors point at RTE then set level 1 to saved address
+;
+            CMPM.L     (A0)+, (A1)+              ;must do post inc.
+            BNE.S      CUMdiff                   ;different so not both RTE
+            MOVE.L     SaveLvl1, VEC1.W          ;restore from saved area
+;
+; Restore Interrupts
+;
+CUMdiff     BRA        ENBINTS
+
+; THE RTE INSTRUCTION
+;
+THERTE      RTE
+  page
+;
+; COMST - UNITSTATUS
+; call the Table change or buffer free Functions
+;
+COMST       CMPI.W     #TBLSTATE,D2              ;VALID FUNCTION CODE
+            BHI.S      CSTERR                    ;NO
+            MOVE.W     (A3),D0                   ;GET PARAMETER
+            LEA        CSTTBL,A1                 ;TURN THE FUNCTION CODE INTO
+            LSL.W      #1,D2                     ;AN INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D2.W),D2
+            JMP        0(A1,D2.W)                ;DO FUNCTION
+;
+; Invalid Function Code Error
+;
+CSTERR      MOVEQ      #INVFNC,D7
+            RTS
+;
+; THE COM DRIVER STATUS JUMP TABLE
+;
+; functions compatible with old printer driver
+
+CSTTBL      DATA.W     STWBUF-CSTTBL             ;WRITE BUFFER FREE SPACE
+            DATA.W     STBAUD-CSTTBL             ;SET BAUD RATE
+            DATA.W     STPRITY-CSTTBL            ;SET PARITY
+            DATA.W     STRBUF-CSTTBL             ;READ BUFFER FREE SPACE
+            DATA.W     STWRDSZ-CSTTBL            ;SET WORD SIZE
+            DATA.W     STHNDSK-CSTTBL            ;SET HANDSHAKE METHOD
+            DATA.W     STBFSTS-CSTTBL            ;TELL BUFFER CONTROL STATUS
+
+; new functions
+
+            DATA.W     STRDSTS-CSTTBL            ;TELL READ STATUS
+            DATA.W     STWTSTS-CSTTBL            ;TELL WRITE STATUS
+            DATA.W     STRDHI-CSTTBL             ;SET READ BUFFER HI WATER MARK
+            DATA.W     STRDLO-CSTTBL             ;SET READ BUFFER LOW WATER MARK
+            DATA.W     STOUTRD-CSTTBL            ;TOGGLE OUTBOUND READ
+            DATA.W     STINRD-CSTTBL             ;TOGGLE INBOUND READ
+            DATA.W     STOUTWT-CSTTBL            ;TOGGLE OUTBOUND WRITE
+            DATA.W     STINWT-CSTTBL             ;TOGGLE INBOUND WRITE
+            DATA.W     BWBCHR-CSTTBL             ;TELL #CHARS IN WRITE BUFFER
+            DATA.W     BRBCHR-CSTTBL             ;TELL #CHARS IN READ BUFFER
+            DATA.W     STATOLF-CSTTBL            ;TOGGLE auto LineFeed flag
+            DATA.W     STBENQ-CSTTBL             ;SET number of chars between ENQ's
+            DATA.W     STRDALTBF-CSTTBL          ;SET Read Alternate buffer
+            DATA.W     STWTALTBF-CSTTBL          ;SET Write Alternate bufferen ENQ's
+
+; *kb 7/28/83*
+            DATA.W     STRDBFCLR-CSTTBL          ;Clear Read buffer to empty
+            DATA.W     STWRBFCLR-CSTTBL          ;Clear Write buffer to empty
+; *kb 7/28/83*
+; *kb 8/10/83*
+            DATA.W     STSNDBRK-CSTTBL           ;Send 1/4 second of BREAK
+; *kb 8/10/83*
+  page
+STCallDis   BRA        DISINTS                   ;DISABLE INTERRUPTS
+;
+; STWBUF - Return to the user the Free space in the write buffer
+;
+STWBUF      BSR.S      STCallDis                 ;DISABLE INTERRUPTS
+            MOVE.W     WB_FREE(A6), (A3)         ;WRITE BUFFER FREE SPACE
+STCallEnb   BRA        ENBINTS                   ;ENABLE INTERRUPTS
+;
+; STRBUF - Return to the user the Free space in the READ buffer
+;
+STRBUF      BSR.S      STCallDis                 ;DISABLE INTERRUPTS
+            MOVE.W     RB_FREE(A6), (A3)         ;WRITE BUFFER FREE SPACE
+            BRA.S      STCallEnb                 ;ENABLE INTERRUPTS
+;
+; STBAUD - Set the Baud Rate
+;
+STBAUD      CMPI.W     #MAXBAUD,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        BF_RDBD(A6), A0           ;WHERE TO PUT VALUE
+            LEA        BAUDCNV,A1                ;CONVERSION ARRAY
+            BRA.S      SAVPARM                   ;SAVE CONVERTED PARAMETER
+;
+; STPRITY - Set the Parity
+;
+STPRITY     CMPI.W     #MAXPRTY,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        BF_PART(A6), A0           ;WHERE TO PUT VALUE
+            LEA        PRTYCNV,A1                ;CONVERSION ARRAY
+            BRA.S      SAVPARM                   ;SAVE CONVERTED PARAMETER
+;
+; STWRDSZ - Set the word size to transmit (7 or 8)
+;
+STWRDSZ     CMPI.W     #MAXWRDS,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        BF_WRDS(A6), A0           ;WHERE TO PUT VALUE
+            MOVE.B     D0,(A0)                   ;PUT IN WORD SIZE VALUE
+            BRA.S      RSTUART                   ;RESET UART FROM TABLE
+;
+; common code to STBAUDR, STPRITY, STWRDSZ, STDTACOM, & STHNDSK
+;
+SAVPARM     MOVE.B     0(A1,D0.W),(A0)           ;SAVE CONVERTED PARAMETER
+;
+RSTUART     BSR.S      STCallDis                 ;DISABLE INTERRUPTS
+RSTUART1    BSR        SETUART                   ;SETUP UART FROM TABLE
+            BRA.S      STCallEnb                 ;ENABLE INTERRUPTS
+;
+; Invalid Parameter error
+;
+SETERR      MOVEQ      #INVPRM,D7
+            RTS
+  page
+;
+; STHNDSK - Set Handshake type.  Convert parameter into the flags and put these
+;           flag values into the Printer Control Table.  Don't need to reset
+;           UART.
+;
+STHNDSK
+            CMPI.W     #MAXHNDS,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        HNDSCNV,A1                ;CONVERSION ARRAY
+            MOVE.B     0(A1,D0.W), BF_PROF+1(A6) ;move new flags into flag byte
+
+; see if user disabled all protocols
+;
+            BSET       #PROT_P2, BF_PROF(A6)     ;assume have a protocol
+            TST.B      BF_PROF+1(A6)             ;IF zero then no protocols
+            BNE.S      SHDchkEA                  ;see if ETX/ACK or ENQ/ACK
+            BCLR       #PROT_P2, BF_PROF(A6)     ;show no protocol
+            BRA.S      SHDexit
+
+;
+;
+SHDchkEA    BTST       #ETXACK, BF_PROF+1(A6)     ;is it ETX/ACK?
+            BON.S      SHDzero                    ;yes, zero char count
+            BTST       #ENQACK, BF_PROF+1(A6)     ;is it ENQ/ACK?
+            BOFF.S     SHDexit                    ;no, exit
+SHDzero     CLR.W      WB_BENQ(A6)                ;clr cnt of chars between ENQ's or ETX's
+;
+SHDexit     RTS
+  page
+;
+;STRDHI  -SET THE READ BUFFER HIGH WATER MARK
+;
+STRDHI      MOVE.W     (A3), RB_HIWA(A6)
+            RTS
+;
+;STRDLO  -SET THE READ BUFFER LOW WATER MARK
+;
+STRDLO      MOVE.W     (A3), RB_LOWA(A6)
+            RTS
+;
+; STATLF - toggle the Auto LineFeed flag
+;
+STATOLF     BCHG       #AULF_W2, WB_FLG2+1(A6)  ;flip the bit
+            RTS
+;
+; STBENQ - set the number of chars between ENQ's or ETX's
+;
+STBENQ      MOVE.W     (A3), BF_BTWNEA(A6)
+            RTS
+  page
+; STRDSTS - GET THE READ BUFFER STATUS
+;       ParameterBlock = record
+;                          BufferSize     : integer;
+;                          FreeSpace      : integer;
+;                          HiWater        : integer;
+;                          LowWater       : integer;
+;                          InputDisabled  : byte;    {true = 1, false = 0}
+;                          OutputDisabled : byte;    {true = 1, false = 0}
+;                          LostData       : byte;    {true = 1, false = 0}
+;                          AltBufferAvail : byte;    {true = 1, false = 0}
+;                          AltBufferAddr  : pointer; {0 if AltBufferAvail false}
+;                          AltBufferSize  : integer; {0 if AltBufferAvail false}
+;                        end;
+;
+STRDSTS     MOVE.W     RB_SIZE(A6), (A3)+       ;get buffer size
+            MOVE.W     RB_FREE(A6), (A3)+       ;get free space byte count
+            MOVE.W     RB_HIWA(A6), (A3)+       ;get hi water byte count
+            MOVE.W     RB_LOWA(A6), (A3)+       ;get low water byte count
+
+; get the flags and make byte Pascal booleans
+;
+            BTST       #INPE_R1, RB_FLG1+1(A6)  ;is PORT to BUFFER disabled?
+            BSR.S      MAKEBOOL
+            BTST       #OUTE_R1, RB_FLG1+1(A6)  ;is BUFFER to USER disabled?
+            BSR.S      MAKEBOOL
+            BCLR       #LOST_R2, RB_FLG2+1(A6)  ;has any data been lost?
+            BSR.S      MAKEBOOL
+
+; IF have an Alt buffer then return it's ADDRESS AND SIZE
+;
+            BTST       #ALTBF_R1, RB_FLG1+1(A6)
+            BOFF.S     RDSTnone
+            MOVE.B     #1, (A3)+                ;set Alt buffer boolean
+            MOVE.L     RB_ABADR(A6), (A3)+      ;get Alternate buffer Address
+            MOVE.W     RB_ASIZE(A6), (A3)       ;get Alternate buffer size
+            BRA.S      RDSTexit
+
+RDSTnone    CLR.B      (A3)+                    ;no Alternate buffer available
+            CLR.L      (A3)+                    ;so NIL pointer for address
+            CLR.W      (A3)                     ;and zero bytes size
+
+RDSTexit    RTS
+;
+; MAKEBOOL - make Pascal boolean from zero flag
+;
+MAKEBOOL    SNE        D0               ;D0.B = $FF if zero flag clear
+            ANDI.B     #TRUE, D0        ;turn to Pascal boolean (1 = true)
+            MOVE.B     D0, (A3)+        ;save in parameter block
+            RTS
+  page
+; STWTSTS - GET THE WRITE BUFFER STATUS
+;       ParameterBlock = record
+;                          BufferSize     : integer;
+;                          FreeSpace      : integer;
+; FROM BUFFER CNTRL TBL -> CharsBtwnENQs  : integer;
+;                          InputDisabled  : byte;    {true = 1, false = 0}
+;                          OutputDisabled : byte;    {true = 1, false = 0}
+;                          AutoLineFeed   : byte;    {true = 1, false = 0}
+;                          AltBufferAvail : byte;    {true = 1, false = 0}
+;                          AltBufferAddr  : pointer; {0 if AltBufferAvail false}
+;                          AltBufferSize  : integer; {0 if AltBufferAvail false}
+;                        end;
+;
+STWTSTS     MOVE.W     WB_SIZE(A6), (A3)+       ;get buffer size
+            MOVE.W     WB_FREE(A6), (A3)+       ;get free space byte count
+            MOVE.W     BF_BTWNEA(A6), (A3)+     ;get maximum number of chars between ENQ's or ETX's
+
+; get the flags and make byte Pascal booleans
+;
+            BTST       #INPE_W1, WB_FLG1+1(A6)  ;is USER to BUFFER disabled?
+            BSR.S      MAKEBOOL
+            BTST       #OUTE_W1, WB_FLG1+1(A6)  ;is BUFFER to PORT disabled?
+            BSR.S      MAKEBOOL
+            BTST       #AULF_W2, WB_FLG2+1(A6)  ;is Auto LineFeed mode on?
+            BSR.S      MAKEBOOL
+
+; IF have an Alt buffer then return it's ADDRESS AND SIZE
+;
+            BTST       #ALTBF_W1, WB_FLG1+1(A6)
+            BOFF.S     WTSTnone
+            MOVE.B     #1, (A3)+                ;set Alt buffer boolean
+            MOVE.L     WB_ABADR(A6), (A3)+      ;get Alternate buffer Address
+            MOVE.W     WB_ASIZE(A6), (A3)       ;get Alternate buffer size
+            BRA.S      WTSTexit
+
+WTSTnone    CLR.B      (A3)+                    ;no Alternate buffer available
+            CLR.L      (A3)+                    ;so NIL pointer for address
+            CLR.W      (A3)                     ;and zero bytes size
+
+WTSTexit    RTS
+  page
+; STBFSTS - Return to the user in the parameter block the state of the Buffer Control Table.
+;       ParameterBlock = record
+;                          BaudRate  : integer; ;{range = 0..6}
+;                          Parity    : integer; ;{range = 0..4}
+;                          DataCom   : integer; ;{range = 0..1}
+;                          WordSize  : integer; ;{range = 0..1}
+;                          HandShake : integer; ;{range = 0..9}
+;                        end;
+;
+STBFSTS     CLR.L      D1                        ;MAKE SURE NO GARBAGE IN REGISTER
+;
+; GET BAUD RATE
+;
+            MOVE.W     #MAXBAUD,D0               ;MAX BAUD RATE PARAMETER VALUE
+            MOVE.B     BF_RDBD(A6), D1           ;CURRENT TABLE VALUE
+            LEA        BAUDCNV,A0                ;CONVERT TO INTEGER RANGE
+            BSR.S      GETVAL
+;
+; GET PARITY
+;
+            MOVE.W     #MAXPRTY,D0               ;MAX PARITY PARAMETER VALUE
+            MOVE.B     BF_PART(A6), D1           ;CURRENT TABLE VALUE
+            LEA        PRTYCNV,A0                ;CONVERT TO INTEGER RANGE
+            BSR.S      GETVAL
+;
+; GET DATACOM - BASED ON D4 and the SAVED UNIT NUMBER
+;
+            CLR.L      D1                        ;assume is Port 0
+            CMP.W      UnitP0, D4                ;is Port 0?
+            BEQ.S      SBFSisP0                  ;yes
+            MOVEQ      #1, D1                    ;no, show as Port 1
+SBFSisP0    MOVE.W     D1, (A3)+                 ;save parameter
+;
+; GET WORD SIZE
+;
+            MOVE.B     BF_WRDS(A6), D1
+            MOVE.W     D1, (A3)+
+;
+; GET HANDSHAKE
+;
+            MOVE.W     #MAXHNDS,D0               ;MAX HANDSHAKE PARAMETER VALUE
+            MOVE.B     BF_PROF+1(A6),D1          ;CURRENT TABLE VALUE
+            LEA        HNDSCNV,A0                ;CONVERT TO INTEGER RANGE
+;
+; GET PARAMETER VALUE AN PUT IN PARAMETER BLOCK
+;
+GETVAL      CMP.B      0(A0,D0.W), D1            ;SEE WHICH CONVERSION VALUE = CURRENT VALUE
+            DBEQ       D0, GETVAL                ;THE INDEX OF ONE = IS THE PARAMETER VALUE TO
+            MOVE.W     D0, (A3)+                 ;RETURN TO USER IN PARAMETER BLOCK
+            RTS
+  page
+DoDisInt    BRA        DISINTS                   ;DISABLE INTERRUPTS
+;
+; STOUTRD -- TOGGLE OUTBOUND RECEIVE DISABLE   (BUFFER TO USER)
+;
+STOUTRD     BSR.S      DoDisInt                  ;DISABLE INTERRUPTS
+            BCHG       #OUTC_R1, RB_FLG1+1(A6)
+            BCHG       #OUTE_R1, RB_FLG1+1(A6)
+            BRA.S      DoEnbInt                  ;enable interrupts
+;
+; STINRD -- TOGGLE INBOUND RECEIVE DISABLE  (PORT TO BUFFER)
+;
+STINRD      BSR.S      DoDisInt                  ;DISABLE INTERRUPTS
+            LEA        RB_FLG1+1(A6), A0         ;address of flags
+            BCHG       #INPC_R1, (A0)            ;user currently controlling?
+            BON.S      INRDenb                   ;yes, then enable
+            BSR.S      DisRcvIn                  ;no, disable input
+            BRA.S      DoEnbInt
+INRDenb     BSR.S      EnbRcvIn
+
+DoEnbInt    BRA        ENBINTS                   ;ENABLE INTERRUPTS
+;
+; STOUTWT -- TOGGLE OUTBOUND TRANSMIT DISABLE  (BUFFER TO PORT)
+;
+STOUTWT     BSR.S      DoDisInt                  ;DISABLE INTERRUPTS
+            BCHG       #OUTC_W1, WB_FLG1+1(A6)   ;toggle user controlling
+            BCHG       #OUTE_W1, WB_FLG1+1(A6)   ;and enable/disable flag
+            BON.S      OTWToff                   ;now disabled, turn off xmit int
+            BSR        STRTXMIT                  ;enable xmit int
+            BRA.S      DoEnbInt
+OTWToff     BSR        STOPXMIT                  ;disable xmit ints
+            BRA.S      DoEnbInt                  ;enable interrupts
+;
+; STINWT -- TOGGLE INBOUND TRANSMIT DISABLE  (USER TO BUFFER)
+;
+STINWT      BSR.S      DoDisInt                  ;DISABLE INTERRUPTS
+            LEA        WB_FLG1+1(A6), A0         ;address of flags
+            BCHG       #INPC_W1, (A0)            ;toggle user controlling
+            BTST       #ALTBF_W1, (A0)           ;if got an alt buffer
+            BON.S      DoEnbInt                  ;then already set, let it enable
+            BCHG       #INPE_W1, (A0)            ;else toggle it
+            BRA.S      DoEnbInt                  ;enable interrupts
+  page
+;
+; EnbRcvIn - Enable input receive
+;      Entry : A6 = address of ports data area
+;              A0 = address of read buffer flag 1 low byte
+;              interrupts disabled
+;
+EnbRcvIn    BTST       #ALTBF_R1, (A0)           ;alternate buffer available?
+            BON.S      ERIchkprt                 ;yes then let switch enable RCV
+            BCLR       #INPE_R1, (A0)            ;NO, enable input
+
+; see if should tell other side not BUSY
+;
+ERIchkprt   BRA        ChkProto
+;
+; DisRcvIn
+;      Entry : A6 = address of ports data area
+;              A0 = address of read buffer flag 1 low byte
+;              interrupts disabled
+;
+DisRcvIn    BSET       #INPE_R1, (A0)            ;disable input
+            BON.S      DRIexit                   ;if was off then don't go busy again
+
+; if protocols enabled and NOT Line type protocol then go busy
+;
+            BTST       #PROT_P2, BF_PROF(A6)     ; SEE IF ANY PROTOCOLS AT ALL--CHECK HI BYTE
+            BOFF.S     DRIexit                   ; No protocol enabled, exit
+            BTST       #Line, BF_PROF+1(A6)      ; is it a Line protocol?
+            BON.S      DRIexit                   ; Yes, exit
+            BSR        GoRcvBusy                 ; go busy
+
+DRIexit     RTS
+  page
+;
+; BWBCHR -  GET Number of characters  IN the WRITE BUFFER
+;
+BWBCHR      MOVE.W     WB_SIZE(A6), D0           ;SIZE IN D1
+            SUB.W      WB_FREE(A6), D0           ; SIZE - FREE = Number of CHARS
+            MOVE.W     D0, (A3)                  ; return to user amount
+            RTS
+;
+; BRBCHR -  GET Number of characters  IN the READ BUFFER
+;
+BRBCHR      MOVE.W     RB_SIZE(A6), D0           ;SIZE IN D1
+            SUB.W      RB_FREE(A6), D0           ; SIZE - FREE = Number of CHARS
+            MOVE.W     D0, (A3)                  ; return to user amount
+            RTS
+  page
+;
+; STRDALTBF - set Alternate Buffer for Read
+;
+STRDALTBF   BSR        DISINTS                  ; disable interrupts
+            BSR.S      GetAltBuf                ; get address and size user passed
+            BNE.S      RDABsz                   ; addr ok, check size
+            LEA        RDBUF(A6), A0            ; they were zero so use default
+            MOVE.W     #RBFLEN, D0              ; read buffer
+            BRA.S      RDABok
+
+RDABsz      TST.W      D0                       ; check size, is it negative?
+            BPL.S      RDABok                   ; no
+STBFerr     MOVEQ      #INVPRM, D7              ; yes, invalid parameter
+            BRA.S      RDABexit
+
+; got buffer address and length
+;
+RDABok      BTST       #EMPT_R2, RB_FLG2+1(A6)  ; current buffer empty?
+            BON.S      RDABswtch                ; yes, then use user's buffer
+
+; buffer isn't empty so wait till empty to switch
+;
+            MOVE.L     A0, RB_ABADR(A6)         ;save address in alt buffer adr
+            MOVE.W     D0, RB_ASIZE(A6)         ;and length in alt buffer size
+            LEA        RB_FLG1+1(A6), A0        ;DisRcvIn needs A0 -> flag byte
+            BSET       #ALTBF_R1, (A0)          ;alt buffer available true
+            BSR        DisRcvIn                 ;disable input and see if should go busy
+            BRA.S      RDABexit                 ; exit
+
+; EMPTY SO MAKE NEW the current buffer
+;
+RDABswtch   BSR.S      SetupRB
+
+RDABexit    BRA        ENBINTS
+;
+; GetNewBuf - from user's parameter block get the Alt buffer
+;             address and size.
+;      EXIT  : D0 = alt buffer length
+;              D1 = 0
+;              A0 = alt buffer address
+;              (EQ) = use default
+;              (NE) = use A0 and D0
+;
+GetAltBuf   MOVEA.L    (A3)+, A0
+            MOVE.W     (A3)+, D0
+            CLR.L      D1
+            CMP.L      A0, D1
+GABFexit    RTS
+  page
+; STWTALTBF - set Alternate Buffer for Write
+;
+STWTALTBF   BSR        DISINTS                  ; disable interrupts
+            BSR.S      GetAltBuf                ;get user's buffer address and size
+            BNE.S      WTABsz                   ; addr good chk size
+            LEA        WRTBUF(A6), A0           ; they were zero so use default
+            MOVE.W     #WBFLEN, D0              ; write buffer
+            BRA.S      WTABok
+
+WTABsz      TST.W      D0                       ; check size, is it negative?
+            BMI.S      STBFerr                  ; no
+
+; got buffer address and length
+;
+WTABok      BTST       #EMPT_W2, WB_FLG2+1(A6)  ; current buffer empty?
+            BON.S      WTABswtch                ; yes, then use user's buffer
+
+; buffer isn't empty so wait till empty to switch
+;
+            MOVE.L     A0, WB_ABADR(A6)         ;save address in alt buffer adr
+            MOVE.W     D0, WB_ASIZE(A6)         ;and length in alt buffer size
+            BSET       #INPE_W1, WB_FLG1+1(A6)  ;disable input
+            BSET       #ALTBF_W1, WB_FLG1+1(A6) ;alt buffer available true
+            BRA.S      WTABexit                 ; exit
+
+; EMPTY SO MAKE NEW the current buffer
+;
+WTABswtch   BSR.S      SetupWB
+
+WTABexit    BRA        ENBINTS
+;
+; SetupRB - put the alternate buffer info in the Read Buffer Control Table
+; SetupWB - put the alternate buffer info in the Write Buffer Control Table
+;      Entry : D0 = alternate buffer size
+;              A0 = alternate buffer address
+;
+SetupWB     LEA        WB_FILLP(A6), A1
+            SUBA.L     A4,A4
+            BRA.S      STUPgo
+
+SetupRB     LEA        RB_FILLP(A6), A1
+            LEA        RDBUF(A6), A4
+
+; move the buffer address into the Front, Rear, and buffer pointers
+;
+STUPgo      MOVE.L     A0, (A1)+                ;set the fill (Front) pointer
+            MOVE.L     A0, (A1)+                ;set the empty (Rear) pointer
+            MOVE.L     A0, (A1)+                ;set the buffer pointer
+
+; move the size into the buffer size and free space counter
+;
+            MOVE.W     D0, (A1)+                ;set the size
+            MOVE.W     D0, (A1)+                ;set the free space available
+
+; see if should set water marks for read buffer
+;
+            CMPA.L     A0, A4
+            BNE.S      STUPexit
+            MOVE.W     #MAXRHI, RB_HIWA(A6)
+            MOVE.W     #MAXRLO, RB_LOWA(A6)
+STUPexit    RTS
+  page
+;
+; Added *kb 7/28/83*
+; STRDBFCLR - make read bufer empty
+;
+STRDBFCLR   BSR        DISINTS                             ;Disable interrupts
+            MOVE.L     RB_BADR(A6), RB_FILLP(A6)           ;clear buffer to empty
+            MOVE.L     RB_BADR(A6), RB_EMPTY(A6)           ;   by resetting buffer
+            MOVE.W     RB_SIZE(A6), RB_FREE(A6)            ;   ptrs & counters
+            BSET       #EMPT_R2, RB_FLG2+1(A6)             ;show flags as empty
+            BCLR       #FULL_R2, RB_FLG2+1(A6)             ;   & not full
+            BSR        ChkProto                            ;if was busy make not busy
+            BSR        RChkAltBf                           ;see if alt buff available
+STRDBFenb   BRA        ENBINTS                             ;enable ints and exit
+;
+; Added *kb 7/28/83*
+; STWRBFCLR - make write buffer empty
+;
+STWRBFCLR   BSR        DISINTS                             ;Disable interrupts
+            MOVE.L     WB_BADR(A6), WB_FILLP(A6)           ;clear buffer to empty
+            MOVE.L     WB_BADR(A6), WB_EMPTY(A6)           ;   by resetting buffer
+            MOVE.W     WB_SIZE(A6), WB_FREE(A6)            ;   ptrs & counters
+            BSET       #EMPT_R2, WB_FLG2+1(A6)             ;show flags as empty
+            BCLR       #FULL_R2, WB_FLG2+1(A6)             ;   & not full
+            BSR        WChkAltBf                           ;see if alt buff available
+            BRA.S      STRDBFenb                           ;enable ints and exit
+  page
+;
+; Added *kb 8/10/83*
+; STSNDBRK - send a BREAK for about 1/4 of a second.
+;
+STSNDBRK    BSR        DISINTS                             ;Disable interrupts
+            BSR        GETBASE                             ;get UART base address
+
+; wait for transmit buffer empty
+;
+STSNDwait   BTST       #S_WRTE, STATRI(A5)                 ;buffer empty when
+            BOFF.S     STSNDwait                           ;  bit is on
+
+; set to transmit a BREAK
+;
+            MOVE.B     CMDREGI(A5), D0                     ;save UART cmd reg
+            MOVE.B     #CM_TDBRK+CM_DTRL, CMDREGI(A5)      ;turn on BREAK
+
+            MOVE.W     #62500, D1                          ;wait 1/4 second
+STSNDqrtr   DBRA       D1, STSNDqrtr                       ;16 cycles at 250 ns.
+
+            MOVE.B     D0, CMDREGI(A5)                     ;restore UART cmd reg
+            BRA.S      STRDBFenb                           ;enable ints and exit
+  page
+;
+; constant data area
+;
+; Conversion arrays for Set functions of Unitstatus
+;
+BAUDCNV     DATA.B     6,7,8,$A,$C,$E,$F         ;BAUD RATE
+; 6=300,7=600,8=1200,A=2400,C=4800,E=9600,F=19200
+;
+PRTYCNV     DATA.B     0,1,3,5,7                 ;PARITY
+; 0=DISABLED,1=ODD,3=EVEN,5=MARK XMIT/NO RCV,7=SPACE XMIT/NO RCV
+;
+HNDSCNV     DATA.B     $49                       ;LINE/CTS/INV
+            DATA.B     $09                       ;LINE/CTS/NOT INV
+            DATA.B     $51                       ;LINE/DSR/INV
+            DATA.B     $11                       ;LINE/DSR/NOT INV
+            DATA.B     $61                       ;LINE/DCD/INV
+            DATA.B     $21                       ;LINE/DCD/NOT INV
+            DATA.B     $02                       ;XON/XOFF
+            DATA.B     $04                       ;ENQ/ACK
+            DATA.B     $80                       ;ETX/ACK
+            DATA.B     $00                       ;NONE OF THE ABOVE PROTOCOLS
+;=============================================================================================
+  page
+;
+; Variable data area
+;
+; Port 0 data area
+;
+Port0Data
+
+; DEFAULT BUFFER  Control Table  - MUST HAVE SAME FIELD FORMAT AS BUFFER CONTROL TABLE
+;
+DEFBWRT     EQU        %-Port0Data
+            DATA.B     $0E                       ;WRITE BAUD RATE-9600
+DEFBRD      EQU        %-Port0Data
+            DATA.B     $0E                       ;READ BAUD RATE-9600
+DEFPART     EQU        %-Port0Data
+            DATA.B     $00                       ;PARITY-DISABLED
+DEFWRDS     EQU        %-Port0Data
+            DATA.B     $00                       ;WORD SIZE = 8 BITS (1=7 BITS)
+DEFBTWNEA   EQU        %-Port0Data               ;NUMBER OF CHARS BETWEEN
+            DATA.W     80                        ;        ENQ's or ETX's
+DEFINTRN    EQU        %-Port0Data
+            DATA.W     $0000                     ;INTERNAL FLAG--all off
+DEFPROT     EQU        %-Port0Data
+            DATA.W     $0902                     ;PROTOCOL FLAG--Enabled - XON/XOFF
+DEFend      EQU        %-Port0Data
+DEFBCTLN    EQU        (DEFend-DEFBWRT)/2        ;number of words in both tables
+
+; BUFFER CONTROL TABLE
+;
+BFRCTL      EQU        %-Port0Data               ;Index to Buffer Control Table
+BF_WRBD     EQU        %-Port0Data               ;Index to WRITE BAUD RATE
+            DATA.B     0                         ;
+BF_RDBD     EQU        %-Port0Data               ;Index to READ BAUD RATE
+            DATA.B     0                         ;
+BF_PART     EQU        %-Port0Data               ;Index to PARITY
+            DATA.B     0                         ;
+BF_WRDS     EQU        %-Port0Data               ;Index to WORD SIZE
+            DATA.B     0                         ;
+BF_BTWNEA   EQU        %-Port0Data               ;Index to NUMBER OF CHARS BETWEEN
+            DATA.W     0                         ;        ENQ's or ETX's
+BF_INTL     EQU        %-Port0Data               ;Index to INTERNAL FLAGS
+            DATA.W     0                         ;
+BF_PROF     EQU        %-Port0Data               ;Index to PROTOCOL FLAGS-HANDSHAKE TYPE
+            DATA.W     0                         ;
+
+;           WRITE BUFFER CONTROL TABLE
+;
+WRTCTL      EQU        %-Port0Data               ;Index to WRITE BUFFER CONTROL TABLE
+WB_FLG1     EQU        %-Port0Data               ;Index to FLAG WORD 1
+            DATA.W     0
+WB_FLG2     EQU        %-Port0Data               ;Index to FLAG WORD 2
+            DATA.W     0
+WB_FILLP    EQU        %-Port0Data               ;Index to BUFFER FILL POINTER  rear
+            DATA.L     0
+WB_EMPTY    EQU        %-Port0Data               ;Index to BUFFER EMPTY POINTER front
+            DATA.L     0
+WB_BADR     EQU        %-Port0Data               ;Index to BUFFER ADDRESS
+            DATA.L     0
+WB_SIZE     EQU        %-Port0Data               ;Index to BUFFER SIZE
+            DATA.W     0
+WB_FREE     EQU        %-Port0Data               ;Index to AMOUNT OF BUFFER FREE SPACE
+            DATA.W     0
+WB_ABADR    EQU        %-Port0Data               ;Index to ALTERNATE BUFFER ADDRESS
+            DATA.L     0
+WB_ASIZE    EQU        %-Port0Data               ;Index to ALTERNATE BUFFER SIZE
+            DATA.W     0
+WB_BENQ     EQU        %-Port0Data               ;Index to Number of bytes before wait for ACK
+            DATA.W     0
+WB_ESCCNT   EQU        %-Port0Data               ;Index to Escape sequence down counter
+            DATA.W     0                         ;*4/11/83 kb*
+;
+;           READ BUFFER CONTROL TABLE
+;
+RDCTL       EQU        %-Port0Data               ;Index to READ BUFFER CONTROL TABLE
+RB_FLG1     EQU        %-Port0Data               ;Index to FLAG WORD 1
+            DATA.W     0
+RB_FLG2     EQU        %-Port0Data               ;Index to FLAG WORD 2
+            DATA.W     0
+RB_FILLP    EQU        %-Port0Data               ;Index to BUFFER FILL POINTER  rear
+            DATA.L     0
+RB_EMPTY    EQU        %-Port0Data               ;Index to BUFFER EMPTY POINTER front
+            DATA.L     0
+RB_BADR     EQU        %-Port0Data               ;Index to BUFFER ADDRESS
+            DATA.L     0
+RB_SIZE     EQU        %-Port0Data               ;Index to BUFFER SIZE
+            DATA.W     0
+RB_FREE     EQU        %-Port0Data               ;Index to AMOUNT OF BUFFER FREE SPACE
+            DATA.W     0
+RB_ABADR    EQU        %-Port0Data               ;Index to ALTERNATE BUFFER ADDRESS
+            DATA.L     0
+RB_ASIZE    EQU        %-Port0Data               ;Index to ALTERNATE BUFFER SIZE
+            DATA.W     0
+RB_HIWA     EQU        %-Port0Data               ;Index to NUMBER OF BYTES IN HI WATER MARK
+            DATA.W     0                         ;number of bytes in buffer when at hi water mark
+RB_LOWA     EQU        %-Port0Data               ;Index to NUMBER OF BYTES IN LOW WATER MARK
+            DATA.W     0                         ;number of bytes in buffer when at low water mark
+;
+; control character buffer
+;
+CB_FRONT    EQU        %-Port0Data               ;Index to Ctl buffer Front Pointer
+            DATA.L     0
+CB_REAR     EQU        %-Port0Data               ;Index to Ctl buffer Rear Pointer
+            DATA.L     0
+CB_FLAGS    EQU        %-Port0Data               ;Index to Ctl buffer Flags word
+            DATA.W     0
+CTLBUF      EQU        %-Port0Data               ;Index to Ctl buffer
+            DATA.L     0
+;
+;  Read Buffer - 256 bytes
+;
+RDBUF       EQU        %-Port0Data               ;Index to Read Buffer
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;64
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;128
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;256
+RBFend      EQU        %-Port0Data
+RBFLEN      EQU        RBFend-RDBUF              ;READ BUFFER LENGTH
+;
+;  Write Buffer - 256 bytes
+;
+WRTBUF      EQU        %-Port0Data               ;Index to Write Buffer
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;64
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;128
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;256
+WBFend      EQU        %-Port0Data
+WBFLEN      EQU        WBFend-WRTBUF             ;WRITE BUFFER LENGTH
+;
+pdlen       EQU        %-Port0Data               ;Length of port data area
+  page
+;
+; Port 1 data area
+; same structure as the port 0 data area
+;
+Port1Data
+
+; DEFAULT BUFFER  Control Table
+
+            DATA.B     $0C                       ;WRITE BAUD RATE-4800
+            DATA.B     $0C                       ;READ BAUD RATE-4800
+            DATA.B     $00                       ;PARITY-DISABLED
+            DATA.B     $00                       ;WORD SIZE = 8 BITS (1=7 BITS)
+            DATA.W     80                        ;NUMBER OF CHARS BETWEEN ENQ's or ETX's
+            DATA.W     $00                       ;INTERNAL FLAG--all off
+            DATA.W     $0911                     ;PROTOCOL FLAG--Enabled/LINE/DSR/NOT INV
+
+            DATA.B     0,0,0,0                   ; buffer control table
+            DATA.W     0,0,0
+
+            DATA.L     0,0,0,0                   ; write buffer control table
+            DATA.W     0,0,0,0,0,0               ;*4/11/83 kb*
+
+            DATA.L     0,0,0,0                   ; read buffer control table
+            DATA.W     0,0,0,0,0,0,0,0
+
+; control character buffer and control variables
+;
+            DATA.L     0,0
+            DATA.W     0
+            DATA.L     0
+;
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;64
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;128
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;256
+
+; write buffer
+;
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;64
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;128
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0        ;256
+  page
+;
+;Common area
+;
+; Flags
+;
+CMNFLGS     DATA.W     0
+
+; Unit Numbers for the ports
+;
+UnitP0      DATA.W     0
+UnitP1      DATA.W     0
+
+; Save of DataCom Ctrl interrupt vector
+;
+SaveLvl1    DATA.L     0
+
+            END        COMDRV

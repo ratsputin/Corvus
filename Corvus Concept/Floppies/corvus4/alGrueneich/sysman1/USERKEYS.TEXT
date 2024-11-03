@@ -1,0 +1,70 @@
+; File: USERKEYS.TEXT
+;
+; This file defines user keys for the Dispatcher.  User keys are
+; active if USERKEYS.TEXT is in the volume mounted on unit 5.
+;
+; ";" records are comments.
+;
+; Define level 1
+;
+
+1 0 FileMgr
+/CCSYS/CC.FILMGR
+
+1 1 LogiCalc
+!CC.LGICLC
+
+1 2 EdWord
+!ED
+
+1 3 Set Vol
+!CC.FILMGR SETVOL
+
+1 4 List Vol
+!CC.FILMGR LSTVOL
+
+
+1 5 Clr Wndw
+!CC.WNDMGR CLRWND
+
+1 6 MountMgr
+!CC.MNTMGR
+
+1 7 Spool
+/CCSYS/SPOOL
+
+1 8 Restart
+RESTART
+
+;[SHIFT] depressed labels
+
+1 10 ParamMgr
+/CCUTIL/PARMGR
+
+1 15 SetDate
+!CC.SYSMGR SETDAT
+
+1 16 SetTime
+!CC.SYSMGR SETTIM
+
+1 17 Despool
+/CCUTIL/DESPOOL
+
+; [COMMAND] depressed labels
+
+1 22 ExecFile
+!CC.EXEC
+
+1 24 SysUtils
+!CC.SYSMGR
+
+1 25 RevBkgnd
+!CC.WNDMGR REVBKG
+
+1 27 Spool
+/CCSYS/SPOOL
+
+; [COMMAND] [SHIFT] depressed labels
+
+1 37 Despool
+/CCUTIL/DESPOOL

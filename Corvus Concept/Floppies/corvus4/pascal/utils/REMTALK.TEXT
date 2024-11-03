@@ -1,0 +1,355 @@
+(*$R-,I-*)
+PROGRAM REMOTETALK;
+{ This item is the property of SofTech Microsystems, inc.             }
+{ and it may be used, copied, or distributed only as permitted        }
+{ in a written license from that company.                             }
+
+ { This is an unpublished work copyrigh1977, 78, 79                  }
+ { by the Regents of The University of California a 1980, 81, 82     }
+ {            by SofTech Microsystems, Inc.                          }
+
+
+CONST version='IV.0 a1';
+      res_segs='fileops,pascalio,extraio,heapops'; {resident segments}
+      slop=2000; {extra slop for buffer allocation}
+      
+      REMIN=7;
+      REMOUT=8;
+      FINALBLOCK=50;
+      NOTLASTBLOCK=51;
+      SENDAGAIN=52;
+      SENDNEXT=53;
+      ABORT=54;
+      UNSLAVE=55;
+      CLOSEFILE=56;
+      RECEIVEFILE=57;
+      SENDFILE=58;
+      OPENFILE=59;
+      FILEOPENED=60;
+      BUMFILE=61;
+      FILECLOSED=62;
+
+TYPE BYTE=0..255;
+     BLOCK=PACKED ARRAY[0..511] OF BYTE;
+     TWOBYTES=PACKED ARRAY[0..1] OF BYTE;
+     SETOFCHAR=SET OF CHAR;
+     BLOCKARRAY=ARRAY[0..0] OF BLOCK;
+     BLOCKPTR=^BLOCKARRAY;
+
+VAR BUFF,FOON:BLOCKPTR;
+    PACKBLOCK:BLOCK;
+    FILENAME:STRING;
+    INCH:CHAR;
+    F:FILE;
+    COMMAND:PACKED ARRAY[0..81] OF BYTE;
+    FIRSTBLOCK,UNITNUM,LASTBLOCK,UNOCNTR,BUFFSIZE:INTEGER;
+
+  PROCEDURE SIGNAL(COMMAND:INTEGER);
+  VAR WART:TWOBYTES;
+  BEGIN
+    WART[0]:=COMMAND;
+    UNITWRITE(REMOUT,WART[0],1,0,12);
+  END;
+  
+  FUNCTION WAIT:INTEGER;
+  VAR WART:TWOBYTES;
+  BEGIN
+    UNITREAD(REMIN,WART[0],1,0,12);
+    WAIT:=WART[0];
+  END;
+  
+  PROCEDURE UNO(CH:CHAR);
+  BEGIN
+    UNOCNTR:=UNOCNTR+1;
+    WRITE(CH);
+    IF UNOCNTR=40 THEN
+    BEGIN
+      WRITELN;
+      UNOCNTR:=0;
+    END;
+  END;
+  
+  FUNCTION GETCHAR(OKSET:SETOFCHAR):CHAR;
+  VAR CH:CHAR;
+  BEGIN
+    REPEAT
+      READ(KEYBOARD,CH);
+      IF CH IN ['a'..'z'] THEN
+        CH:=CHR(ORD(CH)-ORD('a')+ORD('A'));
+    UNTIL CH IN OKSET;
+    WRITELN(CH);
+    GETCHAR:=CH;
+  END;
+  
+  PROCEDURE RECEIVEIT;
+  VAR INBLOCK:PACKED ARRAY[0..1025] OF BYTE;
+      JUSTONE:TWOBYTES;
+      BADOUTPUT:BOOLEAN;
+      BYTENUM,CHECKSUM,BUFFPTR,BYTE0,BYTE1,ANSWER:INTEGER;
+  
+    FUNCTION PUTBLOCK(VAR ONEBLOCK:BLOCK):BOOLEAN;
+    BEGIN
+      PUTBLOCK:=TRUE;
+      BUFF^[BUFFPTR]:=ONEBLOCK;
+      BUFFPTR:=BUFFPTR+1;
+      IF BUFFPTR=BUFFSIZE THEN
+      BEGIN
+        PUTBLOCK:=BLOCKWRITE(F,BUFF^,BUFFSIZE)=BUFFSIZE;
+        BUFFPTR:=0;
+      END;
+    END;
+    
+  BEGIN
+    BUFFPTR:=0;
+    UNOCNTR:=0;
+    BADOUTPUT:=FALSE;
+    REPEAT
+      ANSWER:=WAIT;
+      IF ANSWER=NOTLASTBLOCK THEN
+      BEGIN
+        UNITREAD(REMIN,INBLOCK,1026,0,12);
+        CHECKSUM:=0;
+        FOR BYTENUM:=0 TO 511 DO
+        BEGIN
+          BYTE0:=ORD(ODD(15) AND ODD(INBLOCK[BYTENUM+BYTENUM]));
+          BYTE1:=ORD(ODD(15) AND ODD(INBLOCK[BYTENUM+BYTENUM+1]));
+          PACKBLOCK[BYTENUM]:=BYTE0*16+BYTE1;
+          CHECKSUM:=CHECKSUM+BYTE0+BYTE1;
+        END;
+        IF CHECKSUM=ORD(ODD(127) AND ODD(INBLOCK[1024]))*128+
+           ORD(ODD(127) AND ODD(INBLOCK[1025])) THEN
+        BEGIN
+          IF PUTBLOCK(PACKBLOCK) THEN
+          BEGIN
+            UNO('.');
+            SIGNAL(SENDNEXT);
+          END ELSE
+          BEGIN
+            BADOUTPUT:=TRUE;
+            SIGNAL(ABORT);
+          END;
+        END ELSE
+        BEGIN
+          UNO('?');
+          SIGNAL(SENDAGA@N);
+        END;
+      END ELSE
+        IF ANSWER=ABORT THEN
+          BEGIN
+            WRITELN;
+            WRITE(' ERROR in input file');
+          END;
+    UNTIL ANSWER IN [FINALBLOCK,ABORT];
+    BADOUTPUT:=BADOUTPUT OR (BLOCKWRITE(F,BUFF^,BUFFPTR)<>BUFFPTR);
+    CLOSE(F,LOCK);
+    IF (IORESULT<>0) OR BADOUTPUT THEN
+    BEGIN
+      SIGNAL(ABORT);
+      WRITELN;
+      WRITE(' ERROR in output file');
+    END ELSE
+      SIGNAL(FILECLOSED);
+  END;
+  
+  PROCEDURE SENDIT;
+  VAR ANS,BYTE0,BYTE1,BYTENUM,CHECKSUM,BLOCKSREAD,BUFFPTR:INTEGER;
+      BADINPUT:BOOLEAN;
+      UNPACKBLOCK:PACKED ARRAY[0..1023] OF BYTE;
+      JUSTTWO:TWOBYTES;
+  
+    FUNCTION GETBLOCK(VAR ONEBLOCK:BLOCK):BOOLEAN;
+    BEGIN
+      BUFFPTR:=BUFFPTR+1;
+      IF BUFFPTR>=BLOCKSREAD THEN
+      BEGIN
+        BLOCKSREAD:=BLOCKREAD(F,BUFF^,BUFFSIZE);
+        BADINPUT:=IORESULT<>0;
+        BUFFPTR:=0;
+      END;
+      GETBLOCK:=(BLOCKSREAD<>0) AND (NOT BADINPUT);
+      ONEBLOCK:=BUFF^[BUFFPTR];
+    END;
+    
+  BEGIN
+    BADINPUT:=FALSE;
+    UNOCNTR:=0;
+    BUFFPTR:=-1;
+    BLOCKSREAD:=0;
+    ANS:=SENDNEXT;
+    WHILE GETBLOCK(PACKBLOCK) AND (ANS<>ABORT) DO
+    BEGIN
+      CHECKSUM:=0;
+      SIGNAL(NOTLASTBLOCK);
+      FOR BYTENUM:=0 TO 511 DO
+      BEGIN
+        BYTE0:=PACKBLOCK[BYTENUM] DIV 16;
+        UNPACKBLOCK[BYTENUM+BYTENUM]:=BYTE0;
+        BYTE1:=ORD(ODD(PACKBLOCK[BYTENUM]) AND ODD(15));
+        UNPACKBLOCK[BYTENUM+BYTENUM+1]:=BYTE1;
+        CHECKSUM:=CHECKSUM+BYTE0+BYTE1;
+      END;
+      UNITWRITE(REMOUT,UNPACKBLOCK,1024,0,12);
+      JUSTTWO[0]:=CHECKSUM DIV 128;
+      JUSTTWO[1]:=ORD(ODD(CHECKSUM) AND ODD(127));
+      UNITWRITE(REMOUT,JUSTTWO,2,0,12);
+      ANS:=WAIT;
+      CASE ANS OF
+        SENDNEXT :UNO('.');
+        SENDAGAIN:BEGIN
+                    BUFFPTR:=BUFFPTR-1;
+                    UNO('?');
+                  END;
+      END;
+    END;
+    CLOSE(F);
+    IF BADINPUT THEN
+    BEGIN
+      WRITELN;
+      WRITE(' ERROR in input file');
+      SIGNAL(ABORT);
+    END ELSE
+      SIGNAL(FINALBLOCK);
+    IF WAIT<>FILECLOSED THEN
+      BEGIN
+        WRITELN;
+        WRITE(' ERROR in output file');
+      END;
+  END;
+  
+  PROCEDURE DOCOMMAND(SENDORRECEIVE:CHAR);
+  VAR CH:CHAR;
+      I,TRANSFERUNIT:INTEGER;
+      ANSWER:TWOBYTES;
+      S:STRING;
+  BEGIN
+    FILLCHAR(COMMAND,82,0);
+    IF SENDORRECEIVE='S' THEN
+    BEGIN
+      COMMAND[0]:=SENDFILE;
+      REPEAT
+        WRITE('  Send what file? ');
+        READLN(S);
+        IF LENGTH(S)=0 THEN
+          EXIT(DOCOMMAND);
+        RESET(F,S);
+      UNTIL IORESULT=0;
+      REPEAT
+        WRITE('  Send to what remote file? ');
+        READLN(S);
+        IF LENGTH(S)=0 THEN
+        BEGIN
+          CLOSE(F);
+          EXIT(DOCOMMAND);
+        END;
+        FOR I:=0 TO LENGTH(S) DO
+          COMMAND[I+1]:=ORD(S[I]);
+        UNITWRITE(REMOUT,COMMAND,82,0,12);
+      UNTIL WAIT=FILEOPENED;
+      SENDIT;
+    END ELSE
+    BEGIN
+      REPEAT
+        WRITE('  Receive what remote file? ');
+        READLN(S);
+        IF LENGTH(S)=0 THEN
+          EXIT(DOCOMMAND);
+        COMMAND[0]:=OPENFILE;
+        FOR I:=0 TO LENGTH(S) DO
+          COMMAND[I+1]:=ORD(S[I]);
+        UNITWRITE(REMOUT,COMMAND,82,0,12);
+      UNTIL WAIT=FILEOPENED;
+      REPEAT
+        WRITE('  Write to what file? ');
+        READLN(S);
+        IF LENGTH(S)=0 THEN
+        BEGIN
+          COMMAND[0]:=CLOSEFILE;
+          UNITWRITE(REMOUT,COMMAND,82,0,12);
+          EXIT(DOCOMMAND);
+        END;
+        REWRITE(F,S);
+      UNTIL IORESULT=0;
+      COMMAND[0]:=RECEIVEFILE;
+      UNITWRITE(REMOUT,COMMAND,82,0,12);
+      RECEIVEIT;
+    END;
+  END;
+  
+  PROCEDURE DOSLAVECOMMANDS;
+  VAR I:INTEGER;
+      S:STRING;
+  BEGIN
+    REPEAT
+      UNITREAD(REMIN,COMMAND,82,0,12);
+      FOR I:=0 TO COMMAND[1] DO
+        S[I]:=CHR(COMMAND[I+1]);
+      WRITELN;
+      CASE COMMAND[0] OF
+        CLOSEFILE  :CLOSE(F);
+        SENDFILE   :BEGIN
+                      REWRITE(F,S);
+                      IF IORESULT=0 THEN
+                      BEGIN
+                        WRITE('Opening new file: ',S);
+                        COMMAND[0]:=FILEOPENED;
+                      END ELSE
+                      BEGIN
+                        WRITE('ERROR opening new file: ',S);
+                        COMMAND[0]:=BUMFILE;
+                      END;
+                      UNITWRITE(REMOUT,COMMAND,1,0,12);
+                      WRITELN;
+                      IF COMMAND[0]=FILEOPENED THEN
+                        RECEIVEIT;
+                    END;
+        RECEIVEFILE:SENDIT;
+        OPENFILE   :BEGIN
+                      RESET(F,S);
+                      IF IORESULT=0 THEN
+                      BEGIN
+                        WRITE('Opening old file: ',S);
+                        COMMAND[0]:=FILEOPENED;
+                      END ELSE
+                      BEGIN
+                        WRITE('ERROR opening old file: ',S);
+                        COMMAND[0]:=BUMFILE;
+                      END;
+                      UNITWRITE(REMOUT,COMMAND,1,0,12);
+                    END;
+      END;
+    UNTIL COMMAND[0]=UNSLAVE;
+  END;
+  
+BEGIN
+  buffsize:= 1 + ((varavail(res_segs)-slop) div 256);
+  if varnew(buff,buffsize*256) = 0
+    then
+      begin
+        writeln('program error allocating buffer');
+        exit(program);
+      end;
+  WRITELN('REMTALK [',version,'] - press S(lave first');
+  REPEAT
+    WRITE('M(aster  S(lave  Q(uit ');
+    CASE GETCHAR(['M','S','Q']) OF
+      'M':BEGIN
+            REPEAT
+              WRITE('  S(end  R(eceive  Q(uit ');
+              INCH:=GETCHAR(['S','R','Q']);
+              CASE INCH OF
+                'S',
+                'R':DOCOMMAND(INCH);
+                'Q':BEGIN
+                      COMMAND[0]:=UNSLAVE;
+                      UNITWRITE(REMOUT,COMMAND,82,0,12);
+                    END;
+              END;
+              WRITELN;
+            UNTIL INCH='Q';
+          END;
+      'S':DOSLAVECOMMANDS;
+      'Q':EXIT(REMOTETALK);
+    END;
+    WRITELN;
+  UNTIL FALSE;
+END.

@@ -1,0 +1,182 @@
+; File: ftn.misc.text
+; Date: 09-Nov-82
+
+;
+; Misc. FORTRAN Stuff - By R. Steven Glanville
+;
+
+        ident   ftn_misc
+        
+        global  %_iabs,%_idim,%_isign,%_imod
+        global  %_conj
+        global  %_max,%_min
+        global  %c_cmp
+        global  %c_neg
+        
+        extern  %i_mod4
+        extern  %f_cmp
+        
+;
+; function %_iabs(i: longint): longint;
+;
+; Integer absolute value
+;
+
+%_iabs
+        move.l  d0,-(sp)
+        move.l  8(sp),d0
+        bpl.s   iabsok
+        neg.l   d0
+iabsok  move.l  d0,12(sp)
+        move.l  (sp)+,d0
+        move.l  (sp)+,(sp)
+        rts
+        
+;
+; function %_idim(i,j: longint): longint;
+;
+; i - j if >= 0, else 0
+;
+
+%_idim
+        move.l  d0,-(sp)
+        move.l  12(sp),d0       ; I
+        sub.l   8(sp),d0        ; I - J
+        bpl.s   idimok
+        clr.l   d0
+idimok  move.l  d0,16(sp)
+        move.l  (sp)+,d0
+        move.l  (sp),8(sp)
+        addq.l  #8,sp
+        rts
+        
+;
+; function %_isign(i,j: longint): longint;
+;
+; |i| if j >= 0,  -|i| if j < 0
+;
+
+%_isign
+        move.l  d0,-(sp)
+        move.l  12(sp),d0       ; I
+        bpl.s   noabs
+        neg.l   d0
+noabs   tst.l   8(sp)           ; |I|
+        bpl.s   isignok
+        neg.l   d0              ; -|I|
+isignok move.l  d0,16(sp)
+        move.l  (sp)+,d0
+        move.l  (sp),8(sp)
+        addq.l  #8,sp
+        rts
+        
+;
+; function %_imod(i,j: longint): longint;
+;
+; i - (i/j)*j
+;
+
+%_imod
+        move.l  8(sp),12(sp)
+        move.l  4(sp),8(sp)
+        move.l  (sp)+,(sp)
+        jmp     %i_mod4
+        
+;
+; function %_conj(c: complex): complex;
+;
+
+%_conj
+        move.l  4(sp),12(sp)
+        move.l  8(sp),16(sp)
+        bchg    #7,16(sp)
+        move.l  (sp),8(sp)
+        addq.l  #8,sp
+        rts
+        
+;
+; %_max - FORTRAN max(i,j) function
+;
+; Parameters: ST.L - First param
+;             ST.L - Second param
+;
+; Returns:    ST.L - Result
+;
+; Assumes no room for result initially.
+;
+; All registers preserved.
+;
+
+%_max
+        move.l  d0,-(sp)
+        move.l  8(sp),d0        ; J
+        cmp.l   12(sp),d0
+        ble.s   maxok
+        move.l  d0,12(sp)
+maxok   move.l  (sp)+,d0
+        move.l  (sp)+,(sp)
+        rts
+        
+;
+; %_min - FORTRAN min(i,j) function
+;
+; Parameters: ST.L - First param
+;             ST.L - Second param
+;
+; Returns:    ST.L - Result
+;
+; Assumes no room for result initially.
+;
+; All registers preserved.
+;
+
+%_min
+        move.l  d0,-(sp)
+        move.l  8(sp),d0        ; J
+        cmp.l   12(sp),d0
+        bge.s   minok
+        move.l  d0,12(sp)
+minok   move.l  (sp)+,d0
+        move.l  (sp)+,(sp)
+        rts
+        
+;
+; %c_cmp - Complex compare
+;
+; Parameters: ST.C - First param
+;             ST.C - Second param
+;
+; Returns: CC - Result
+;
+; All registers preserved.
+;
+
+%c_cmp
+        move.l  8(sp),-(sp)     ; Push B.I
+        move.l  20(sp),-(sp)    ; Push A.I
+        move.l  8(sp),24(sp)    ; Set up return address
+        jsr     %f_cmp
+        bne.s   ccmpne
+        move.l  4(sp),-(sp)     ; Push B.R
+        move.l  16(sp),-(sp)    ; Push A.R
+        jsr     %f_cmp
+ccmpne  adda.w  #16,sp
+        rts
+        
+;
+; %c_neg - Complex negate
+;
+; Parameters: ST.C - Param
+;
+; Returns: ST.C - Result
+;
+; All registers preserved.
+;
+
+%c_neg
+        bchg    #7,4(sp)        ; Negate Real part
+        bchg    #7,8(sp)        ; Negate Imaginary part
+        rts
+        
+        end
+

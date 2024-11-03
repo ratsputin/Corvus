@@ -1,0 +1,248 @@
+{$S ENHANCE}
+
+procedure EnhanceTask;
+var Done: boolean;
+    EnhByt: byte;
+    ArgV : ^StrTyp;
+    iost : Integer;
+
+procedure WriteEnhSet;
+var M: StrTyp;
+
+  procedure Conc( var M: StrTyp; S:pStrTyp );
+  begin M := concat( M, S^, ' ' ); end;
+
+begin
+  M := '';
+  Conc( M, Msg(MGENH,11) );
+  if Bold     in CurEnh then Conc( M, Msg(MGENH,2) );
+  if Super    in CurEnh then Conc( M, Msg(MGENH,8) );
+  if Sub      in CurEnh then Conc( M, Msg(MGENH,9) );
+  if ULine    in CurEnh then Conc( M, Msg(MGENH,3) );
+  if DblUline in CurEnh then Conc( M, Msg(MGENH,4) );
+  if StrkOut  in CurEnh then Conc( M, Msg(MGENH,5) );
+
+  if CurEnh=[] then begin{no enhancements}
+    Conc( M, Msg(MGENH,10) );
+  end else begin   {delete trailing ", "}
+    delete( M, length(M)-1, 2 );
+  end;
+
+  TellUsr( @M );
+end;
+
+{
+.PG
+PROCEDURE ToggleEnh( Enh: EnhTyp );
+
+Toggles the specified enhancement in the current enhancement set.
+Makes sure that nonsensical combinations (e.g. sub AND super)
+never occur.
+}
+procedure ToggleEnh( Enh: EnhTyp );
+var EnhByt: byte;
+begin
+  if Enh = ULine    then CurEnh := CurEnh - [DblUline];
+  if Enh = DblUline then CurEnh := CurEnh - [ULine];
+  if Enh = Super    then CurEnh := CurEnh - [Sub];
+  if Enh = Sub      then CurEnh := CurEnh - [Super];
+
+  if Enh in CurEnh then
+    CurEnh := CurEnh - [Enh]
+  else
+    CurEnh := CurEnh + [Enh];
+
+  WriteEnhSet;
+  CnvEnhByt( CurEnh, EnhByt );
+  write( EnhCod, chr(EnhByt) );
+end;
+
+{
+.PG
+procedure OverStrike;
+
+Overstrikes the cursor character.
+}
+procedure OverStrike;
+var OC: char;
+    CurNdx: integer;
+    OVR: array [1..3] of byte;
+begin
+  OC := ' ';
+  if PmtChr( Msg(MGENH,12), False, OC ) then begin
+     CurNdx := BAColToNdx( CurCol, NewTxt );
+     while BAMatch( NewTxt, CurNdx, EnhCod ) do
+       CurNdx := CurNdx+3;
+     CurNdx := max( 1, min( MaxLinLen-3, CurNdx ));
+     if BAMatch( NewTxt, CurNdx, '\1BO' ) then begin
+       NewTxt[CurNdx+2] := ord(OC);
+     end else begin
+       if NewTxt[CurNdx]=ord(' ') then begin
+         NewTxt[CurNdx] := ord(OC);
+       end else begin
+         Ovr[1] := 27;
+         Ovr[2] := ord('O');
+         Ovr[3] := ord(OC);
+         BAInsByt( NewTxt, CurNdx, 3, Ovr[1] );
+       end;
+     end;
+     ShowLine( CurLin );
+     CsrRht;
+     NewTxtMty := false;
+     WriteEnhSet;
+  end;
+end;
+
+{
+.PG
+procedure ForceEnh( ActEnh: EnhSetTyp; Col: integer; var B: BA );
+
+Forces the set of character enhancements specified by ActEnh
+at column Col in byte array B.
+}
+procedure ForceEnh( ActEnh: EnhSetTyp; Col: integer; var B: BA );
+var ColEnh, NxtEnh: EnhSetTyp;
+    Enh: array[1..3] of byte;
+    CurNdx: integer;
+begin
+  Enh[1] := ord(EnhCod[1]);
+  Enh[2] := ord(EnhCod[2]);
+  CurNdx := BAColToNdx( Col, B );
+  EnhAtCol( B, Col, ColEnh );
+  EnhAtCol( B, Col+1, NxtEnh );
+
+  if [Super,Sub] <= ActEnh then {Super cancels Sub}
+    ActEnh := ActEnh - [Super,Sub];
+  if [ULine,DblULine] <= ActEnh then {Dbl overrides Uline }
+    ActEnh := ActEnh - [ULine];
+
+  if ColEnh<>ActEnh then begin
+    if BAMatch( B, CurNdx, EnhCod ) then
+      BADelByt( B, CurNdx, 3 );
+    EnhAtCol( B, Col, ColEnh );
+    if ColEnh<>ActEnh then begin
+      CnvEnhByt( ActEnh, Enh[3] );
+      BAInsByt( B, CurNdx, 3, Enh[1] ); {force new enh}
+    end;
+    CurNdx := BAColToNdx( Col+1, B );
+    if (NxtEnh<>ActEnh) then begin
+      if not BAMatch(B,CurNdx,EnhCod) then begin
+        CnvEnhByt( NxtEnh, Enh[3] );
+        BAInsByt( B, CurNdx, 3, Enh[1] ); {force foll enh}
+      end;
+    end else begin
+      if BAMatch( B, CurNdx, EnhCod) then
+        BADelByt( B, CurNdx, 3 ); {redundant enh}
+    end;
+  end;
+end;
+
+{
+.PG
+procedure EnhOn;
+
+If no enhancements are on, the previous applied enhancements are
+used, otherwise, takes the current enhancement and applies it to
+the character at the cursor position.  Cursor is then moved to
+the next character in the line, or to the first non blank in the
+lines following.  Enhancements are additive, except for Sub/Sup
+and ULine/DblUline, which are mutually exclusive.
+}
+procedure EnhOn;
+var ColEnh: EnhSetTyp;
+begin
+  if CurEnh=[] then begin
+    CurEnh := OldEnh;
+    WriteEnhSet;
+  end else begin
+    EnhAtCol( NewTxt, CurCol, ColEnh );
+    ForceEnh( ColEnh+CurEnh, CurCol, NewTxt );
+    NewTxtMty := false;
+    ShowLine( CurLin );
+    CsrRht;
+  end;
+end;
+
+{
+.PG
+procedure EnhOff;
+
+Turns off enhancements selected when pressed once.  Turns off
+enhancements at cursor character if pressed more than once.
+}
+procedure EnhOff;
+var ColEnh, NxtEnh: EnhSetTyp;
+    Enh: array[1..3] of byte;
+    CurNdx: integer;
+begin
+  if CurEnh<>[] then begin
+    OldEnh := CurEnh;
+    CurEnh := [];
+    WriteEnhSet;
+  end else begin
+    ForceEnh( [], CurCol, NewTxt );
+    NewTxtMty := false;
+    ShowLine( CurLin );
+    CsrRht;
+  end;
+end;
+
+{
+.PG
+procedure Insert;
+
+Toggles insert mode.
+}
+procedure Insert;
+begin
+  InsMod := not InsMod;
+  if InsMod then begin
+    TellUsr( Msg(MGEDIT,12));
+    write( '\1Bu' )
+  end else begin
+    TellUsr( Msg(MGEDIT,13));;
+    write( '\1Bv' );
+  end;
+end;
+
+{
+.PG
+procedure SpclChar *MAIN*
+
+Command dispatcher for spclchar subtask.
+}
+begin
+  FollowEnh := false;
+  LoadLabels( EnhFrame );
+  Done := false;
+
+(*CurEnh := OldEnh;  *)
+
+  WriteEnhSet;
+  while not Done do begin
+    NextCmd;
+    case Cmd of
+      KF1:  ToggleEnh( ULine );
+      KF2:  ToggleEnh( Sub );
+      KF3:  ToggleEnh( Bold );
+      KF4:  OverStrike;
+      KF5:  Insert;
+      KF6:  EnhOn;
+      KF7:  EnhOff;
+      KF10: Done := true;
+      KF12: ToggleEnh( Super );
+      KF13: ToggleEnh( StrkOut );
+      KF14: iost := call( '!LOGO',input,output,ArgV,0);
+      KF15: iost := call( '!TRADEMK',input,output,ArgV,0);
+      otherwise: Done := not LocalEdit;
+    end;
+  end;
+
+(*OldEnh := CurEnh; *)
+
+  ClrMsg;
+  CnvEnhByt( [], EnhByt );
+  write( EnhCod, chr(EnhByt) );
+  FollowEnh := true;
+end;
+

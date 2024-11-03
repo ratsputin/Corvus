@@ -1,0 +1,38 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 655360, 1280 blocks of 512 bytes each
+
+Volume BACKUP1 has 31 files,  0 to 6 (6), eov 1280, size 0, free 31
+
+ 1: CC.CPM          Data 12-May-83    6-  34(  28), 14336+512= 14848 bytes
+ 2: CC.CPM1         Data 13-Aug-83   34-  45(  11),  5632+512=  6144 bytes
+ 3: CC.EDCHAR       Ux7df5 11-Nov-85   45-  88(  43), 22016+512= 22528 bytes
+ 4: LC              Data  1-Feb-84   88- 289( 201), 102912+512= 103424 bytes
+ 5: CC.MNTMGR       Ux7df5 11-Nov-85  289- 390( 101), 51712+512= 52224 bytes
+ 6: HELP.TEXT       Ux7df3  1-Feb-84  390- 412(  22), 11264+512= 11776 bytes
+ 7: CC.PSYSTEM      Ux7df5  1-Feb-84  412- 435(  23), 11776+512= 12288 bytes
+ 8: CC.SETDCP       Ux7df5 11-Nov-85  435- 478(  43), 22016+512= 22528 bytes
+ 9: CPMD.DEFAULT    Data 13-Aug-83  478- 479(   1),   512+512=  1024 bytes
+10: CSD.CCOS        Data  1-Feb-84  479- 481(   2),  1024+512=  1536 bytes
+11: CSD.DEFAULT     Ux7dc5  1-Feb-84  481- 483(   2),  1024+512=  1536 bytes
+12: CSK.DEFAULT     Ux7dc5  1-Feb-84  483- 485(   2),  1024+512=  1536 bytes
+13: CON.SYS.TEXT    Ux7dc3 11-Nov-85  485- 489(   4),  2048+512=  2560 bytes
+14: DEBUG           Ux7dc5  1-Feb-84  489- 501(  12),  6144+512=  6656 bytes
+15: DRV.APIO        Data  1-Feb-84  501- 503(   2),  1024+512=  1536 bytes
+16: DRV.DISPVT      Ux7dc5 11-Nov-85  503- 514(  11),  5632+512=  6144 bytes
+17: DRV.DTACOM      Ux7dc5 11-Nov-85  514- 522(   8),  4096+512=  4608 bytes
+18: DRV.EPRNT       Ux7dc5 11-Nov-85  522- 527(   5),  2560+512=  3072 bytes
+19: DRV.FDISK1      Ux7dc5 11-Nov-85  527- 531(   4),  2048+512=  2560 bytes
+20: ED              Ux7df5  1-Feb-84  531- 857( 326), 166912+512= 167424 bytes
+21: EDINIT.TEXT     Ux7df3  1-Feb-84  857- 869(  12),  6144+512=  6656 bytes
+22: HELP.LC.TEXT    Text  1-Feb-84  869- 891(  22), 11264+512= 11776 bytes
+23: KEYS.ED.TEXT    Ux7df3  1-Feb-84  891- 905(  14),  7168+512=  7680 bytes
+24: KEYS.ISYS       Data  1-Feb-84  905- 938(  33), 16896+512= 17408 bytes
+25: KEYS.LC.TEXT    Text  1-Feb-84  938- 950(  12),  6144+512=  6656 bytes
+26: LOADER.IMAGE    Ux7df5  1-Feb-84  950- 951(   1),   512+512=  1024 bytes
+27: MEM             Data 16-Jul-82  951- 956(   5),  2560+512=  3072 bytes
+28: SYSMSG          Ux7df5  1-Feb-84  956- 989(  33), 16896+397= 17293 bytes
+29: WNDUTIL         Ux7df5  1-Feb-84  989-1046(  57), 29184+512= 29696 bytes
+30: MOUNT           Ux3e5 11-Nov-85 1046-1089(  43), 22016+512= 22528 bytes
+31: 1CC.LGICLC      Data 15-May-84 1089-1280( 191), 97792+512= 98304 bytes

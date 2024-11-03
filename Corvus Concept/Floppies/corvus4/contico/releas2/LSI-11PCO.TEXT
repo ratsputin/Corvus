@@ -1,0 +1,45 @@
+
+
+
+
+
+This pco covers the LSI-11 Omninet Software Utilities.
+
+ Product code : L/OMN ( 8" Standard IBM format media ) PCO#: 360
+                CP#: 8100-08515
+
+Software utilities for RT-11 V3.B and later include :
+
+ 1. Pipes Utilities (Spooler, Despooler, and Pipe manage.)
+ 2. Omninet applications demonstration package.
+ 3. RT-11 Omninet application aids.
+
+There is one floppy in this release. The contents are listed
+below.
+
+The files on the floppy are listed below:
+
+ODIAG  .SAV
+SPOOL  .SAV
+ON     .MAC
+CONFIG .SAV
+PMGR   .SAV
+ONDEMO .SAV
+
+The label format is listed below:
+
+              +---------------------------------+
+              |  LSI-11 Omninet Utilities       |
+              |  For RT-11 V3.B and later       |
+              |  Release date:  16-Feb-82       |
+              +---------------------------------+
+               CP#: 8100-08515
+
+Previous releases:
+------------------
+
+xxL Utilities - vol 1 of 1 6/5/81  CP#: 8100-08537
+
+
+
+

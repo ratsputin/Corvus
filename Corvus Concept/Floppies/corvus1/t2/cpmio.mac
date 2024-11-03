@@ -1,0 +1,310 @@
+	public RECV, SEND
+        .8080           ;8080 opcodes
+;
+;
+; --- RECEIVE BLOCK INTO BUFFER ---
+;
+RECV:   POP     H       ; get return address
+        XTHL            ; put return addr back, get buf address
+        PUSH    H       ; save buf address
+        INX     H       ; point past length field in buf
+        INX     H       ;
+	CALL	TURN	; WAIT FOR BUSS TO TURN AROUND
+	MVI	B, 15	;
+	CALL	DELAY	;
+	CALL	TURN	;
+	MVI	B, 15	;
+	CALL	DELAY	;
+        CALL    GTBLK   ; get block of bytes and put count on stack
+        POP     B       ; get count
+        POP     H       ; get buf address
+        MOV     M,C     ; put lower byte of len field
+        INX     H       ;
+        MOV     M,B     ; put upper byte of len field
+        RET             ;
+;
+; --- SEND block from buffer ---
+;
+SEND:   POP     H       ; get ret addr
+        XTHL            ; put ret addr back, get buf address
+        MOV     C,M     ; BC is WTBLK length counter
+        INX     H       ; load with len field of buffer
+        MOV     B,M     ;
+        INX     H       ; HL points to bytes to send
+        CALL    WTBLK   ; write bytes to drive
+        RET             ;
+;
+; ---- CORVUS DISC EQUATES ----
+;
+H89	EQU	1	; ZENITH H89 SYSTEM
+HRD	EQU	2	; H89 R&D VERSION
+SB	EQU	3	; SUPERBRAIN SYSTEM
+ALTOS	EQU	3	; ALTOS SYSTEM DESIGNATOR
+S100	EQU	4	; S100 SYSTEM DESIGNATOR
+TRS2	EQU	4	; TRS-80 MODEL II DESIGNATOR
+APPLE	EQU	5	; APPLE CPM DESIGNATOR
+XRX	EQU	6	; XEROX CPM DESIGNATOR
+                        ;
+sys	EQU	S100	; Designates sys
+
+	 if sys EQ H89		; IF SYSTEM IS H89 THEN
+DATA	EQU	07AH	;
+STAT	EQU	07BH	;
+HTDRDY	EQU	2	; Host-To-Drive , Drive Ready status
+DTHRDY	EQU	0	;
+	 endif
+	 if sys EQ HRD		; for H89 R&D INTERFACE
+DATA	EQU	0D1H	;
+STAT	EQU	0D0H	;
+HTDRDY	EQU	0	;
+DTHRDY	EQU	2	;
+	 endif
+                        ;
+	 if sys EQ (SB OR ALTOS) ; IF SYSTEM IS SUPERBRAIN OR ALTOS
+DATA    EQU     081H    ; DATA INPUT PORT
+STAT	EQU     080H    ; STATUS INPUT PORT
+HTDRDY	EQU	0	;
+DTHRDY	EQU	2	;
+	 endif
+
+	 if sys EQ S100		; for S100 type syss
+STAT	EQU	0DFH	;
+DATA	EQU	0DEH	;
+HTDRDY	EQU	2	;
+DTHRDY	EQU	0	;
+	 endif
+
+	 if sys EQ XRX		; XEROX equates
+DATA	EQU	08H	;
+PDATA	EQU	09H	; Control of data port
+STAT	EQU	0AH	; status port
+PSTAT	EQU	0BH	; Control of status port
+
+HTDRDY	EQU	02H	; Host-To-Drive & Drive Ready status
+DTHRDY	EQU	 0H	; Drive-To-Host & Drive Ready status
+
+OTMODE	EQU	0FH	; PIO output mode
+INMODE	EQU	4FH	; PIP input mode
+CTLMODE	EQU	0CFH	; PIO bit control mode
+CTLMASK	EQU	0FH	; mask for PIO when in CTLMODE
+NOINT	EQU	7H	; disable PIO interupts
+
+OTDIS	EQU	30H	; interface output mode, strobes disabled
+INDIS	EQU	10H	; interface input mode,  strobes disabled
+OTEN	EQU	20H	; interface output mode, strobes enabled
+INEN	EQU	 0H	; interface input mode,  strobes enabled
+	 endif
+
+	 if sys NE APPLE
+DRDY	EQU	1	; MASK FOR DRIVE READY BIT
+DIFAC	EQU	2	; MASK FOR DRIVE ACTIVE BIT
+	 endif
+
+	 if sys EQ APPLE		;Apple CP/M equates
+DATA	EQU	0E0E0H	;I/O data pointer
+STAT	EQU	0E0E1H	; I/O status pointer
+DRDY	EQU	080H    ;Status -- Data ready flag
+DIFAC	EQU	040H    ;Status -- Active flag
+HTDRDY	EQU	0	;Host-To-Drive ReaDY status
+DTHRDY	EQU	040H	;Drive-To-Host ReaDY status
+                        ;
+Z$PU    EQU     0F3DEh  ;Pointer to SoftCard
+A$VEC   EQU     0F3D0h  ;Pointer to 6502 subroutine address
+A$ACC   EQU     0F045h  ;Pointer to 6502 A register
+CWRIT6  EQU     0FBAh   ;6502 write data byte subr address
+CREAD6  EQU     0FC9h   ;6502 read data byte subr address
+	 endif           ;
+                        ;
+        page
+
+;
+;       INSTAT -- Get disk controller status subroutine
+;
+INSTAT	MACRO			; macro to choose how to get status
+	if sys EQ APPLE              ;
+        LDA     STAT          ;Get status
+	else
+	IN	STAT		;
+  	 endif                 ;
+        ENDM                   ;Return
+
+;
+;	TSTIN -- Set Z-flag if status = "Drive-To-Host", "Drive Ready"
+;
+TSTIN	MACRO			; macro for testing input status
+	 if sys EQ XRX		; if system is XEROX
+	CALL	SETIN		;  set port direction
+	 endif
+	INSTAT			; get status
+	ANI	DIFAC OR DRDY	; mask status bits
+	CPI	DTHRDY		; set Z-flag if status is right
+	ENDM			;
+
+;
+;	TSTOT -- Set Z-flag if status = "Host-To-Drive", "Drive Ready"
+;
+TSTOT	MACRO			; macro to test output status
+	 if sys EQ XRX		; if XEROX system
+	CALL	SETOT		;   set port direction
+	 endif
+	INSTAT		 	;get status
+	ANI	DIFAC OR DRDY	; mask status bits
+	CPI	HTDRDY		; set Z-flag if status is right
+	ENDM			;
+
+;
+;       INDATA -- Get disk controller data subroutine
+;
+INDATA	MACRO			; macro to chose how to get data
+	 if sys EQ APPLE              ;     
+        PUSH    H             ;Save (H,L)
+        LXI     H,CREAD6      ;Get 6502 read subr address
+        CALL    X6502         ;Read data byte (6502)
+        POP     H             ;Restore (H,L)
+        LDA     A$ACC         ;Get data byte
+	 else
+	IN	DATA	;
+   	 endif                 ;
+        ENDM                   ;Return
+
+;
+;       OTDATA -- Put disk controller data subroutine
+;
+OTDATA	MACRO			; macro to chose how to output data
+	 if sys EQ APPLE              ;     
+        STA     A$ACC         ;Put data byte
+        PUSH    H             ;Save (H,L)
+        LXI     H,CWRIT6      ;Get 6502 write subr address
+        CALL    X6502         ;Write data byte (6502)
+        POP     H             ;Restore (H,L)
+	 else
+	OUT	DATA		;
+   	 endif                 ;
+        ENDM                   ;Return
+
+        page
+;
+; --- WRITE A BLOCK OF DATA TO THE DISC ---
+;
+WTBLK:	MOV	A,M	; GET BYTE FROM MEMORY
+	CALL	WAITO	; output byte
+	INX	H
+	DCX	B
+	MOV	A,B
+	ORA	C
+	JNZ	WTBLK	; LOOP UNTIL DONE
+	RET
+;
+; --- GET A BLOCK OF UNDETERMINED LENGTH BACK FROM DISC ---
+;
+GTBLK:	 if sys EQ XRX	; if XEROX system
+	CALL	SETIN	;   set port direction
+	 endif
+	LXI	D,0	; set counter
+GTB1:	INSTAT		; GET STATUS
+	MOV	C,A	; SAVE IT
+	ANI	DRDY	; TEST IF READY
+	JNZ	GTB1	; LOOP UNTIL READY
+	MOV	A,C
+	ANI	DIFAC OR DRDY	; mask status bits
+	CPI	HTDRDY		; if "Host-To-Drive" & Ready
+	JZ	GTB2		;  then jump out of loop
+	INDATA		; GET DATA BYTE
+	MOV	M,A	; SAVE IT
+	INX	H
+	INX	D
+	JMP	GTB1
+GTB2:	XCHG		; GET COUNT IN (H,L)
+	XTHL            ; SAVE IT
+	PCHL            ; RETURN
+        page
+;
+;
+TURN:	TSTIN			; Set Z-flag if "Drive-To-Host" & Ready
+	JNZ	TURN		; loop if not
+	RET			;
+;
+DELAY:	DCR	B
+	JNZ	DELAY
+	RET
+;
+WAITI:	TSTIN			; Set Z-flag if DTHRDY
+	JNZ	WAITI		; LOOP UNTIL READY
+	INDATA			; READ BYTE FROM DISC
+	RET
+;
+WAITO:	PUSH	PSW		; SAVE COMMAND
+	TSTOT			; Set Z-flag if HTDRDY
+	JNZ	WAITO+1		; LOOP UNTIL READY
+	POP	PSW
+	OTDATA		; WRITE BYTE TO DISC
+	RET
+
+  	 if sys EQ APPLE
+;	APPLE only
+;	X6502 -- Call 6502 subroutine
+;
+X6502:  SHLD    A$VEC         ;Save 6502 subroutine address
+        LHLD    Z$PU          ;Get pointer to Z80 card
+        SHLD    X651+1        ;Save for 6502 call
+X651:   STA     0             ;Execute 6502 subroutine
+        RET                   ;Return
+  	 endif
+
+	 if sys EQ XRX		;
+;	XEROX only
+;
+;	SETOT -- Set the port direction to out
+;
+SETOT:	LDA	DIRCTN		; Get the direction of previous i/o
+	CPI	HTDRDY		; Was it "Host-To-Drive"
+	RZ			; return if it was
+	MVI	A, HTDRDY	; get Host-To-Drive status
+	STA	DIRCTN		; put it in i/o direction indicator
+
+	MVI	A,OTMODE	; program data channel to output mode
+	OUT	PDATA		;
+
+	MVI	A,NOINT		; no interrupts on data channel
+	OUT	PDATA		;
+
+	MVI	A,OTDIS		; disable control channel
+	OUT	STAT		;
+;
+	MVI	A,CTLMODE	; bit control mode on Status channel
+	OUT	PSTAT		;
+
+	MVI	A,CTLMASK	; hi nibble out, lo nibble in
+	OUT	PSTAT		;
+;
+	MVI	A,OTEN		; enable control channel
+	OUT	STAT		;
+	RET			;
+
+;
+;	SETIN -- Set port direction to in
+;
+SETIN:	LDA	DIRCTN		; get direction of last i/o
+	CPI	DTHRDY		; test if it was "Drive-To-Host"
+	RZ			; return if it was
+	MVI	A, DTHRDY	; get Drive-To-Host status
+	STA	DIRCTN		; put it into i/o direction indicator
+;
+	MVI	A,OTDIS		;
+	OUT	STAT		; disable control channel
+
+	MVI	A,INMODE	;
+	OUT	PDATA		; program data channel to input mode
+
+	MVI	A,NOINT		;
+	OUT	PDATA		; no interrupts on data channel
+;
+	MVI	A,INEN		; enabel control channel
+	OUT	STAT		; enable control channel
+	RET			;
+
+DIRCTN:	DB	0FFH		; initialized to illegal value
+	 endif
+
+	END
+

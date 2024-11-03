@@ -1,0 +1,913 @@
+{ ************************************************************* }
+{ Program:      OMNIDIAG                                        }
+{ Author:       Phil Belanger                                   }
+{ Date:         11/05/81                                        }
+{ Purpose:      This program is a diagnostic tool for Omninet.  }
+{       It can be used to verify that a Transporter is function-}
+{       ing properly by sending each command individually.      }
+{       OMNIDIAG can also be used to set up complicated         }
+{       experiments with multiple stations...  This version of  }
+{       the program is intended for internal use at Corvus and  }
+{       by Omninet Licensees...                                 }
+{                                                               }
+{ UNITs used:                                                   }
+{       CCDefn - for BYTE definition etc...                     }
+{       ccOTCio - provides a Pascal interface to the Transporter}
+{       CCCRTIO - used for input with defaults etc...           }
+{       hexout - for hex dumps......                            }
+{       LABELIO - to use the softkeys                           }
+{       windowio - to create separate windows                   }
+{                                                               }
+{ Revision History:                                             }
+{       0.0 - ported Apple version 2.5 to Star 1/14/82          }
+{       0.1 - made changes for our screen and keyboard 3/24/82  }
+{       1.0 - Major changes to utilize the Concept's full power }
+{          added interrupts, windows, and softkeys.... 4/5/82   }
+{       1.1 - bug fixes... sendstat....                         }
+{       1.2 - attempt to make receives reentrant                }
+{       1.3 - big changes... make it work with new              }
+{                                       reentrant UNIT  9/3/82  }
+{       1.4 - use interrupts on sends.....                      }
+{               check for command pending error         9/5/82  }
+{       1.5 - double buffer sends                       9/14/82 }
+{       1.6 - changes to work with queued driver        9/15/82 }
+{       1.7 - try until not EntInUse in getpacket       9/24/82 }
+{                                                               }
+{       2.0 - make  it work with new TRANSCMDS unit     2/12/83 }
+{           - also assure compatibility with CCOS v 1.1a        }
+{       2.1 - re arrange display format so that OD will 2/21/83 }
+{             work with the enhanced character set              }
+{                                                       PHB     }
+{       3.0 - major change -make it work with CCOS 1.2  2/29/83 }
+{           - the major change is useing ccOCTio unit           }
+{           - instead of TRANSCMDS unit                         }
+{           - the new OD will find out transporter version      }
+{           - up to T9.B                                        }
+{                                                       WL      }
+{ ************************************************************* }
+{$P}
+PROGRAM omnidiag;
+{$R-}
+{$I-}
+
+  { *********************************************************** }
+  {       Corvus Systems, Inc.  Proprietary Information.        }
+  {        Unauthorized use or disclosure is prohibited.        }
+  {                                                             }
+  {           Copyright 1983 by Corvus Systems, Inc.            }
+  { *********************************************************** }
+
+
+  USES {$U /ccutil/cclib} CCDEFN, CCCRTIO, CCLBLIO, CCWNDIO, CCHEXOUT,
+       CCOTCIO;
+  CONST
+
+        odvers = '[3.0]';
+        
+        MaxBufs = 10;
+        MaxRetries = 10;
+        BufSize = 520;  { big enough to simulate disk commands}
+        HdrLen = 16;    { bigger than the biggest Constellation header }
+
+
+        { indexes into the array of counters }
+        SAT = 11;       { sends attempted }
+        SOK = 12;       { successful sends }
+        SGU = 13;       { give ups }
+        STL = 14;       { sent a packet which was too long }
+        SNS = 15;       { socket not setup... sent to unitied socket }
+        SHE = 16;       { header length mismatch }
+        MaxCount = 16;
+
+{$P}
+  TYPE
+
+    pBUFFER = ^BUFFER;
+
+    pMCB = ^MCB;
+
+    SOCKSTATE = (NoSock, NoBuf, RcvSet);
+
+    ODRES = RECORD
+      RES: TCrsltRcd;
+      HDR: ARRAY[1..HdrLen] OF BYTE;
+      END;
+
+    BUFFER = RECORD
+      CASE BOOLEAN OF
+      TRUE:  (BYT: ARRAY[1..BufSize] OF BYTE);
+      FALSE: (CHR: PACKED ARRAY[1..BufSize] OF CHAR);
+      END;
+
+    MCB = RECORD         { Message Control Block }
+      NEXT: pMCB;
+      ID: INTEGER;
+      PTRS: TCParmBlk;
+      END;
+
+    EXCHANGE = RECORD
+      CURMCB: pMCB;
+      COUNT: LONGINT;
+      LEND: INTEGER;
+      LENH: BYTE;
+      LASTSRC: BYTE;
+      LASTID: INTEGER;
+      STATE: SOCKSTATE;
+    END;
+
+    TRIX = RECORD
+      CASE INTEGER OF
+        1: (LNG: LONGINT);
+        2: (PTR: ^BYTE);
+        3: (ARR: ARRAY[0..3] OF BYTE);
+        END;
+{$P}
+
+
+  VAR
+    counts:  ARRAY[0..MaxCount] OF LONGINT;     { OD counters }
+    socktbl: ARRAY[1..4] OF EXCHANGE;           { socket table }
+    restbl:  ARRAY[1..MaxBufs] OF ODRES;        { result table }
+    buftbl:  ARRAY[1..MaxBufs] OF BUFFER;       { buffer table }
+    gotrecv: ARRAY[0..4] OF BOOLEAN;            { true if a new message has come in }
+    newcmd:  BOOLEAN;   { true if a command has been entered at the keyboard }
+    done:    BOOLEAN;   { True if the program is over }
+    verbose: BOOLEAN;   { true if we are in verbose mode }
+    omode:   BOOLEAN;   { true if we are in Omninet single command mode }
+    socknum: INTEGER;   { the last socket number which received a message }
+    cmdchar: CHAR;      { the current command character }
+    hostnum: INTEGER;   { our host number }
+    cntwind: WNDRCD;    { the window record representing the counter area }
+    sndwind: WNDRCD;
+    whowind: WNDRCD;
+    ramwind: WNDRCD;
+    genwind: WNDRCD;
+    sparmwind: WNDRCD;
+    rcvwind: WNDRCD;    { the receive status window }
+    tcdebug: BOOLEAN;   { True if we are in tcdebug mode }
+    deb:     BOOLEAN;
+    firstsend: BOOLEAN; { True if this is the first send... }
+    lastsend: BOOLEAN;
+    gotsend: BOOLEAN;   { True if we got a send interrupt }
+    sending: BOOLEAN;   { True if we are looping sending... }
+    ssock: INTEGER;     { send destination socket }
+    dest: INTEGER;      { send destination host number }
+    sdl: INTEGER;       { send data length }
+    shl: BYTE;          { send header length }
+    smsg: pMCB;         { points at a list of send message control blocks }
+    numsend: INTEGER;   { number of sends to try... }
+    rsock: INTEGER;     { current receive socket }
+    rdl: INTEGER;       { receive data length }
+    rhl: BYTE;          { receive header length }
+    delay: INTEGER;
+    ii, ior: INTEGER;
+
+  FUNCTION pOScurWnd: pWndRcd; EXTERNAL;
+  FUNCTION unsigned(b: BYTE): INTEGER; FORWARD;
+{$P}
+
+{$I OD.SCREEN.TEXT }
+{$I OD.UTILS.TEXT }
+  
+  { *********************************************************** }
+  { getpacket - get the packet which just came in on socket sn  }
+  { Update the receive status for socket sn and attempt to set  }
+  { up a new receive on that socket.                            }
+  { General Receive Interrupt Routine                           }
+  { *********************************************************** }
+  PROCEDURE getpacket(sn: INTEGER; rslt: TCrsltRcd);
+    VAR
+      x: INTEGER;
+    BEGIN
+    WITH socktbl[sn] DO
+      IF (STATE <> NoSock) AND (rslt.RCODE = OkCode) THEN
+        BEGIN
+        LASTID := CURMCB^.ID;
+        COUNT := COUNT + 1;
+        LASTSRC := rslt.SOURC;
+        CURMCB := CURMCB^.NEXT;
+
+        REPEAT
+         TCinitBlk (CURMCB^.PTRS,CURMCB^.PTRS.PRSLT,CURMCB^.PTRS.PBUFF,CURMCB^.PTRS.PPROC);
+          x := TCsetRecv (CURMCB^.PTRS, sn, LEND, LENH);
+          CASE x OF
+            OkCode: WITH CURMCB^.PTRS.PRSLT^ DO
+                      CASE unsigned(RCODE) OF
+                        CmdAcpt: STATE := RcvSet;
+                        InUse, BadSock: BEGIN
+                                        cmdstat(unsigned(RCODE));
+                                        STATE := NoBuf
+                                        END;
+                        Waiting: fatal('In getpacket, result code is still FF......');
+                        OkCode: STATE := NoBuf;
+                        END; {CASE}
+            TCQueued: BEGIN END;
+                    { do nothing!  STATE is really NoBuf, but we won't know when it changes...}
+            TCEntUse: BEGIN { fatal('In getpacket, entry in use...') } END;
+            OTHERWISE: fatal('In getpacket, Transporter not responding...');
+            END {CASE}
+        UNTIL x <> TcEntUse;
+        gotrecv[0] := TRUE;         { got something }
+        gotrecv[sn] := TRUE;        {... on socket sn }
+        END;
+    END;
+
+{$P}
+
+  PROCEDURE rsock1(err: INTEGER; s: INTEGER; r: pTCrsltRcd; b: pTCbuffer; p: pTCparmBlk);
+    BEGIN
+    IF err <> 0 THEN fatal('Last receive on sock 1 didn`t work!');
+    getpacket(1, r^);
+    END;
+
+  PROCEDURE rsock2(err: INTEGER; s: INTEGER; r: pTCrsltRcd; b: pTCbuffer; p: pTCparmBlk);
+    BEGIN
+    IF err <> 0 THEN fatal('Last receive on sock 2 didn`t work!');
+    getpacket(2, r^);
+    END;
+
+  PROCEDURE rsock3(err: INTEGER; s: INTEGER; r: pTCrsltRcd; b: pTCbuffer;
+                   p: pTCparmblk);
+    BEGIN
+    IF err <> 0 THEN fatal('Last receive on sock 3 didn`t work!');
+    getpacket(3, r^);
+    END;
+
+  PROCEDURE rsock4(err: INTEGER; s: INTEGER; r: pTCrsltRcd; b: pTCbuffer;
+                   p: pTCparmBlk);
+    BEGIN
+    IF err <> 0 THEN fatal('Last receive on sock 4 didn`t work!');
+    getpacket(4, r^);
+    END;
+{$P}
+    
+  
+  
+  { *************************************************************** }
+  { peekcmd - get parms from user and transpeek or transpoke into Transporter }
+  { *************************************************************** }
+  PROCEDURE peekpoke;
+    VAR
+      tcp: TCparmBlk;
+      ch: CHAR;
+      li: LONGINT;
+      i, adr, tcode: INTEGER;
+      val: INTEGER;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    inverson;
+    printmsg(0, 0, 'Peek/Poke into the Transporter memory:');
+    inversoff;
+    printmsg(0, 1, 'Peek/Poke what address? ');
+    li := $E6;
+    IF getlongnum(li) <> Normal THEN EXIT(peekpoke);
+    adr := ORD(li);
+    printmsg(0, 2, 'P)eek  or  W)rite? P');
+    CRT(CursorLeft);
+    ch := GETBYTE;
+    IF ch = 'W' THEN  {this is a transpoke command}
+      BEGIN
+      i := 0;
+      printmsg(0, 3, 'Poke what value? ');
+      IF getnum(i) <> Normal THEN EXIT(peekpoke);
+      val := ORD(i);
+      IF TCpokeTrans (adr, val, tcode) <> 0 THEN fatal('Poke failed...');
+      cmdstat(tcode);
+      END
+    ELSE
+      BEGIN
+      IF TCpeekTrans (adr,val) <> 0 THEN fatal('Peek failed...');
+      printmsg(0, 3, '[');
+      puthexword(adr);
+      write('] = ');
+      puthexbyte(val);
+      END;
+    END;
+{$P}
+
+
+  { ********************************************************************* }
+  { initcmd - is executed when someone enters the I command from keyboard }
+  { ********************************************************************* }
+  PROCEDURE initcmd;
+    VAR
+      i: INTEGER;
+      b: INTEGER;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    printmsg(0,0,'Initializing Transporter...');
+    IF TCinitTrans(b) <> 0 THEN
+      fatal('Transporter not responding...')
+    ELSE
+      hostnum := b;
+    printmsg(0, 1, '   This is host number ');
+    writeln(hostnum, '.');
+    FOR i := 1 TO 4 DO                  { sockets were re initialized so update display }
+      BEGIN
+      socktbl[i].COUNT := 0;
+      socktbl[i].STATE := NoSock;
+      rcvstat(i, true);
+      END;
+    END;
+
+
+  { *********************************************** }
+  { endcmd - stop receiving on the specified socket }
+  { *********************************************** }
+  PROCEDURE endcmd;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    printmsg(0, 0, 'Stop receiving.');
+    printmsg(0, 1, 'Stop receiving on which socket? ');
+    getsock(rsock);
+    IF rsock < 0 THEN
+      BEGIN rsock := 3; EXIT(endcmd) END;
+    IF TCendrecv(rsock, ii) <> 0 THEN     { not checking for transporter error }
+      BEGIN
+      fatal('Endrecv failed...');
+      EXIT(endcmd);
+      END;
+    socktbl[rsock].STATE := NoSock;
+    rcvstat(rsock, true);
+    END;
+
+{$P}
+
+
+
+  { general purpose message sender... }
+  PROCEDURE sendum;
+    VAR
+     sendcode, i: INTEGER;
+    BEGIN
+    TCinitBlk (smsg^.NEXT^.PTRS,smsg^.NEXT^.PTRS.PRSLT,smsg^.NEXT^.PTRS.PBUFF,smsg^.NEXT^.PTRS.PPROC);
+    FOR i := 0 TO delay DO;  {nothing}
+    SENDCODE := TCsndMesg( smsg^.NEXT^.PTRS ,ssock, sdl, shl, dest);
+    CASE sendcode OF
+      OkCode, TCQueued: IF numsend <> 0 THEN
+                        BEGIN
+                        numsend := numsend - 1;
+                        IF numsend = 0 THEN lastsend := TRUE;
+                        END;
+      TCEntUse: fatal('In Sendum... Entry in use....... ');
+      OTHERWISE: fatal('In SENDUM... Transporter not responding.');
+    END;  {CASE}
+    END;
+
+
+
+  { *************************************************************************** }
+  { sendint - interrupt routine for sends... increment counters and notify main }
+  { level that we got a send interrupt                                          }
+  { *************************************************************************** }
+  PROCEDURE sendint(err: INTEGER; s: INTEGER;  r: pTCrsltrcd;  b: pTCbuffer; p: pTCparmBlk );
+    BEGIN
+    IF err <> 0 THEN fatal('The last send was queued and failed...');
+    sendcnts(unsigned(smsg^.NEXT^.PTRS.pRslt^.RCODE));
+    smsg := smsg^.NEXT;
+    gotsend := TRUE;
+    END;
+
+
+  { ******************** }
+  { againcmd - repeats the last send command n times }
+  { ******************** }
+  PROCEDURE againcmd;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    printmsg(0,0, 'Send the last message again.');
+    printmsg(0,1, 'Send it how many times? ');
+    IF getnum(numsend) <> Normal THEN EXIT(againcmd);
+    showsendparms;
+    sendum;
+    END;
+{$P}
+
+  { ****************************************************************** }
+  { sendcmd - prompt the user for parameters and execute a transporter }
+  { sendmsg command                                                    }
+  { ****************************************************************** }
+  PROCEDURE sendcmd;
+    VAR
+      i: INTEGER;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    IF sending THEN
+      BEGIN
+      printmsg(0,0, 'Stop Sending...');
+      numsend := 1;      {this turns off sending...}
+      EXIT(sendcmd);
+      END;
+    inverson;
+    printmsg(0, 0, 'Send a Packet:');
+    inversoff;
+    printmsg(0, 1, 'Send to what host? ');
+    i := dest;
+    IF getnum(i) <> Normal THEN EXIT(sendcmd);
+    dest := ORD(i);
+    printmsg(0,2, 'Send to which socket? ');
+    getsock(ssock);
+    IF ssock < 0 THEN BEGIN ssock := 3; EXIT(sendcmd) END;
+    gethdrlen(shl, ssock);
+    IF shl < 0 THEN
+      BEGIN
+      shl := HdrLen;
+      EXIT(sendcmd)
+      END;
+    printmsg(0, 4, 'Send how many bytes? ');
+    IF getnum(sdl) <> Normal THEN EXIT(sendcmd);
+    IF sdl > BufSize THEN sdl := BufSize;
+    IF shl > 0 THEN        { must fill both headers/buffers now that we are double buffered }
+      BEGIN
+      hdrfill(restbl[9], shl);
+      restbl[10] := restbl[9];
+      END;
+    IF sdl > 0 THEN
+      BEGIN
+      buffill(buftbl[9], sdl);
+      buftbl[10] := buftbl[9];
+      END;
+    printmsg(0,12, 'Send how many?  ( 0=forever ) ');
+    IF getnum(numsend) <> Normal THEN EXIT(sendcmd);
+    showsendparms;
+    sending := TRUE;
+    sendum;
+    END;
+{$P}
+
+
+
+  { ******************************************************************** }
+  { rcvcmd - set up a receive... gets the parameter values from keyboard }
+  { ******************************************************************** }
+  PROCEDURE rcvcmd;
+    VAR
+      i: INTEGER;
+    BEGIN
+    i := winselect(genwind);
+    CRT(EraseAll);
+    printmsg(0, 0, 'Set Up a Receive:');
+    printmsg(0, 1, 'Receive on which socket? ');
+    i := rsock;
+    REPEAT          { find a likely candidate for rsock default }
+      i := (i MOD 4) + 1;
+      IF socktbl[i].STATE = NoSock THEN rsock := i;
+    UNTIL i = rsock;
+    getsock(rsock);
+    IF rsock < 0 THEN
+      BEGIN
+      rsock := 3;
+      EXIT(rcvcmd);
+      END;
+    printmsg(0, 2, 'What is the maximum length you wish to receive? ');
+    IF getnum(rdl) <> Normal THEN EXIT(rcvcmd);
+    IF rdl>Bufsize THEN rdl := Bufsize;
+    gethdrlen(rhl, rsock);
+    IF rhl < 0 THEN
+      BEGIN
+      rhl := HdrLen;
+      EXIT(rcvcmd)
+      END;
+    WITH socktbl[rsock] DO
+      BEGIN
+      LEND := rdl;
+      LENH := rhl;
+      TCinitBlk (CURMCB^.PTRS,CURMCB^.PTRS.PRSLT,CURMCB^.PTRS.PBUFF,CURMCB^.PTRS.PPROC);
+      IF TCsetRecv(CURMCB^.PTRS, rsock, LEND, LENH) <> 0
+      THEN fatal('Receive setup failed...');
+      i := unsigned(CURMCB^.PTRS.pRslt^.RCODE);
+      CASE i OF
+        OkCode: STATE := NoBuf;
+        CmdAcpt: STATE := RcvSet;
+        InUse: BEGIN cmdstat(i); EXIT(rcvcmd); END;
+        END;
+      COUNT := 0;
+      END; { with}
+    rcvstat(rsock, True);
+    i := winsystem(WsysCmd);
+    printmsg(0, 0, 'Command Status ===> Receive Setup Successful');
+    END;
+{$P}
+
+  { *************************************************************** }
+  { recvs - does the receive oriented commands...                   }
+  { *************************************************************** }
+  PROCEDURE recvs;
+    BEGIN
+    CASE GETBYTE OF
+      'E': endcmd;
+      'R', ' ': rcvcmd;
+      END;
+    END;
+
+
+  PROCEDURE dolabels;
+    VAR
+      i: INTEGER;
+    BEGIN
+    LblsInit;       { clear the softkey labels }
+    i := LblSet(0, 'Receive', 'RR');
+    i := LblSet(1, '  Send', 'S');
+    i := LblSet(2, '  Echo', 'E');
+    i := LblSet(3, '  Init', 'I');
+    i := LblSet(4, 'EndRecv', 'RE');
+    i := LblSet(5, '  Peek', 'P');
+    i := LblSet(6, '  Poke', 'P');
+    i := LblSet(7, '  Who', 'W');
+    i := LblSet(8, 'Again', 'A');
+    i := LblSet(9, '  Exit', 'Q');
+    i := LblSet(20, '  Dump', 'D');
+    i := LblSet(21, '  Fill', 'F');
+    i := LblSet(22, 'Delay', 'MN');
+    i := LblSet(23, '6801 RAM', 'MR');
+    i := LblSet(24, 'ZeroCnt', 'Z');
+    i := LblSet(25, 'ODdebug', 'MD');
+    i := LblSet(26, 'TCdebug', 'MT');
+    i := LblSet(28, ' Help', 'H');
+    i := LblSet(29, ' Exit', 'Q');
+    LblsOn;
+    END;
+
+{$P}
+
+
+  PROCEDURE initdiag;
+    CONST
+      Eighta  = 138;
+      SixFour = 100;
+      hF800   = -2048;
+
+    VAR
+      mp: pMCB;
+      ch: CHAR;
+      tv, i, j, k, c : INTEGER;
+    BEGIN
+    cchexinit;            {initialize hexout unit }
+    CCCRTIOINIT;  { initialize the CCCRTIO unit }
+    CCWndioinit; { ....the window unit }
+    cclblioinit;
+    ccOTCioInit; { initialize the CCOCTIO unit               }
+    Crtsdef := TRUE; {turn on string defaults }
+    CRTTahd := TRUE;
+    tcdebug := False; deb := FALSE;
+    dolabels;
+    delay := 0;
+    horizcreate;        { create the windows for the horizontal screen }
+    FOR i := 0 TO 4 DO gotrecv[i] := FALSE;
+    j := 0;
+    FOR i := 1 TO 4 DO
+      BEGIN
+      WITH socktbl[i] DO
+        BEGIN
+        NEW(mp);
+        CURMCB := mp;
+        NEW(mp);
+        CURMCB^.NEXT := mp;
+        mp^.NEXT := CURMCB;     { create a circular list }
+        mp := CURMCB;
+        REPEAT
+          j := j + 1;
+          WITH mp^, mp^.PTRS DO
+            BEGIN
+            ID := j;
+            pRslt := @restbl[j];
+            pBuff := @buftbl[j];
+            CASE i OF
+              1: pPROC := @rsock1;
+              2: pPROC := @rsock2;
+              3: pPROC := @rsock3;
+              4: pPROC := @rsock4;
+              END; {Case}
+            END; {WITH mp....}
+          mp := mp^.NEXT
+        UNTIL mp = CURMCB;
+        COUNT := 0;
+        STATE := NoSock;
+        END; {WITH}
+      END;
+{ continued on next page... }
+{$P}
+
+{ initdiag continued... }
+
+    NEW(mp);
+    smsg := mp;
+    NEW(mp);
+    smsg^.NEXT := mp;
+    mp^.NEXT := smsg;
+    FOR i := 1 TO 2 DO
+      BEGIN
+      smsg := smsg^.NEXT;
+      WITH smsg^, smsg^.PTRS DO       {initialize send message control point }
+        BEGIN
+        ID := j + i;
+        pRslt := @restbl[ID];
+        pBuff := @buftbl[ID];
+        pPROC := @sendint;
+        END;
+      END;
+    sdl := BufSize;
+    shl := 0;
+    ssock := 2;
+    dest := 63;
+    rdl := BufSize;
+    rhl := 0;
+    rsock := 2;
+    sending := FALSE; lastsend := FALSE;
+    gotsend := FALSE;
+    numsend := 0;
+    omode := TRUE;
+    newcmd := FALSE;
+    done := FALSE;
+    verbose := TRUE;
+    socknum := 1;
+    i := TCwhoami(hostnum);     { find out the host number 0.5 }
+    IF i <> 0 THEN fatal('Transporter not responding!!!');
+    CRT(EraseAll);
+    inverson;
+    printmsg(0,0,' ');
+    printmsg(0,1,'       Omninet Diagnostic   V');
+    write(odvers);
+    k := TCpeekTrans( hF800, c);
+    tv := unsigned(c);
+    CASE tv OF
+      SixFour: printmsg(53,1, 'T6.4');
+      EightA:  printmsg(53,1, 'T8.A');
+      139: printmsg(53,1, 'T8.B');      { 139 = $8B }
+      155: printmsg(53,1, 'T9.B');      { 155 = $9B }
+      END;
+    printmsg(74, 1, 'Host Number = ');
+    write(hostnum:-2);
+    inversoff;
+    initrcvwnd;
+    initcounts;
+    END;
+{$P}
+    
+  { *************************************************** }
+  { echocmd - send an echo packet to the specified host }
+  { *************************************************** }
+  PROCEDURE echocmd;
+    VAR
+      tcode,
+      dest: INTEGER;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    printmsg(0,0, 'Echo command:');
+    printmsg(0,1, 'Send echo to what host? ');
+    dest := 0;
+    IF getnum(dest) <> Normal THEN EXIT(echocmd);
+    IF TCechoTrans(ORD(dest),tcode) <> 0
+    THEN fatal('Unable to do an echo command.');
+    cmdstat(tcode);
+    END;
+
+
+  { ******************************************************** }
+  { miscmds - do the miscellaneous commands....              }
+  { ******************************************************** }
+  PROCEDURE miscmds;
+    BEGIN
+    CASE GETBYTE OF
+      'D': deb := NOT deb;
+      'T': tcdebug := NOT tcdebug;
+      'N': delaycmd;
+      'R', ' ': ramdump;
+      'V': verbose := NOT verbose;
+      END;
+    END;
+{$P}
+
+  { *********************************************************** }
+  { dump the contents of a buffer, header or any memory loc...  }
+  { *********************************************************** }
+  PROCEDURE dump;
+    VAR
+      ch: CHAR;
+    BEGIN
+    ii := winselect(genwind);
+    CRT(EraseAll);
+    write('Display  M)emory,  B)uffer or H)eader? B');
+    CRT(CursorLeft);
+    ch := GETBYTE;
+    ior := winselect(genwind);
+    CRT(EraseAll);
+    CASE ch OF
+      'M': mdump;
+      'H': hdump;
+      'B', ' ': bdump;
+      END;  {CASE}
+    END;
+
+
+{$P}
+
+  PROCEDURE fill;
+    VAR
+      bp: pBUFFER;
+      ch: CHAR;
+      adr: LONGINT;
+      id, ln: INTEGER;
+    BEGIN
+    id := winselect(genwind);
+    CRT(EraseAll);
+    printmsg(0, 2, 'Fill a  B)uffer  H)eader or  M)emory? B');
+    CRT(CursorLeft);
+    ch := GETBYTE;
+    printmsg(0,10, 'Hit <esc> to quit filling...');
+    CASE ch OF
+      ' ', 'B': BEGIN
+                printmsg(0,3, 'Fill which buffer? ');
+                id := 7;
+                IF getnum(id) <> Normal THEN EXIT(fill);
+                IF id> MaxBufs THEN EXIT(fill);
+                ln := BufSize;   {length is a VAR parameter... }
+                buffill(buftbl[id], ln);
+                END;
+      'H': BEGIN
+           printmsg(0,3, 'Fill which header? ');
+           id := 0;
+           IF getnum(id) <> Normal THEN EXIT(fill);
+           IF id > MaxBufs THEN EXIT(fill);
+           hdrfill(restbl[id], HdrLen);
+           END;
+      'M': BEGIN
+           printmsg(0,3, 'Fill starting at what location? ');
+           adr := $90000;
+           IF getlongnum(adr) <> Normal THEN EXIT(fill);
+           bp := POINTER(adr);
+           printmsg(0,4, 'Fill how many bytes? ');
+           ln := 1;
+           IF getnum(ln) <> Normal THEN EXIT(fill);
+           buffill(bp^, ln);
+           END;
+      END; {CASE}
+    END;
+
+{$P}
+  PROCEDURE whocmd;
+    VAR
+      whoset: TCHOSTSET;
+      x,y,i: INTEGER;
+    BEGIN
+    i := winselect(whowind);
+    CRT(EraseAll);
+    inverson;
+    printmsg(0,0,' ');
+    printmsg(0,1, ' Active Omninet hosts: ');
+    inversoff;
+    i := TCnetMap(whoset);
+    x := 2; y := 2;
+    FOR i := 0 TO 63 DO
+      BEGIN
+      IF i IN whoset THEN
+        BEGIN
+        GOTOXY(x,y);
+        write(i:3);
+        y := y+1;
+        IF y > 10 THEN
+          BEGIN
+          y := 2;
+          x := x +4;
+          END;
+        END;
+      END;
+   END;
+{$P}
+
+
+  { *********************************************************** }
+  { shosends - display send stats and do new send if necessary  }
+  { *********************************************************** }
+  PROCEDURE shosends;
+    VAR
+      ok: BOOLEAN;
+    BEGIN
+    gotsend := FALSE;
+    sendstat(firstsend);
+    IF firstsend THEN
+      BEGIN
+      invertwin(sparmwind);
+      firstsend := FALSE;
+      END;
+    IF lastsend THEN
+      BEGIN
+      invertwin(sparmwind);
+      sending := FALSE;
+      shocounts;
+      lastsend := FALSE;
+      prompt;
+      END;
+    IF (sending) AND (NOT lastsend) THEN sendum;
+    END;
+
+
+  PROCEDURE cleanscreen;
+    VAR
+      i: INTEGER;
+    BEGIN
+    i := winselect(genwind);
+    CRT(EraseAll);
+    shocounts;
+    sendstat(TRUE);
+    FOR i := 1 TO 4 DO
+      IF socktbl[i].STATE <> NoSock THEN
+        rcvstat(i, TRUE);
+    END;
+{$P}
+
+  { ************************* }
+  { doit - do the command selected by cmd                              }
+  { ************************* }
+  PROCEDURE doit(cmd: CHAR);
+    BEGIN
+    ior := winsystem(WsysCmd);
+    printmsg(0,0, '');
+    newcmd := FALSE;
+    CASE cmd OF
+      'A': againcmd;
+      'C': shocounts;
+      'D': dump;
+      'E': echocmd;
+      'F': fill;
+      'H': help;
+      'I': initcmd{};
+      'M': miscmds{};
+      'O': omode := NOT omode;
+      'P': peekpoke{};
+      'Q': done := TRUE;
+      'R': recvs{};
+      'S': sendcmd{};
+      'V': verbose := NOT verbose;
+      'W': whocmd;
+      'Z': BEGIN zerocnts; cleanscreen; END;
+      ' ': cleanscreen;
+      END;   {CASE}
+    UNITCLEAR(1);                       { 2.2 }
+    prompt;
+    END;
+
+  PROCEDURE shorecvs;
+    VAR
+      i: INTEGER;
+    BEGIN
+    gotrecv[0] := FALSE;
+    FOR i := 1 TO 4 DO
+      IF gotrecv[i] THEN
+        BEGIN
+        gotrecv[i] := FALSE;
+        rcvstat(i, FALSE);
+        END;
+    END;
+
+{$P}
+  
+  
+  PROCEDURE cleanup;
+    VAR
+      i,tcode: INTEGER;
+    BEGIN
+    FOR i := 1 TO 4 DO
+      IF socktbl[i].STATE <> NoSock THEN ii := TCendrecv(i, tcode);
+    i := winsystem(WsysCurr);
+    CRT(EraseAll);
+    i := windelete(genwind);
+    i := windelete(sndwind);
+    i := windelete(whowind);
+    i := windelete(ramwind);
+    i := windelete(sparmwind);
+    i := windelete(rcvwind);
+    i := windelete(cntwind);
+    END;
+
+
+  FUNCTION getcommand: CHAR;
+    BEGIN
+    ior := winsystem(WsysCmd);
+    newcmd := TRUE;
+    getcommand := GETBYTE;
+    END;
+    
+      
+    
+        
+  BEGIN  { omnidiag main program }
+  CRT(EraseAll);
+  initdiag;
+  prompt;
+  WHILE NOT done DO
+    BEGIN
+    IF gotrecv[0] THEN shorecvs{};
+    IF gotsend THEN shosends{};
+    IF newcmd THEN doit(cmdchar);
+    IF UNITBUSY(35) THEN cmdchar := getcommand{};
+    END;
+  cleanup{};
+  END.  {omnidiag}
+

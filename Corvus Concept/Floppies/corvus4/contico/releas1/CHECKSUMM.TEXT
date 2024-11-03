@@ -1,0 +1,204 @@
+                .NOLIST
+;
+                .MACRO BTRUE
+                BNE     %1
+                .ENDM
+;
+                .MACRO BFALSE
+                BEQ     %1
+                .ENDM
+;
+                .MACRO BL
+                BCC     %1
+                .ENDM
+;
+                .MACRO BNL
+                BCS     %1
+                .ENDM
+;
+                .MACRO BH
+                BEQ      *+4
+                BCS      %1
+                .ENDM
+;
+                .MACRO BNH
+                BCC     %1
+                BEQ     %1
+                .ENDM
+;
+                .MACRO ENTER
+                PLA
+                STA     0
+                PLA
+                STA     1
+                .IF "%1" = "FUNCTION"
+                PLA
+                PLA
+                PLA
+                PLA
+                .ENDC
+                .ENDM
+;
+                .MACRO GOBAK
+                LDA     1
+                PHA
+                LDA     0
+                PHA
+                RTS
+                .ENDM
+;
+                .MACRO SET1
+                LDA     %2
+                STA     %1
+                .ENDM
+;
+                .MACRO SET2
+                LDA     %2
+                STA     %1
+                STA     %1+1
+                .ENDM
+;
+                .MACRO SET
+                LDA     %3
+                LDY     #0
+$99             STA     %1,Y
+                INY
+                CPY     #%2.
+                BNE     $99
+                .ENDM
+;
+                .MACRO MOVE1
+                LDA     %2
+                STA     %1
+                .ENDM
+;
+                .MACRO MOVE2
+                LDA     %2
+                STA     %1
+                STA     %1+1
+                .ENDM
+;
+                .MACRO MOVE
+                LDY     #0
+$99             LDA     %2,Y
+                STA     %1,Y
+                INY
+                CPY     #%3.
+                BNE     $99
+                .ENDM
+;
+                .MACRO INC16
+                INC     %1
+                BNE     *+4
+                INC     %1+1
+                .ENDM
+;
+                .MACRO DEC16
+                LDA     %1
+                BNE     *+4
+                DEC     %1+1
+                DEC     %1
+                .ENDM
+;
+                .MACRO ADD16
+                LDY     #0
+                CLC
+$99             LDA     %1,Y
+                ADC     %2,Y
+                STA     %1,Y
+                INY
+                CPY     #2
+                BNE     $99
+                .ENDM
+;
+                .MACRO SUB16
+                LDY     #0
+                SEC
+$99             LDA     %1,Y
+                SBC     %2,Y
+                STA     %1,Y
+                INY
+                CPY     #2
+                BNE     $99
+                .ENDM
+;
+                .MACRO PULL
+                PLA
+                STA     %1
+                PLA
+                STA     %1+1
+                .ENDM
+;
+                .MACRO PUSH
+                LDA     %1+1
+                PHA
+                LDA     %1
+                PHA
+                .ENDM
+;
+                .MACRO PUSHCON
+                CLC
+                BCC     $98
+$99             .WORD   %1
+$98             LDA     $99+1
+                PHA
+                LDA     $99
+                PHA
+                .ENDM
+;
+;**WARNING USE A LABEL ON SCANDLIM TO CUT BACK LOCAL LABEL TABLE
+;  SCANDLIM USES A FORWARD REFERENCE ON LOCAL SYMBOLS
+;
+                .MACRO SCANDLIM
+                LDY     #1
+$9999997        CPY     %1
+                BH      $9999998
+                CMP     %1,Y
+                BEQ     $9999999
+                INY
+                BNE     $9999997
+$9999998        LDY     #1
+$9999999        RTS
+                .ENDM
+;
+                .LIST
+                
+                .PROC   CHECK_SUMM,3
+;
+; PROCEDURE CHECK_SUMM(VAR CHK_SUM:INTEGER; VAR DATA; LENGTH:INTEGER);
+;
+;  CHK_SUM SHOULD BE SET TO ZERO BEFORE FIRST CALL
+;
+;  PASS ANY DATA OF ANY TYPE BY ADDRESS
+;
+;  PASS LENGTH OF DATA
+;
+;  EOR BYTE CHECKSUMM WILL BE KEPT IN THE INTEGER VARIABLE PASSED BY ADDRESS
+;
+RETURN          .EQU    0
+CHK_SUMM        .EQU    2
+DATA            .EQU    4
+LENGTH          .EQU    6
+
+                
+                ENTER
+                PULL    LENGTH
+                PULL    DATA
+                PULL    CHK_SUMM
+                JMP     CHK_FOR_ZERO
+                
+LOOP            LDY     #0
+                LDA     @DATA,Y
+                EOR     @CHK_SUMM,Y
+                STA     @CHK_SUMM,Y
+                
+                INC16   DATA
+                DEC16   LENGTH
+                
+CHK_FOR_ZERO    LDA     LENGTH
+                BNE     LOOP
+                LDA     LENGTH+1
+                BNE     LOOP
+                
+                GOBAK
+                .END

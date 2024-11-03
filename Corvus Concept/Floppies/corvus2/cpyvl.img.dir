@@ -1,0 +1,35 @@
+
+Directory of UCSD disk image file 'cpyvl.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 27 files,  0 to 6 (6), eov 500, size 27, free 27
+
+ 1: 1FIND.DAT       Data 14-Sep-83    6-  10(   4),  2048+300=  2348 bytes
+ 2: 1PROFILE        Data 14-Sep-83   10-  31(  21), 10752+212= 10964 bytes
+ 3: ACCOUNT.TEXT    Text 16-Aug-83   31-  35(   4),  2048+512=  2560 bytes
+ 4: ADRFILE         Data 14-Sep-83   35-  65(  30), 15360+412= 15772 bytes
+ 5: AMAINS.TEXT     Text 16-Jul-83   65-  71(   6),  3072+512=  3584 bytes
+ 6: APPT.TEXT       Text 20-Jun-83   71-  75(   4),  2048+512=  2560 bytes
+ 7: BDRFILE         Data 14-Sep-83   75- 105(  30), 15360+412= 15772 bytes
+ 8: BLSINS.TEXT     Text 16-Jul-83  105- 111(   6),  3072+512=  3584 bytes
+ 9: CHARTLIST.TEXT  Text 15-Jun-83  111- 115(   4),  2048+512=  2560 bytes
+10: COLLECT.TEXT    Text 14-Aug-83  115- 119(   4),  2048+512=  2560 bytes
+11: FACCOUNT.TEXT   Text 14-Aug-83  119- 123(   4),  2048+512=  2560 bytes
+12: GARBDAT         Data 14-Sep-83  123- 125(   2),  1024+492=  1516 bytes
+13: INITDEMO        Data 15-Sep-83  125- 140(  15),  7680+512=  8192 bytes
+14: INSHELP.TEXT    Text 15-Aug-83  140- 148(   8),  4096+512=  4608 bytes
+15: MAILLIST.TEXT   Text 15-Jun-83  148- 152(   4),  2048+512=  2560 bytes
+16: MBSHELP.TEXT    Text 15-Aug-83  152- 164(  12),  6144+512=  6656 bytes
+17: MBSINT.DAT      Ux375 14-Sep-83  164- 165(   1),   512+ 58=   570 bytes
+18: MBSSTR.DAT      Data  3-Oct-83  165- 168(   3),  1536+320=  1856 bytes
+19: MCAINS.TEXT     Text 16-Jul-83  168- 174(   6),  3072+512=  3584 bytes
+20: MCRINS.TEXT     Text 20-Jun-83  174- 180(   6),  3072+512=  3584 bytes
+21: PROFILE         Data 14-Sep-83  180- 242(  62), 31744+ 20= 31764 bytes
+22: REPHELP.TEXT    Text 15-Aug-83  242- 250(   8),  4096+512=  4608 bytes
+23: TRANSHELP.TEXT  Text 15-Aug-83  250- 258(   8),  4096+512=  4608 bytes
+24: WRKINS.TEXT     Text 16-Jan-83  258- 264(   6),  3072+512=  3584 bytes
+25: ISPOOL.TEXT     Text  3-Oct-83  264- 268(   4),  2048+512=  2560 bytes
+26: SPINS.DAT       Data  3-Oct-83  268- 285(  17),  8704+172=  8876 bytes
+27: MEDAID          Data 15-Sep-83  285- 473( 188), 96256+512= 96768 bytes

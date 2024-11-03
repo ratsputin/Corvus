@@ -1,0 +1,10 @@
+
+Directory of UCSD disk image file 'vsixrfSrc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 2 files,  0 to 6 (6), eov 500, size 260, free 2
+
+ 1: CC.VSILIB.OBJ   Data  4-Jun-83    6- 200( 194), 99328+512= 99840 bytes
+ 2: CC.VSIXRF.TEXT  Text  6-Jun-83  200- 240(  40), 20480+512= 20992 bytes

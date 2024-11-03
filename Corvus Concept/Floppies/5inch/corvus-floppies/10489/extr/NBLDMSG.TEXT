@@ -1,0 +1,159 @@
+Program BldMsg;
+
+Uses {$U /ccutil/cclib}
+  ccDefn,
+  CCcrtIO;
+
+Type
+  Str20 = String[20];
+  MsgRcd = Packed Record
+             Grp : Integer;
+             Msg : Integer;
+             Txt : String[80]
+             End;
+
+Var
+  INFNam,
+  OUFNam : Str20;
+  INF : Text;
+  OuF : File of MsgRcd;
+  Counter,
+  N1,                                { eAGroupe@ eAnumbere@ }
+  N2  : Integer;                     { eAMessagee@ eAnumbere@ }
+  B   : Char;                        { eABlank!e@ }
+  LI  : String[80];                  { eAMessagee@ eAtexte@ }
+
+
+  Function BrkPress : Boolean; External;
+
+  Procedure ExitGracefully;
+
+  Begin
+    WriteLn;
+    WriteLn('Program terminated by user- output file not written!');
+    Close(OuF)
+  End;
+
+
+  Procedure OutError;
+
+  Begin
+    Write(chr(7));
+    WriteLn;
+    WriteLn('An error was encountered writing the output file. Check to make');
+    WriteLn('sure there is enough room on the output volume for the compiled');
+    WriteLn('file (CRUNCHing may help).');
+    Exit(BldMsg)
+  End;
+
+
+  Procedure Capitalize(Var IS : Str20);
+
+  Var
+    Counter,
+    Glotzy  : Integer;
+
+  Begin
+    For Counter := 1 To Length(IS) Do
+      If IS[Counter] in ['a'..'z'] Then Begin
+        Glotzy := Ord(IS[Counter]);
+        If Glotzy > 127 Then Glotzy := Glotzy - 256;
+        IS[Counter] := Chr(Ord(IS[Counter])-32)
+        End
+  End;
+
+
+  Procedure PutGrp(GN : Integer);
+
+  { eAPute@ eAalle@ eAmessagese@ eAfrome@ eAgroupe@ eA"GN"e@ eAine@ eAoutpute@ eAfile.e@ eAEnterede@ eAwithe@ eAfirste@ }
+  { eAmessagee@ eAcontentse@ eAine@ eAN1,e@ eAN2,e@ eAande@ eATXT.e@ }
+
+  Var
+    Counter : Integer;
+
+    Procedure PutMsg;
+
+    { eAPute@ eAae@ eAsinglee@ eAmessagee@ eAine@ eAthee@ eAoutpute@ eAfilee@ }
+
+    Begin
+      If BrkPress Then ExitGracefully;
+      OuF^.Grp := n1;
+      OuF^.Msg := N2;
+      OuF^.Txt := LI;
+      Put(OuF)
+    End;
+
+  Begin   { eAPutGrpe@ }
+    Write('Message group ',GN:0,': ');
+    PutMsg;                            { eAPute@ eAthee@ eAfirste@ eAmsge@ eAwee@ eAfounde@ }
+    Counter := 1;
+    Repeat                             { eAUntile@ eAnewe@ eAgroupe@ }
+      ReadLn(INF,N1,N2,B,LI);          { eAGete@ eAae@ eAmessage...e@ }
+      If ArgC > 1 Then WriteLn(N1,' ',N2,' ',LI);
+      If N1 = GN Then Begin            { eAIse@ eAite@ eAine@ eAthee@ eAcurrente@ eAgroup?e@ }
+        PutMsg;                        { eAYep,e@ eApute@ eAite@ eAine@ eAthee@ eAoutpute@ eAfilee@ }
+        Counter := Counter + 1         { eAInce@ eAthee@ eAmessagee@ eAcounter...e@ }
+        End
+    Until EOF(INF) or (N1 <> GN);
+    WriteLn(Counter:0,' messages.')
+  End;
+
+
+Begin           { eABLDMSGe@ }
+  CCcrtIOinit;
+  CrtAction(EraseAll);
+  CrtTpgm := 'BldMsg';
+  CrtTvrs := '2.1';
+  CrtTcpy := 'Copyright 1984 Corvus Systems, Inc.';
+  CrtTitle('System message file builder utility');
+  GotoXY(0,6);
+  Write('Name of message file to compile? ');
+  ReadLn(INFNam);
+  WriteLn;
+  If Length(INFNam) = 0 Then Exit(BldMsg);
+  Capitalize(INFNam);
+  If Pos('.TEXT',INFNam) = 0 Then INFNam := Concat(INFNam,'.TEXT');
+
+  {$I-}
+  Reset(INF,INFNam);
+  {$I+}
+
+  If IOResult <> 0 Then Begin
+    Write(chr(7));
+    WriteLn;
+    WriteLn('An error was encountered opening the input file. Check to make');
+    WriteLn('sure that you have spelled the file name correctly and that the');
+    WriteLn('file does exist.');
+    Exit(BldMsg)
+    End;
+
+  OUFNam := Copy(INFNam,1,Length(INFNam)-5); { eADrope@ eAthee@ eA".TEXT"e@ eAsuffixe@ }
+
+  {$I-}
+  ReWrite(OuF,OUfNam);
+  {$I+}
+
+  If IOResult <> 0 Then OutError;            { eAErrore@ eAopeninge@ eAoutpute@ eAfilee@ }
+  N1 := 0;                                   { eASete@ eAupe@ eAfore@ eAfirste@ eAreade@ }
+  Repeat
+    If N1 = 0 Then Repeat                    { eAReade@ eAuntile@ eAlegite@ eAmessagee@ }
+                     ReadLn(INF,N1,N2,B,LI)
+                   Until N1 > 0;
+    PutGrp(N1)                           { eAReade@ eAande@ eAstoree@ eAae@ eAmessagee@ eAgroupe@ }
+  Until EOF(INF);                        { eAEnde@ eAofe@ eAfile...e@ }
+
+  Close(OuF,Lock);                       { eAWe'ree@ eAdone...e@ }
+  WriteLn;
+  WriteLn('Done.');
+  If ARGC > 0 Then Begin
+    WriteLn;
+    WriteLn('Check of compacted file: ');
+    WriteLn;
+    Reset(OuF,OufNam);
+    Repeat
+      Get(OuF);
+      If BrkPress Then ExitGracefully;
+      With Ouf^ Do WriteLn(Grp,' ',Msg,' ',Txt)
+    Until EOF(Ouf)
+    End
+End.

@@ -1,0 +1,16 @@
+clrwnd
+;
+; BLD.VN -- Build Corvus Venus Boot PROM
+;
+delfil -q vn.prom.text vn.prom.obj vn.prom
+crunch -q /newprom
+vsippp prom vn -a
+asm68k vn.prom
+delfil -q vn.prom.text
+crunch -q /newprom
+linker vn.prom
+delfil -q vn.prom.obj
+crunch -q /newprom
+;
+; Finished ....
+;

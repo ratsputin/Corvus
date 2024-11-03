@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'sim.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 6 files,  0 to 6 (6), eov 500, size 380, free 6
+
+ 1: NETLIST.TEXT    Text 13-Dec-83    6-  10(   4),  2048+512=  2560 bytes
+ 2: NETXREF         Data  1-Jan-84   10-  44(  34), 17408+512= 17920 bytes
+ 3: NETXREF.TEXT    Text  1-Jan-84   44-  74(  30), 15360+512= 15872 bytes
+ 4: PROCNET.TEXT    Text 13-Dec-83   74-  78(   4),  2048+512=  2560 bytes
+ 5: SIM.TEXT        Text  2-Jan-84   78- 116(  38), 19456+512= 19968 bytes
+ 6: TIME.TEXT       Text  2-Jan-84  116- 120(   4),  2048+512=  2560 bytes

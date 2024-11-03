@@ -1,0 +1,22 @@
+pad4   : '    '
+back4  : csrlft csrlft csrlft csrlft inson
+proc   : 'PROCEDURE tstpgm;'cr
+bg     : 'BEGIN'cr
+le     : 'END.'
+ae     : 'END;'cr
+if1    : 'IF () THEN'cr
+if2    : 'ELSE'cr
+FullIF : inson if1 pad4 bg ae back4 if2 pad4 bg ae back4
+ThenIF : inson if1 pad4 bg ae back4
+pgm    : inson proc bg le
+
+
+UFN1   : STUB
+UF1    : pgm
+
+UFN2   : Full IF
+UF2    : FullIF
+
+UFN3   : Then IF
+UF3    : ThenIF
+

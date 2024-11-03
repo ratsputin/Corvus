@@ -1,0 +1,573 @@
+{$S+}
+{---------------------------------------------------------------------------------------}
+{ UNIT:         UIutils                                                                 }
+{                                                                                       }
+{ Copyright 1982 by Corvus Systems, Inc.                                                }
+{                                                                                       }
+{ PURPOSE:      This unit provides user interface support for the Constellation II      }
+{               UsrMgr program.                                                         }
+{                                                                                       }
+{                  PROCEDURE UIinit                                                     }
+{                     initializes variables                                             }
+{                                                                                       }
+{                  FUNCTION GVstring:   CRTstatus;                                      }
+{                     gets a valid string                                               }
+{                                                                                       }
+{                  FUNCTION GVinteger:  CRTstatus;                                      }
+{                     gets a valid integer                                              }
+{                                                                                       }
+{                  PROCEDURE CnvNameStr;                                                }
+{                     converts type name to type string80, trailing blanks truncated    }
+{                                                                                       }
+{                  PROCEDURE CnvStrName;                                                }
+{                     converts type string80 to type name, trailing blanks appended     }
+{                                                                                       }
+{                  PROCEDURE CnvPswStr;                                                 }
+{                     converts type psw to type string80, trailing blanks truncated     }
+{                                                                                       }
+{                  PROCEDURE CnvStrPsw;                                                 }
+{                     converts type string80 to type psw, trailing blanks appended      }
+{                                                                                       }
+{                  FUNCTION  DecDigits;                                                 }
+{                     counts the number of decimal digits in an integer value           }
+{                                                                                       }
+{ AUTHOR:       Donna Ono                                                               }
+{                                                                                       }
+{ REQUIREMENTS: This unit must be initialized.                                          }
+{                                                                                       }
+{ REVISION HISTORY:                                                                     }
+{               v 1.0   19-May-82       DSO     original unit                           }
+{                       24-May-82       DSO     Updated to use units in /CCLIB/CClib    }
+{---------------------------------------------------------------------------------------}
+
+UNIT UIutils;
+
+INTERFACE
+
+USES    {public}
+   {$U /CCLIB/CCLIB.OBJ       } CCdefn,         { general type declarations             }
+   {$U /CCLIB/CCLIB.OBJ       } CCcrtIO,        { GetByte,GetString,CrtStatus,CrtAction }
+   {$U /CCLIB/CCLIB.OBJ       } CCwndIO,        { window manager                        }
+   {$U /CCDECLS/CCdrvIO.OBJ   } CCdrvIO,        { host_types                            }
+   {$U /CCDECLS/CVtables.OBJ  } CVtables;       { name, psw, NameLen, PswLen            }
+
+CONST   {public}
+   UIutilsRev = '1.0';  { unit revision number }
+
+TYPE    {public}
+   InfoType   = (YesNo,         { force user to enter 'Y' or 'N'                        }
+                 Identifier,    { force user to enter a valid identifier                }
+                 Password,      { force user to enter a valid password                  }
+                 PathName);     { force user to enter a valid pathname                  }
+
+PROCEDURE UIinit        {public}
+     {input}
+     {output}
+    ;
+
+FUNCTION GVstring       {public}
+   ( {input}      Msg:          String80;
+                  Prompt:       String80;
+                  InfoUse:      InfoType;
+     {in/out} VAR Info:         String80
+   ):{result}                   CRTstatus;
+
+FUNCTION GVinteger      {public}
+   ( {input}      Msg:          String80;
+                  Prompt:       String80;
+                  LoIntVal:     INTEGER;
+                  HiIntVal:     INTEGER;
+     {in/out} VAR IntVal:       INTEGER
+   ):{result}                   CRTstatus;
+
+PROCEDURE CnvNameStr    {public}
+   ( {input}      NameArray:    name;
+     {output} VAR Info:         String80
+   );
+
+PROCEDURE CnvStrName    {public}
+   ( {input}      Info:         String80;
+     {output} VAR NameArray:    name
+   );
+
+PROCEDURE CnvPswStr     {public}
+   ( {input}      PswArray:     psw;
+     {output} VAR Info:         String80
+   );
+
+PROCEDURE CnvStrPsw     {public}
+   ( {input}      Info:         String80;
+     {output} VAR PswArray:     psw
+   );
+
+FUNCTION  DecDigits     {public}
+   ( {input}      IntVal:       INTEGER
+     {output}
+   ):{result}                   INTEGER;
+
+{$P}
+IMPLEMENTATION
+
+TYPE    {private}
+   CharSetType  = SET OF CHAR;
+
+VAR     {private}
+   YesNoMenu:   CharSetType;    { ['Y','N']                                             }
+   Letters:     CharSetType;    { ['A'..'Z']                                            }
+   Digits:      CharSetType;    { ['0'..'9']                                            }
+   AlphaNums:   CharSetType;    { Letters + Digits                                      }
+   IdentChars:  CharSetType;    { AlphaNums + ['_']                                     }
+   PathChars:   CharSetType;    { AlphaNums + ['/']                                     }
+   Punctuation: CharSetType;    { <miscellaneous characters>                            }
+   Printables:  CharSetType;    { AlphaNums + Punctuation                               }
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    UIinit                                                                  }
+{                                                                                       }
+{ INPUT:        (none)                                                                  }
+{                                                                                       }
+{ OUTPUT:       (none)                                                                  }
+{                                                                                       }
+{ DESCRIPTION:  Initializes unit.                                                       }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE UIinit;       {public}
+
+BEGIN   {PROCEDURE UIinit}
+
+CrtAction(DefStrOn);
+CrtAction(DefNumOn);
+
+YesNoMenu    := ['Y','N'];
+Letters      := ['A'..'Z'];
+Digits       := ['0'..'9'];
+AlphaNums    := Letters + Digits;
+IdentChars   := AlphaNums + ['_'];
+PathChars    := AlphaNums + ['/'];
+Punctuation  := [' ', '!', '"', '#', '$', '%', '&', '''',
+                 '(', ')', '*', '+', ',', '-', '.', '/',
+                 ':', ';', '<', '=', '>', '?', '@',
+                 '[', '\\',']', '^', '_', '`',
+                 '{', '|', '}', '~'];
+Printables   := AlphaNums + Punctuation;
+
+END;    {PROCEDURE UIinit}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ FUNCTION:     GVstring:       CRTstatus       (escape or normal, never error)         }
+{                                                                                       }
+{ INPUT:            Msg:        String80                                                }
+{                   Prompt:     String80                                                }
+{                   InfoUse:    InfoType                                                }
+{                                                                                       }
+{ IN/OUT:       VAR Info:       String80                                                }
+{                                                                                       }
+{ DESCRIPTION:  Writes the message in Prompt to the operator's console, then returns    }
+{               the operator's input.  If Info is not initially null, its contents are  }
+{               displayed (following the prompt message) as a default response which    }
+{               the operator may select by pressing <RET>.  The value of InfoType       }
+{               determines the error-checking that this function performs on the        }
+{               operator's response.                                                    }
+{---------------------------------------------------------------------------------------}
+
+FUNCTION GVstring;      {public}
+
+VAR     {private}
+   ior:         INTEGER;        { I/O result code returned by WinSystem                 }
+   MinStrLen:   INTEGER;        { minimum length of Info                                }
+   MaxStrLen:   INTEGER;        { maximum length of Info                                }
+   ValidChars:  CharSetType;    { valid characters for Info                             }
+   OrigInfo:    String80;       { saves original value of Info                          }
+   done:        BOOLEAN;        { flags end of loop                                     }
+   RspType:     CrtStatus;      { normal, escape, error                                 }
+   EndOfStr:    INTEGER;        { length of user input string                           }
+   IntStr:      String80;       { integer text returned by CvIntStr                     }
+
+FUNCTION CharsOK:       BOOLEAN;        {private}
+   VAR  {private private}
+      CharNum:  INTEGER;
+      OKchars:  BOOLEAN;
+   BEGIN   {FUNCTION CharsOK}
+   OKchars  := TRUE;
+   CharNum  := 1;
+   WHILE (CharNum <= EndOfStr) AND OKchars DO
+      BEGIN
+      OKchars := Info[CharNum] IN ValidChars;
+      CharNum := CharNum + 1;
+      END;
+   CharsOK := OKchars;
+   END;    {FUNCTION CharsOK}
+
+BEGIN   {FUNCTION GVstring}
+
+ior := WinSystem(WsysCmd);
+
+CASE InfoUse OF
+   YesNo:
+      BEGIN
+      MinStrLen  := 1;
+      MaxStrLen  := 1;
+      ValidChars := YesNoMenu;
+      END;
+   Identifier:
+      BEGIN
+      MinStrLen  := 1;
+      MaxStrLen  := NameLen;
+      ValidChars := IdentChars;
+      END;
+   PassWord:
+      BEGIN
+      MinStrLen  := 0;
+      MaxStrLen  := PswLen;
+      ValidChars := Printables;
+      END;
+   PathName:
+      BEGIN
+      MinStrLen  := 1;
+      MaxStrLen  := 75;
+      ValidChars := PathChars;
+      END;
+   END;
+
+OrigInfo := Info;
+done := FALSE;
+
+REPEAT
+   CrtAction(EraseALL);
+   WRITE  (OUTPUT,Msg);
+   GoToXY(0,1);
+   WRITE  (OUTPUT,Prompt);
+   RspType := GetString(Info);
+   EndOfStr := LENGTH(Info);
+
+   CASE RspType OF
+      error:
+         BEGIN
+         IF InfoUse = YesNo THEN
+            Msg := '''Y'' or ''N'' expected'
+         ELSE
+            Msg := 'String contains unprintable character(s).';
+         Info := OrigInfo;
+         END;
+      escape:
+         done := TRUE;
+      normal:
+         IF EndOfStr < MinStrLen THEN
+            Info := OrigInfo
+         ELSE
+            IF EndOfStr > MaxStrLen THEN
+               BEGIN
+               IF InfoUse = YesNo THEN
+                  Msg := '''Y'' or ''N'' expected.'
+               ELSE
+                  BEGIN
+                  CvIntStr(MaxStrLen,
+                           IntStr,
+                                     DecRdx);
+                  Msg := CONCAT(Info,' contains more than ',IntStr,' characters.');
+                  END;
+               Info := OrigInfo;
+               END
+            ELSE
+               IF NOT CharsOK{*} THEN
+                  BEGIN
+                  IF InfoUse = YesNo THEN
+                     Msg := '''Y'' or ''N'' expected.'
+                  ELSE
+                     Msg := 'String contains invalid character(s).';
+                  Info := OrigInfo;
+                  END
+               ELSE
+                  CASE InfoUse OF
+                     Identifier:
+                        IF NOT(Info[1] IN Letters) THEN
+                           BEGIN
+                           Msg := 'Identifier must begin with a letter.';
+                           Info := OrigInfo;
+                           END
+                        ELSE
+                           done := TRUE;
+                     PathName:
+                        IF NOT(Info[1] IN Letters) THEN
+                           IF NOT(Info[1] = '/') THEN
+                              BEGIN
+                              Msg := 'Filename must begin with a letter or slash.';
+                              Info := OrigInfo;
+                              END
+                           ELSE done := TRUE
+                        ELSE
+                           done := TRUE;
+                     OTHERWISE:
+                        done := TRUE;
+                     END;
+      END;
+UNTIL done;
+
+GVstring := RspType;
+
+END;    {FUNCTION GVstring}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ FUNCTION:     GVinteger:      CRTstatus       (escape or normal, never error)         }
+{                                                                                       }
+{ INPUT:            Msg:        String80                                                }
+{                   Prompt:     String80                                                }
+{                   LoIntVal:   INTEGER                                                 }
+{                   HiIntVal:   INTEGER                                                 }
+{                                                                                       }
+{ IN/OUT:       VAR IntVal:     INTEGER                                                 }
+{                                                                                       }
+{ DESCRIPTION:  Writes the message in Prompt to the operator's console, then gets a     }
+{               valid integer from operator.  The value must be within the specified    }
+{               range.                                                                  }
+{---------------------------------------------------------------------------------------}
+
+FUNCTION GVinteger;     {public}
+
+VAR     {private}
+   ior:         INTEGER;        { I/O result code returned by WinSystem                 }
+   OrigIntVal:  INTEGER;        { saves original value of IntVal                        }
+   done:        BOOLEAN;        { flags end of loop                                     }
+   RspType:     CrtStatus;      { normal, escape, error                                 }
+   LoIntStr:    String80;       { integer text returned by CvIntStr                     }
+   HiIntStr:    String80;       { integer text returned by CvIntStr                     }
+
+FUNCTION IntValOK: BOOLEAN;     {private}
+   BEGIN        {FUNCTION IntValOK}
+   IntValOK := ((LoIntVal <= IntVal) AND (IntVal <= HiIntVal));
+   END;         {FUNCTION IntValOK}
+
+BEGIN   {FUNCTION GVinteger}
+
+ior := WinSystem(WsysCmd);
+
+OrigIntVal := IntVal;
+done := FALSE;
+
+REPEAT
+   CrtAction(EraseALL);
+   WRITE  (OUTPUT,Msg);
+   GoToXY(0,1);
+   WRITE  (OUTPUT,Prompt);
+   RspType := GetNum(IntVal);
+
+   CASE RspType OF
+      error:
+         BEGIN
+         Msg := 'String contains unprintable character(s).';
+         IntVal := OrigIntVal;
+         END;
+      escape:
+         done := TRUE;
+      normal:
+         IF NOT IntValOK{*} THEN
+            BEGIN
+            CvIntStr(LoIntVal,
+                     LoIntStr,  DecRdx);
+            CvIntStr(HiIntVal,
+                     HiIntStr,  DecRdx);
+            Msg := CONCAT('Integer from ',LoIntStr,' to ',HiIntStr,' expected.');
+            IntVal := OrigIntVal;
+            END
+         ELSE
+            done := TRUE;
+      END;
+UNTIL done;
+
+GVinteger := RspType;
+
+END;    {FUNCTION GVinteger}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CnvNameStr                                                              }
+{                                                                                       }
+{ INPUT:            NameArray:  name                                                    }
+{                                                                                       }
+{ OUTPUT:       VAR Info:       String80                                                }
+{                                                                                       }
+{ DESCRIPTION:  Converts a packed array of NameLen characters to a string of static     }
+{               length 80 with any trailing blank(s) truncated.                         }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CnvNameStr;   {public}
+
+VAR     {private}
+   StrChar:     String[1];      { used to "unpack" a char from NameArray                }
+   CharNum:     INTEGER;        { index into NameArray                                  }
+   done:        BOOLEAN;        { flags end of conversion                               }
+
+BEGIN   {PROCEDURE CnvNameStr}
+
+Info    := '';                  { init length to 0                                      }
+StrChar := ' ';                 { fix length at 1                                       }
+CharNum := 1;                   { init index into NameArray                             }
+done    := FALSE;               { init flag                                             }
+
+REPEAT
+   IF NameArray[CharNum] = ' ' THEN
+      done := TRUE
+   ELSE
+      BEGIN
+      StrChar[1] := NameArray[CharNum];
+      Info := CONCAT(Info,StrChar);
+      IF CharNum = NameLen THEN
+         done := TRUE
+      ELSE
+         CharNum := CharNum + 1;
+      END;
+UNTIL done;
+
+END;    {PROCEDURE CnvNameStr}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CnvStrName                                                              }
+{                                                                                       }
+{ INPUT:            Info:       String80                                                }
+{                                                                                       }
+{ OUTPUT:       VAR NameArray:  name                                                    }
+{                                                                                       }
+{ DESCRIPTION:  Converts a valid identifier in a string of static length 80 to a packed }
+{               array of NameLen characters with blank fill to the right.               }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CnvStrName;   {public}
+
+VAR     {private}
+   EndOfStr:    INTEGER;        { length of input string Info                           }
+   CharNum:     INTEGER;        { index into input string Info & output array NameArray }
+
+BEGIN   {PROCEDURE CnvStrName}
+
+EndOfStr := LENGTH(Info);
+
+FOR CharNum := 1 TO NameLen DO
+   IF CharNum <= EndOfStr THEN
+      NameArray[CharNum] := Info[CharNum]
+   ELSE
+      NameArray[CharNum] := ' ';
+
+END;    {PROCEDURE CnvStrName}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CnvPswStr                                                               }
+{                                                                                       }
+{ INPUT:            PswArray:   psw                                                     }
+{                                                                                       }
+{ OUTPUT:       VAR Info:       String80                                                }
+{                                                                                       }
+{ DESCRIPTION:  Converts a packed array of PswLen characters to a string of static      }
+{               length 80 with any trailing blank(s) truncated.                         }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CnvPswStr;    {public}
+
+VAR     {private}
+   StrChar:     String[1];      { used to "unpack" a char from PswArray                 }
+   CharNum:     INTEGER;        { index into PswArray                                   }
+   done:        BOOLEAN;        { flags end of conversion                               }
+
+BEGIN   {PROCEDURE CnvPswStr}
+
+Info    := '';                  { init length to 0                                      }
+StrChar := ' ';                 { fix length at 1                                       }
+CharNum := 1;                   { init index into PswArray                              }
+done    := FALSE;               { init flag                                             }
+
+REPEAT
+   IF PswArray[CharNum] = ' ' THEN
+      done := TRUE
+   ELSE
+      BEGIN
+      StrChar[1] := PswArray[CharNum];
+      Info := CONCAT(Info,StrChar);
+      IF CharNum = PswLen THEN
+         done := TRUE
+      ELSE
+         CharNum := CharNum + 1;
+      END;
+UNTIL done;
+
+END;    {PROCEDURE CnvPswStr}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CnvStrPsw                                                               }
+{                                                                                       }
+{ INPUT:            Info:       String80                                                }
+{                                                                                       }
+{ OUTPUT:       VAR PswArray:   psw                                                     }
+{                                                                                       }
+{ DESCRIPTION:  Converts a valid password in a string of static length 80 to a packed   }
+{               array of PswLen characters with blank fill to the right.                }
+{---------------------------------------------------------------------------------------}
+
+PrOCEDURE CnvStrPsw;    {public}
+
+VAR     {private}
+   EndOfStr:    INTEGER;        { length of input string Info                           }
+   CharNum:     INTEGER;        { index into input string Info & output array PswArray  }
+
+BEGIN   {PROCEDURE CnvStrPsw}
+
+EndOfStr := LENGTH(Info);
+
+FOR CharNum := 1 TO PswLen DO
+   IF CharNum <= EndOfStr THEN
+      PswArray[CharNum] := Info[CharNum]
+   ELSE
+      PswArray[CharNum] := ' ';
+
+END;    {PROCEDURE CnvStrPsw}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ FUNCTION:     DecDigits:      INTEGER                                                 }
+{                                                                                       }
+{ INPUT:        IntVal:         INTEGER                                                 }
+{                                                                                       }
+{ OUTPUT:       (none)                                                                  }
+{                                                                                       }
+{ DESCRIPTION:  Returns the count of decimal digits contained in the integer IntVal.    }
+{               If IntVal is negative, the sign is counted as a digit.                  }
+{---------------------------------------------------------------------------------------}
+
+FUNCTION DecDigits;     {UIutils public}
+
+VAR     {public}
+   AbsVal:   INTEGER;
+   ValSiz:   INTEGER;
+   done:     BOOLEAN;
+
+BEGIN        {FUNCTION DecDigits}
+
+AbsVal := ABS(IntVal);
+ValSiz := 1;
+done :=  FALSE;
+
+REPEAT
+   IF AbsVal < 10 THEN
+      done := TRUE
+   ELSE
+      BEGIN
+      AbsVal := AbsVal DIV 10;
+      ValSiz := ValSiz + 1;
+      END;
+UNTIL done;
+
+IF IntVal < 0 THEN
+   DecDigits := ValSiz + 1
+ELSE
+   DecDigits := ValSiz;
+
+END;         {FUNCTION DecDigits}
+
+{$P}
+END.    {UNIT UIutils}
+
+

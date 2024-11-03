@@ -1,0 +1,373 @@
+;
+;  file : fdiag.asm.text
+;  date : 31-Mar-82     kb            { start date }                           .IX
+
+;  version :  0.0.2   11-May-82       { last modified date  }
+;  Keith Ball
+;
+;  This is a preliminary floppy diagnostic.  It uses 6 files of the 8" floppy driver as
+;  include files. These files are 1) DR8MEQU, which has all the equates for the main system of the
+;  floppy driver, 2) DR8SEQU, which has the controller equates, 3) DR8RDWR, which has the read and
+;  write sector routines, 4) DR8SPSU, which has the floppy routines for seek and restore, 5) DR8WTST,
+;  which has the wait for floppy states routines, and 6) DR8PRCO, which has the status bit processing
+;  routines.  They require the OS globals file to be included. The floppy driver was written by Ravi Luthra.
+;  This interface program must be driven by a Pascal program.  The following routines are External
+;  procedures and functions to the Pascal program.
+;
+
+;
+; ENTRY POINTS TO FLOPPY DRIVER DR8SPSU include file routines                  .IX
+;       all these routines expect A2 ==> Slot base address
+;
+;          EXTERN    RSTRSUB,SEEKSUB,RDSECSUB,WRSECSUB,PSKSTBTS
+;
+           list 0
+           INCLUDE   '/CCOS/OS.GBL.ASM.TEXT'
+           list 1
+           INCLUDE   '/ravi/DR8MEQU.TEXT'              ;EQUATES
+           INCLUDE   '/ravi/DR8SEQU.TEXT'              ;EQUATES
+           INCLUDE   '/ravi/DR8RDWR.TEXT'              ;READ & WRITE ROUTINES
+           INCLUDE   '/ravi/DR8SPSU.TEXT'              ;OTHER FLOPPY OPERATION RTNS
+           INCLUDE   '/ravi/DR8WTST.TEXT'              ;WAIT ROUTINES
+           INCLUDE   '/ravi/DR8PRCO.TEXT'              ;ERROR PROCESS RTNS
+;
+; ENTRY POINTS TO THIS ROUTINE USED BY PASCAL PROGRAM                          .IX
+;
+           GLOBAL    SEEKS,READSEC,WRITESEC,SETUP
+
+           PAGE      59
+;
+; GLOBAL DEFINITIONS TO ALL DIAG ROUTINES
+;
+; LOCAL COMMANDS - REAL AND TEST                                               .IX
+;
+LOCLCMD    EQU       $C0                         ;8 in., sngl density, side 0, drive 0, motor on
+LTSTCMD1   EQU       $61                         ;8 in., dbl density, side 1, drive 0, motor off
+
+; DIAG RETURN CODES                                                            .IX
+;
+RCGOOD     EQU       0                           ;GOOD RETURN CODE
+NOFLOPER   EQU       1                           ;NO FLOPPY CONTROLLER IN SLOT
+INVSLTER   EQU       2                           ;INVALID SLOT  NUMBER
+DCRCERR    EQU       3                           ;CRC ERROR
+DWRPRT     EQU       4                           ;WRITE PROTECTED FLOPPY
+DRECNF     EQU       5                           ;RECORD NOT FOUND
+DBUSYDV    EQU       6                           ;DEVICE BUSY
+DNOTRDY    EQU       7                           ;DEVICE NOT READY
+DSEEKER    EQU       8                           ;SEEK ERROR
+DWRFLT     EQU       9                           ;WRITE FAULT
+
+UNERRCOD   EQU       $FF                         ;ERR CODE RETURNED WHEN FLOPPY ERROR NOT IN TABLE
+
+; RANGE OF PARAMETER DEFINITIONS                                               .IX
+;
+MINSLOTN   EQU       1                           ;MINIMUM SLOT NUMBER
+MAXSLOTN   EQU       4                           ;MAX SLOT NUMBER
+
+; miscellaneous
+;
+INTLEN     EQU       2                           ;NUMBER OF BYTES IN AN INTEGER
+SECSIZE    EQU       128                         ;NUMBER OF BYTES PER SECTOR FOR SINGLE DENSITY DISK
+
+  page
+;
+; SETUP - setup the diagnostic system and floppy drive.                        .IX
+;         Uses only drive 1 of card in slot specified by SlotNumber.
+;
+;  Function SETUP( SlotNumber : integer) : integer;
+;
+; returns a result code :
+;
+;       0 = ok, completed setup
+;       1 = No drive in slot
+;       2 = invalid slot number
+;
+SETUP
+           BSR       SAVA456                     ;SAVE ADDRESS REGISTERS
+           MOVEA.L   (SP)+,A0                    ;GET RETURN ADDRESS
+           MOVE.W    (SP)+,D0                    ;GET SLOT NUMBER PARAMETER
+;
+; CHECK IF SLOT SPECIFIED CONTAINS A FLOPPY
+;
+           BSR.S     CALCBASE                    ;CALCULATE BASE ADDRESS OF SLOT
+           BNE.S     SUEXIT                      ;ERROR, INVALID SLOT NUMBER
+           MOVE.B    #LTSTCMD1,LCMDR(A2)         ;WIGGLE BITS TO SEE IF FLOPPY IN SLOT
+           BTST      #LSFMMFM,LSTRR(A2)          ;THIS CMD SETS DBL DENSITY
+           BNE.S     SUNOFLOP                    ;NO FLOPPY, BIT IS SINGLE DENSITY
+
+           MOVE.B    #LOCLCMD,LCMDR(A2)          ;8 IN.,SINGLE DENSITY,SIDE 0,DRIVE 0,MOTOR ON
+           BTST      #LSFMMFM,LSTRR(A2)          ;THIS CMD SETS SNGL DENSITY
+           BEQ.S     SUNOFLOP                    ;NO FLOPPY, DBL DENSITY BIT SET
+;
+; HAVE SET CORRECT LOCAL COMMAND IN CONTROLLER BOARD
+;
+
+           CLR.L     D7                          ;NO ERROR, DRIVE IN SLOT & SET UP
+           BSR       MVWSSRAM                    ;MOVE THE WRITE SECTOR CRITICAL CODE TO STATIC RAM
+           BRA.S     SUEXIT
+
+; NO FLOPPY EXIT
+;
+SUNOFLOP   MOVE.W    #NOFLOPER,D7
+SUEXIT     MOVE.W    D7,(SP)
+           BSR       RSTA456                     ;RESTORE ADDRESS REGISTERS
+           JMP       (A0)
+
+;
+; CALCBASE - From SlotNumber calculate the Base address of the device register area                .IX
+;
+;          Entry : (D0) = SlotNumber
+;          Exit  : if (EQ) then (A2) = Base address
+;                  if (NE) then (D7) = error code (invalid slot number)
+;
+CALCBASE
+           CMPI.W    #MINSLOTN,D0                ;is SlotNumber in range
+           BCS.S     CLCERR                      ;NO
+           CMPI.W    #MAXSLOTN,D0
+           BHI.S     CLCERR                      ;NO
+
+; CALCULATE BASE INTO A1
+;
+           LEA       NDEV1AD.L,A2                ;FIRST SLOT BASE ADDRESS
+           MOVE.W    D0,D1
+           MULU      #DEVADOFST,D1               ;CALCULATE OFFSET TO SlotNumber
+           ADDA.L    D1,A2                       ;BASE
+           CLR.L     D1
+           RTS
+
+; ERROR - INVALID SLOT NUMBER
+;
+ERINVLST
+CLCERR     MOVE.W    #INVSLTER,D7
+           RTS
+
+  page
+;
+; SEEKS - Seek the specified tracks and report any errors                       .IX
+;          Always do a Restore before do the specified seeks.  The number of seeks is 4.
+;
+;          Function SEEK( trk1, trk2, trk3, trk4, SlotNumber : integer) : integer;
+;
+; Returns as integer error codes :
+;
+;          0 = ok, did all the seeks
+;        <>0 = failed,  hi order byte is track failed on (1..4)
+;                       low order byte is error code
+;
+SEEKS
+           BSR       SAVA456                     ;SAVE ADDRESS REGISTERS
+           MOVEA.L   (SP)+,A0                    ;GET RETURN ADDRESS
+           MOVE.W    (SP)+,D0                    ;GET SLOT NUMBER PARAMETER
+           BSR.S     CALCBASE                    ;CALCULATE BASE ADDRESS OF SLOT
+           BNE.S     SKSLERR                     ;ERROR, INVALID SLOT NUMBER
+
+; RESTORE - put head on track 0
+;
+           CLR.L     D3                          ;track is 0
+           JSR       RSTRSUB                     ;call floppy driver to restore
+           BSR.S     ERRCHK                      ;see if error
+           BNE.S     SKSLERR                     ;was,exit - remove parameters from stack
+
+; for i:=1 to 4 do begin seek track; if error then exit; end;
+;
+           MOVEQ     #3,D0                       ;do 4 times
+
+SKSEEK     MOVE.W    (SP)+,D3                    ;get track number to seek
+           MOVE.W    D0,-(SP)                    ;save loop counter
+           JSR       SEEKSUB                     ;call floppy driver code to seek
+           MOVE.W    (SP)+,D0                    ;restore loop counter
+           BSR.S     ERRCHK                      ;see if error
+           DBNE      D0,SKSEEK                      ;do until (error) or (done 4 tracks)
+           BNE.S     SKERROR                     ;remove extra parameters off stack
+
+; EXIT
+;
+SKEXIT     MOVE.W    D7,(SP)                     ;PUT ON ERROR RETURN CODE
+           BSR       RSTA456                     ;RESTORE ADDRESS REGISTERS
+           JMP       (A0)
+
+; INVALID SLOT NUMBER ERROR - REMOVE TRACK NUMBERS FROM STACK
+;
+SKSLERR    MOVEM.W   (SP)+,D0-D3                 ;REMOVE 4 INTEGERS
+           BRA.S     SKEXIT
+
+        page
+; SEEK ERROR
+;
+SKERROR    SUBQ.W    #1,D0                       ;remove unused track numbers
+           BMI.S     SKEXIT                      ;from stack
+           MOVE.W    (SP)+,D3
+           BRA.S     SKERROR
+
+  page
+;
+; ERRCHK - Check register D7 for Floppy driver error codes.                    .IX
+;          If find an error map the driver code into the diag code.
+;          Diag error code is Hi byte = track number with error, low byte = error type.
+;          If Floppy error code is not in table then get unknown error code which is first
+;          word before Diagnostic error code table.
+;
+;          Entry : (D7) = Floppy Driver error code
+;                  (D3) = Track index number
+;          Exit  : (D7) = Diag error code.
+;                  (EQ) = no error
+;                  (NE) = error
+;       clobbers A4
+;
+ERRCHK     TST.W     D7
+           BEQ.S     ECEXIT                      ;NO ERROR RETURN FROM FLOPPY
+
+; FIND WHICH ERROR AND GET DIAG ERROR CODE
+;
+           MOVEQ     #-2,D2                      ;index into error code array
+           MOVEQ     #MAXERRC-1,D1               ;get maximum number of floppy driver codes
+           LEA       FDERTBL,A4                  ;address of floppy driver error code table
+
+ECCHKT     ADDQ.W    #2,D2                       ;index to next element
+           CMP.W     0(A4,D2.W),D7
+           DBEQ      D1,ECCHKT                   ;do until (found) or (ran out)
+           BNE.S     ERUNKWN                     ;unknown error code
+
+; FOUND ERROR CODE
+;
+           LEA       DIAGERRS,A4
+           MOVE.W    0(A4,D2.W),D7               ;GET LOW ORDER BYTE FOR ERROR TYPE
+           MOVE.W    D3,D1                       ;GET TRACK NUMBER
+           LSL.W     #8,D1
+           OR.W      D1,D7                       ;HAVE DIAG CODE
+ECEXIT     RTS
+
+; UNKNOWN ERROR CODE - RETURN -1 TO CALLER
+;
+ERUNKWN    MOVE.W    D1,D7                       ;D1 = $FFFF
+           RTS
+
+  page
+;
+; READSEC - Seek a track then read a sector.                                      .IX
+;          Read a specified sector on a specified track from a floppy in specified slot into
+;          into a specified buffer.
+;
+;  Function READSEC( SlotNumber, Track,sector : integer; var Buffer : array[1..SECSIZE] of byte) : integer;
+;
+; Returns as integer error codes :
+;
+;          0 = ok, did all the seeks
+;        <>0 = failed,  hi order byte is track failed on (1..4)
+;                       low order byte is error code
+;
+READSEC    MOVEA.L   (SP)+,A3                    ;GET RETURN ADDRESS
+           MOVEA.L   (SP)+,A0                    ;BUFFER ADDRESS
+           MOVE.W    (SP)+,D4                    ;SECTOR NUMBER
+           MOVE.W    (SP)+,D3                    ;TRACK NUMBER
+           MOVE.W    (SP)+,D0                    ;SLOT  NUMBER
+           MOVE.L    A3,-(SP)                    ;PUT RETURN ADDR BACK ON STACK
+
+           BSR.S     SAVA456                     ;SAVE ADDRESS REGISTERS
+           BSR       CALCBASE                    ;CALCULATE BASE ADDRESS FOR DEVICE REGISTERS
+           BNE.S     RDEXIT                      ;ERROR, INVALID SLOT NUMBER
+
+; SEEK TO TRACK
+;
+           JSR       SEEKSUB                     ;SEEK TRACK - TRACK NUMBER IN D3.W
+           BSR.S     ERRCHK
+           BNE.S     RDEXIT
+
+; READ SECTOR
+;
+           MOVE.W    #SECSIZE,D1                 ;NUMBER BYTES PER SECTOR
+           JSR       RDSECSUB
+           BSR.S     ERRCHK
+
+; EXIT
+;
+RDEXIT     MOVE.W    D7,4(SP)                    ;RETURN ERROR CODE
+           BSR.S     RSTA456                     ;RESTORE ADDRESS REGISTERS
+           RTS                                   ;EXIT
+
+  page
+;
+; WRITESEC - Seek a track then write a sector.                                    .IX
+;
+;          Write a specified sector on a specified track from a floppy in specified slot into
+;          into a specified buffer.
+;
+;  Function WRITESEC( SlotNumber, Track,sector : integer; var Buffer : array[1..SECSIZE] of byte) : integer;
+;
+; Returns as integer error codes :
+;
+;          0 = ok, did all the seeks
+;        <>0 = failed,  hi order byte is track failed on (1..4)
+;                       low order byte is error code
+;
+WRITESEC   MOVEA.L   (SP)+,A3                    ;GET RETURN ADDRESS
+           MOVEA.L   (SP)+,A0                    ;BUFFER ADDRESS
+           MOVE.W    (SP)+,D4                    ;SECTOR NUMBER
+           MOVE.W    (SP)+,D3                    ;TRACK NUMBER
+           MOVE.W    (SP)+,D0                    ;SLOT  NUMBER
+           MOVE.L    A3,-(SP)                    ;PUT RETURN ADDR BACK ON STACK
+
+           BSR.S     SAVA456                     ;SAVE ADDRESS REGISTERS
+           BSR       CALCBASE                    ;CALCULATE BASE ADDRESS FOR DEVICE REGISTERS
+           BNE.S     WREXIT                      ;ERROR, INVALID SLOT NUMBER
+
+; SEEK TO TRACK
+;
+           JSR       SEEKSUB                     ;SEEK TRACK - TRACK NUMBER IN D3.W
+           BSR       ERRCHK
+           BNE.S     WREXIT
+
+; WRITE SECTOR
+;
+           MOVE.W    #SECSIZE,D1                 ;NUMBER BYTES PER SECTOR
+           JSR       WRSECSUB
+           BSR       ERRCHK
+
+; EXIT
+;
+WREXIT     MOVE.W    D7,4(SP)                     ;RETURN ERROR CODE
+           BSR.S     RSTA456                     ;RESTORE ADDRESS REGISTERS
+           RTS                                   ;EXIT
+
+  page
+;
+; SAVA456 - Save registers A4, A5, and A6 in register save area                .IX
+;
+SAVA456
+          LEA        SAVAREA+SVALEN,A3
+          MOVEM.L    A4-A6,-(A3)
+          RTS
+
+;
+; RSTA456 - Restore registers A4, A5, and A6 from register save area           .IX
+;
+RSTA456   LEA        SAVAREA,A3
+          MOVEM.L    (A3)+,A4-A6
+          RTS
+  page
+;
+; DATA AREA - CONSTANTS
+
+; ERROR CODE DEFINITIONS FROM FLOPPY DRIVER                                    .IX
+;
+FDCRCER    EQU       $01                         ;CRC ERROR
+FDWRPRT    EQU       $10                         ;FLOPPY WRITE PROTECTED
+FDRECNF    EQU       $13                         ;RECORD NOT FOUND
+FDBUSY     EQU       $12                         ;CONTROLLER BUSY
+FDNRDY     EQU       $14                         ;CONTROLLER NOT READY
+FDSEEKER   EQU       $11                         ;SEEK ERROR
+FDWRFLT    EQU       $04                         ;WRITE FAULT
+
+; ERROR CODE TRANSLATION ARRAYS
+;
+FDERTBL    DATA.W    FDCRCER,FDWRPRT,FDRECNF,FDBUSY,FDNRDY,FDSEEKER,FDWRFLT
+DIAGERRS   DATA.W    DCRCERR,DWRPRT,DRECNF,DBUSYDV,DNOTRDY,DSEEKER,DWRFLT
+MAXERRC    EQU       (%-DIAGERRS)/2              ;NUMBER ERROR CODES IN TABLE
+
+  page
+;
+; DATA AREA - VARIABLES                                                        .IX
+
+SAVAREA    DATA.L    0,0,0                       ;SAVE AREA FOR A4,A5, AND A6
+SVALEN     EQU       %-SAVAREA                   ;LENGTH OF SAVE AREA
+           END

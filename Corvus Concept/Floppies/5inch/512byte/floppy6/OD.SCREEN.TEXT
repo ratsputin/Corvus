@@ -1,0 +1,331 @@
+  { ******************************************************************* }
+  { ******************************************************************* }
+
+  { This file is OD.SCREEN.   It contains the procedures which control  }
+  { the omnidiag display screen.                                        }
+
+  { ******************************************************************* }
+  { ******************************************************************* }
+
+
+
+  { ******************************************************************* }
+  { turn on inverse mode.  Output will be displayed black on white.     }
+  { ******************************************************************* }
+  PROCEDURE inverson;
+    BEGIN
+    write(CHR($1B), 'G4');
+    END;
+
+
+  { ******************************************************************* }
+  { turn off inverse mode.  Output will be displayed white on black...  }
+  { ******************************************************************* }
+  PROCEDURE inversoff;
+    BEGIN
+    write(CHR($1B), 'G0');
+    END;
+
+
+  { ******************************************************************* }
+  { invert the background for the specified window.  Leaves that window }
+  { selected......                                                      }
+  { ******************************************************************* }
+  PROCEDURE invertwin(VAR w: WNDRCD);
+    BEGIN
+    ior := winselect(w);
+    write(CHR($1B), 'z');
+    END;
+{$P}
+
+  { ****************************************************************** }
+  { printmsg - prints a message on the screen at the X, Y coordinants  }
+  { which are specified                                                }
+  { ****************************************************************** }
+  PROCEDURE printmsg(X, Y: INTEGER; str: String80);
+    BEGIN
+    GOTOXY(X, Y);
+    CRT(ErasEOL);  {erase to the end of that line}
+    write(str);   {print the message}
+    END;
+
+
+
+  { ******************************************************************* }
+  { fatal - help!!!! fatal error occurred...                            }
+  { ******************************************************************* }
+  PROCEDURE fatal(str: String80);
+    VAR
+      i: INTEGER;
+      ch: CHAR;
+    BEGIN
+    i := winsystem(WsysCmd);
+    inverson;
+    GOTOXY(0,0);
+    write(chr(7), 'FATAL... ', str, chr(7));
+    write('Exit? Y');
+    CRT(CursorLeft);
+    inversoff;
+    ch := GETBYTE;
+    CASE ch OF
+      'Y',' ': EXIT(omnidiag);
+      'N': write('  Attempting to continue...');
+      END;
+    END;
+{$P}
+
+
+  { ************************************************************* }
+  { cmdstat - displays the status of the last transporter command }
+  { ************************************************************* }
+  PROCEDURE cmdstat(rcode: INTEGER);
+    BEGIN
+    IF not verbose THEN EXIT(cmdstat);
+    ior := winsystem(WsysCmd);
+    printmsg(0, 0, '     Command Status ===> ');
+    CASE rcode OF
+      OkCode: write('Successful');
+      GaveUp: write('Gave up - too many retries...');
+      TooLong: write('Message too long for receive socket.');
+      NoSockt: write('Sent to an uninitialized socket.');
+      HdrErr: write('Header length mismatch');
+      BadSock: write('Illegal socket number');
+      Inuse: write('Socket in use...');
+      BadDest: write('Illegal host number');
+      Echoed: BEGIN write('Echo Successful'); rcode := 0; END;
+      END;  {CASE}
+    IF rcode >= GaveUp THEN
+      write(Beep)
+    ELSE
+      IF rcode > OkCode THEN
+        write('Send successful after ', rcode:2, ' retries.');
+    END;
+
+{$P}
+  { *********************************************************** }
+  { rcvstat - print the status of socket sock on the screen...  }
+  { IF long is false, only show counts source and bufid         }
+  { this will be called from an interrupt routine, so we always }
+  { re select the current window before exiting....             }
+  { last modified for version: 2.1                              }
+  { *********************************************************** }
+  PROCEDURE rcvstat(sock: INTEGER; long: BOOLEAN);
+    VAR
+      y: INTEGER;
+    BEGIN
+    IF NOT verbose THEN EXIT(rcvstat);
+    y := winselect(rcvwind);
+    y := (sock * 2);  { compute row which should be modified }
+    WITH socktbl[sock] DO
+      BEGIN
+      IF long THEN
+        BEGIN
+        GOTOXY(0, y);
+        CASE sock OF
+          1: write('1 (80)  ');
+          2: write('2 (90)  ');
+          3: write('3 (A0)  ');
+          4: write('4 (B0)  ');
+          END;
+        GOTOXY(8,y);
+        CASE STATE OF
+          NoSock: write('Not Set Up');
+          NoBuf:  write(' No Buffer');
+          RcvSet: write('  Ready   ');
+          END; {CASE}
+        END;
+      GOTOXY(21,y);
+      write(COUNT:11);
+      IF COUNT > 0 THEN
+        BEGIN
+        GOTOXY(36, y);
+        write(LASTSRC:2);
+        GOTOXY(47, y);
+        write(LASTID:1);
+        END;
+      END; {with}
+    END;
+{$P}
+
+  { ******************************************************************* }
+  { set up the receive window                                           }
+  { last modified for version: 2.1                                      }
+  { ******************************************************************* }
+  PROCEDURE initrcvwnd;
+    VAR
+      i, y: INTEGER;
+    BEGIN
+    i := winselect(rcvwind);
+    printmsg(0, 0,'Socket    Status        Count      Source   Buf ID ');
+    printmsg(0, 1,'------|------------|-------------|--------|--------');
+    FOR i := 1 TO 4 DO
+      BEGIN
+      rcvstat(i, True);
+      y := i * 2 + 1;
+      printmsg(0, y,'------|------------|-------------|--------|--------');
+      END;
+    END;
+
+
+  { ************************************************************* }
+  { prompt for new input                                          }
+  { ************************************************************* }
+  PROCEDURE prompt;
+    VAR
+      y: INTEGER;
+    BEGIN
+    ior := winsystem(WsysCmd);
+    {   printmsg(0,0,''); }
+    printmsg(0,1,'     Enter an OmniDiag Command: ');
+    END;
+
+
+  { ******************************************************************* }
+  { last modified for version: 2.1                                      }
+  { ******************************************************************* }
+  PROCEDURE horizcreate;
+    VAR
+      i: INTEGER;
+    BEGIN
+    i := wincreate(rcvwind, 5, 4, 54, 10, WfgScrOff+WfgClrPg);
+    i := wincreate(sndwind, 5, 17, 54, 1, WfgScrOff+WfgClrPg);
+    i := wincreate(cntwind, 65, 4, 30, 22, WfgScrOff+WfgClrPg);
+    i := wincreate(whowind, 65, 33, 30, 10, WfgScrOff+WfgClrPg);
+    i := wincreate(ramwind, 5, 21, 52, 10, WfgScrOff+WfgClrPg);
+    i := wincreate(sparmwind, 65,27,30,5, WfgScrOff+WfgClrPg);
+    i := wincreate(genwind, 5, 33, 54, 10, WfgCursOn+WfgInvCur+WfgClrPg);
+    END;
+{$P}
+
+  { *********************************************** }
+  { sendstat - prints the send status on the screen }
+  { we want sends to be slower than receives so it  }
+  { is OK to use printmsg and write here...         }
+  { last modified for version: 2.1                  }
+  { *********************************************** }
+  PROCEDURE sendstat(long: BOOLEAN);
+    VAR
+      i: INTEGER;
+    BEGIN
+    i := winselect(sndwind);
+    IF long THEN
+      BEGIN
+      printmsg(0, 0, 'Messages Sent = ');
+      write(counts[SOK]:-11);
+      printmsg(31, 0,  'Give Ups = ');
+      write(counts[SGU]:-11);
+      END
+    ELSE
+      BEGIN
+      GOTOXY(16,0);
+      write(counts[SOK]:-11);
+      GOTOXY(42,0);
+      write(counts[SGU]:-11);
+      END;
+    END;
+
+
+  PROCEDURE showsendparms;
+    BEGIN
+    ior := winselect(sparmwind);
+    CRT(EraseAll);
+    printmsg(1,1, 'Sending to Host ');
+    write(dest:2, ', Socket ', ssock:1,'.');
+    printmsg(1,2, 'DataLen = ');
+    write(sdl:4, '  HdrLen =', shl: 3, '.');
+    sending := TRUE;
+    firstsend := TRUE;
+    printmsg(1, 3, 'Delay between sends = ');
+    write(delay:-2,'.');
+    END;
+{$P}
+
+  PROCEDURE shocounts;
+    VAR
+      i: INTEGER;
+    BEGIN
+    i := winselect(cntwind);
+    FOR i := 0 TO MaxCount DO
+      BEGIN
+      GOTOXY(17, i);
+      CRT(ErasEOL);
+      write(counts[i]:-11);
+      END;
+    tcgetcounts(**);
+    FOR i := 1 TO TCCmaxCnt DO
+      BEGIN
+      GOTOXY(17, i+MaxCount);
+      CRT(ErasEOL);
+      write(tccounts[i]:-11);
+      END;
+    GOTOXY(17, TCCmaxCnt+MaxCount+1);
+    write('$');
+    puthexword(tcadlc);
+    END;
+
+
+  { ************************ }
+  { zerocnts - zero out all of the counters }
+  { ************************ }
+  PROCEDURE zerocnts;
+    VAR
+      i: INTEGER;
+    BEGIN
+    FOR i := 0 TO MaxCount DO counts[i] := 0;
+    tcgetcounts(**);
+    FOR i := 1 TO 4 DO tccounts[i] := 0;
+    END;
+{$P}
+
+
+  { ************************************************ }
+  { initcounts - initialize the counter display area }
+  { ************************************************ }
+  PROCEDURE initcounts;
+    VAR
+      i: INTEGER;
+    BEGIN
+    i := winselect(cntwind);
+    CRT(EraseAll);
+    zerocnts;
+    FOR i := 0 TO 9 DO
+      BEGIN
+      GOTOXY(6, i);
+      write('Retry[',i:1,'] = ',counts[i]:-11);
+      END;
+    printmsg(5, 10, 'Retry[10] = ');
+    write(counts[10]:-11);
+    FOR i := SAT TO MaxCount DO
+      BEGIN
+      GOTOXY(1, i);
+      CASE i OF
+        SAT: write('Send Attempts = ':16);
+        SOK: write('Total Sent OK = ':16);
+        SGU: write('Send Give Ups = ':16);
+        STL: write('Send Too Long = ':16);
+        SNS: write('Uninited Sokt = ':16);
+        SHE: write('Hdr Mismatch = ':16);
+        END;  {CASE}
+      write(counts[i]:-11);
+      END;
+    FOR i := 1 TO TCCmaxCnt DO
+      BEGIN
+      GOTOXY(1, MaxCount+i);
+      CASE i OF
+        TCCMiss: write('Missed Pkts = ':16);
+        TCCcoll: write('CollAvd Ints. = ':16);
+        TCCintErr: write('Bad Interrupt = ':16);
+        TCCRcvErr: write('Rcv Errors = ':16);
+        END; {CASE}
+      write(tccounts[i]:-11);
+      END;
+    GOTOXY(1, MaxCount+TCCmaxCnt+1);
+    write('ADLC Status = ':16);
+    write('$');
+    puthexword(tcadlc);
+    END;
+{$P}
+{ end of file OD.SCREEN }
+{$P}
+
+

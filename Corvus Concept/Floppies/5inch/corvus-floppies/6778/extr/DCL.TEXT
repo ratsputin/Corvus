@@ -1,0 +1,37 @@
+{$%+}
+
+CONST
+      r_min_exp = -127;
+      r_max_exp = 127;
+      d_min_exp = -1023;
+      d_max_exp = 1023;
+ {??ck min/max exp}
+
+TYPE TYPES = 1..5;
+     ERROR_TYPE = (none, underflow, overflow,  not_a_number);
+     SNGL = RECORD
+       CASE BOOLEAN OF
+         TRUE: (REEL: REAL);
+         FALSE: (INT: LONGINT)
+     END;
+     FAKE_REAL = LONGINT;
+     DBLE = ARRAY [1..2] OF LONGINT;
+     COMPLEX = RECORD
+       RE: REAL;
+       IM: REAL
+     END;
+     UNP_REAL = RECORD
+       UPPER: LONGINT;
+       LOWER: LONGINT;
+       EXP: INTEGER;
+       SGN: 0..1;
+       KND: TYPES 
+     END;
+     SIX_CHAR_NAME = PACKED ARRAY[1..6] OF CHAR;
+
+PROCEDURE %PF_UNPK(X:SNGL;  VAR Y: UNP_REAL);  EXTERNAL;
+PROCEDURE %PD_UNPK(X:DBLE;  VAR Y: UNP_REAL);  EXTERNAL;
+PROCEDURE %PG_NSH (VAR Y: UNP_REAL);  EXTERNAL;
+PROCEDURE %PF_PACK(VAR X: SNGL;  VAR Y: UNP_REAL);  EXTERNAL;
+PROCEDURE {really a dble fcn} %D_MUL { A,B: DBLE };  EXTERNAL;
+PROCEDURE %PD_PACK(VAR X: DBLE;  VAR Y: UNP_REAL);  EXTERNAL;

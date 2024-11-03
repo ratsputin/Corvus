@@ -1,0 +1,91 @@
+{FILEID: spool.def}
+
+{ Globally Defined Constants }
+
+CONST
+    Version = '2.0';
+                                { constants for pipes module }
+    NameLen = 8;   {size of a pipe name}
+    BlockLen = 512;
+    BlockMax	= 511;
+    
+    OkCode      =  0;   {successful return code}
+    
+    {pipe error return codes...}
+    PEmpty       = -8;   {tried to read an empty pipe}
+    PNotOpen     = -9;   {pipe was not open for read or write}
+    PFull        = -10;  {tried to  write to a full pipe}
+    POpErr       = -11;  {tried to open (for reading) an open pipe}
+    PNotThere    = -12;  {pipe does not exist}
+    PNoRoom      = -13;  {the pipe data structures are full, and there
+                         is no room for new pipes at the moment...}
+    PBadCmd      = -14;  {illegal command}
+    PsNotInitted = -15;  { pipes not initialized }
+    {an error code less than -127 is a fatal disk error}
+
+
+    FILERR	= 255;
+
+			{ Despool Destination Designators }
+    CON		= 1;	{ console }
+    FIL		= 2;	{ file }
+    LPR		= 3;	{ line printer }
+
+			{ spool file types }
+    FORMTD	= 1;	{ Formatted text }
+    NONTXT	= 2;	{ NonText }
+    UNFORMTD	= 3;	{ Unformatted text }
+
+    BELL	= 7;
+    CNTRLC	= 12;
+    CPMEOF	= 26;
+    CR		= 13;
+    DLRSGN	= 36;
+    FF		= 12;
+    LF		= 10;
+    TAB		= 9;
+    NULL	= 0;
+
+    BUFLEN	= 128;
+    BUFMAX	= 127;
+    BUFBLKS	= 1;
+    MESSMAX	= 80;
+ 
+
+{ Globally Defined Data Structures }
+
+TYPE
+    BBLOCK =	PACKED ARRAY[0..BlockMax] OF BYTE;
+    BFILE =	FILE OF BYTE;
+    BLOCK =     PACKED ARRAY[0..BlockMax] OF CHAR;
+    BUF =	PACKED ARRAY[0..BUFMAX] OF CHAR;
+    BUFILE =	FILE of BUF;
+
+    NAME =	PACKED ARRAY[0..7] OF CHAR;
+    NMTBL =	PACKED ARRAY[0..63] OF NAME;
+    PTR =	PACKED ARRAY[0..7] OF CHAR;
+    PTRTBL =	PACKED ARRAY[0..63] OF PTR;
+
+    CBLOCK =	RECORD
+		  CASE INTEGER OF
+		    1: (txt : BLOCK);
+		    2: (byt : BBLOCK);
+		    3: (nm : NMTBL);
+		    4: (pt : PTRTBL);
+		END {CBLOCK};
+
+
+{ Globally defined Variables }
+
+VAR
+
+  coname, lprname: STRING;
+  pblocks, pnum: INTEGER;
+
+  ftype : INTEGER;
+  recnt : INTEGER;
+  nbcnt : INTEGER;                      { 1.7 }
+  nbuf  : CBLOCK;                        { 1.7 }
+  pbuf : CBLOCK;		{ pbuf must immediately follow nbuf }
+  spldbug : BOOLEAN;
+

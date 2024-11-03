@@ -1,0 +1,2 @@
+!cc.setdcp unit=printer baud=2400 actiontable=/ccutil/pat.diablo630
+

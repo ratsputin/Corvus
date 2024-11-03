@@ -1,0 +1,166 @@
+Program dumpsc;
+{Mike Cook 29 Dec 82  Dump Screen to printer}
+uses {$U /ccutil/cclib } ccdefn,CCGrfIo;
+CONST ESCAPE    = 27;
+      xmax      = 512;
+      Ymax      = 500;
+      margin    = 30;   {to center picture}
+      CR        = 13;
+      LF        = 10;
+      Vtab      = 12;
+  {   deffile   = '/floppy/SCREEN.DATA'; }
+
+Type    buffer  = array[0..xmax] of byte;
+        nibble  = 0..15;
+{          rec  = record case boolean of
+                              true : (a : longint);
+                              false: (v : ^byte);
+                              end;}{of case}
+      datafile  = file of byte;
+
+VAR     VIA     : longint;{integer*4}
+        i       : integer;
+        leng    : integer;
+        dfile   : datafile;
+        printbuf,
+        abuf    : buffer;
+        qbuf    : array [1..8] of buffer;
+        ch      : char;
+        quit    : boolean;
+
+Procedure sendbyte(b:byte);
+begin
+  unitwrite(6,b,1,0,1);
+end;
+
+Procedure initialise;
+begin
+  ccgrfIoInit;
+  quit:= false;
+ {writeln('Do not forget to install printer driver',}
+ {        'Baud rate = 9600');                     }
+  {set line spacing to 14/144 see manual 7.3 }
+  sendbyte(escape);
+  sendbyte(ord('T'));
+  sendbyte(ord('1'));
+  sendbyte(ord('4'));
+  {set unidirectional printing}
+  sendbyte(escape);
+  sendbyte(ord('>'));
+  {set bit graphics}
+  sendbyte(escape);
+  sendbyte(ord('S'));
+end;
+
+Procedure sendleng(i : integer);
+var j,k : byte;
+begin
+  sendbyte(escape);
+  sendbyte(ord('S'));
+  if i>9999 then i := 9999;
+  j := (i div 1000);
+  sendbyte( j + ord('0'));
+  i:=i-1000*j;
+  j := (i div 100);
+  sendbyte( j + ord('0'));
+  i:=i-100*j;
+  j := (i div 10);
+  sendbyte( j + ord('0'));
+  i:=i-10*j;
+  sendbyte( i + ord('0'));
+end;
+
+procedure printline;
+var i,linelength : integer;
+begin
+  linelength := xmax+margin;
+  sendleng(linelength);
+  writeln('linelength ',linelength);
+  for i:= 1 to xmax+margin do printbuf[i]:=i mod 128;
+  for i := 1 to margin do sendbyte(0);
+  for i := 1 to xmax do sendbyte (printbuf[i]);
+  sendbyte(CR);
+  sendbyte(LF);
+end;
+
+procedure getScreenByte(x,y,count : integer; pBuff : pBytes);
+Begin
+{ write(chr(escape),'o',chr( x div 256 ), chr( x mod 256 ),
+                        chr( y div 256 ), chr( y mod 256 ),
+                        chr( 2 );}
+  {Above is old way to set the graphics origin at x y     }
+  SetOrigin(x,y,GrfQgrAbs);{new way to set graphics origin}
+  ReadBytes(count,pBuff);{put count bytes from screen to pBuffer}
+{ plotpoint(0,0,-1); }
+end;
+
+Procedure dumpscreen;
+var    x,y,         {screen position}
+       i,
+       linelength : integer;
+       b          : byte;
+Begin{1}
+  for x := (xmax div 8) downto 0 do
+  begin{2}
+    sendbyte(cr);
+    sendbyte(lf);
+    linelength := ymax+margin;
+    sendleng(linelength); {about to send linelength graphic bytes}
+    for i := 1 to margin do sendbyte(0);      {send margin blanks}
+   {write(x:3);}
+    for y := 0 to ymax-1 do
+    begin {3}
+      getscreenbytes(x*8,y,1,@b);{gets only one byte}
+      plotpoint(0,0,-1);
+      sendbyte(b);
+    end;
+  end;
+end;
+
+Procedure finalise;
+begin{4}
+  {set line spacing to 1/6 see manual 7.3 }
+  sendbyte(escape);
+  sendbyte(ord('A'));
+  {set bidirectional printing}
+  sendbyte(escape);
+  sendbyte(ord('<'));
+  sendbyte(CR);
+  sendbyte(LF);
+  sendbyte(Vtab);
+end;
+
+begin   {Main}
+  initialise;
+  dumpscreen;
+  finalise;
+end.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,716 @@
+{ simulate.TEXT -------------------------------------------------------}
+{
+{       network cross reference and simulation Program
+{
+{       (c) Copyright 1983 mike cook
+{
+{       All Rights Reserved
+{
+{       v 1.0  27 dec 83 MJC  Original program
+{       v 1.0b  8 jan 84 MJC  added stack and mark array for simulation    }
+{       v 1.0c  8 feb 84 MJC  added array and mark array for simulation    }
+{
+{----------------------------------------------------------------------}
+      {$I-}
+      {$R-}
+
+PROGRAM sim;
+
+USES
+{$U /ccutil/ccLIB} ccDefn, ccCRTio, ccWndIo, ccLblIo, ccCLKio;
+CONST
+      version = '1.0c';
+      nodelen = 10;
+      LinesPerPage     = 57;
+      PageSize     = 66;
+      deffile = '/CONSOLE';
+      maxosctime   = 10;       {arbitrary limit}
+      maxfanin     = 10;       {arbitrary limit}
+      maxnodenum   = 10;       {arbitrary limit}
+      maxsimtime   = 10{00};   {arbitrary limit}
+      maxstack     = 1000;     {arbitrary limit}
+      maxstate     = 1000;     {arbitrary limit}
+
+TYPE
+      searchmode   = (addnode,addtype,addinput,addoutput);{right modes?}
+      token        = packed array [1..nodelen] of char;
+      noderef      = ^node;
+      fanoutref    = ^fanout;
+      logtype      =
+      (Andd,nand,orr,nor,inv,latch,jk,ff,hexcnt,decCntr,unknown);
+      LogicState   = (one ,zero , undefined,rising,falling,tristate);
+      fanin        = array[1..maxfanin] of integer;
+      {need this in one way for xref, another in sim
+      i.e. by tree for xref, by index for sim}
+      node      = record {this is the name of a node}
+                    key         : token;
+                    logictype : token;{should make special type}
+                   {logictype   : logtype}
+                    NodeNum     : integer;
+                    firstout,
+                    lastout     : fanoutref;
+                    left,right  : noderef;
+                  end;
+      fanout    = record {this is a fanout of the node}
+                    NodeNum     : integer;
+                    name        : token;
+                    nxt         : fanoutref;
+                  end;
+      stackentry = record
+                     state     : logicState;
+                     NodeNum   : Integer;
+                   end;
+      stack       = array[0..maxstack] of StackEntry;
+      stackptr    = ^stack;
+      stckndx     = 0..maxstack;{stack index range }
+      LogicNode   = record
+                      nodetype     : LogType; {and, or, inv etc}
+                      fanins       : fanin;
+                      currentstate : LogicState;
+                      nextstate    : LogicState;
+                    end;
+
+{$P}
+VAR   noderoot              : noderef;
+      nodearray             : array[0.. maxstate] of LogicNode;
+      {use one markmap as current change source, other as destinqtion
+                                                               next change}
+      markmap0              : array[0.. maxstate] of Boolean;{it changed!}
+      markmap1              : array[0.. maxstate] of Boolean;{it changed!}
+      id,tempNodeName,
+      gateType              : token;
+      ch                    : char;
+      cr,FormFeed           : string[1];
+      insertFormFeed        : boolean;
+
+      infname1,                        { net list          }
+      infname2,                        { timing input      }
+      outfname              : string80;{xref,timing output?}
+      inFid1,inFid2,outFid  : {file of } text;
+      line, tmprcd,
+      tmprcd2,      outrcd  : string80;
+      inidx                 : integer;
+      i,k,maxcol            : integer;
+      linenmbr,linelen      : integer;
+      pagenmbr,pageline     : integer;
+      WordNumber            : integer;
+      hdrdate               : ClkStr40;
+      title1,title2,
+      source,dest           : string80;
+      Tidx1,Tidx2           : integer;
+      Prntr                 : INTERACTIVE;
+      Twindow               : WndRcd;
+      debug                 : boolean;
+      EndOfFile             : boolean;
+      pass                  : integer;
+      pstack,                            {general stack pointer}
+      pstack0,                           {stack 0 stack pointer}
+      pstack1               : stackptr;  {stack 1 stack pointer}
+      stackindex            : stckndx;
+      osctime,simtime       : integer;
+      actualmaxstate        : 0..maxstate;
+      changeFlag            : boolean;
+      logicValue            : logicState;{temporary logic state}
+      StackFull,StackEmpty  : boolean;
+
+FUNCTION  BrkPress: boolean;               EXTERNAL;
+PROCEDURE Exitsim;                         FORWARD;
+
+
+{$S netinit}
+{ InitPgm -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE InitPgm;
+Begin
+  ccWNDioInit;
+  ccLBLioInit;
+  ccCRTIOinit;
+  CrtAction (DefStrON); CrtAction (UcaseON);
+  CrtTpgm := 'sim'; CrtTvrs := version;
+  FormFeed := ' '; FormFeed[1] := chr(12); cr := ' '; cr[1] := chr(13);
+  title1 := 'Network Cross Reference';
+  CrtTitle (title1);
+  CCclkIOinit;
+  tmprcd := '';
+  tmprcd2:= '';
+  noderoot := NIL;
+  insertFormFeed := FALSE;
+  linenmbr := 0;
+  pageline := 0;
+  pagenmbr := 0;
+  outfname := DEFFILE;
+  infname1  := DEFFILE;
+  write('debug? y : ');
+  read(ch);
+  debug    := (ch in ['y','Y']);
+  maxcol   :={WndowCol-1}70;
+  title1   := concat (CrtTpgm,' -- ',title1);
+  ClkDate2 (hdrdate);
+  while length(title1) < maxcol-length(hdrdate) do
+    title1 := concat (title1,' ');
+  title1   := concat (title1,hdrdate);
+  EndOfFile:= false;
+end;
+{$S}
+
+{$P}
+      {$S sim1}
+
+
+PROCEDURE OpenFiles;
+
+    FUNCTION GetName(VAR Fname : String80) : BOOLEAN;
+    CONST TEXTTAG = '.TEXT';
+    VAR ior, fl, tl : INTEGER;
+    Begin
+      LblsOff;
+{     ior := WinSystem(WsysCmd);}
+      CrtAction(DefStrOn);
+      CrtAction(UcaseOn);
+      write(' file name: ');
+      IF (GetString(Fname) <> Escape) THEN
+      Begin
+        GetName := TRUE;
+        fl := LENGTH(Fname); tl:= LENGTH(TEXTTAG);
+        IF fl > tl THEN
+        Begin
+          IF (COPY(Fname, (fl-tl)+1, tl) <> TEXTTAG) THEN
+          Fname := CONCAT(Fname,TEXTTAG);
+        END
+        ELSE Fname := CONCAT(Fname,TEXTTAG);
+      END
+      ELSE GetName := FALSE;
+      CrtAction(UcaseOff);
+{     ior := WinSelect (Twindow);}
+      LblsOn;
+    END;
+
+Begin {OpenFiles}
+  CrtAction(EraseALL);
+  write('Net List');
+  IF GetName(infname1) THEN
+  Begin
+    REset(infid1,infname1);
+    IF IORESULT <> 0 THEN
+    Begin
+      WRITELN;
+      writeln(beep,'*** Failed to open file ',infname1);
+      CLOSE(infid1,lock);
+      infname1 := DEFFILE;
+    END;
+    writeln('Opened ',infname1,' as net list file');
+  END;
+  write('Input Timing ');
+  IF GetName(infname2) THEN
+  Begin
+    REset(infid2,infname2);
+    IF IORESULT <> 0 THEN
+    Begin
+      WRITELN;
+      writeln(beep,'*** Failed to open file ',infname2);
+      CLOSE(infid2,lock);
+      infname2 := DEFFILE;
+    END;
+    writeln('Opened ',infname2,' as input timing file');
+  END;
+ {IF GetName(outfname) THEN}
+  outfname := DEFFILE;
+  Begin
+    REWRITE(outfid,outfname);
+    IF IORESULT <> 0 THEN
+    Begin
+      WRITELN;
+      writeln(beep,'*** Failed to open file ',outfname);
+      CLOSE(outfid,PURGE);
+      outfname := DEFFILE;
+    END;
+    writeln('Opened ',outfname,' as output file');
+  END;
+  title2 := concat ('File ID: ',infname1);
+  Tidx1  := length(title2) + 2;
+  while length(title2) < maxcol-10 do title2 := concat (title2,' ');
+  Tidx2  := length(title2);
+  title2 := concat (title2,'Page  0');
+END; {OpenFiles}
+
+{$S}
+
+{$P}
+{$S sim2}
+
+{ prtmemavail ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE prtmemavail;
+Begin
+  writeln; writeln (' <',linenmbr:4,'> [',memavail:6,'] ');
+end;
+
+{$P}
+
+{ overflow ---------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE overflow;
+var n: integer;
+Begin
+  if debug then writeln({outfid,}'overflow 2');
+  prtmemavail;
+  pagenmbr := pagenmbr+1;
+  tmprcd   := title1;
+  if insertFormFeed then
+  Begin
+    tmprcd := concat (FormFeed,title1);
+    insertFormFeed := FALSE; pageline := 0;
+  end;
+  write  ({outfid,}tmprcd);
+  tmprcd := title2;
+  cvIntStr (pagenmbr,tmprcd2,DecRdx);
+  tmprcd :=  concat(tmprcd,tmprcd2);
+  writeln ({outfid,}tmprcd);
+  writeln;
+  pageline := pageline+3;
+end;
+
+{ checkoverflow -------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE checkoverflow;
+Begin
+  if debug then writeln({outfid,}'check page overflow',
+                    'line number ',linenmbr);
+  if pageline >= LinesPerPage then
+  Begin
+    if pageline > 0 then insertFormFeed := TRUE;
+  overflow;
+  end;
+  linenmbr := linenmbr+1;
+  pageline := pageline+1;
+  {if outunit <> console then write ('.');}
+end;
+
+{$P}
+{ printnode -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE printnode (w: noderef);
+var x          : fanoutref;
+    mx         : integer;
+    tmpstr     : string80;{to convert record fanout to string}
+Begin {printnode}
+  if debug then writeln({outfid,}'printnode');
+  actualmaxstate  := actualmaxstate +1;
+  if w^.firstout = NIL then exit (printnode); { checkoverflow;}
+  for mx    := 1 to nodelen do tmpstr[mx] := w^.key[mx];
+  tmpstr[0] := chr(nodelen);
+  outrcd    :=concat(tmpstr,' ');{!}
+{
+  for mx    := 1 to nodelen do tmpstr[mx] := w^.LogicType[mx];
+  tmpstr[0] := chr(nodelen);
+  outrcd    :=concat(outrcd,' ',tmpstr,' ');
+
+  cvIntStr (w^.NodeNum,tmprcd2,DecRdx);
+  if debug then writeln('tmprcd2 = ',tmprcd2);
+  outrcd     :=  concat(outrcd,' ',tmprcd2);
+}
+  {need to do the same thing for logictype***************************}
+  if debug then writeln('outrcd is ',outrcd);
+  x := w^.firstout;
+  repeat
+    if length(outrcd)+6{outidx+6}> maxcol then
+    Begin {   checkoverflow; }
+      writeln ({outfid,}outrcd);
+      outrcd   :='      ';
+    end;
+
+    tmpstr[0]  := chr(nodelen);
+    outrcd     := concat(outrcd,' ',tmpstr);
+    cvIntStr (x^.NodeNum,tmprcd2,DecRdx);
+    if debug then writeln('tmprcd2 = ',tmprcd2);
+    outrcd     :=  concat(outrcd,' ',tmprcd2);
+    x          := x^.nxt;
+  until x = NIL;
+ {outrcd[0]    := chr(outidx);}
+  writeln ({outfid,}outrcd);
+  if BrkPress then Exitsim;
+end;
+
+{ printtree -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE printtree (w: noderef);
+Begin {printtree}
+  if debug then writeln({outfid,}'printtree');
+  if w <> NIL then
+  Begin
+    printtree (w^.left);
+    printnode (w);
+    printtree (w^.right);
+  end;
+end;
+
+{$P}
+{ GetLine -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE GetLine;
+var n: integer; delim: string[1];
+Begin
+  readln (infid1,line);
+  if debug then writeln({outfid,}'getline',line);
+  if eof(infid1) then
+  EndOfFile := true;
+  if not EndOfFile then
+  Begin
+    wordnumber := 0;
+    checkoverflow;
+    delim  := '.';
+    outrcd := concat ({'     ',delim, ' ',}line);
+{   cvIntStr (linenmbr,tmprcd2,DecRdx);}
+ {  outrcd := concat (tmprcd2,outrcd);  }
+    if length(outrcd) > maxcol then
+    outrcd := concat (copy(outrcd,1,maxcol-1),'!');
+    if pass = 0 then writeln ({outfid,}outrcd) else write('.');
+    line   := concat (line,' ');
+    inidx  := 1;
+    linelen:= length (line);
+    if BrkPress then Exitsim;
+  end;
+end; {GetLine}
+
+{ ReadCH --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE ReadCH;
+
+{ ReadCH --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+Begin
+  while (inidx > linelen) and not EndOfFile do GetLine;
+  if not EndOfFile then
+  Begin
+    ch    := line[inidx];
+    inidx := inidx+1;
+    if ch in ['A'..'Z'] then ch := chr(ord(ch)-ord('A')+ord('a'));
+  end;
+end;
+
+
+{ Search --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Search (var w1: noderef{;dumbstring : string80});
+var w: noderef; x: fanoutref;
+                i : integer;
+Begin
+  if debug then writeln('search for ',id);
+  if BrkPress then Exitsim;
+  w := w1;
+  if w = NIL then {never seen before;pass 0 -> new node
+                                     pass 1 -> add input}
+  Begin
+    new (w); new (x);    {    new (y);     }
+    if debug then writeln('made a new w and x for ', id);
+    with w^ do
+    Begin
+      key := id;
+      left := NIL; right := NIL;
+      firstout := x; lastout := x;
+      if pass = 0 then
+      NodeNum := linenmbr;
+      for i := 1  to maxfanin do nodearray[NodeNum].fanins[i] := 0;
+       {set all fanins to dummy node zero}
+    end;
+    x^.NodeNum := linenmbr; x^.nxt := NIL;
+{   if pass = 0 then
+    Begin
+      for i := nodelen downto length(dumbstring) do
+      x^.name[i] := ' ';
+      for i := length(dumbstring) downto 1 do
+      x^.name[i] := dumbstring[i];
+    end
+    else}
+    x^.name := tempNodeName;
+    w1 := w;
+  end
+  else
+{ if pass = 0 then writeln('duplicate ',w^.key) else
+  Begin }
+    if      id < w^.key then Search (w^.left{,dumbstring})
+    else if id > w^.key then Search (w^.right{,dumbstring})
+    else if w^.firstout <> NIL then
+         if w^.lastout^.NodeNum <> linenmbr then
+    Begin
+      new (x);
+      x^.NodeNum := linenmbr; x^.nxt := NIL;
+      x^.name := tempNodeName;
+      w^.lastout^.nxt := x;  w^.lastout := x;
+  { end; }
+  end;
+end;
+
+
+{$P}
+{ Exitsim -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Exitsim;
+Begin
+  close (infid1,lock);
+  close (infid2,lock);
+  close (outfid,lock);
+{ CrtAction (EraseALL);}
+  exit (sim);
+end;
+{ GetWord--------------------------------------------------------------}
+{----------------------------------------------------------------------}
+Procedure GetWord(VAR alphanum : token);
+Begin
+  repeat ReadCH;
+  until (ch in ['A'..'Z','a'..'z','0'..'9','_',';']) or EndOfFile;
+
+  if ch <>';' then {this is not a comment}
+  Begin
+    fillchar (alphanum,sizeof(alphanum),' '); k := 0;
+    repeat
+      if k < nodelen then
+      Begin
+        k := k+1;
+        alphanum[k] := ch;
+      end;
+      ReadCH;
+    until (not (ch in ['A'..'Z','a'..'z','0'..'9','_']) or EndOfFile);
+    if debug then writeln('Getword ',alphanum);
+    if debug then writeln('WordNumber',wordnumber);
+  end
+  else
+  Begin
+    GetLine;
+    GetWord(alphanum);
+  end;
+end;
+
+Procedure crossreference;
+{ cross reference  ----------------------------------------------------}
+{----------------------------------------------------------------------}
+var i : integer;
+Begin
+  overflow;
+  GetLine;
+
+  {*********************   pass 0  **************************}
+  wordnumber :=0;
+  pass := 0;
+  repeat
+    GetWord(id);
+    if  not EndOfFile
+    then
+    {*******************  case  ************************************}
+    case wordnumber of
+    0         :  Begin
+                   tempnodename := id;
+                   Search (noderoot{,'OUTPUT'});
+                   if debug then writeln('node name= ',tempNodeName);
+                   wordnumber := wordnumber +1;
+                 end;
+    1         :
+                 Begin
+                   {search for tempnodename and attach gatetype}
+                   wordnumber := wordnumber +1;
+                   gatetype   := id;
+                   if debug then writeln('Gatetype = ',gatetype);
+                 end;
+    otherwise :  Begin
+                   {search for tempnodename and attach fanin   }
+                  {should add to array of fanin tree}
+                  if debug then writeln('fanin  = ',id);
+                 end;
+    end;{of case}
+  {*********************  end of case  ****************************}
+  until EndOfFile;
+  close(inFid1,lock);
+
+  {*********************   pass 1  **************************}
+  reset(infid1,infname1);
+  EndOfFile := false;
+  wordnumber :=0;
+  pass :=1;
+  repeat
+    GetWord(id);
+    if  not EndOfFile
+    then
+    {*******************  case  ************************************}
+    case wordnumber of
+    0         :  Begin
+                   tempnodename := id;
+                   if debug then writeln('node name= ',tempNodeName);
+                   wordnumber := wordnumber +1;
+                 end;
+    1         :
+                 Begin
+                   wordnumber := wordnumber +1;
+                   gatetype   := id;
+                   if debug then writeln('Gatetype = ',gatetype);
+                 end;
+    otherwise :  Begin
+                  if debug then writeln('fanout = ',id);
+                  Search (noderoot{,'INPUT'});
+                 end;
+    end;{of case}
+  {*********************  end of case  ****************************}
+  until EndOfFile;
+  if pageline > 0 then insertFormFeed := TRUE;
+  overflow;
+  actualmaxstate :=0;
+  printtree (noderoot);
+  if pageline > 0 then insertFormFeed := TRUE;
+end;
+{ --- of cross reference ----------------------------------------}
+
+Procedure InitStacks;
+var i : integer;
+Begin
+  new(pstack0);                {assign space for stacks}
+  new(pstack1);
+  pstack     := pstack0;       {point at stack 0       }
+  stackindex :=0;              {point at first item    }
+for i :=0 to maxstate do NodeArray[i].CurrentState := undefined;
+for i :=0 to maxstate do NodeArray[i].NextState := undefined;
+end;
+
+Procedure InitTiming;
+Begin
+  simtime   := 0;
+end;
+
+Procedure Push({VAR stackindex : stckndx its global }
+                VAR nodenumber : integer;
+                VAR logicvalue : LogicState);
+Begin
+  pstack^[stackindex].state :=logicvalue;
+  pstack^[stackindex].nodenum :=nodenumber;
+  if stackindex<maxstack then stackindex := stackindex+1;
+{*!*!*!*!*! careful!*!*!}
+end;
+
+Procedure Pop({VAR stackindex : stckndx;its global}
+               VAR nodenumber : integer;
+               VAR logicvalue : LogicState);
+Begin
+  if stackindex> 0  then stackindex := stackindex-1;
+  logicvalue := pstack^[stackindex].state;
+  nodenumber := pstack^[stackindex].nodenum;
+{*!*!*!*!*! careful!*!*!}
+end;
+
+Procedure exchangeStacks;
+Begin
+  if   pstack  = pstack0
+  then pstack := pstack1
+  else pstack := pstack0;
+end;
+
+{*********************************}
+
+Function resolve(nodenumber : integer):logicstate;
+var tempstate : logicstate;
+    inputnumber : integer;
+begin
+  for inputnumber := 0 to maxstate{use the tree}
+  do
+ {analyse node     }
+  resolve := tempstate;
+end;
+
+{sequence should be
+pass 0 get node name    node type  fanin
+pass = 1 get fanout
+do xref
+fix up fan in fan out in terms of array
+simulate in terms of array (indexed onsteaazd of treeed}
+
+
+procedure simulate; {do one pass of simulation}
+var tempstate : logicstate;
+    nodenumber : integer;
+    fanoutnodenumber : integer;
+{**********************************)}
+begin
+  if debug then writeln('simulate');
+  for nodenumber := 0 to actualMaxState do
+  if markmap0[nodenumber] then
+  begin
+    tempstate := resolve(nodenumber);
+    push(nodenumber,tempstate);{changes in node state perhaps}
+    markmap0[nodenumber] := false;
+  end;
+  repeat
+    pop(nodenumber,tempstate);
+    if tempstate <> NodeArray[nodenumber].currentstate
+    {  all wrong now,   fix it up  }
+    then
+    begin
+      NodeArray[nodenumber].currentState:=tempstate;
+{     for fanout of node[nodenumber] }
+     {do}markmap0[fanoutnodenumber]:=true;
+    end;
+  until stackindex <=0;
+  simtime := simtime +1;
+end;
+
+
+{************************************}
+
+{ simulate  -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+{procedure simulate;                                                   }
+{begin                                                                 }
+{ initStacks;                                                          }
+{ InitTiming;                                                          }
+{ writeln('simulate');                                                 }
+{ repeat                                                               }
+{   ChangeFlag:= false;                                                }
+{   osctime :=0;                                                       }
+{   simtime := simtime+1;                                              }
+{   repeat                                                             }
+{     osctime := osctime + 1;                                          }
+{     pop(logicvalue);   make sure first time is ok                    }
+{     resolve(logicvalue )         nother name                         }
+{     push(logicvalue); changes on stack                               }
+{     Changeflag := true; maybe                                        }
+{      enter into nodenumber of logicarray                             }
+{     Exitsim; temporary                                               }
+{   until (osctime >= maxosctime) or StackEmpty;                       }
+{   need short term time for oscillaations and long term time          }
+{   for simulation time                                                }
+{    if osctime >= maxosctime then write ('unstable');                 }
+{    set oscillating signals unstable;                                 }
+{     writeln(' outputs  ');                                           }
+{ until  termination condition   simtime >= maxsimtime;                }
+{                                                                      }
+{As states go on stack, no  change to map (state is logic level        }
+{as states come off stack, map is changed                              }
+{danger... multiple changes therefore change flag                      }
+{to avoid, maybe need multiple gates for xor and discrete flops        }
+{CCNO,CCNA for latches and flops                                       }
+{______________________________________________________________________}
+
+
+
+{ --- of simulate -----------------------------------------------}
+
+
+begin{main program}
+  InitPgm;
+  OpenFiles;
+  writeln;
+  if BrkPress then;
+      writeln (' <line> [memory]');
+      writeln (' ------ --------');
+
+    if pageline > 0 then insertFormFeed := TRUE;
+  crossreference;
+  simtime :=0;
+  repeat
+    simulate;
+  {display}
+  until simtime = MaxSimTime;
+  Exitsim;
+end.
+
+
+
+
+
+

@@ -1,0 +1,1450 @@
+;
+; file: drv.systerm.text  --- driver for /systerm device with label manager
+; date: 31-March-83
+;
+; Added Version Date before SYSTERMD :  4-6-82  kb
+; Changed IORESULT definitions to use the global file definitions :  4-23-82  kb
+; Fixed inverted cmd string values in SSTINIT when initailzed cmd strings for each entry.
+;       Marked changes with *062882* in comment field.  :  6-23-82 kb
+; Fixed Unitclear destroying command key states : 7-1-82 kb
+; Made systerm save unit number and echo if it is console unit number when does read.
+;     Only does echo if non-ESCAPE SHARP character sequence and not Return strings from
+;     function keys. :  7-2-82  kb  changes marked with *070282*
+; Fix to unitbusy to correct error on test for labels on : 7/6/82  kb - marked *070682*
+; Added header and removed Version date : 7-7-82 kb
+;
+; Redesigned and rewrote the unitread routine to process cmd key release sequences even when
+;       the labels are off.  Does not return function key sequences or cmd key sequences when
+;       the labels are off.  7-9-82 kb
+;
+; Added capability to SSTSKEY to have 8 char labels. Also changed data structures to accomadate
+;       such label size : 7-9-82 kb & lef
+;
+; Added function key numbers to function key display : 7-10-82 lef
+;
+; Changed so SSTINIT calls INITBUF instead of SSTTOFF : 1-19-83  kb
+;
+; Added new UnitStatus function SSTRETS: returns command string to user.  parameter block
+;       is key number(0..39) and string[16].  User passes the key number for string wants
+;       3-24-83  kb
+;
+; Added new UnitStatus function SSTCMDK.  It allows user to force the value of the command
+;       flag.  It will display the labels if the labels are on.  Parameter block is 1
+;       integer using only bit 0, 1=set, 0=clear.  3-29-83  kb
+;
+; Removed ANDI.W #7, D2 from unitstatus routine when added more functions it prevented
+; to the 8th and beyond functions in table.  : 3-31-83  kb
+;
+; Added a LEA FLAGS,A0 to SSTKEY to fix old bug that just appeared: 3-31-83 kb
+;
+        IDENT   LSYSTERM
+        GLOBAL  SYSTERMD
+;
+; include files used :
+;  /ccos/os.gbl.asm.text
+;
+        list    0
+        INCLUDE '/CCOS/os.gbl.asm.text'
+        list    1
+
+;
+; SYSTERMD - The SYSTERM unit driver with transparent label management
+;
+; Parameters:   D0.W - Unit number
+;               D1.L - Address of buffer
+;               D2.W - Count
+;               D3.W - Block Number
+;               D4.W - Command
+;               D5.W - Access Mode
+;
+;                   Input Parameters:              Result values:
+;     Command       Unit  Addr  Count Block Mode   IORESULT  Busy
+;
+;    0 - Install    D0.W                            D7.W
+;    1 - Read       D0.W  D1.L  D2.W  D3.W  D5.W    D7.W
+;    2 - Write      D0.W  D1.L  D2.W  D3.W  D5.W    D7.W
+;    3 - Clear      D0.W                            D7.W
+;    4 - Busy       D0.W                            D7.W     D0.B
+;    5 - Status     D0.W  D1.L  D2.W                D7.W
+;    6 - Unmount    D0.W                            D7.W
+  page
+;
+; SysCom and Device table definitions
+;
+DRVADDR EQU     UTiodrv         ; offset of driver address
+DEVLEN  EQU     UTlen           ; length of a device table entry
+MOUNTED EQU     UTmtd           ; device table entry flag says if entry in use
+CWP     EQU     SCcurrw         ; index to current window record pointer
+ROOTPTR EQU     SCrootw         ; index to Root window record pointer
+;
+; Internal Flags bit definitions
+;
+BUFMTY  EQU     0               ; Buffer empty flag (bit D0)
+LBLSON  EQU     1               ; Label display is on flag (bit D1)
+COMMAND EQU     2               ; Command key pressed flag (bit D2)
+ECHO    EQU     3               ;*070282* Echo internal buffer character (bit D3)
+ERROR   EQU     4               ;*070882* error on read flag
+;
+; SetKey Parameter Block indices definitions
+;
+PBKNUM  EQU     0               ; KeyNumber
+PBLBL   EQU     PBKNUM+2        ; Label
+PBCSLEN EQU     PBLBL+6         ; CommandStringLength
+PBCSTR  EQU     PBCSLEN+1       ; CommandString
+;
+; Display and Keyboard driver calling definitions
+;
+UCLR    EQU     3               ; Unitclear command code
+USTAT   EQU     5               ; Unitstatus command code
+STATWND EQU     5               ; function code for Window Status
+SLCTWND EQU     3               ; function code for Select Window
+;
+; Window Record Index definitions
+;
+RCDLEN  EQU     WRrcdlen        ; window record length - must be 52
+PCHSET  EQU     WRcharpt        ; pointer to character set record
+BASEX   EQU     WRbasex         ; x-coordinate in dots of Home
+BASEY   EQU     WRbasey         ; y-coordinate in dots of Home
+RIGHT   EQU     WRlngthx        ; width in dots + 1
+BOTTOM  EQU     WRlngthy        ; length in dots + 1
+ATTRIB2 EQU     WRattr2         ; byte of flags
+VERTFLG EQU     vert            ; Vertical/Horizontal flag in ATTRIB2
+;
+; Label Window Record definitions
+;
+FNLINE  EQU     0               ;*071082* line for function key labels
+SHFTRW  EQU     1               ;*071082* line for shifted labels display
+USHFTR  EQU     2               ;*071082* line for unshifted labels dispaly
+;
+; Character set record definitions
+;
+LINSPER EQU     4               ; word-Lines per character
+BITSPER EQU     6               ; word-Bits per character
+;
+; Command codes
+;
+READCMD EQU     1               ; read command
+WRCMD   EQU     2               ; write command
+BUSYCMD EQU     4               ; busy command
+UNMCMD  EQU     6               ; unmount command
+;
+; function /command key processing definitions
+;
+ESCAPE  EQU     $1B             ; <ESC> character
+SHARPCH EQU     $23             ; "#" character
+MAXFKEY EQU     $27             ; Hex converted of highest function key
+CMDREL  EQU     $FE             ;command key release-Hex from ASCII Hex rep
+CMDCLS  EQU     $FF             ;command key closure-Hex from ASCII Hex rep
+;
+; Character to integer Conversion definitions
+;
+LETR0   EQU     '0'             ;ASCII zero
+LETR9   EQU     '9'             ;ASCII nine
+LETRA   EQU     'A'             ;ASCII upper case "A"
+LETRF   EQU     'F'             ;ASCII upper case "F"
+BLANK   EQU     ' '             ;ASCII blank
+BARCH   EQU     $7F             ;ASCII del ($7F) displays as a fat bar  *070982*
+;
+; Miscellaneous definitions
+;
+TRUE    EQU     1               ; Pascal true boolean value
+;changed 3/29/83 kb*
+SYSCODE EQU     $F8             ; the lowest SYSTERM Unitstatus function code
+;++++++++++++++++++++
+CARRYST EQU     $0001           ; the CCR value for Carry set
+;
+; error codes (IORESULT)
+;
+NOKYBD  EQU     IOEnokyb        ; error: no keyboard device
+NOCRT   EQU     IOEnodsp        ;   "    no display device
+INVCMD  EQU     IOEioreq        ; invalid cmd-(invalid I/O request)
+INVTBLID EQU    IOEtblid        ;invalid table id
+INVPRM  EQU     IOEuiopm        ;invalid parameter
+ page
+; REGISTER USEAGE - (all unspecified are temps only)
+;       D0 = index to current labels base in label table (DCURLBLS)
+;       D1 = index to current labels group in label table (DCURLBLS)
+;       D5 = user's count of characters (SYSDRD)
+;       D6 = unit # and driver entry address calculation (used as a temp)
+;            and return boolean from drivers for D0 (CALLDISP)
+;       A2 = address of state variable (SYSDRD)
+;       A3 = address of Rear pointer save area (SYSDRD) or address of the parameter
+;            block (local to SSTSKEY)
+;       A4 = Front pointer (SYSDRD)
+;       A5 = Rear pointer (SYSDRD)
+;       A6 = user's buffer address (SYSDRD)
+;
+SYSTERMD
+        BRA.S   SYSD001         ;*070782* JUMP AROUND HEADER
+        DATA.B  0               ;DEVICE NOT BLOCKED
+        DATA.B  31              ;VALID CMDS - ALL
+        DATA.B  83,03,31        ;DATE MARCH 31, 1983
+        DATA.B  0               ;FILLER
+        DATA.B  hmlen           ;HEADER MSG LENGTH
+xxx010  DATA.B  'SYSTERM driver (v1.4t) '  ;HEADER MSG
+
+hmlen   EQU     %-xxx010
+;
+SYSD001 CMPI.W  #UNMCMD,D4      ;valid command?
+        BHI.S   SYSERR          ;no
+        MOVEM.L D1-D6/A0-A6,-(SP)       ;save registers
+        LEA     UNITNO,A0       ;*070282*
+        MOVE.W  D0,(A0)         ;*070282* save unit number
+        MOVE.L  D4,D0           ;save Command
+        CLR.W   D7              ; Clear IORESULT
+        LEA     SYSTABL,A1
+        LSL.W   #1,D0           ; D0 to word count
+        MOVE.W  0(A1,D0.W),D0   ; D0 = dist from SYSTABL
+        JSR     0(A1,D0.W)      ; Go to appropriate routine
+        MOVEM.L (SP)+,D1-D6/A0-A6       ;restore registers
+        RTS
+;
+; Invalid Command Error
+;
+SYSERR  MOVE.W  #INVCMD,D7
+        RTS
+;
+; JUMP TABLE
+;
+SYSTABL DATA.W  SYSINST-SYSTABL
+        DATA.W  SYSDRD-SYSTABL
+        DATA.W  SYSDWR-SYSTABL
+        DATA.W  SYSDCLR-SYSTABL
+        DATA.W  SYSDBSY-SYSTABL
+        DATA.W  SYSDST-SYSTABL
+        DATA.W  SYSUNMT-SYSTABL
+    page
+;
+; SYSINST -- get unit numbers of kybd, crt from device table
+;
+SYSINST LEA     FLAGS,A0        ;init all flags
+        CLR.W   (A0)            ;to false
+        BSR     GETDEVTBL       ; A0==> 1st device, D6 = MAXDEV
+        BSR.S   UNDFKYD         ;init unit # save to "undefined"/A1==> CRTUSAVE
+        MOVE.W  D6,D0           ;look for display.  it is always MAX_DEVICE
+        MULU    #DEVLEN,D0
+        TST.B   MOUNTED(A0,D0.W)
+        BEQ.S   CNOTINS         ; display is not mounted, ERROR
+;
+        MOVE.W  D6,(A1)+        ;save Dispaly unit number
+        SUBQ.W  #1,D6           ;look for keyboard.  it is always MAX_DEVICE
+        SUB.W   #DEVLEN,D0      ;minus 1
+        TST.B   MOUNTED(A0,D0.W)
+        BEQ.S   KNOTINS         ; keyboard not mounted, ERROR
+        MOVE.W  D6,(A1)         ;save Keyboard unit number
+;
+        BRA     SSTINIT         ;init label table & Buffer
+;
+; ERROR exits
+;
+CNOTINS MOVE.W  #NOCRT,D7       ;error--display unit # not mounted
+        BRA.S   SINSRET         ;leave unit # save as "undefined"
+;
+KNOTINS MOVE.W  #NOKYBD,D7      ;error--keyboard unit # not mounted
+SINSRET RTS                     ;leave unit # save as "undefined"
+;
+; UNDFKYD - mark keyboard, display saved unit numbers as "undefined"
+;
+UNDFKYD LEA     CRTUSAVE,A1
+        MOVE.L  #-1,(A1)        ; reset to negative
+        RTS
+    page
+;
+; SYSUNMT - remove label window from screen and clear out saved unit #'s
+;
+SYSUNMT
+        BSR     SSTTOFF         ;call TurnOff to remove labels from screen
+        BNE.S   SUMERR1         ;didn't work
+;
+; mark keyboard and display unit numbers as "undefined"
+;
+        BSR.S   UNDFKYD
+SUMERR1 RTS
+  page
+;
+; SYSDWR--DO A CALLDISP TO CALL THE DISPLAY DRIVER
+;
+SYSDWR                          ; let crt driver handle unitwrite
+;
+; CALLDISP - call Display driver
+;       EXIT : (NE) - error on display call, D7 has error code
+;              (EQ) - successfull
+;              (D6) = result from unitbusy
+;
+CALLDISP
+        BSR.S   GETDEVTBL       ; A0==> 1st device entry
+        MOVE.W  CRTUSAVE,D6     ; D6 = unit # of display
+        BMI.S   CNOTINS         ; Display driver not installed error exit
+CDGDRV  BSR.S   GETDRVR
+        MOVEM.L D0/D5/A2-A6,-(SP)
+        JSR     (A0)            ; call display driver
+        MOVE.L  D0,D6           ; return busy flag in D6
+        MOVEM.L (SP)+,D0/D5/A2-A6
+        TST.W   D7              ; test for error return
+        RTS
+;
+; CALLKEYD - call Keyboard driver (Exit same as CALLDISP)
+;
+CALLKEYD
+        BSR.S   GETDEVTBL       ; A0==> 1st device entry
+        MOVE.W  KBDUSAVE,D6     ; D6 = unit # of keyboard
+        BMI.S   KNOTINS         ; keyboard not installed
+        BRA.S   CDGDRV          ; call driver & test for error when return
+;
+; GETDEVTBL: sets A0==> 1st device in device table, D6=MAXDEV
+;
+GETDEVTBL
+        MOVEA.L PSYSCOM.W,A0
+        MOVE.L  SCdevtab(A0),A0 ; A0==> device table
+        MOVE.W  (A0)+,D6        ; D6 = #device entries, A0==> 1st entry
+        RTS
+;
+; GETDRVR: input- A0==> 1st device in device table, D6=unit#
+;          returns A0 = address of unit driver      [D6 = work]
+GETDRVR MULU    #DEVLEN,D6      ; calc offset of device entry
+        MOVE.L  DRVADDR(A0,D6),A0     ; A0 = address of driver
+        RTS
+  page
+; SYSDCLR -- Reinitialize SYSTERM input/output structure
+; Routine re-written 7-1-82 keith ball
+;
+SYSDCLR
+        BSR.S   CALLDISP        ; call display directly
+        BSR     INITBUF         ; clear local char buffer
+
+; To clear keyboard :  Read characters until no chars available or a) read at least 256
+;   chars or b) in the middle of processing a cmd key char sequence.
+;
+        LEA     BUFFER,A5       ; address of where to get char to
+        LEA     FLAGS,A3        ; address of flag byte with command flag
+        BTST    #COMMAND,(A3)   ; save current state of command flag
+        SNE     D1
+        CLR.L   D0              ; character read counter - i := 0
+        CLR.L   D5              ; state variable for finding cmd char sequences - state := 0
+
+; While( (unitbusy(kbrd)) and ( (i<=256) or (state<>0) ) do begin
+;
+SCLPROC MOVE.W  D1,-(SP)        ; save command flag state
+        MOVEQ   #BUSYCMD,D4     ; do unitbusy(kbrd)
+        BSR.S   CALLKEYD
+        MOVE.W  (SP)+,D1        ; restore stack
+        TST.B   D6              ; returns result in D6
+        BEQ.S   SCLCHKD         ; no more chars, see if should display labels
+;
+        MOVE.W  D1,-(SP)        ; save command flag state
+        BSR     GETKEYB1        ; read one char into (A5)
+        MOVE.W  (SP)+,D1        ; restore stack
+        TST.W   D7              ; error?
+        BNE.S   SCLKERR         ; yes, check display
+        ADDQ.W  #1,D0           ; i := i+1
+
+; case state of
+;
+        LEA     STATETBL,A0
+        CLR.L   D2
+        MOVE.B  D5,D2
+        LSL.W   #1,D2
+        MOVE.W  0(A0,D2.W),D2   ; get index to case element
+        JMP     0(A0,D2.W)      ; goto case element
+STATETBL
+        DATA.W  SCLSTA0-STATETBL
+        DATA.W  SCLSTA1-STATETBL
+        DATA.W  SCLSTA2-STATETBL
+        DATA.W  SCLSTA3-STATETBL
+
+; 0 :  if char = ESCAPE{$1B} then state := 1
+;
+SCLSTA0 CMPI.B  #ESCAPE,(A5)
+        BNE.S   SCLNEXT
+        BRA.S   SCLINCR         ; state := 1
+  page
+; 1 :  if char = '#' then state := 2 else state := 0
+;
+SCLSTA1 CMPI.B  #SHARPCH,(A5)
+        BNE.S   SCLCLRS         ; state := 0
+        BRA.S   SCLINCR         ; state := 2
+
+; 2 :  if char = 'F' then state := 3 else state := 0
+;
+SCLSTA2 CMPI.B  #'F',(A5)
+        BNE.S   SCLCLRS         ; state := 0
+        BRA.S   SCLINCR         ; state := 3
+
+; 3 :  begin if char = 'E' then command := FALSE else if char = 'F' then command := TRUE;
+;            state := 0; end;
+;
+SCLSTA3 CMPI.B  #'E',(A5)       ; release sequence
+        BNE.S   SCLTRYE         ; no
+        BCLR    #COMMAND,(A3)   ; yes, clear command flag
+        BRA.S   SCLCLRS
+SCLTRYE CMPI.B  #'F',(A5)       ; closure sequence
+        BNE.S   SCLCLRS         ; no
+        BSET    #COMMAND,(A3)   ; yes, set command flag
+
+SCLCLRS CLR.L   D5              ; state := 0
+        BRA.S   SCLNEXT
+
+SCLINCR ADDQ.B  #1,D5           ; state := state+1
+
+; check if read at least 256 chars or in middle of cmd char sequence(state<>0)
+;
+SCLNEXT CMPI.W  #256,D0         ; i<=256
+        BLS.S   SCLPROC         ; yes
+        TST.B   D5              ; state<>0
+        BNE.S   SCLPROC         ; yes
+
+; end; {of while loop}
+; if saved command flag <> command flag then display labels
+;
+SCLCHKD BTST    #LBLSON,(A3)    ; are labels on
+        BEQ.S   SCLEXIT         ; no
+        BTST    #COMMAND,(A3)
+        SNE     D0
+        CMP.B   D0,D1           ; command flag change
+        BEQ.S   SCLEXIT         ; no
+        BSR     DCURLBLS        ; yes, display labels
+SCLEXIT RTS
+
+; Keyboard read error -> do unitclear(kbrd)
+;
+SCLKERR MOVEQ   #UCLR,D4
+        BRA     CALLDISP
+  page
+;
+; SYSDRD
+;   get characters.  If label window is on then translate function/command key
+;   input for the user else get characters from Keyboard driver straight.
+;
+SYSDRD
+        LEA     REAR,A3         ;address of REAR ptr save area
+        MOVEA.L (A3),A5         ;get Rear register pointer
+        LEA     STATE,A2        ;address of State variable
+        CLR.B   (A2)            ;state := 0
+        MOVE.L  D1,A6           ;save user's buffer address
+        MOVE.L  D2,D5           ;save user's # of chars wanted
+        LEA     FLAGS,A0        ;initialize error to false
+        BCLR    #ERROR,(A0)
+
+;WHILE(NOT error) and (usercount<>0) do
+; case state of
+;
+SRDCASE LEA     RDSTATE,A0      ;using state variable get
+        CLR.L   D2              ;index to code segment to
+        MOVE.B  (A2),D2         ;execute
+        LSL.W   #1,D2
+        MOVE.W  0(A0,D2.W),D2   ; get index to case element
+        JMP     0(A0,D2.W)      ; goto case element
+RDSTATE
+        DATA.W  SRDSTA0-RDSTATE
+        DATA.W  SRDSTA1-RDSTATE
+        DATA.W  SRDSTA2-RDSTATE
+        DATA.W  SRDSTA3-RDSTATE
+        DATA.W  SRDSTA4-RDSTATE
+        DATA.W  SRDSTA5-RDSTATE
+        DATA.W  SRDSTA6-RDSTATE
+
+; STATE 0 :  if error exit. if usercount=0 exit. if buffer empty state:=1 else state:=6
+;
+SRDSTA0
+        LEA     FLAGS,A0
+        BCLR    #ERROR,(A0)
+        BON.S   SRDERR1         ;if error exit
+        TST.W   D5              ;user count = 0?
+        BEQ.S   SRDEXIT         ;yes, exit
+        MOVEQ   #1,D2           ;assume buffer empty
+        BTST    #BUFMTY,(A0)    ;if buffer empty do chars from Keyboard
+        BON.S   SRD01NXT        ;keep state as 1
+        MOVEQ   #6,D2           ;get from buffer, state=6
+SRD01NXT
+        MOVE.B  D2,(A2)
+        BRA.S   SRDCASE
+
+; STATE 1 : look for Escape -> begin of ESCAPE # Sequence
+;
+SRDSTA1 BSR.S   GETKEYB1        ; get 1 char from keyboard into buffer
+        LEA     FLAGS,A0
+        BCLR    #BUFMTY,(A0)    ; show buffer not empty
+        CLR.B   (A2)            ; assume not escape, state=0
+        CMPI.B  #ESCAPE,(A5)+   ; update rear pointer
+        BNE.S   SRDCASE         ; not escape, give char to user
+;
+        BSR     TSTBUSY         ;see if another char available
+        BEQ.S   SRDCASE         ;no character waiting, give user the escape
+        MOVE.B  #2,(A2)         ;another char - state := 2
+        BRA.S   SRDCASE
+
+; STATE 2 : got an escap, see if next char is a #
+;
+SRDSTA2 BSR.S   GETKEYB1        ; get 1 char from keyboard into buffer
+        CLR.B   (A2)            ; assume not sharp, state=0
+        CMPI.B  #SHARPCH,(A5)+  ; update rear pointer
+        BNE.S   SRDCASE         ; not a sharp, give char to user
+;
+        BSR.S   TSTBUSY         ;see if another char available
+        BEQ.S   SRDCASE         ;no character waiting, give user the escape #
+        MOVE.B  #3,(A2)         ;another char - state := 3
+        BRA.S   SRDCASE
+
+; STATE 3 : see if have 1) function key, 2) cmd key, 3) something else
+;
+SRDSTA3 BSR.S   GETKEYB1        ; get 1 char from keyboard into buffer
+        MOVE.B  #4,(A2)         ; assume cmd key, state=4
+        CMPI.B  #'F',(A5)+      ; update rear pointer
+        BEQ.S   SRD3BSY         ; chk if char avail then colud be cmd key
+        ADDQ.B  #1,(A2)         ; assume is function key
+;
+SRD3BSY BSR.S   TSTBUSY         ;see if another char available
+        BNE.S   SRDCASE         ;is busy, escape sharp sequence
+        CLR.B   (A2)            ;no, something else give chars to user
+        BRA     SRDCASE
+
+; STATE 4 : may have cmd key sequence, see if do and what type
+;
+SRDSTA4 BSR     PCMDKEY         ;process cmd key possibility
+        BRA     SRDCASE
+
+; STATE 5 : may have function key sequence, see if do.
+;
+SRDSTA5 BSR     PFUNKEY         ;process function key possibility
+        BRA     SRDCASE
+
+; STATE 6 : get char from buffer into user buffer.
+;
+SRDSTA6 BSR.S   GETBCHR         ;get char from buffer, echo if should
+        MOVE.B  D0,(A6)+        ;put in user's buffer
+        SUBQ.W  #1,D5           ;usercount := usercount-1
+        CLR.B   (A2)            ;always go back to state 0
+        BRA     SRDCASE
+
+; Error and Valid exit
+;
+SRDERR1 MOVE.W  ERRORCODE,D7    ;when error exit get error code
+SRDEXIT MOVE.L  A5,(A3)         ;always save rear ptr
+        RTS
+    page
+;
+; GETKEYB1 - Get 1 character from Keyboard and put it in the Buffer at (A5).
+; GETKEYBN - Get N characters from Keyboard and put in the Buffer at (A5).
+;       entry for GETKEYBN : (D2) = # of characters
+;
+GETKEYB1
+        MOVEQ   #1,D2           ; set count to 1
+GETKEYBN
+        MOVEQ   #READCMD,D4     ; D4 = read command
+        MOVE.L  A5,D1           ; buffer address
+        BSR     CALLKEYD        ; call keyboard
+        BEQ.S   GKBEXIT         ; no error
+        BSR.S   PRDERROR        ; process error
+GKBEXIT RTS
+;
+; GETBCHR - Get a single character from the Internal Buffer.
+;       EXIT : (D0) = character from buffer (byte)
+;
+GETBCHR
+        LEA     FRONT,A0
+        MOVEA.L (A0),A4         ;get Front pointer
+        MOVE.B  (A4)+,D0        ;get char and update ptr
+        MOVE.L  A4,(A0)         ;update Front pointer save area
+;
+; if unit is console and echo flag is set then echo character *070282*
+;
+        BSR.S   ECHOCHAR        ;*070282*
+;
+; if (Front=Rear) then Init buffer to empty
+;
+        CMPA.L  A4,A5
+        BNE.S   GBCEXIT
+        BSR     INITBUF         ;*070982* also sets echo
+        MOVEA.L (A3),A5         ;*070982* reset rear ptr
+GBCEXIT RTS
+
+; TSTBUSY - see if keyboard has another character available
+;
+TSTBUSY MOVEQ   #BUSYCMD,D4     ; call Keyboard unitbusy
+        BSR     CALLKEYD        ; returns with busy boolean in D6
+        TST.B   D6
+        RTS
+  page
+; DSPLY1  - display 1 character pointed at by A0
+;  routines added with 7/2/82 change *070282* kb
+;
+DSPLY1                          ; display char pointed at by A0
+        MOVE.L  A0,D1
+        MOVEQ   #1,D2           ; call display to print character
+        MOVEQ   #WRCMD,D4       ; write command
+        BRA     CALLDISP
+
+
+; ECHOCHAR - if unit is console and echo flag is set then echo character.
+;  routine added with 7/2/82 change *070282* kb
+;
+ECHOCHAR
+        MOVE.W  UNITNO,D2       ; is this console?
+        SUBQ.W  #1,D2
+        BNE.S   ECEXIT          ; no
+        LEA     FLAGS,A0        ; is echo set
+        BTST    #ECHO,(A0)
+        BOFF.S  ECEXIT          ; no
+
+;
+        LEA     CHARTMP,A0
+        MOVE.B  D0,(A0)         ; echo character
+        BSR.S   DSPLY1
+ECEXIT  RTS
+
+; PRDERROR - process a unitread error
+;
+PRDERROR
+        LEA     ERRORCODE,A0    ;save error code
+        MOVE.W  D7,(A0)
+        CLR.L   D7
+        LEA     FLAGS,A0        ;set error flag to true
+        BSET    #ERROR,(A0)
+        RTS
+    page
+;
+; PFUNKEY - process function key
+;       ENTRY : (D1) = number of function key (qualified) pressed
+;               (A3) = address of Rear ptr save area
+;       EXIT  : (NC) - always
+;                Updates the Rear pointer save area
+;
+PFUNKEY
+        BSR     GETKEYB1        ;*070982* get char into buffer
+        ADDQ.L  #1,A5           ;*070982* bump rear ptr
+        CLR.B   (A2)            ;*070982* always state 0 after
+        CLR.L   D1              ;*070982* make sure no garbage in upper bytes
+        BSR.S   CVTAH           ;*070982* convert chars to hex
+        CMPI.B  #MAXFKEY,D1     ;*070982* is this a function key?
+        BHI.S   PFKNFK          ;*070982* not a function key
+
+; if labels on then give user return string. if not then give user nothing
+;
+        LEA     FLAGS,A0        ;*070282* clear echo
+        BTST    #LBLSON,(A0)    ;*070282*
+        BOFF.S  PFKBUFE         ;*070282* not on give nothing
+
+        BCLR    #ECHO,(A0)      ;*070282* do not echo return strings
+        BSR     INITBUFP        ;remove ESC # sequence from buffer
+        LEA     LBLTBL,A0       ;address of label table
+        MULU    #TENTLEN,D1     ;calculate index to entry
+        MOVEA.L (A3),A5         ;get init value of Rear ptr
+;
+; Move Command string into buffer
+;
+        MOVE.B  CSTRLEN(A0,D1.W),D2     ;length of Command string
+        BEQ.S   PFKBUFE         ;Command string is null
+;
+PFKMOVE MOVE.B  CMDSTR(A0,D1.W),(A5)+   ;update Rear ptr when move
+        ADDQ.W  #1,D1           ;update string index
+        SUBQ.B  #1,D2           ;if more
+        BNE.S   PFKMOVE         ;then move 'em
+;
+        MOVE.L  A5,(A3)         ;Update Rear pointer save area
+PFKNFK  RTS
+;
+; no characters in Command string - initialize buffer to empty
+;
+PFKBUFE BSR     INITBUF         ;Updates Rear pointer save area
+        MOVEA.L (A3),A5         ;*070982* reset rear ptr
+        RTS
+    page
+; CVTAH - convert two ASCII Hex characters to a single byte value
+;       ENTRY: (A5) = rear ptr. (-2 & -1 of A5 are the characters)
+;       EXIT : (C) - invalid characters
+;              (NC) - converted characters with result in D1
+;
+CVTAH
+        MOVE.B  -2(A5),D2       ;*070982* get first character
+        BSR.S   CVTONEA         ;test and convert 1 char
+        BCS.S   CAHERR
+        MOVE.B  D2,D1           ;hex nibble
+        LSL.B   #4,D1           ;put in as high order nibble
+;
+        MOVE.B  -1(A5),D2       ;*070982* get second char
+        BSR.S   CVTONEA
+        BCS.S   CAHEXIT         ;not valid ASCII Hex
+        OR.B    D2,D1           ;or always clears carry
+CAHEXIT RTS
+;
+; Error exits
+;
+CAHERR  ADDQ.L  #1,A5           ;update Rear to point after characters
+COAERR  MOVE.W  #CARRYST,CCR    ;show error
+COAEXIT RTS
+;
+CVTONEA
+        CMPI.B  #LETR0,D2       ;is it between 0 and 9, inclusive
+        BCS.S   COAERR          ;no, not ASCII Hex
+        CMPI.B  #LETR9,D2
+        BHI.S   COAATF          ;try A to F
+        ANDI.B  #$0F,D2         ;convert to hex
+        BRA.S   COAEXIT
+;
+COAATF
+        CMPI.B  #LETRA,D2       ;is it between A and F, inclusive
+        BCS.S   COAERR          ;no, not ASCII Hex
+        CMPI.B  #LETRF,D2
+        BHI.S   COAERR          ;no, not ASCII Hex
+        SUB.B   #$37,D2         ;make Hex
+        CLR.L   D3              ;show no error
+        BRA.S   COAEXIT
+    page
+;
+; PCMDKEY - process the command key state (state = 4)
+;       rewritten 7-9-82 change
+;           see if have a command key sequence. if is then determine
+;           if it is a closure or a release.
+;       EXIT : (A5) = updated rear ptr.
+;
+PCMDKEY
+        BSR     GETKEYB1        ;get char
+        CLR.B   (A2)            ;always next state = 0
+        LEA     FLAGS,A0
+        CMPI.B  #'F',(A5)+      ;update rear, is it closure?
+        BEQ.S   PCKCLSR         ;yes
+        CMPI.B  #'E',-1(A5)     ;is it release?
+        BNE.S   PCKEXIT         ;no, then give user these chars
+        BCLR    #COMMAND,(A0)   ;it is release
+        BRA.S   PCKDISP         ;see if should display labels
+PCKCLSR BSET    #COMMAND,(A0)   ;it is closure
+
+; if labels are on then display the new label group
+;
+PCKDISP BTST    #LBLSON,(A0)
+        BOFF.S  PCKINIT         ;not on so init buffer, never return cmd key sequences
+        MOVE.L  A2,-(SP)        ;save state variable ptr
+        BSR     DCURLBLS        ;display current labels
+        MOVE.L  (SP)+,A2
+        TST.W   D7              ;error on display
+        BEQ.S   PCKINIT         ;no
+        BSR     PRDERROR        ;yes,process error
+
+; remove sequence from buffer
+;
+PCKINIT BSR     INITBUF         ;remove ESC # sequence from buffer
+        MOVEA.L (A3),A5         ;reset rear ptr
+PCKEXIT RTS
+    page
+;
+; SYSDBSY - return boolean saying if Input characters available to user.
+;    first check if Internal buffer has characters.
+;
+SYSDBSY
+        LEA     FLAGS,A0
+        BTST    #BUFMTY,(A0)    ;buffer empty?
+        BON.S   SBSYKYB         ;yes, check keyboard driver
+        BTST    #LBLSON,(A0)    ;label window on?
+        BOFF.S  SBSYKYB         ;no, check keyboard driver *070682*
+        MOVEQ   #TRUE,D0        ;else say true - Pascal boolean
+        RTS
+;
+; call keyboard unitbusy to see if Keypress is true
+;
+SBSYKYB BSR     CALLKEYD        ; let keyboard driver handle unitbusy
+        MOVE.L  D6,D0           ; return busy boolean in D0
+        RTS
+  page
+;
+; SYSDST-- look up address of crt driver, pass unitstatus request to it
+;
+SYSDST  CMPI.W  #SYSCODE,D2     ; if not SYSTERM function code
+        BCS     CALLDISP        ; then call Display driver unitstatus
+        SUBI.W  #SYSCODE,D2
+        LEA     STATTBL,A0      ; else goto SYSTERM function
+        LSL.W   #1,D2           ; turn D2 into the index to the
+        MOVE.W  0(A0,D2.W),D2   ; function's entry point
+        JMP     0(A0,D2.W)
+;
+; Unitstatus Jump Table
+;
+STATTBL
+        ;added 3/29/83 kb*
+        DATA.W  SSTCMDK-STATTBL ; force command flag state
+        ;+++++++++++++++++++
+        ;added 3/24/83 kb*
+        DATA.W  SSTRETS-STATTBL ; get Return String (Command String)
+        ;+++++++++++++++++++
+        DATA.W  SSTPUSH-STATTBL ; Push Label Table
+        DATA.W  SSTPOP-STATTBL  ; Pop Label Table
+        DATA.W  SSTTON-STATTBL  ; TurnOn
+        DATA.W  SSTTOFF-STATTBL ; TurnOff
+        DATA.W  SSTSKEY-STATTBL ; SetKey
+        DATA.W  SSTINIT-STATTBL ; Init
+  page
+;
+; SSTPUSH - Push Label table on stack
+;
+SSTPUSH MOVE.L  (SP)+,A0        ;return address to main
+        MOVEM.L (SP)+,D1-D6/A0-A6       ;remove registers
+        LEA     SAVRETA,A0      ;save for return addresses
+        MOVE.L  (SP)+,(A0)+     ;save returns unit I/O
+        MOVE.L  (SP)+,(A0)+     ;puts on stack
+        MOVE.L  (SP)+,(A0)      ;this is user's return address
+;
+; push label table
+;
+        CLR.L   D0
+        LEA     LBLTBL,A0
+        MOVEQ   #NUMENTS-1,D2
+PSHMOVE
+        MOVE.B  CSTRLEN(A0,D0.W),D1     ;always clears carry
+        BEQ.S   PSHNOCS         ;null command string
+        LSR.B   #1,D1           ;divide by 2
+        BTST    #0,CSTRLEN(A0,D0.W)     ;is cmd str length an odd #
+        BEQ.S   PSHDINC         ;no
+        ADDQ.B  #1,D1           ;yes, push extra word
+PSHDINC LEA     CMDSTR(A0,D0.W),A1
+PSHCMDM MOVE.W  (A1)+,-(SP)     ;push word of command string
+        SUBQ.B  #1,D1
+        BNE.S   PSHCMDM
+;
+PSHNOCS MOVEQ   #(LBLLEN+1)/2,D1 ;push labels,entry's flags, & cmdstringlenggth
+        LEA     ENTFLG(A0,D0.W),A1
+PSHREST
+        MOVE.W  (A1)+,-(SP)
+        DBF     D1,PSHREST
+;
+        ADDI.W  #TENTLEN,D0
+        DBF     D2,PSHMOVE
+;
+; RESTORE return addresses and exit
+;
+        LEA     SAVRETA+SRALEN,A0      ;address after save area for return addresses
+        MOVE.L  -(A0),-(SP)     ;start with user's and then put
+        MOVE.L  -(A0),-(SP)     ;on Unit I/O's two return addresses
+        MOVE.L  -(A0),-(SP)
+        RTS
+  page
+; SSTPOP - Pop label table off stack
+;
+SSTPOP  MOVE.L  (SP)+,A0        ;return address to main
+        MOVEM.L (SP)+,D1-D6/A0-A6       ;remove registers
+        LEA     SAVRETA,A0      ;save for return addresses
+        MOVE.L  (SP)+,(A0)+     ;save returns unit I/O
+        MOVE.L  (SP)+,(A0)+     ;puts on stack
+        MOVE.L  (SP)+,(A0)      ;this is user's return address
+;
+; pop label table
+;
+        LEA     LASTENT,A0      ;top of stack is last entry of table
+        MOVEQ   #NUMENTS-1,D2
+POPMOVE
+        MOVEQ   #(LBLLEN+1)/2,D1
+        LEA     CMDSTR(A0),A1   ;get length,labels then flags of this entry
+POPREST
+        MOVE.W  (SP)+,-(A1)
+        DBF     D1,POPREST
+;
+; get command string
+;
+        CLR.L   D1
+        MOVE.B  CSTRLEN(A0),D1  ;always clears carry
+        BEQ.S   POPNOCS         ;null command string
+        LSR.B   #1,D1
+        BTST    #0,CSTRLEN(A0,D0.W)     ;is cmd str length an odd #
+        BEQ.S   POPDINC         ;no
+        ADDQ.B  #1,D1           ;yes, pop extra word
+POPDINC MOVE.L  D1,D0           ;calculate address to pop into
+        LSL.W   #1,D0           ;need # of bytes popping
+        LEA     CMDSTR(A0,D0.W),A1
+POPCMDM MOVE.W  (SP)+,-(A1)     ;pop word of command string
+        SUBQ.B  #1,D1           ;# of words to pop
+        BNE.S   POPCMDM
+;
+POPNOCS SUBI.W  #TENTLEN,D0
+        DBF     D2,POPMOVE
+;
+; done, display current labels
+;
+        MOVEM.L A4-A6,-(SP)
+        BSR     DCURLBLS
+        MOVEM.L (SP)+,A4-A6
+        LEA     SAVRETA+SRALEN,A0      ;address after save area for return addresses
+        MOVE.L  -(A0),-(SP)     ;start with user's and then put
+        MOVE.L  -(A0),-(SP)     ;on Unit I/O's two return addresses
+        MOVE.L  -(A0),-(SP)
+        RTS
+  page
+;
+; SSTINIT -- init Label table and mark labels as turned off.
+;            Initialize the buffer and buffer variables to BufferEmpty.
+; changes made to routine 062882.  Marked by *062882* in comment.
+;
+; Turn off the Label window
+;
+SSTINIT
+        LEA     FLAGS,A0
+        BCLR    #COMMAND,(A0)   ;make Release the current group
+        BSR     SSTTOFF         ; turn labels off  & clear buffer
+        BSR     INITBUF         ; *kb 1/19/83*
+;
+; Initialize the Label table
+;
+        CLR.L   D0              ;Index into label table to entry
+        CLR.L   D4              ;*062882* label number
+        LEA     LBLTBL,A0
+        MOVE.W  #NUMENTS-1,D2   ;loop control, the number of entries
+;
+ILTCLR  CLR.B   ENTFLG(A0,D0.W) ;clear flags
+        MOVE.B  #4,CSTRLEN(A0,D0.W)     ;4 chars in Command string
+        MOVEQ   #LBLLEN-1,D1    ;loop counter-init label field LBLLEN bytes
+        LEA     LABELS(A0,D0.W),A1
+ILTCLBL MOVE.B  #BLANK,0(A1,D1.W)       ;init labels to blanks
+        DBF     D1,ILTCLBL
+;
+        MOVE.B  #ESCAPE,CMDSTR(A0,D0.W) ;init command string to ESC # sequence
+        MOVE.B  #SHARPCH,CMDSTR+1(A0,D0.W)      ; for this function key
+        MOVE.B  D4,D3                   ;*062882* get label number
+        LSR.B   #4,D3
+        BSR.S   CVTHNA                  ;create ASCII Hex for this qualified
+        MOVE.B  D3,CMDSTR+2(A0,D0.W)    ;function key
+        MOVE.B  D4,D3                   ;*062882* get label number
+        ANDI.W  #$0F,D3
+        BSR.S   CVTHNA
+        MOVE.B  D3,CMDSTR+3(A0,D0.W)
+;
+        ADDQ.B  #1,D4                   ;*062882* update label number
+        ADDI.W  #TENTLEN,D0             ;update index to next entry
+        DBF     D2,ILTCLR               ;for i:= numents-1 to 0 by -1
+;
+ILTEXIT RTS
+  page
+;
+; CVTHNA - convert a Hex nibble into a single byte of ASCII Hex
+;       ENTRY : (D3) = hex nibble to convert (low order nibble)
+;       EXIT  : (D3) = ASCII Hex character (low order byte)
+;
+CVTHNA
+        CMPI.B  #9,D3
+        BHI.S   CTNLETR         ;make it an 'A' to 'F'
+        ORI.B   #$30,D3         ;make it an '0' to '9'
+        BRA.S   CTNEXIT
+;
+CTNLETR ADDI.B  #LETRA-$A,D3
+CTNEXIT RTS
+  page
+;
+; SSTTON - Turn On the label display
+;
+SSTTON
+;
+; Display current labels - force group to be Command release group
+;
+        BSR.S   DCURLBLS        ; display current labels
+        BCS.S   TONEXIT         ;Output error
+;
+; if successful show that labels are on and for unitread to begin translating
+;
+        LEA     FLAGS,A0
+        BSET    #LBLSON,(A0)
+TONEXIT RTS
+  page
+;
+; DCURLBLS - display the current labels in the Label window.
+;
+DCURLBLS
+        BSR.S   GETLBLW         ;make label window the current window
+        BNE.S   DCLERR1         ;error, try to restore current window
+;
+; Calculate index to Current labels
+;
+        CLR.L   D0              ;assume base is Command release group
+        LEA     FLAGS,A0
+        BTST    #COMMAND,(A0)
+        BEQ.S   DCLDLB
+        MOVE.W  #CLSGRP,D0      ;base is Command closure group
+;
+; display labels
+;
+DCLDLB
+        BSR     DSPFNUM         ;*071082* display function key numbers
+        BNE.S   DCLERR1         ;*071082* error, try to restore current window
+                                ;
+        LEA     YPOS,A0         ; both shift row label display halves
+        MOVE.B  #SHFTRW,(A0)    ; on Row 0 of the Label window
+        MOVE.W  D0,D1           ;calculate index to shifted label group
+        ADDI.W  #SHFTLEN,D1
+        BSR.S   LBLLINE         ;display shifted group
+        BNE.S   DCLERR1         ;error, try to restore current window
+                                ;
+        LEA     YPOS,A0         ; both unshift row label display halves
+        MOVE.B  #USHFTR,(A0)    ; on Row 1 of the Label window
+        MOVE.W  D0,D1
+        BSR.S   LBLLINE         ;display unshifted group
+        BNE.S   DCLERR1         ;error, try to restore current window
+        BSR.S   RSTCURW         ;restore user's current window
+        CLR.L   D0              ;show no error
+        RTS
+;
+DCLERR1 BSR.S   RSTCURW         ;try to restore user's current window
+        BNE.S   DCLEXIT         ;give up
+        BSR     SSTTOFF         ;try to turn off labels
+        MOVE.W  #CARRYST,CCR
+DCLEXIT RTS
+  page
+;
+; GETLBLW -- make label window the current window
+;       EXIT : NE - error no display driver
+;              EQ - called display driver (D7 = result code)
+;
+GETLBLW
+        MOVE.L  PSYSCOM.W,A0    ;save current window pointer
+        LEA     CWPSAV,A1
+        MOVE.L  CWP(A0),(A1)
+        MOVEA.L SCwndtbl(A0),A1
+        MOVEA.L 4(A1),A1        ;A1 is the window record ptr
+        MOVE.L  A1,D1           ;use the label window record
+        BSR.S   RSTDO           ;call select display function
+        LEA     LBLWNDS,A1      ;get pointer to status info
+        MOVE.L  A1,D1           ;*
+        MOVEQ   #STATWND,D2     ;get window status function
+        BRA.S   RSTDO1          ;get window status
+;
+; RSTCURW -- restore user's current window
+;       EXIT : NE - error no display driver
+;              EQ - called display driver (D7 = result code)
+;
+RSTCURW
+        MOVE.L  PSYSCOM.W,A0    ; restore user's current window pointer
+        MOVE.L  CWPSAV,D1
+RSTDO   MOVEQ   #SLCTWND,D2     ;select function code
+RSTDO1  MOVEQ   #USTAT,D4       ;call display to Select Window
+        BRA     CALLDISP        ; call display driver directly
+  page
+;
+; LBLLINE - build and display 1 label line in label window.
+;           Builds each half with cursor positioning to location in window for
+;           that half.
+;       ENTRY : (D1) = index to 10 labels to display
+;
+LBLLINE
+        LEA     LBLTBL,A1       ;address of label table
+        LEA     XPOS,A0         ; display left half of line
+        MOVE.B  #0,(A0)         ; flush with left edge of Label window
+        LEA     LEFTL,A0        ;do left set of labels
+        BSR.S   ONESIDE
+        LEA     XPOS,A0         ; display right half of line flush with right edge
+        MOVE.W  LBLWNDX,D2      ;compute position based on window size
+        SUB.W   #LINLEN,D2      ; xpos := (window width)-line length
+        MOVE.B  D2,(A0)
+        LEA     RIGHTL,A0       ;do right set of labels
+        BSR.S   ONESIDE
+        RTS                     ; lef mod
+;
+; ONESIDE - put 5 labels into line buffer
+;       ENTRY : (A1) = address of Label table
+;               (D1) = index to label table entry of first label
+;               (A0) = address of where in line buffer to put 5 labels
+;       EXIT :  (D1) = updated to index entry after 5 entries used
+;
+ONESIDE MOVEQ   #4,D4           ;loop counter-# of labels to move-1
+        CLR.L   D2              ;index into line buffer
+;
+OSDMOVE MOVE.B  #BARCH,0(A0,D2.W)       ;put in label start char a "|"
+        ADDQ.W  #1,D2           ;bump index into line buffer
+        LEA     LABELS(A1,D1.W),A2      ;address of these labels
+        MOVEQ   #0,D3           ;loop counter-MOVE label field into line buffer
+;
+OSDLBL  MOVE.B  0(A2,D3.W),0(A0,D2.W)   ;SRC=entry, DES=line buffer
+        ADDQ.W  #1,D2           ;bump index into line buffer
+        ADDQ.W  #1,D3           ; lef mod
+        CMP.W   #LBLLEN,D3      ; at end of label
+        BNE.S   OSDLBL          ; no, get next byte
+;
+        ADDI.W  #TENTLEN,D1     ;update label table index to next entry
+        DBF     D4,OSDMOVE      ;if done less then 5, do it again
+;
+; Display partial line
+;
+        MOVEM.L A1/D1,-(SP)     ; save label table address & index
+        LEA     LINBUF,A0       ;address of Line buffer to display
+        MOVE.L  A0,D1
+        MOVEQ   #LBUFLEN,D2     ;length of Line buffer
+        BSR.S   CALLDRV         ;call Display driver
+        MOVEM.L (SP)+,A1/D1     ; restore label table address & index
+        RTS
+
+
+; DSPFNUM - display function key numbers
+;
+DSPFNUM
+        LEA     FNUMLL,A0       ;*071082* get pointer to line text
+        MOVE.L  A0,D1           ;*071082* *
+        LEA     FNLXPOS,A0      ;*071082* get pointer to gotoxy coordinates
+        MOVE.B  #0,(A0)+        ;*071082* set gotoxy column
+        MOVE.B  #FNLINE,(A0)    ;*071082* set gotoxy line
+        MOVEQ   #FNUMLEN,D2     ;*071082* get output length
+        BSR.S   CALLDRV         ;*071082* output left half of key nmbrs
+                                ;
+        LEA     FNUMRL,A0       ;*071082* get pointer to line text
+        MOVE.L  A0,D1           ;*071082* *
+        LEA     FNRXPOS,A0      ;*071082* get pointer to gotoxy coordinates
+        MOVE.W  LBLWNDX,D2      ;*071082* compute right side column nmbr
+        SUB.W   #LINLEN,D2      ;*071082* *
+        MOVE.B  D2,(A0)+        ;*071082* set gotoxy column
+        MOVE.B  #FNLINE,(A0)    ;*071082* set gotoxy line
+        MOVEQ   #FNUMLEN,D2     ;*071082* get output length
+        BSR.S   CALLDRV         ;*071082* output left half of key nmbrs
+                                ;
+        RTS                     ;*071082* return
+
+  page
+;
+; SSTTOFF - Turn off the labels
+;
+SSTTOFF
+        BSR     GETLBLW         ;make the label window the current window
+        BNE.S   TOFERR          ;failed
+;
+; clear the label window and leave it in normal video
+;
+        BSR.S   NORMVID
+        BNE.S   TOFERR
+;
+        LEA     FLAGS,A0
+        BCLR    #LBLSON,(A0)    ;show labels off
+;;;     BSR.S   INITBUF;*kb 1/19/83* ; Initialize the buffer to empty
+;
+; Restore saved current window
+;
+TOFERR  BSR     RSTCURW
+        RTS
+;
+; INITBUF - initialize buffer to empty
+; INITBUFP - initialize buffer pointers to empty
+;       EXIT : (NC) - always for both entry points
+;
+INITBUF
+        LEA     FLAGS,A0
+        BSET    #BUFMTY,(A0)    ; init buffer to empty
+        BSET    #ECHO,(A0)      ;*070982* turn off echo
+INITBUFP
+        LEA     BUFFER,A0
+        LEA     FRONT,A1
+        MOVE.L  A0,(A1)+        ; Front := @Buffer
+        MOVE.L  A0,(A1)         ; Rear := @Buffer
+        RTS
+;
+; Routines to change the Label window display
+;
+;
+NORMVID                    ;set the window to normal video & clear and home it
+        LEA     NORMLCH,A0      ;address of normal video escape sequence
+        MOVE.L  A0,D1
+        MOVEQ   #NCHLEN,D2      ;include clear&home sequence
+CALLDRV MOVEQ   #WRCMD,D4       ;call Unitwrite
+        BRA     CALLDISP        ;of Display driver
+  page
+; SSTSKEY - SetKey prcedure, put fill in label table entry from Parameter Block
+;
+; Validate Parameter Block fields : KeyNumber and CommandStringLength
+;
+SSTSKEY MOVE.L  D1,A3           ;address of parameter block
+        MOVE.W  (A3),D0         ;get KeyNumber
+        MOVE.W  D0,D3           ;save KeyNumber
+        CMPI.W  #NUMENTS-1,D0   ;if NumEntries-1 < (D0) then error
+        BHI.S   SKYERR1         ;invalid table id error
+;
+        moveq   #6,d2           ;*070982* assume 6 char label
+        CLR.L   D1
+        MOVE.B  PBCSLEN(A3),D1  ;CommandStringLen
+        cmpi.b  #32,d1          ;*070982* possible 8 char label?
+        blt.s   lef0            ;*070982* no
+        moveq   #-1,d2          ;*070982* if 8 set flag to not use extra blanks
+        MOVE.B  PBCSLEN+2(A3),D1;*070982* get 8 char label cmd string length
+lef0    CMPI.B  #CSLEN,D1       ;if CommandStringLength > MaxLength then error
+        BHI.S   SKYERR2         ;invalid parameter error
+;
+; Valid Parameter Block - move data into entry specified by KeyNumber
+;
+        MULU    #TENTLEN,D0     ;calculate index to entry
+        MOVE.W  D0,D4           ;save index
+        LEA     LBLTBL+LABELS,A1
+        ADDI.B  #LBLLEN+CSLLEN-1,D1     ;# OF bytes to move
+SKYMOVE
+        tst.w   d2              ;*070982* should add extra blanks?
+        bne.s   lef1            ;*070982* no
+        MOVE.B  #' ',0(A1,D0.W) ;*070982* add blank as 7th char
+        MOVE.B  #' ',1(A1,D0.W) ;*070982* add blank as 8th char
+        ADDQ.W  #2,D0           ;*070982* update index
+        subq.W  #2,D1           ;*070982* subtract 2 from loop counter
+lef1
+        MOVE.B  PBLBL(A3),0(A1,D0.W)
+        subq    #1,d2           ;*070982* decrement blank add flag
+        ADDQ.L  #1,A3
+        ADDQ.W  #1,D0
+        DBF     D1,SKYMOVE
+;
+; if (entry is being displayed) then redisplay it
+;
+        LEA     FLAGS,A0        ;*kb 3/31/83*
+        BTST    #LBLSON,(A0)    ;if labels off then done
+        BEQ.S   SKYEXIT
+        CLR.L   D2              ;(D2) ==> Base
+        BTST    #COMMAND,(A0)   ;If Command then Base := 20
+        BEQ.S   SKYTSTK         ;           else Base := 0;
+        MOVEQ   #CLSBASE,D2
+SKYTSTK CMP.W   D2,D3           ;if KeyNumber >= Base
+        BCS.S   SKYEXIT         ;no, not being displayed
+        ADDI.W  #CLSBASE-1,D2   ;and KeyNumber <= Base+19 then is in display set
+        CMP.W   D2,D3
+        BHI.S   SKYEXIT         ;entry is not in range of labels being displayed
+        BRA     DCURLBLS        ; display current labels / DOES RETURN
+;
+; Error exits
+;
+SKYERR1 MOVE.W  #INVTBLID,D7    ;invalid table id error
+        BRA.S   SKYEXIT
+SKYERR2 MOVE.W  #INVPRM,D7      ;invalid parameter error
+SKYEXIT RTS
+  page
+;
+; added 3/24/83 kb
+; SSTRETS - return to caller command string for key number.
+;
+; parameter block : record
+;                     Key number: integer {0..39}  Input
+;                     ReturnString :  String16     Output
+;
+SSTRETS MOVE.L  D1,A3            ;address of parameter block
+        MOVE.W  (A3)+,D0         ;get KeyNumber
+        CMPI.W  #NUMENTS-1,D0    ;if NumEntries-1 < (D0) then error
+        BHI.S   SKYERR1          ;invalid table id error
+
+; get return string
+;
+        MULU    #TENTLEN,D0      ;calculate index to entry
+        LEA     LBLTBL+CSTRLEN,A1 ;address of label table, cmd string entry
+        ADDA.L  D0, A1           ;address of string for this entry
+        CLR.L   D1               ;clear word of garbage for cmd string length
+        MOVE.B  (A1),D1          ;string length is 1 more if length byte included
+SRTSmove
+        MOVE.B  (A1)+,(A3)+      ;move in length and string
+        DBRA    D1, SRTSmove     ;do for length + 1 bytes
+;
+        RTS
+  page
+;
+; added 3/29/83 kb
+; SSTCMDK - force command clear or set
+;
+; parameter block :  CMDflag: integer; {bit 0, if 0= clear, 1=set}
+;
+SSTCMDK MOVE.L  D1,A3            ;address of parameter block
+        MOVE.W  (A3), D0         ;get CMDflag
+        LEA     FLAGS, A0        ;where internal command flag is
+        BCLR    #COMMAND, (A0)   ;assume clear
+        BTST    #0, D0           ;Clear?
+        BOFF.S  SCKdisp          ;yes
+        BSET    #COMMAND, (A0)   ;no, set
+
+; if labels are on display label
+;
+SCKdisp BTST    #LBLSON,(A0)     ;labels on?
+        BOFF.S  SCKexit          ;no, exit
+        BSR     DCURLBLS         ;display current labels, sets D7 if I/O error
+SCKexit RTS
+  page
+;
+;
+; constant data area
+;
+; THE function key number line
+; displayed left side then right side with 2 display driver calls
+;
+FNUMLL  DATA.B  ESCAPE,'='      ;*071082*
+FNLXPOS DATA.B  0,0             ;*071082*
+        DATA.B  ESCAPE,'G0'     ;*071082*
+        DATA.B  '    F1   ','    F2   ','    F3   ' ;minus display
+        DATA.B  '    F4   '
+LBL101  DATA.B  '    F5  '
+LBLDLEN EQU     %-LBL101        ;length of 1 label display
+; 2ND label group
+FNUMRL  DATA.B  ESCAPE,'='      ;*071082*
+FNRXPOS DATA.B  0,0             ;*071082*
+        DATA.B  ESCAPE,'G0'     ;*071082*
+        DATA.B  '    F6   ','    F7   ','    F8   ' ;minus display
+        DATA.B  '    F9   ','   F10  '
+FNUMLEN EQU     %-FNUMRL        ;length of 1/2 of a function key number line
+;
+; Normal video escape sequence, must be followed by the Home & Clear sequence
+;
+NORMLCH DATA.B  ESCAPE,'G0'
+NRMLEN  EQU     %-NORMLCH       ;length of normal video escape sequence
+;
+; Home and Clear sequence
+;
+CHCHRS  DATA.B  ESCAPE,'J'
+CHLEN   EQU     %-CHCHRS
+NCHLEN  EQU     %-NORMLCH       ;length of normal video & home&clear sequences
+        DATA.B  0               ;fill
+  page
+;
+; variable data area
+;
+CRTUSAVE DATA.W -1              ; save display  unit # here
+KBDUSAVE DATA.W -1              ; save keyboard unit # here
+;
+FLAGS   DATA.W  0               ; internal flag byte (see Equates for bit
+                                ; definitions).
+;
+CWPSAV  DATA.L  0               ; current window record ptr save area
+SAVRETA DATA.L  0,0,0           ; save area for return addresses(SSTPUSH&POP)
+SRALEN  EQU     %-SAVRETA
+;
+; line buffer for displaying labels
+; Position Escape Sequence
+;
+LINBUF                          ; lef mod
+POSSEQ  DATA.B  ESCAPE,'='
+XPOS    DATA.B  0
+YPOS    DATA.B  0
+PSQLEN  EQU     %-POSSEQ        ;length of position sequence
+;
+; Only the label areas are variable the other areas are constants.
+;
+        DATA.B  ESCAPE,'G4'     ;set inverse video
+RIGHTL                          ; lef mod
+LEFTL   DATA.B  0,0,0           ;label area 5 labels 7 chars each
+        DATA.L  0,0,0,0,0,0,0,0
+        data.w  0,0,0,0,0       ;*070982* addition for extra label chars
+LINLEN  EQU     %-LEFTL         ;data line length
+        DATA.B  ESCAPE,'G0'     ;group seperator - 2 normal video blanks
+LBUFLEN EQU     %-LINBUF        ;length of line buffer
+        data.b  0               ;*070982*filler
+;
+; Label window status
+;
+LBLWNDS DATA.W  0,0             ;label window status
+LBLWNDX DATA.W  0               ;window width in characters
+LBLWNDY DATA.W  0,0             ;window length in characters
+;
+; Buffer control and Buffer
+;
+FRONT   DATA.L  0               ; Front Buffer pointer
+REAR    DATA.L  0               ; Rear Buffer pointer
+;
+BUFFER  DATA.L  0,0,0,0,0,0     ;THE  internal buffer
+        DATA.L  0,0,0,0,0,0
+BUFLEN  EQU     %-BUFFER        ;buffer length
+;
+; additions for adding console to driver *070282*
+;
+UNITNO  DATA.W  0               ;*070282* unit number
+CHARTMP DATA.B  0               ;*070282* char save for echo
+STATE   DATA.B  0               ;*070982* state variable for SYSDRD
+ERRORCODE DATA.W 0              ;*070982* error code save
+;
+; The Label table
+;
+; Command release group unshifted group
+;
+LBLTBL
+ENTFLG  EQU     %-LBLTBL        ;Index to entry flags
+        DATA.B  0               ;definitions for first entry - ENTFLG
+LABELS  EQU     %-LBLTBL        ;Index to entry's labels
+        DATA.B  0,0,0,0,0,0,0,0 ;label for entries    new mod
+LBLLEN  EQU     (%-LBLTBL)-LABELS  ;length of label field
+CSTRLEN EQU     %-LBLTBL        ;Index to entry's Command string Length
+        DATA.B  0
+CMDSTR  EQU     %-LBLTBL        ;Index to entry's Command string
+CSLLEN  EQU     CMDSTR-CSTRLEN  ;length of Command string length field
+        DATA.L  0,0,0,0         ;16 bytes
+CSLEN   EQU     (%-LBLTBL)-CMDSTR       ;max length of command string
+TENTLEN EQU     %-LBLTBL        ;Entry length
+        DATA.L  0,0,0,0,0,0     ;SECOND ENTRY
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $02 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $03 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $04 entry
+        data.w  0               ;
+RIGHTH  EQU     (%-LBLTBL)/TENTLEN      ;entry # of 1st right side label
+        DATA.L  0,0,0,0,0,0     ; $05 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $06 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $07 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $08 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $09 entry
+        data.w  0               ;
+;
+; Command release group shifted group
+;
+SHFTLEN EQU     %-LBLTBL                ;length of a contiguous label group
+GRPSIZE EQU     SHFTLEN/TENTLEN         ;number of entry's per row of display
+        DATA.L  0,0,0,0,0,0     ; $0A entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $0B entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $0C entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $0D entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $0E entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $0F entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $10 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $11 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $12 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $13 entry
+        data.w  0               ;
+;
+; Command closure group unshifted group
+;
+CLSGRP  EQU     %-LBLTBL                ;index to Command Closure group
+CLSBASE EQU     CLSGRP/TENTLEN          ;entry number for 1st of cmd cls group
+        DATA.L  0,0,0,0,0,0     ; $14 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $15 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $16 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $17 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $18 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $19 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $1A entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $1B entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $1C entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $1D entry
+        data.w  0               ;
+;
+; Command release shifted group
+;
+        DATA.L  0,0,0,0,0,0     ; $1E entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $1F entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $20 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $21 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $22 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $23 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $24 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $25 entry
+        data.w  0               ;
+        DATA.L  0,0,0,0,0,0     ; $26 entry
+        data.w  0               ;
+LASTENT DATA.L  0,0,0,0,0,0     ; $27 entry
+        data.w  0               ;
+ELTBL   EQU     %-LBLTBL                ;length of label table in bytes
+NUMENTS EQU     ELTBL/TENTLEN           ;number of entries in table
+        END     SYSTERMD

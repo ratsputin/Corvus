@@ -1,0 +1,823 @@
+{----------------------------------------------------------------------}
+{ File: DCOMM1.TEXT
+{----------------------------------------------------------------------}
+
+{$S DIALSEG}
+
+{ Dialer --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Dialer;
+
+type  directory = record case integer of
+                      1: (LinkFrst: integer;
+                          LinkLast: integer;
+                          stat:     integer;
+                          eofloc:   integer;
+                          avail:    integer;
+                          DCvrsn:   string[08];
+                          DCpswd:   string[10]);
+                      2: (LinkNext: integer;
+                          LinkPrev: integer;
+                          active:   boolean;
+                          name:     string[28];
+                          phone:    string[36];
+                          logon:    string[30];
+                          pswd:     string[20];
+                          autolog:  string[64];
+                          trmtype:  string[08];
+                          xfrtype:  string[08];
+                          baud:     integer;
+                          wordlen:  integer;
+                          stopbits: integer;
+                          parity:   char;
+                          handshk:  char);
+                      3: (fill:     array [1..256] of byte);
+                      end;
+      screen    = record
+                      recno:   integer;
+                      nm:      string80;
+                      ph:      string80;
+                      log:     string80;
+                      pswd:    string80;
+                      baud:    integer;
+                      wordlen: integer;
+                      parity:  char;
+                      handshk: char;
+                      end;
+
+var choice, fk: char;
+    scr: array [1..15] of screen;
+    df:       file of directory;
+    filename: string80;
+    versno, res, i,k: integer;
+    quit: boolean;
+    iost: integer;
+    pswdStr,pswdMsg: string80;
+
+PROCEDURE Putafter (prev, ins: integer); Forward;
+
+{ Dialer.EncodeStr ----------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE EncodeStr (var st: string80);
+      var i: integer;
+      begin
+      for i := 1 to ord(st[0]) do
+          st[i] := chr(ord(st[i]) + $80 + ord(st[0]) + i);
+      end;
+
+{ Dialer.DecodeStr ----------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DecodeStr (var st: string80);
+      var i: integer;
+      begin
+      for i := 1 to ord(st[0]) do
+          st[i] := chr(ord(st[i]) - $80 - ord(st[0]) - i);
+      end;
+
+{ Dialer.IOerr --------------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION IOerr: boolean;
+      begin
+      iost := ioresult; IOerr := TRUE;
+      if iost = 5 then iost := 9;
+      if iost = 6 then iost := 10;
+      case iost of
+             0: IOerr := FALSE;
+             9: begin
+                StatMsg ('Unable to find the phone directory file');
+                StatMsg (concat ('Please place volume ',volname,' online'));
+                end;
+            10: begin end;
+            16: StatMsg (concat('Volume ',volname,' is write protected'));
+          otherwise: IOmsg (iost);
+           end; {case}
+      end;
+
+{ Dialer.LabelsDial ---------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE LabelsDial;
+      var i: integer;
+      begin
+      LblsInit;
+      i := lblset (00, 'Redial',   concat (pfx,';'));
+      i := lblset (01, 'Manual',   concat (pfx,'<'));
+      i := lblset (02, 'PageUp',   concat (pfx,'A'));
+      i := lblset (03, 'PageDown', concat (pfx,'B'));
+      i := lblset (04, 'PageTop',  concat (pfx,'C'));
+      i := lblset (05, 'Change',   concat (pfx,'='));
+      i := lblset (06, 'Add',      concat (pfx,'?'));
+      i := lblset (07, 'Move',     concat (pfx,'>'));
+      i := lblset (08, 'Delete',   concat (pfx,'@'));
+      i := lblset (09, 'Exit',     concat (pfx,'D'));
+      i := lblset (18, 'UnDelete', concat (pfx,'F'));
+      LblsOn;
+      LevelName := 'Dialer';
+      end;
+
+{ Dialer.ShowFixed ----------------------------------------------------}
+{ Displays fixed part of the directory screen
+{----------------------------------------------------------------------}
+PROCEDURE ShowFixed;
+      var k: integer;
+      begin
+      GoToXY (0,0); write (crtEraEOL);
+      GoToXY (0,1); write (' D i r e c t o r y',crtEraEOL);
+      GoToXY (0,2); write (crtEraEOL);
+      for k := 3 to 17 do begin
+          GoToXY (0,k); write (' ',chr(k+94),crtEraEOL);
+          end;
+      GoToXY (0,18); write (crtEraEOL);
+      GoToXY (0,19); write (crtNorVdo,crtEraEOS,crtInvVdo);
+      end;
+
+{ Dialer.ShowPage -----------------------------------------------------}
+{ Displays the screen record
+{----------------------------------------------------------------------}
+PROCEDURE ShowPage;
+      var name: string[27]; k,p: integer;
+      begin
+      write (crtCurOFF,crtInvVdo);
+      for k := 1 to 15 do begin
+          name := '                           ';
+          for p := 1 to length(scr[k].nm) do name[p] := scr[k].nm[p];
+          GoToXY (6,k+2); write (name,' ',scr[k].ph:22);
+          if scr[k].baud > 0 then begin
+              write (' ',scr[k].baud:5,'-',scr[k].wordlen:1,'-',
+                         scr[k].parity,'-',scr[k].handshk);
+              end;
+          end;
+      writeln (crtNorVdo); writeln;
+      end;
+
+{ Dialer.Readit -------------------------------------------------------}
+{ reads 15 or fewer entries into display screen record (scr)
+{----------------------------------------------------------------------}
+PROCEDURE Readit (pos: integer);
+      var next,k,j: integer;
+      begin
+      if pos = 0 then begin
+          seek (df,0); get (df); pos := df^.LinkFrst;
+          if odd(df^.stat) then begin
+             StatMsg (''); write (pbeep);
+             StatMsg ('Warning: Telephone directory file may be damaged');
+             StatMsg (''); write (pbeep);
+             end;
+          if df^.stat <> versno+4 then begin
+             StatMsg (''); write (pbeep);
+             StatMsg ('Warning: Telephone directory file mismatch');
+             exit (Dialer);
+             end;
+          end;
+      for j := 1 to 15 do begin
+          scr[j].recno := 0;
+          scr[j].nm    := '';
+          scr[j].ph    := '';
+          scr[j].baud  := 0;
+          end;
+      if pos = 0 then scr[1].nm := '--- E M P T Y ---';
+      k := 1;
+      while (pos > 0) and (k <= 15) do begin
+          seek (df,pos); get (df);
+          next           := df^.LinkNext;
+          scr[k].nm      := df^.name;    DecodeStr (scr[k].nm);
+          scr[k].ph      := df^.phone;   DecodeStr (scr[k].ph);
+          scr[k].log     := df^.logon;   DecodeStr (scr[k].log);
+          scr[k].pswd    := df^.pswd;    DecodeStr (scr[k].pswd);
+          scr[k].baud    := df^.baud;
+          scr[k].wordlen := df^.wordlen;
+          scr[k].parity  := df^.parity;
+          scr[k].handshk := df^.handshk;
+          scr[k].recno   := pos;
+          pos            := df^.LinkNext;
+          k := k+1;
+          end;
+      end;
+
+{ Dialer.Pageup -------------------------------------------------------}
+{ if passed a zero, displays previous page of directory, otherwise
+{ displays 15 entries which precede record number passed
+{----------------------------------------------------------------------}
+PROCEDURE Pageup (bptr: integer);
+      var n: integer;
+      begin
+      n := 1;
+      if bptr = 0 then bptr := scr[1].recno;
+      while (n < 15) and (bptr <> 0) do begin
+          seek (df,bptr); get (df);
+          bptr := df^.LinkPrev;  n := n+1;
+          end;
+      readit (bptr); ShowPage;
+      end;
+
+{ Dialer.Pagedown -----------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Pagedown;
+      begin
+      readit (scr[15].recno);
+      ShowPage;
+      end;
+
+{$P}
+{ Dialer.Redial -------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Redial;
+      var loc,p,k: integer; pfx: char;
+      begin
+      if autodtr then CR_SET_DTR (cr_on);
+      if lastnum = '' then exit (Redial);
+      write (crtEraEOL,CR,crtInvVdo,' Dialing: ');
+      if lastname <> '' then write (lastname,' at ');
+      writeln (lastnum,crtEraEOL);
+      SndModemStr ('ATZ');
+      if NOT ModemOK then begin
+          StatMsg ('Modem is not responding');
+          exit (Redial);
+          end;
+      pfx := lastnum[1];
+      p := 5;            { if one of four prefixes not used, then }
+      case pfx of             { 5 gives null prefix to dialer }
+          '+': p := 1;
+          '&': p := 2;
+          '#': p := 3;
+          '$': p := 4;
+          end; {case}
+      for k := 1 to length(dialcmd) do   CR_PUTREM (dialcmd[k]);
+      for k := 1 to length(prefix[p]) do CR_PUTREM (prefix[p][k]);
+      for k := 1 to length(lastnum) do   CR_PUTREM (lastnum[k]);
+      CR_PUTREM (CR);
+      startime := notetime;  { note time at beginning of call }
+      end;
+
+{ Dialer.Manual ------------------------------------------------------}
+{ Allows manual entry of number to be dialed but not put in directory
+{---------------------------------------------------------------------}
+FUNCTION Manual: Boolean;
+      var temp: string80;
+      begin
+      Manual := FALSE; temp := '';
+      ChgString (temp,'Manual','','Enter telephone number to dial');
+      if cst <> Normal then exit (Manual);
+      lastname := ''; lastnum := temp;
+      Redial;
+      Manual := TRUE;
+      end;
+
+{$P}
+{ Dialer.DirAlloc -----------------------------------------------------}
+{ Allocates a record from avail list.  if avail is empty, it
+{ grows phonedir file by one record
+{----------------------------------------------------------------------}
+FUNCTION DirAlloc: integer;
+      var nieu, free: integer;
+      begin
+      seek (df,0); get (df);
+      df^.stat := versno+3;        { mark directory as "being updated" }
+      seek (df,0);  put (df);
+      seek (df,0);  get (df);      { fix for SVS Pascal bug  }
+      if df^.avail = 0
+          then begin                       { no avail records, so we   }
+              df^.eofloc := df^.eofloc + 1;   { grow file by one  }
+              nieu := df^.eofloc;              { nieu record at end  }
+              end
+          else begin
+              nieu := df^.avail;       { alloc old used record, adjust }
+              seek (df,nieu); get (df);{ avail header to next avail    }
+              free := df^.LinkNext;
+              seek (df,0);  get (df);
+              df^.avail := free;
+              end;
+      df^.stat := versno+4;      { mark directory as 'update complete' }
+      seek (df,0);  put (df);
+      DirAlloc := nieu;
+      end;
+
+{$P}
+{ Dialer.DirInsert ----------------------------------------------------}
+{ Inserts a new entry in the directory
+{ chops name to 26 char and phone # to 36.
+{ Large phone # to allow passing through PBXs etc.
+{----------------------------------------------------------------------}
+PROCEDURE DirInsert;
+      var st,name,phone: string80; newrec: integer;
+      begin
+      CrtAction (UcaseOFF);
+
+      st := '';
+      ChgString (st,'Add','','Name');
+      if cst = Escape then exit (DirInsert);
+      if length(st) > 28 then st := copy (st,1,28);
+      EncodeStr (st); name := st;
+
+      st := '';
+      ChgString (st,'Add','','Telephone number');
+      if cst = Escape then exit (DirInsert);
+      if length(st) > 36 then st := copy (st,1,36);
+      EncodeStr (st); phone := st;
+
+      CrtAction (UcaseON);
+      newrec := DirAlloc;              { allocate a new (or used!) record }
+      seek (df,newrec); get (df);
+      df^.name    := name;
+      df^.phone   := phone;           { fill record with pertinent info }
+      df^.logon   := '';
+      df^.pswd    := '';
+      df^.autolog := '';
+      df^.trmtype := '';
+      df^.xfrtype := '';
+      df^.baud    := 0;
+      df^.parity  := 'N';
+      df^.handshk := 'N';
+      df^.active  := TRUE;
+      seek (df,newrec); put (df);
+      PutAfter (0,newrec);         { insert the new record at end of file }
+      PageUp (newrec);             { display the new entry }
+      end;
+
+{$P}
+{ Dialer.DirDelete ----------------------------------------------------}
+{ Deletes record number 'loc' and places it on top of avail list
+{----------------------------------------------------------------------}
+PROCEDURE DirDelete (loc: integer);
+      var prev,next,free: integer;
+      begin
+      seek (df,0); get (df);
+      df^.stat := versno+3;           { mark directory as "being updated" }
+      seek (df,0); put (df);
+      seek (df,loc); get (df);
+      prev := df^.LinkPrev;
+      next := df^.LinkNext;   { find records on either side in list }
+      df^.active := FALSE;        { mark inactive in case of directory rebuild }
+      seek (df,loc); put (df);
+      seek (df,prev); get (df);       { point previous record at next }
+      if prev = 0
+          then df^.LinkFrst := next
+          else df^.LinkNext := next;
+      seek (df,prev); put (df);
+      seek (df,next); get (df);       { point next record at previous }
+      if next = 0
+          then df^.LinkLast := prev
+          else df^.LinkPrev := prev;
+      seek (df,next); put (df);
+      seek (df,0); get (df);
+      free := df^.avail;
+      df^.avail := loc;              { place deleted record at top of avail list }
+      seek (df,0); put (df);
+      seek (df,loc); get (df);
+      df^.LinkNext := free;
+      seek (df,loc); put (df);
+      seek (df,0); get (df);
+      df^.stat := versno+4;          { mark directory as "update complete" }
+      seek (df,0); put (df);
+      end;
+
+{ Dialer.DirRemove ----------------------------------------------------}
+{ Deletes entry and puts its record on avail space list
+{----------------------------------------------------------------------}
+PROCEDURE DirRemove;
+      var which: char; loc: integer;
+      begin
+      ChgChar (which,'Delete','','Delete which entry');
+      loc := MapRecNum (which);
+      if (loc = 0) or (loc > 15) then exit (DirRemove);
+      if scr[loc].recno = 0 then exit (DirRemove);
+      DirDelete (scr[loc].recno);
+      readit (scr[1].recno); ShowPage;
+      end;
+
+{$P}
+{ Dialer.DirChange ----------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DirChange;
+      var which: char; action,loc: integer;
+          st,baudstr,wordstr,stopstr,temp,parstr,hndstr: string80;
+          trmstr,xfrstr,logstr: string80;
+
+{ Dialer.DirChange.DirExit --------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DirExit;
+      begin
+      readit (scr[1].recno);
+      ShowPage;
+      CR_DELAY (12);
+      CrtAction (UcaseON); CrtAction (DefStrOFF);
+      exit (DirChange);
+      end;
+
+{ Dialer.DirChange.DirUpdate ------------------------------------------}
+{ Enters changes into phonedir and exits
+{----------------------------------------------------------------------}
+PROCEDURE DirUpdate;
+      var k: integer;
+      begin;
+      EncodeStr (scr[loc].nm);   df^.name     := scr[loc].nm;
+      EncodeStr (scr[loc].ph);   df^.phone    := scr[loc].ph;
+      EncodeStr (scr[loc].log);  df^.logon    := scr[loc].log;
+      EncodeStr (scr[loc].pswd); df^.pswd     := scr[loc].pswd;
+      EncodeStr (logstr);        df^.autolog  := logstr;
+      df^.trmtype  := trmstr;
+      df^.xfrtype  := xfrstr;
+      df^.parity   := parstr[1];
+      df^.handshk  := hndstr[1];
+      cst := CvStrInt (baudstr,df^.baud);
+      cst := CvStrInt (wordstr,df^.wordlen);
+      cst := CvStrInt (stopstr,df^.stopbits);
+      seek (df,scr[loc].recno); put (df);
+      DirExit;
+      end;
+
+{ Dialer.DirChange ----------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      ChgChar (which,'Change','','Change which entry [a..o]');
+      loc := MapRecNum (which);  { change character to screen record number }
+      if (loc = 0) or (loc > 15) then exit (DirChange); { exit if out of range }
+      if scr[loc].recno = 0 then exit (DirChange); { exit if empty record }
+      seek (df,scr[loc].recno); get (df);  { fetch full record from disk }
+      logstr := df^.autolog; DecodeStr (logstr);
+      trmstr := df^.trmtype;
+      xfrstr := df^.xfrtype;
+      CvIntStr (df^.baud,baudstr,DecRdx);
+      CvIntStr (df^.wordlen,wordstr,DecRdx);
+      CvIntStr (df^.stopbits,stopstr,DecRdx);
+      parstr := 'None';
+      case df^.parity of
+          'E': parstr := 'Even';
+          'M': parstr := 'Mark';
+          'N': parstr := 'None';
+          'O': parstr := 'Odd';
+          'S': parstr := 'Space';
+          end; {case}
+      hndstr := 'None';
+      case df^.handshk of
+          'N': hndstr := 'None';
+          'X': hndstr := 'XonXoff';
+          end; {case}
+      CrtAction (UcaseOFF); CrtAction (DefStrON);
+
+      st := scr[loc].nm;
+      ChgString (st,'Change','','Name');
+      if cst = Escape then DirExit;
+      if length(st) > 28 then st := copy (st,1,28);
+      scr[loc].nm := st;
+
+      st := scr[loc].ph;
+      ChgString (st,'Change','','Telephone number');
+      if cst = Escape then DirExit;
+      if length(st) > 36 then st := copy (st,1,36);
+      scr[loc].ph := st;
+
+      st := scr[loc].log;
+      ChgString (st,'Change','','Logon sequence');
+      if cst = Escape then DirExit;
+      if length(st) > 30 then st := copy (st,1,30);
+      scr[loc].log := st;
+
+      st := scr[loc].pswd;
+      ChgString (st,'Change','','Password sequence');
+      if cst = Escape then DirExit;
+      if length(st) > 20 then st := copy (st,1,20);
+      scr[loc].pswd := st;
+
+      st := trmstr;
+      ChgString (st,'Change','','Terminal type');
+      if cst = Escape then DirExit;
+      if length(st) > 8 then st := copy (st,1,8);
+      trmstr := st;
+
+      st := xfrstr;
+      ChgString (st,'Change','','Transfer mode');
+      if cst = Escape then DirExit;
+      if length(st) > 8 then st := copy (st,1,8);
+      xfrstr := st;
+
+      st := baudstr;
+      ChgString (st,'Change','','Baud rate');
+      if cst = Escape then DirExit;
+      if st = '' then st := '*';
+      if st = '19200' then baudstr := st;
+      if st = '9600'  then baudstr := st;
+      if st = '4800'  then baudstr := st;
+      if st = '2400'  then baudstr := st;
+      if st = '1200'  then baudstr := st;
+      if st = '600'   then baudstr := st;
+      if st = '300'   then baudstr := st;
+
+      st := wordstr;
+      ChgString (st,'Change','','Word length [5..8]');
+      if cst = Escape then DirExit;
+      if st = '' then st := '*';
+      if st = '5' then wordstr := st;
+      if st = '6' then wordstr := st;
+      if st = '7' then wordstr := st;
+      if st = '8' then wordstr := st;
+
+      st := parstr;
+      ChgString (st,'Change','','Parity [Odd Even Mark Space None]');
+      if cst = Escape then DirExit;
+      if st = '' then st := '*';
+      st[1] := UpperCase (st[1]);
+      if st[1] = 'E' then parstr := 'Even';
+      if st[1] = 'M' then parstr := 'Mark';
+      if st[1] = 'N' then parstr := 'None';
+      if st[1] = 'O' then parstr := 'Odd';
+      if st[1] = 'S' then parstr := 'Space';
+
+      st := hndstr;
+      ChgString (st,'Change','','Handshake [XonXoff None]');
+      if cst = Escape then DirExit;
+      if st = '' then st := '*';
+      st[1] := UpperCase (st[1]);
+      if st[1] = 'N' then hndstr := 'None';
+      if st[1] = 'X' then hndstr := 'XonXoff';
+
+      DirUpdate;
+      end;
+
+{$P}
+{ Dialer.Dialit -------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Dialit (which: char);
+      var loc,p,k: integer; pfx: char;
+
+{ Dialer.Dialit.Convert -----------------------------------------------}
+{ converts logon info by changing "\" to CR and forms like
+{ ^C to appropriate ASCII special char.  a "^^" is converted
+{ to the string "^"
+{----------------------------------------------------------------------}
+PROCEDURE Convert (s: string80; var out: string80);
+      var k: integer;
+      begin
+      for k := 1 to length(s) do begin
+          if s[k] = '^' then begin
+             s[k] := chr(0);
+             k := k+1;
+             if ord(s[k]) >= 97 then s[k] := chr(ord(s[k])-32);
+             s[k] := chr(ord(s[k])-64);   {convert ^C to "003"}
+             if s[k] = chr(30) then s[k] := '^';  { ^^ becomes ^ }
+             end;
+          if s[k] = '\\' then s[k] := chr(13);
+          end;
+      out := s;
+      end;
+
+{ Dialer.Dialit -------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      loc := MapRecNum (which); { map character to screen record number }
+      if (loc = 0) or (loc > 15) then exit (Dialit);
+      if scr[loc].recno = 0 then exit (Dialit);
+      seek (df,scr[loc].recno); get (df);  { fetch full directory entry }
+      if df^.baud > 0
+      then begin
+          CR_SETCOMMUNICATIONS (df^.parity,
+                                df^.baud,
+                                df^.wordlen,
+                                df^.stopbits,
+                                df^.handshk,
+                                cr_orig,
+                                'Concept',
+                                commres);
+          for k := 2 to 3 do begin
+              baud[k]     := df^.baud;
+              parity[k]   := df^.parity;
+              databits[k] := df^.wordlen;
+              stopbits[k] := df^.stopbits;
+              XON_XOFF[k] := df^.handshk;
+              end;
+          writeln (' DataComm set to: ',df^.baud:1,' baud, ',
+                   df^.parity:1,' parity, ',
+                   df^.wordlen:1,' databits',crtEraEOL);
+          end
+      else begin
+          writeln (' Default DataComm parameters used',crtEraEOL);
+          writeln (' DataComm set to: ',baud[3]:1,' baud, ',
+                   parity[3]:1,' parity, ',
+                   databits[3]:1,' databits',crtEraEOL);
+          end;
+      lastnum  := scr[loc].ph;
+      lastname := scr[loc].nm;
+      convert (scr[loc].log,logon);     { convert logon info and pswd }
+      convert (scr[loc].pswd,pswd);     { to global variables  }
+      if df^.trmtype = 'CONCEPT' then currTerm := Concept else
+      if df^.trmtype = 'TTY'     then currTerm := TTY     else
+      if df^.trmtype = 'VT100'   then currTerm := VT100   else
+                                      currTerm := Concept;
+      Redial;
+      quit := TRUE;
+      end;
+
+{$P}
+{ Dialer.PutAfter -----------------------------------------------------}
+{ inserts record 'ins' after record number 'prev'.
+{ if 'prev' = 0 then record is added to end of directory
+{----------------------------------------------------------------------}
+PROCEDURE Putafter {prev, ins: integer}; { declared forward }
+      var next: integer;
+      begin
+      seek (df,0); get (df);
+      df^.stat := versno+3;        { mark file as being updated }
+      seek (df,0); put (df);
+      if prev = 0 then begin
+          seek (df,0); get (df);    { if 0 passed as location, then find last }
+          prev := df^.LinkLast;          { record to insert after }
+          end;
+      seek (df,prev); get (df);
+      if prev = 0
+          then next := 0
+          else next := df^.LinkNext;     { find successor to 'prev' }
+      if prev = 0
+          then df^.LinkFrst := ins
+          else df^.LinkNext := ins;   { point 'prev' record }
+      seek (df,prev); put (df);                           { forward to new rcd }
+      seek (df,ins); get (df);
+      df^.LinkPrev := prev;              { point ins fwd to next and }
+      df^.LinkNext := next;              { back to 'prev' record }
+      df^.active := TRUE;          { mark as valid record }
+      seek (df,ins); put (df);
+      seek (df,next); get (df);
+      if next = 0
+          then df^.LinkLast := ins
+          else df^.LinkPrev := ins;   { point 'next' record }
+      seek (df,next); put (df);                           { back to 'ins' record }
+      seek (df,0); get (df);
+      df^.stat := versno+4;        { mark file as update complete }
+      seek (df,0); put (df);
+      end;
+
+{ Dialer.DirUndelete --------------------------------------------------}
+{ undeletes the last record deleted, if there is one,
+{ and places it at the end of the directory
+{----------------------------------------------------------------------}
+PROCEDURE DirUndelete;
+      var oldrec: integer;
+      begin
+      GoToXY (0,22);
+      seek (df,0); get (df);
+      if df^.avail = 0 then begin
+         StatMsg ('Nothing to undelete');
+         CR_DELAY (20); ClrFrom (20);
+         exit (DirUndelete);
+         end;
+      seek (df,df^.avail); get (df);
+      if (df^.name = ' ') and (df^.phone = ' ') then begin
+         StatMsg ('Nothing to undelete');
+         CR_DELAY (20);
+         exit (DirUndelete);
+         end;
+      oldrec := DirAlloc;                        { get old record }
+      seek (df,oldrec);  get (df);
+      PutAfter (df^.LinkPrev,oldrec);  { put back where it came from (maybe!) }
+      StatMsg ('Last record undeleted');
+      PageUp (oldrec);             { show results }
+      end;
+
+{ DirMove -------------------------------------------------------------}
+{ Moves phone directory entries to new positions in the directory
+{----------------------------------------------------------------------}
+PROCEDURE DirMove;
+      var newpos,which: char; movrec,insrec,irec: integer;
+      begin
+      ChgChar (which,'Move','','Move which entry');
+      movrec := MapRecNum (which);
+      if (movrec = 0) or (movrec > 15) then exit (DirMove);
+      if scr[movrec].recno = 0 then exit (DirMove);
+      movrec := scr[movrec].recno;  { convert from screen address to file address }
+      repeat
+          ChgChar (newpos,'Move','','Insert behind which entry');
+          if newpos = FUNCPFX then begin
+              newpos := CR_GETKB;
+              if newpos = 'A' then PageUp (0);
+              if newpos = 'B' then Pagedown;
+              if newpos = 'C' then begin readit (0); ShowPage; end;
+              newpos := '*';
+              end;
+          irec := MapRecNum (newpos);
+          if (irec > 0) and (irec <= 15) then
+              if scr[irec].recno = 0 then exit (DirMove);
+          until irec > 0;
+      DirDelete (movrec);      { delete the record being moved  }
+      PutAfter (scr[irec].recno,DirAlloc); { inserts deleted record behind 'irec' }
+      if irec > 9
+          then readit (scr[10].recno)
+          else readit (scr[1].recno);
+      ShowPage;
+      end;
+
+{$P}
+{ Dialer --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      HoldComm; LblsOff;
+      versno := 10;
+      filename := 'DCOMM.PHONEDIR';
+      if volname <> '' then
+          filename := concat ('/',volname,'/',filename);
+      reset (df,filename);
+      if IOerr
+      then begin
+          if iost <> 10 then begin
+              StatMsg ('Dialer terminating');
+              exit (Dialer);
+              end;
+          if NOT GetYN (concat('Unable to find file ',filename),
+                        'Create new file') then exit (Dialer);
+          rewrite (df,filename);      { if no file, then          }
+          if IOerr then begin
+              StatMsg ('Dialer terminating');
+              exit (Dialer);
+              end;
+          dirPswd := '';
+          ChgString (dirPswd,'Dialer',
+                     'DComm requires a password to prevent unauthorized access',
+                     'Enter (and remember) password for new directory');
+          if cst = Escape then exit (dialer);
+          seek (df,0); { create new directory }
+          for i := 1 to sizeof(directory) do df^.fill[i] := 0;
+          df^.LinkFrst := 0; df^.LinkLast := 0;
+          df^.DCvrsn  := version;
+          EncodeStr (dirPswd);
+          df^.DCpswd  := dirPswd;
+          DecodeStr (dirPswd);
+          df^.eofloc  := 32; { for 32 entries initially }
+          df^.avail   := 1;
+          df^.stat    := versno+4;
+          put (df);
+          for i := 1 to sizeof(directory) do df^.fill[i] := 0;
+          df^.name    := '';  df^.phone := '';    df^.LinkPrev := 0;
+          df^.logon   := '';  df^.pswd := '';     df^.active   := FALSE;
+          df^.baud    := 0;   df^.parity := 'N';  df^.handshk  := 'N';
+          df^.wordlen := 8;   df^.stopbits := 1;
+          df^.autolog := '';
+          df^.trmtype := '';
+          df^.xfrtype := '';
+          for k := 1 to 32 do begin
+              df^.LinkNext := k+1; seek (df,k); put (df); end;
+          df^.LinkNext := 0; seek (df,32); put (df);
+          end
+      else if dirPswd = '\00' then begin
+          seek (df,0); get (df);
+          pswdStr := df^.DCpswd; DecodeStr (pswdStr);
+          if df^.DCvrsn <> version then begin
+              StatMsg (concat('Directory is version ',df^.DCvrsn));
+              exit (Dialer);
+              end;
+          pswdMsg := 'DComm requires a password to prevent unauthorized access';
+          repeat
+              dirPswd := '';
+              CrtAction (EchoOFF);
+              ChgString (dirPswd,'Dialer',pswdMsg,
+                         'Enter directory password');
+              CrtAction (EchoON);
+              if cst = Escape then exit (dialer);
+              pswdMsg := 'Invalid directory password entered (press ESC to escape)';
+              until dirPswd = pswdStr;
+          end;
+
+      ShowFixed; readit (0); ShowPage; quit := FALSE;
+      while not quit do begin
+          LabelsDial;
+          ChgChar (choice,'Dialer','',
+                   'Select function or number to dial [a..o]');
+          LblsOff;
+          if cst <> Normal then quit := TRUE;
+          if NOT quit then begin
+              if choice in ['A'..'O'] then Dialit (choice);
+              if choice = FUNCPFX then begin
+                  fk := CR_GETKB;
+                  case fk of
+                      ';': { Redial - redial call }
+                           begin quit := TRUE; Redial; end;
+                      '<': { Manual - manual dial }
+                           if Manual then quit := TRUE;
+                      '=': { Change - Change }
+                           begin
+                           DirChange;
+                           if CR_KBSTAT then choice := CR_GETKB; { temp bug fix @@ }
+                           end;
+                      '>': { Move - move }
+                           DirMove;
+                      'F': { Undelete - undelete }
+                           DirUndelete;
+                      '?': { Add - add entry }
+                           DirInsert;
+                      '@': { Delete - delete entry }
+                           DirRemove;
+                      'C': { PageTop - show first page }
+                           begin readit (0); ShowPage; end;
+                      'D': { Exit - exit dialer }
+                           quit := TRUE;
+                      'A': { PageUp - page up }
+                           PageUp (0);
+                      'B': { PageDown - page down }
+                           Pagedown;
+                      end; {case fk}
+                  end; {if choice = FUNCPFX}
+              end; {if NOT quit}
+          end; {while NOT quit};
+      seek (df,0);          get (df); { find last posit in file, then close }
+      seek (df,df^.eofloc); get (df); { file with eof behind last posit }
+      close (df,crunch);
+      write (crtCurON);
+      end;
+{$S}
+

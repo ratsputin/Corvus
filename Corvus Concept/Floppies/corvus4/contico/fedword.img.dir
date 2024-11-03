@@ -1,0 +1,11 @@
+
+Directory of UCSD disk image file 'fedword.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FEDWORD has 3 files,  0 to 6 (6), eov 500, size 163, free 3
+
+ 1: ED              Data  4-Feb-83    6- 321( 315), 161280+512= 161792 bytes
+ 2: EDINIT.TEXT     Text  4-Feb-83  321- 333(  12),  6144+512=  6656 bytes
+ 3: SYSTEM.UPDATE   Text  4-Feb-83  333- 337(   4),  2048+512=  2560 bytes

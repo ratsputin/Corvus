@@ -1,0 +1,2 @@
+asm68k #1  -l/spooler
+/ccutil/pipes close

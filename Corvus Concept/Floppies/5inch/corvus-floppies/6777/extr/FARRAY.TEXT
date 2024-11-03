@@ -1,0 +1,181 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                             File: FARRAY.TEXT                             *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               01-Dec-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+(*****************************************************************************)
+(*                           Array Formatted Write                           *)
+(*****************************************************************************)
+
+
+procedure %_wafi4{var fintarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_wafi4}
+for ctr := 1 to count do
+  %_wrfi4(fintarray[ctr]);
+end; {%_wafi4}
+
+procedure %_wafi2{var fintarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_wafi2}
+for ctr := 1 to count do
+  %_wrfi2(fintarray[ctr]);
+end; {%_wafi2}
+
+procedure %_wafi1{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wafi1}
+for ctr := 1 to count do
+  %_wrfi1(fintarray[ctr]);
+end; {%_wafi1}
+
+procedure %_wafr8{var frealarray: real8array; count: int4};
+  var ctr: longint;
+begin {%_wafr8}
+for ctr := 1 to count do
+  %_wrfr8(frealarray[ctr]);
+end; {%_wafr4}
+
+procedure %_wafr4{var frealarray: real4array; count: int4};
+  var ctr: longint;
+begin {%_wafr4}
+for ctr := 1 to count do
+  %_wrfr4(frealarray[ctr]);
+end; {%_wafr4}
+
+procedure %_wafl4{var flogarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_wafl4}
+for ctr := 1 to count do
+  %_wrfl4(flogarray[ctr]);
+end; {%_wafl4}
+
+procedure %_wafl2{var flogarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_wafl2}
+for ctr := 1 to count do
+  %_wrfl2(flogarray[ctr]);
+end; {%_wafl2}
+
+procedure %_wafl1{var flogarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wafl1}
+for ctr := 1 to count do
+  %_wrfl1(flogarray[ctr]);
+end; {%_wafl1}
+
+procedure %_wafc8{var fcomplexarray: complexarray; count: int4};
+  var ctr: longint;
+begin {%_wafc8}
+for ctr := 1 to count do
+  %_wrfc8(fcomplexarray[ctr].imagpart,fcomplexarray[ctr].realpart);
+end; {%_wafc8}
+
+procedure %_wafch{fpac: pbyte; paclen: integer; count: int4};
+  var lpaclen,i: integer; ctr: longint; p: ppac;
+begin {%_wafch}
+p := pointer(ord(fpac));
+for ctr := 0 to count - 1 do begin
+  getfmt; if edlet <> 'A' then error(46);
+  if not EdwPresent then edw := paclen;
+  putblanks(edw - paclen);
+  if edw < paclen then lpaclen := edw else lpaclen := paclen;
+  for i := 1 to lpaclen do
+    putch(p^[i]);
+  p := pointer(ord(p) + paclen);
+  end;
+end; {%_wafch}
+
+
+(*****************************************************************************)
+(*                           Array Formatted Read                            *)
+(*****************************************************************************)
+
+
+procedure %_rafi4{var fintarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_rafi4}
+for ctr := 1 to count do
+  %_rdfi4(fintarray[ctr]);
+end; {%_rafi4}
+
+procedure %_rafi2{var fintarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_rafi2}
+for ctr := 1 to count do
+  %_rdfi2(fintarray[ctr]);
+end; {%_rafi2}
+
+procedure %_rafi1{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rafi1}
+for ctr := 1 to count do
+  %_rdfi1(fintarray[ctr]);
+end; {%_rafi1}
+
+procedure %_rafr8{var frealarray: real8array; count: int4};
+  var ctr: longint;
+begin {%_rafr8}
+for ctr := 1 to count do
+  %_rdfr8(frealarray[ctr]);
+end; {%_rafr8}
+
+procedure %_rafr4{var frealarray: real4array; count: int4};
+  var ctr: longint;
+begin {%_rafr4}
+for ctr := 1 to count do
+  %_rdfr4(frealarray[ctr]);
+end; {%_rafr4}
+
+procedure %_rafl4{var flogarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_rafl4}
+for ctr := 1 to count do
+  %_rdfl4(flogarray[ctr]);
+end; {%_rafl4}
+
+procedure %_rafl2{var flogarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_rafl2}
+for ctr := 1 to count do
+  %_rdfl2(flogarray[ctr]);
+end; {%_rafl2}
+
+procedure %_rafl1{var flogarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rafl1}
+for ctr := 1 to count do
+  %_rdfl1(flogarray[ctr]);
+end; {%_rafl1}
+
+procedure %_rafc8{var fcomplexarray: complexarray; count: int4};
+  var ctr: longint;
+begin {%_rafc8}
+for ctr := 1 to count do
+  %_rdfc8(fcomplexarray[ctr]);
+end; {%_rafc8}
+
+procedure %_rafch{fpac: pbyte; paclen: integer; count: int4};
+  var lpaclen,i: integer; lch: char; ctr: longint; p: ppac;
+begin {%_rafch}
+for ctr := 0 to count - 1 do begin
+  getfmt; if edlet <> 'A' then error(40);
+  if not EdwPresent then edw := paclen;
+  for i := 1 to edw - paclen do
+    getch(lch);
+  p := pointer(ord(fpac) + ctr*paclen);
+  for i := 1 to edw do begin
+    getch(lch); p^[i] := lch;
+    end;
+  for i := edw + 1 to paclen do
+    p^[i] := ' ';
+  end;
+end; {%_rafch}
+
+

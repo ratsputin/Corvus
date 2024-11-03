@@ -1,0 +1,253 @@
+
+    file : /dsgn/tranpdoc.text
+    date : 18-July-1983   kb
+
+    This document describes the Transporter Driver for Concept.
+
+    The Transporter driver has three (3) main functions :
+       1) "strobe in" transporter commands,
+       2) handle Transporter generated interrupts,
+       3) make sure only one command and one receive on each socket is
+          attempted at the same time.
+
+    Access to the driver is through the Unitstatus mechanism of the Concept
+    OS.
+
+
+    Interface to Transporter Driver :
+
+    The Pascal defined Unitstatus call is as follows :
+
+       UnitStatus (Unit#,ParameterBlock,function code);
+
+    where Unit# is the unit number of the Transporter driver, ParameterBlock
+    is the Transporter driver's parameter block, and the function code is
+    one of the 9 valid codes for the driver.
+
+    The ParameterBlock has the form :
+
+                  record CommandAddress : Pbytes;
+                         ProcedurePointer : Pbytes;
+                         UserData : LongWord;
+                         end;
+
+    where CommandAddress is the pointer to the Transporter Control Block
+    the caller wants the driver to "strobe" into the Transporter.
+    ProcedurePointer is the address of the global level procedure the
+    Transporter driver should call when the Transporter interrupt occurs.
+    UserData is a 4 byte long word data field which use and specific type
+    are user-defined.
+
+    The command address must point at a valid Transporter Control Block
+    above the address $80000, except for the clear receive socket function
+    where it can be nil.  The procedure address must point at a valid user
+    interrupt service routine or may be nil.  A nil procedure pointer means
+    there is NO user interrupt service routine to call when the operation
+    is complete.  The procedure pointed at by the procedure pointer must
+    take 5 parameters.  They are the dequeue call flag word, the dequeue
+    error code, the result and buffer pointers from the Transporter Control
+    Block, and a long word user data parameter from the user's unitstatus
+    parameter block (see description in interrupt routine discussion).  The
+    dequeue flag signifies if the interrupt routine is called for a
+    operation start attempt (non-zero) or an operation complete (zero). If
+    the dequeue flag is (non-zero) then the error parameter describes the
+    ioresult code for the operation start attempt.  If the error code is
+    not 0 (zero) then the control block specified failed to get "strobed
+    in".  The dequeue operation start call to the interrupt routine will be
+    made only if the Transporter Control Block was queued up by the driver
+    because the Current Command entry was in use.
+
+    The user interrupt procedure interface is :
+
+    Procedure Done ( Dequeue   : Integer;
+                     Error     : Integer;
+                     ResultPtr : Pbytes;    {User can use any pointer type}
+                     BufferPtr : Pbytes;    {for either pointers.         }
+                     UserData  : LongInt ); {Can be any long word type.   }
+
+    Failure to comply with these rules will result in catastrophic
+    consequences.
+
+    The user data parameter is available for any purpose the user
+    determines.  It's value is not examined or used for any purpose
+    internal to the driver.  It can be used to return to the user's
+    interrrupt procedure any type of information the user needs.  For
+    example, it can be a pointer to an operation control block, a
+    transaction code, or an index into an array.
+
+    The function codes are :
+
+            1) 0 for Current Command.
+
+            2) 1, 2, 3, and 4 for a receive socket setup.  The function
+               code specifies which socket, where 1 is socket $80, 2 is
+               socket $90 and so on.
+
+            3) $81, $82, $83, $84, for clear a receive socket.  The high
+               order bit being set specifies the clear operation.  The
+               socket to be cleared is specified by the rest of the
+               function code, where 1 is socket $80, 2 is socket $90 and
+               so on.
+
+    Each of the functions uses the same parameter block.  If any other
+    function codes are used the driver returns an error code indicating
+    what was wrong (see section on error and warning codes).
+
+    The functions :
+
+    The driver's 3 functions use a table internal to the driver to control
+    the operations.  This table has 5 entries.  1 for the Current Command
+    and 4 for each of the receive sockets.  The Current Command entry is
+    used for send, peek, poke, init, echo, and other immediate Transporter
+    commands sent to the driver via the Current Command function interface.
+    The Clear a Receive Socket function will use the Current Command entry
+    if the command address is not nil.  This should be used to send a end
+    receive command to the Transporter.  The Receive Socket Setup function
+    will also use the Current Command entry to transmit to the Transporter
+    the receive socket setup command.  It of course will use the receive
+    socket entry if the command is successfully strobed into the
+    transporter.
+
+    Each entry in the table can be in use for only one command at a time.
+    The 4 receives sockets may each have only one receive pending at a
+    time.  If a receive setup is requested on a socket with a receive
+    pending then an in use error code is returned to the caller and the
+    driver takes no action.  The current command entry may have only one
+    command pending on it.  However, if a current command request is made
+    while one is currently pending then the driver will queue up the new
+    request if there is room on the queue.  The function returns a warning
+    code if it queues up a request (see error and warning code section).
+    The receive socket setup function will not setup the socket entry if
+    the current command is queued up.  When the request is de-queued the
+    receive will be setup, if possible.  If the driver cannot setup the
+    receive then the user's interrupt procedure will be called with the
+    dequeue word not equal to zero and the error parameter defining the I/O
+    error.  If it worked the interrupt procedure will be called with the
+    dequeue word not equal to zero and the error parameter equal to zero,
+    showing no error on dequeue.
+
+    The receive socket setup function does special processing on the result
+    code of the current command if it is successfully transmitted to the
+    Transporter.  The function will busy wait on the change of the receive
+    setup result code instead of depending on the driver's interrupt
+    service routine to release the current command entry.  This is
+    neccesary because of a bug in the version 6.4 Transporter which does
+    not generate an interrupt when the receive socket is set up.  If the
+    result code does not change within a certain time then the driver will
+    return the Transporter Not Ready error code.  It will also clear both
+    the current command and receive socket entries.  However, if the
+    Transporter changes the result code to an error state the function does
+    NOT release the socket entry.  It assumes the receive is setup.
+    Therefore, the caller must do a clear a receive socket function with
+    the command address nil to free up the receive socket entry.
+
+    The driver has attempted to correct another bug in the Transporter
+    design.  For the peek command, the Transporter returns the data as the
+    result code.  Since the driver determines which command and therefore
+    which entry caused the interrupt by the result code, a peek response of
+    $FF will cause the driver to miss the interrupt for the peek
+    completion.  Consequently, the driver would not release the current
+    command entry.  To prevent this, the driver does a busy wait on the
+    completion of the peek command.  If the result code does not change
+    within a certain time length the driver assumes that the peek command
+    returned an $FF and releases the current command entry.  Unfortunately,
+    this means that a user should not busy wait on an in use error response
+    from the driver in an interrupt routine if it is possible that a peek
+    command is pending in the current command entry.  For this last case,
+    if the peek response is $FF then the current command entry will not be
+    released.
+
+    Interrupt Routine :
+
+    For all the driver functions, if the user has an interrupt service
+    routine then this routine must be resident in memory the entire time the
+    Transporter command is active.  Furthermore, if the code is Pascal then
+    the routine must be a global level procedure.  A global level procedure
+    is only nested under the MAIN level program.  It is not a sub-procedure
+    of a sub-procedure.
+
+    The procedure must do 2 types of processing.  The first is when the
+    dequeue parameter is zero (0).  This means the operation is complete
+    and the procedure should do it's normal operation completion
+    processing.  Normal processing can entail calling the Transporter
+    driver to setup the command again.  The second processing type is when
+    the dequeue parameter is non-zero.  This means that a previously queued
+    command has been dequeued and processed by the driver to start-up the
+    Transporter operation.  The interrupt procedure must check the error
+    parameter.  The error code describes what went wrong with setting up
+    the command when it was removed from the queue.  If it is zero then the
+    set up was successful.  If it is non-zero then the set up failed.  The
+    error code will usually be a Transporter Not Ready error.  This means
+    there is a good probability of a hardware malfunction with the
+    Transporter.  However, it can be the inuse error if the operation
+    requested was a receive setup.  If the setup succeeded then the
+    interrupt procedure will be called again when the operation is
+    complete.  If it failed then the interrupt procedure will NOT be called
+    for an operation completion.
+
+    Normally, the procedure is called after the command has been performed
+    and the entry has been released.  Prior to the procedure call the
+    driver restores the interrupt level to the state when the Transporter
+    (OmniNet) interrupt occurred.  Upon return, the driver resets the
+    interrupt level to disable Transporter interrupts.  For the dequeue
+    call, the command has not been completed, the current command entry was
+    not released, and the entry was not removed from the queue, therefore,
+    the user's normal processing may cause problems.  After the procedure
+    returns from the dequeue call, the current command entry is released
+    and the entry is removed from the queue.
+
+    The user's interrupt service routine must be very careful about
+    reentrancy problems, such as changing global variables from within the
+    interrupt procedure or calling non-reentrant system functions.  This
+    procedure may call other procedures and functions within the user's
+    program.  It should not call the display or keyboard drivers because of
+    reentrancy problems.  The driver's interrupt routine saves and restores
+    IORESULT, a potential source of reentrancy problems in the system.
+    This protects the user's interrupt routines which call the driver from
+    damaging I/O error reporting from the system after the interrupt call
+    is completed.
+
+    The user interrupt routine is never called for a receive setup
+    interrupt.  The receive socket setup routine forces the current command
+    entry's procedure pointer to nil when it calls the current command
+    function.  This is part of the fix for the 6.4 Tranpsorter bug
+    mentioned in the function section.
+
+    Error and Warning codes :
+
+    The following is a list of the error and warning codes returned by the
+    driver to the calling routine.  It also includes the reasons the driver
+    has returned the error or warning code.
+
+          3  - invalid I/O request error code.   The driver returns this
+               code if the user requests a type of I/O the driver does not
+               support or if the command code is invalid.  The command
+               codes defined by the Concept OS are in the range of 0 to 6,
+               inclusive.  The driver performs only unitinstall (command
+               code = 0), unitstatus (cc = 5), and unitunmount (cc = 6).
+               The commands unitread (cc = 1), unitwrite (cc = 2),
+               unitclear (cc = 3), and unitbusy (cc = 4) are not supported.
+
+         21  - transporter not ready error code.  The driver returns this
+               code if the transporter fails to respond ready in time when
+               trying to "strobe in" the command.  It also responds with
+               this code when it times out waiting for the receive setup
+               response from the Transporter.
+
+         30  - queued request warning code.  The driver responds with this
+               code whenever it queues up a request.  This can occur for
+               current command and receive socket setup function calls.
+
+         52  - entry in use error code.  This error code is returned
+               whenever the entry specified or implied has a command
+               pending on it.  The clear a receive socket function will
+               return this if the current command entry is in use.  The
+               receive socket setup function will return it if the
+               specified receive socket entry is in use or the current
+               command entry is in use and the queue was full.  The current
+               command function will return it only if the current command
+               entry is in use and the queue is full.
+
+         56  - invalid function code error code.  The driver returns this
+               code if the user passes a function code to the unitstatus
+               command that is not 0, 1, 2, 3, 4, $81, $82, $83, or $84.

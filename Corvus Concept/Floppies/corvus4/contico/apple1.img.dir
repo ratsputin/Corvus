@@ -1,0 +1,30 @@
+
+Directory of UCSD disk image file 'apple1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume APPLE1 has 22 files,  0 to 6 (6), eov 500, size 5, free 22
+
+ 1: AP.DEFN.TEXT    Text 13-Oct-82    6-  20(  14),  7168+343=  7511 bytes
+ 2: AP.PIPES.TEXT   Text 13-Oct-82   20-  50(  30), 15360+271= 15631 bytes
+ 3: AP.SEMA4.TEXT   Text 13-Oct-82   50-  64(  14),  7168+297=  7465 bytes
+ 4: AP.DEFN.CODE    Code 13-Oct-82   64-  71(   7),  3584+512=  4096 bytes
+ 5: AP.PIPES.CODE   Code 13-Oct-82   71-  83(  12),  6144+512=  6656 bytes
+ 6: AP.SEMA4.CODE   Code 13-Oct-82   83-  92(   9),  4608+512=  5120 bytes
+ 7: AP.ERRORS.TEXT  Text 13-Oct-82   92- 112(  20), 10240+419= 10659 bytes
+ 8: AP.ERRREPS.TEXT Text 13-Oct-82  112- 142(  30), 15360+346= 15706 bytes
+ 9: AP.ERRORS.CODE  Code 13-Oct-82  142- 160(  18),  9216+512=  9728 bytes
+10: AP.ERRREPS.CODE Code 13-Oct-82  160- 179(  19),  9728+512= 10240 bytes
+11: AP.LIB2         Data 13-Oct-82  179- 198(  19),  9728+512= 10240 bytes
+12: DIAG.DATA       Data  6-Oct-82  198- 199(   1),   512+512=  1024 bytes
+13: RTSTND.LIBRARY  Data 18-Oct-82  199- 235(  36), 18432+512= 18944 bytes
+14: AP.CRTIO.TEXT   Text 27-Oct-82  235- 281(  46), 23552+ 36= 23588 bytes
+15: AP.DRVIO.TEXT   Text 28-Oct-82  281- 333(  52), 26624+149= 26773 bytes
+16: AP.CRTIO.CODE   Code 27-Oct-82  333- 355(  22), 11264+512= 11776 bytes
+17: AP.DRVIO.CODE   Code 28-Oct-82  355- 375(  20), 10240+512= 10752 bytes
+18: AP.DRVU1.TEXT   Text 29-Oct-82  375- 385(  10),  5120+122=  5242 bytes
+19: AP.DRVU1.CODE   Code 28-Oct-82  385- 391(   6),  3072+512=  3584 bytes
+20: AP.LIB          Data 29-Oct-82  391- 485(  94), 48128+512= 48640 bytes
+21: COMP.CODE       Code 29-Oct-82  485- 494(   9),  4608+512=  5120 bytes
+22: DIAG18.DATA     Data 14-Sep-82  494- 495(   1),   512+512=  1024 bytes

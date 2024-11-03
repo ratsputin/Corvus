@@ -1,0 +1,98 @@
+program diskx(input,output);
+{MSDOS 2.0 link check}
+
+const nblk  = 40;
+
+type  buffer= array [0..511] of byte;
+
+var   f: file of buffer;
+      terminalin: file of char;
+      pass,err,i,k: word;
+      buf1,buf2: buffer;
+      fname: string(40);
+
+procedure endxqq; external;  {library procedure}
+
+function keypress: boolean;
+    {returns true if key read }
+    {        false if no key available}
+    begin
+    get(terminalin);
+    keypress := terminalin^ <> chr(0);
+    end;
+
+procedure chkIO;
+    var ch: char;
+    begin
+    if f.errs <> 0 then begin
+        writeln(output);
+        write('**** I/O error ',i:1,', continue? [Y/N]: ');
+        read(ch); writeln(output);
+        if (ch = 'N') or (ch = 'n') then begin
+            discard(f); endxqq; end;
+        end;
+    end;
+
+procedure fillbuff (p,b: word);
+    var i: integer;
+        n: word;
+    begin
+    n := p+b;
+    for i := 0 to 511 do begin
+        buf1[i] := n mod 256; n := n+1; end;
+    end;
+
+function cmpbufs: boolean;
+    {returns true if buffs same }
+    {        false if buffs not same}
+    var i: integer;
+        good: boolean;
+    begin
+    good := true; i := 0;
+    while( (i<512) and good) do begin
+         good := buf1[i] = buf2[i];
+         i := i + 1;
+         end;
+    cmpbufs := good;
+    end;
+
+begin { diskx }
+{for keypress}
+terminalin.mode := terminal;
+assign(terminalin,'USER'); reset(terminalin);
+
+write('Enter file name :  '); readln(fname);
+assign(f,fname);
+pass := 0; err := 0;
+repeat
+    write('O'); f.trap := true;
+    rewrite(f); f.trap := true; chkIO;
+    for i := 0 to nblk-1 do begin
+        fillbuff(pass,i);
+        write('W');
+        f^ := buf1; put(f); chkIO;
+        end;
+
+    write('C');
+    close(f); f.trap := true; chkIO;
+    write('o');
+    reset(f); f.trap := true; chkIO;
+    for i := 0 to nblk-1 do begin
+        fillbuff(pass,i);
+        write('r');
+        buf2 := f^; get(f); chkIO;
+        if (NOT cmpbufs) then begin
+            err := err+1; writeln(output);
+            writeln('Error on block: ',i:1); end;
+        end;
+
+    write('c');
+    close(f); f.trap := true; chkIO;
+    writeln(output);
+    pass := pass+1;
+    writeln('pass = ',pass:1,'  error = ',err:1);
+    until(keypress);
+writeln(output);
+{  reset(f); f.trap := true; discard(f); }
+end.
+

@@ -1,0 +1,198 @@
+(* /START HJELP *)
+PROGRAM HJELP;
+
+USES {$U /ccutil/cclib} CCdefn, CClblio, CCwndio,
+     {$U /program/ocslib} OCS, OCSfile;
+
+TYPE Dpost=RECORD
+             Case integer of
+             1: (Tegn: Packed Array[1..512] of char);
+             2: (Did : String[9];
+                Dant: Integer;
+                Dt  : Array[1..41] of
+                      RECORD
+                        dn:string[7];
+                        dpb,dpt:integer;
+                       END;
+                Dl  : string[7]);
+              End;
+     Post = Packed array[1..512] of char;
+
+VAR f             :file;
+    fili          :file of post;
+    inn,ut        :str;
+    ts,s,i,o,bp,retur,l :integer;
+    kar           :CHAR;
+    io            :Dpost;
+    text          :Lstr;
+    Doc           :String[7];
+    DocSTART:Boolean;
+    Tant: Integer;
+    Tt  : Array[1..41] of
+             RECORD
+             dn:string[7];
+             dpb,dpt:integer;
+             END;
+
+Procedure INITblk;
+VAR s:integer;
+Begin
+    for s:=1 to 512 do
+        io.tegn[s]:='\00';
+
+END;
+
+Procedure Skrivblk;
+BEGIN
+    Retur:=BLOCKwrite(f,io,1,bp);
+    o:=1;
+    INITblk;
+    bp:=bp+1;
+END;
+
+Procedure Leschr;
+BEGIN
+    kar:=' ';
+    REPEAT
+    if i > 512 then
+       begin
+       get(Fili);
+       i:=1
+       end;
+    kar:=Fili^[i];
+    i:=i+1;
+    UNTIL (EOF(Fili)) or (kar <> '\00');
+END;
+
+Procedure Leslinje;
+Var p,l:integer;
+BEGIN
+    DocSTART:=False;
+    tS:=0;
+    Text:=' ';
+    leschr;
+    WHILE (not EOF(Fili)) and (kar <> '\0D') and (ts <= 128) DO
+       BEGIN
+       ts:=ts+1;
+       text[ts]:=kar;
+       leschr;
+       END;
+    text[0]:=chr(ts);
+    p:=POS('/START',text);
+    if p > 0 then
+       begin
+       doc:='       ';
+       l:=p+7;
+       p:=0;
+       for l:=l to ts do
+           if (text[l] <> ' ') and (p <= 7) then
+              begin
+              p:=p+1;
+              doc[p]:=text[l]
+              end
+           else
+              if p>0 then
+                 l:=ts+1;
+       Doc[0]:=CHR(7);
+       DocSTART:=TRUE;
+       end;
+END;
+
+Procedure skrivtegn;
+BEGIN
+   io.tegn[o]:=kar;
+   o:=o+1;
+   if o > 512 then
+      skrivblk;
+END;
+
+Procedure skrivlinje;
+Var s : integer;
+Begin
+   FOR s:=1 to ts do
+       begin
+       kar:=text[s];
+       skrivtegn
+       end;
+   kar:='\0D';
+   skrivtegn;
+END;
+
+BEGIN
+   REPEAT
+      Clear;
+      CCwndioinit;
+      retur:=WINSYSTEM(2);
+      Clear;
+      retur:=WINSYSTEM(3);
+      Clear;
+      CClblioinit;
+      LBLsinit;
+      s:=lblset(9,'Exit','\0D');
+      LBLson;
+      GOTOcr(20,5);
+      Writeln('Office & Computer System');
+      GOTOcr(20,10);
+      Writeln('Help System GENERATOR');
+      GOTOcr( 20, 20);
+      write('Help Input  file: ');
+      GOTOcr( 20, 22);
+      Write('Help Output file: ');
+      pfkey:=0;
+      inn:=' ';
+      ut:=' ';
+      Repeat
+        Gettekst(40,20,16,inn);
+        if pfkey = 0 then
+          GETtekst(40,22,16,ut);
+      until (pfkey = 0) or (pfkey = 10);
+    if pfkey = 10 then
+    else
+      BEGIN
+      Reset(Fili,inn);
+      Rewrite(F,ut);
+      bp:=0;
+      INITblk;
+      SKRIVblk;
+      i:=1;
+      o:=1;
+      tant:=0;
+      Repeat
+        leslinje;
+        if DOCstart then
+           Begin
+           tant:=tant+1;
+           tt[tant].dn:=doc;
+           tt[tant].dpb:=bp;
+           tt[tant].dpt:=o
+           End
+        else
+           if ts > 0 then
+              skrivlinje;
+      UNTIL EOF(FILI);
+      SKRIVblk;
+      bp:=0;
+      Initblk;
+      io.Did:='DOCUMENT';
+      io.dant:=tant;
+      FOR i:=1 to tant do
+          Begin
+          io.dt[i].dn:=tt[i].dn;
+          io.dt[i].dpb:=tt[i].dpb;
+          io.dt[i].dpt:=tt[i].dpt
+          End;
+      Skrivblk;
+      Close(Fili);
+      Close(F,Lock);
+      LBLsinit;
+      s:=lblset(9,'Exit','\0D');
+      LBLson;
+      retur:=WINSYSTEM(2);
+      Write('Press RETURN for repeat or EXIT to terminate');
+      repeat
+      GETkey;
+      until (pfkey = 0) or (pfkey = 10);
+     end;
+     UNTIL pfkey = 10;
+END.
+(* /END *)

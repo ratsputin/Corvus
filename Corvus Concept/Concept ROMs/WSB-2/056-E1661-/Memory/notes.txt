@@ -1,0 +1,9 @@
+Memory board in drawer, screwed to processor board
+2-01 is:
+  Signetics
+  N82S153N 8227
+  S       HCTR7
+3-01 is:
+  Signetics
+  N82S153N 8243
+  S       VCTR8

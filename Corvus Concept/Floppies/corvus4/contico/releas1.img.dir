@@ -1,0 +1,31 @@
+
+Directory of UCSD disk image file 'releas1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume RELEAS1 has 23 files,  0 to 6 (6), eov 500, size 3, free 23
+
+ 1: CHECKSUMM.TEXT  Text  7-May-81    6-  14(   8),  4096+512=  4608 bytes
+ 2: CHECKSUMM.CODE  Code 25-Aug-81   14-  17(   3),  1536+512=  2048 bytes
+ 3: CRCTEST.TEXT    Text  6-Jan-82   17-  19(   2),  1024+512=  1536 bytes
+ 4: OLDMFLOP.TEXT   Text  3-Nov-81   19-  43(  24), 12288+512= 12800 bytes
+ 5: CORVUS.LIBRARY  Data 24-Sep-81   43- 108(  65), 33280+512= 33792 bytes
+ 6: CRCLIST.CODE    Code  6-Jan-82  108- 144(  36), 18432+512= 18944 bytes
+ 7: CRCLIST.TEXT    Text  6-Jan-82  144- 174(  30), 15360+512= 15872 bytes
+ 8: CRCCHECK.CODE   Code  6-Jan-82  174- 205(  31), 15872+512= 16384 bytes
+ 9: CRCCHECK.TEXT   Text  6-Jan-82  205- 231(  26), 13312+512= 13824 bytes
+10: RDMAKEFLOP.TEXT Text  6-Jan-82  231- 255(  24), 12288+512= 12800 bytes
+11: RDMAKEFLOP.CODE Code  6-Jan-82  255- 273(  18),  9216+512=  9728 bytes
+12: CRCS.TEXT       Text  7-Jan-82  273- 305(  32), 16384+512= 16896 bytes
+13: DIFF.TEXT       Text  7-Jan-82  305- 315(  10),  5120+460=  5580 bytes
+14: T2PCO.TEXT      Text 23-Jun-82  315- 325(  10),  5120+512=  5632 bytes
+15: CRC2.TEXT       Text 21-Jul-82  325- 355(  30), 15360+512= 15872 bytes
+16: S100PCO.TEXT    Text  9-Jul-82  355- 383(  28), 14336+512= 14848 bytes
+17: XRPCO.TEXT      Text  9-Jul-82  383- 411(  28), 14336+512= 14848 bytes
+18: PROD.FLOP.TEXT  Text 25-May-82  411- 437(  26), 13312+512= 13824 bytes
+19: A3PCO.TEXT      Text 23-Jun-82  437- 453(  16),  8192+512=  8704 bytes
+20: T1PCO.TEXT      Text 29-Jul-82  453- 467(  14),  7168+512=  7680 bytes
+21: AVLPCO.TEXT     Text 24-Aug-82  467- 481(  14),  7168+512=  7680 bytes
+22: OMNITPCO.TEXT   Text 24-Aug-82  481- 487(   6),  3072+512=  3584 bytes
+23: ATARIPCO.TEXT   Text 24-Aug-82  487- 497(  10),  5120+512=  5632 bytes

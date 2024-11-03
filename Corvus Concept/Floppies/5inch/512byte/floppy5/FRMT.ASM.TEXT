@@ -1,0 +1,29 @@
+;
+; file : frmt.asm.text
+; date : 28-APR-82   kb
+;
+; last revision : 10-MAY-82  kb
+;
+;       Subroutine to pascal program to format a floppy diskette.
+;       This routine calls the Floppy driver write track/read track format code to format
+;       the diskette so it can be read by the controller.
+;
+                GLOBAL          FORMAT
+                EXTERN          FRMT8SD
+;
+;       Function FORMAT( unitno : integer, verf : boolean ) : integer;
+;
+;       parameter unitno : The unit number of the floppy drive.
+;       returns : the result code of the operation.  0 is successful.
+;
+FORMAT          MOVEA.L         (SP)+, A0               ;GET RETURN ADDRESS
+                MOVE.B          (SP)+, D5               ;GET VERIFY FLAG
+                MOVE.W          (SP)+, D0               ;GET UNIT NUMBER
+                MOVE.L          A0, -(SP)               ;PUT BACK RETURN ADDRESS
+;
+; CALL THE FORMAT CODE
+;
+                JSR             FRMT8SD
+FMTEXIT         MOVE.W          D7, 4(SP)               ;PUT RETURN CODE ON STACK
+                RTS
+                END

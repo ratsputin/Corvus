@@ -1,0 +1,391 @@
+{ file release:rdmakeflop.text}
+(*$S+*)
+{ ************************************************************* }
+{ Program:      MAKEFLOP                                        }
+{ Authors:      Bruce Eisenhard                                 }
+{ Date:         01/26/81                                        }
+{ Purpose:      MAKEFLOP is a program for manuf. 16-sector      }
+{               floppies                                        }
+{                                                               }
+{ Revision History:                                             }
+{       1.0:    CORVUS internal release                     BTE }
+{       1.1:    modified by Denise                              }
+{       1.1a:   bug fix in verify                               }
+{       1.2:    OMNINET floppies added                          }
+{       1.3     modified to support other floppies as well      }
+{       1.4     modified to ask for floppy names                }
+{ ************************************************************* }
+
+program makeflop;
+
+(*$U CORVUS.LIBRARY*)
+USES smartio;
+
+{$I-}
+CONST revnumber = '1.4';
+      bufsize = 7168;
+      blocks  = 14;
+      maxc    = 10; 
+      quit    = 11;
+
+TYPE  flop = RECORD 
+                Entre: string[30];
+                FName: string[20];
+                initialized: boolean;
+                chksum: integer;
+               end;
+      byte = 0..255;
+      buffer = PACKED ARRAY [1..bufsize] OF byte;
+
+VAR     source,dest: FILE;
+        srcbuf, destbuf: buffer;
+        menu: ARRAY [1..maxc] OF flop;
+        ch: char;
+        iores: integer;
+        masterunit, floppyunit: string;
+       
+  
+PROCEDURE checksumm( var checksum: integer; buf: buffer; length: integer );
+EXTERNAL;
+
+segment procedure help;
+begin
+crt(eraseall);
+writeln;
+writeln('This program is used to reproduce');
+writeln('floppies for the Apple product line.');
+writeln('The options are listed below.');
+writeln;
+writeln('I(nitialize:  Copies from the master');
+writeln(' floppy into a Master file on the Corvus');
+writeln(' drive.  It also computes a checksum on');
+writeln(' the data.  This checksum can be');
+writeln(' displayed with the S(how option.');
+writeln;
+writeln('C(opy: Copies from the Master file to a');
+writeln(' floppy.  The data is verified as it is');
+writeln(' written to the floppy.  If an error');
+writeln(' occurs, the copy is terminated, and the');
+writeln(' floppy should be retested.  The data on');
+writeln(' it is no good.');
+writeln;
+writeln('V(erify:  Compares the contents of the');
+writeln(' Master file to a floppy');
+writeln;
+writeln('S(how: Displays the checksum of a Master');
+writeln(' file, or of a floppy.');
+writeln;
+writeln('P(arameters: Allows you to change either');
+writeln(' the Master unit # (which defaults to 10)');
+writeln(' or the floppy unit # (which defaults to');
+writeln(' 9).');
+end;
+  
+  procedure Checkio( var iores: integer; s: string );
+  begin
+  iores := ioresult;
+  if iores<>0 then
+     begin
+     crt(eraseos); writeln;
+     writeln(beep, 'IO error ',iores,':  Cannot access ',s);
+     end;
+  end; { procedure checkio }
+  
+  PROCEDURE initmenu;
+  var i: integer;
+      s: STRING;
+  BEGIN
+  for i:=1 to maxc do 
+     BEGIN
+     menu[i].initialized := false;
+     Menu[i].Entre:='';
+     STR(i,s);  Menu[i].FName:=CONCAT('FLOP',s,'.DATA');
+     END;
+  END;
+  
+  
+  PROCEDURE listmenu(heading: string);
+  VAR i:INTEGER;
+  BEGIN
+  crt(eraseall);
+  writeln; writeln;
+  FOR i:=1 TO maxc DO writeln('  ',i:2,' - ',menu[i].Entre);
+  writeln;
+  writeln('  ',quit:2,' - QUIT');
+  gotoxy(0,0); write(heading,': Choose one: ');
+  END;
+  
+  function getchoice(var choice: integer ): boolean;
+  var x: integer;
+  begin
+  readln(x);  while (x<1) or (x>quit) do readln(x);
+  if x=quit then getchoice := false else getchoice := true;
+  choice := x;
+  crt(eraseos);
+  end; { Function getchoice }
+
+function additup: integer;
+var i,j,k,c: integer;
+begin
+crt(startbeat);
+c := 0; additup := 0;
+FOR i:=0 TO 19 DO    { 20*14 = 280 blocks }
+  BEGIN
+  j:=blockread(source,srcbuf,blocks,blocks*i);
+  IF (ioresult<>0) or (j<>blocks) THEN 
+    BEGIN
+    writeln; writeln(beep,'*** READ ERROR ***');
+    exit(additup);
+    END;
+  checksumm( c, srcbuf, bufsize );
+  crt(heartbeat);
+  end;
+additup := c;
+end; {function additup}
+
+procedure Checkit; 
+var c,choice: integer;
+    ch: char;
+    done: boolean;
+
+begin
+done := false;
+crt(eraseall); write('Checksum: F(loppy M(aster: '); ch := getbyte;
+if ch='F' then
+   begin
+   writeln; write('Insert floppy; press <return> when ready');
+   ch := getbyte; writeln;
+   if ch<>'!' then
+      begin
+      reset(source,floppyunit);
+      checkio(iores,floppyunit);
+      if iores=0 then
+         begin
+         c := additup;
+         done := true;
+         close(source);
+         end;
+      end;
+   end
+else begin
+   listmenu('Checksum');
+   if getchoice(choice) then 
+      begin
+      done := true;
+      if not (Menu[choice].initialized) then
+         begin
+         reset(source,concat(masterunit,Menu[choice].Fname));
+         checkio(iores,Menu[choice].fname);
+         if iores<>0 then done := false   
+         else
+            begin
+            Menu[choice].chksum := additup;
+            Menu[choice].initialized := true;
+            close(source);
+            end;
+         end;
+      c := Menu[choice].chksum;
+      end;
+   end;
+if done then begin writeln; writeln('Checksum is ',c); end;
+end; { checkit } 
+
+procedure DoIt(s: string);
+VAR  ch: char;
+     count,choice: integer;
+     temps: STRING;
+     stop: boolean;
+
+procedure Verify( choice: integer );
+var i,j,k: integer;
+begin
+reset(source,concat(masterunit,menu[choice].fname));
+checkio(iores,Menu[choice].fname);
+if iores<>0 then exit(DoIt);
+reset(dest,floppyunit);
+checkio(iores,floppyunit);
+if iores<>0 then exit(DoIt);
+crt(startbeat);
+FOR i:=0 TO 19 DO    { 20*14 = 280 blocks }
+  BEGIN
+  j:=blockread(source,srcbuf,blocks,blocks*i);
+  IF (ioresult<>0) or (j<>blocks) THEN 
+    BEGIN
+    writeln; writeln(beep,'*** READ ERROR ***');
+    exit(DoIt);
+    END;
+  k:=blockread(dest,destbuf,blocks,blocks*i);
+  iores := ioresult;                                            {1.1a}
+  IF (iores<>0) or (srcbuf<>destbuf) or (k<>blocks) THEN        {1.1a}
+    BEGIN
+    writeln; writeln(beep,'*** VERIFY ERROR ***');
+    writeln( 'Ioresult: ',iores);                               {1.1a}
+    exit(DoIt);
+    END;
+  crt(heartbeat);
+  END;
+close(source); close(dest);
+end; {procedure Verify}
+
+procedure CopyIT;
+var i,j,k: integer;
+begin
+crt(startbeat);
+FOR i:=0 TO 19 DO    { 20*14 = 280 blocks }
+  BEGIN
+  j:=blockread(source,srcbuf,blocks,blocks*i);
+  IF (ioresult<>0) or (j<>blocks) THEN 
+    BEGIN
+    writeln; writeln(beep,'*** READ ERROR ***');
+    exit(DoIt);
+    END;
+  k:=blockwrite(dest,srcbuf,blocks,blocks*i);
+  IF (ioresult<>0) or (k<>blocks) THEN
+    BEGIN
+    writeln; writeln(beep,'*** WRITE ERROR ***');
+    exit(DoIt);
+    END;
+  j:=blockread(dest,destbuf,blocks,blocks*i);
+  iores := ioresult;                                            {1.1a}
+  IF (iores<>0) or (srcbuf<>destbuf) or (j<>blocks) THEN
+    BEGIN
+    writeln; writeln(beep,'*** VERIFY ERROR ***');
+    writeln( 'Ioresult: ',iores,', Blocks read: ',j);           {1.1a}
+    exit(DoIt);
+    END;
+  crt(heartbeat);
+  END;
+end; {procedure CopyIT}
+  
+PROCEDURE Copy(choice: integer);
+BEGIN
+reset(source,concat(masterunit,menu[choice].fname));
+checkio(iores,Menu[choice].fname);
+if iores<>0 then exit(DoIT);
+reset(dest,floppyunit);
+checkio(iores,floppyunit);
+if iores<>0 then exit(DoIt);
+CopyIT;
+close(source); close(dest);
+end; {procedure COPY}
+  
+PROCEDURE Initialize(choice: integer);
+BEGIN
+reset(source,floppyunit);
+checkio(iores,floppyunit);
+if iores<>0 then exit(DoIt);
+reset(dest,concat(masterunit,menu[choice].fname));
+if ioresult<>0 then
+   begin
+   rewrite(dest,concat(masterunit,menu[choice].fname));
+   checkio(iores,Menu[choice].fname);
+   if iores<>0 then exit(DoIt);
+   end;
+CopyIT;
+close(source);  close(dest,lock);
+writeln; writeln('Floppy read.  Now starting Checksum pass.');
+reset(source,concat(masterunit,menu[choice].fname));
+checkio(iores,Menu[choice].fname);
+if iores<>0 then exit(DoIt);
+menu[choice].chksum := additup;
+menu[choice].initialized := true;
+close(source);
+writeln; writeln('Checksum is ',Menu[choice].chksum);
+end; {procedure Initialize}
+
+
+
+begin { procedure DoIT }
+listmenu( s );
+if getchoice(choice) then
+   begin
+   crt(eraseall); 
+   IF s[1]='I' THEN 
+      BEGIN
+      WRITE('Enter floppy title: '); 
+      IF getstring(temps)<>normal THEN exit(Doit);
+      Menu[choice].Entre := temps;
+      END
+   ELSE IF Menu[choice].Entre='' THEN
+      BEGIN
+      WRITELN; WRITELN;
+      WRITELN(Beep,'Floppy ',choice,' has not been initialized.');
+      EXIT(Doit);
+      END;
+   writeln; writeln( s,'ing ',Menu[choice].Entre );
+   count := 0; stop := false; 
+   repeat 
+     write('Insert floppy; press <return> when ready');
+     ch := getbyte;
+     if ch='!' then exit(DoIt);
+     case s[1] of
+       'C':  Copy(choice);
+       'V':  Verify(choice);
+       'I':  Initialize(choice);
+     end;
+     count := count+1;
+     writeln;
+     if count=1 then writeln('1 ',s,' completed.')
+        else writeln(Count,' ',s, 's of ',Menu[choice].Entre,' completed.');
+     if s[1]='I' then stop := true else
+        begin
+        write(s,' again? Y'); crt(left); ch := getbyte;
+        if ch='N' then stop := true;
+        writeln;
+        end;
+   until stop;
+   end;
+end; { procedure Doit }
+  
+       
+PROCEDURE Parameters;
+VAR ch: char;
+    unitnum: string;
+    i: INTEGER;
+begin
+while true do
+  begin
+  crt(eraseall); writeln;
+  writeln(' Current parameters are: ');
+  writeln('    floppy unit:  ',floppyunit );
+  writeln('    master unit:  ',masterunit );
+  gotoxy(0,0); write(' Change: F(loppy M(aster Q(uit: ');
+  ch := getbyte;  writeln;
+  if ch='Q' then exit(Parameters);
+  if ch='F' then write('Enter new floppy unit #:')
+  else if ch='M' then write('Enter new Master unit #:');
+  readln(unitnum);
+  unitnum := concat('#',unitnum,':');
+  if ch='F' then floppyunit := unitnum else 
+  if ch='M' then  
+     begin 
+     masterunit := unitnum;
+     initmenu;
+     end;
+  end;
+end; { procedure Parameters }
+
+BEGIN
+ioinit;
+initmenu;
+masterunit := '#10:';
+floppyunit := '#9:';
+
+repeat
+  close(source); close(dest);
+  gotoxy(0,0); crt(eraseol);
+  write('MAKEFLOP:  I(nit C(opy V(er S(how P(arameters H Q: ');
+  ch := getbyte; crt(eraseos); writeln;
+  case ch of
+    'I':  DoIt('Initialize');
+    'C':  DoIt('Copy');
+    'V':  DoIt('Verify');
+    'S':  Checkit;  
+    'P':  Parameters;
+    'H':  Help;
+    ' ': crt(eraseall);
+    end;
+until ch='Q';
+
+END.
+

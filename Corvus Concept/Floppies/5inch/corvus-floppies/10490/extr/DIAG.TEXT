@@ -1,0 +1,69 @@
+{$S DiagTask}
+procedure Sampler;
+var I,J: integer;
+    Total: longint;
+    YN: char;
+begin
+  Total := 1;
+  for I := 1 to 30 do
+    Total := Total + Sample[I];
+  writeln( 'Total (-Sample[0]) = ', Total );
+  writeln( 'Sample[0] = ', Sample[0] );
+  for I := 1 to 30 do begin
+    write( I:2, Sample[I], '  ' );
+    for J := 1 to 25 do
+      if J <= (Sample[I]*ord4(25)) div Total
+        then write('#') else write(' ');
+    writeln;
+  end;
+  write( 'clear sample?' );
+  readln( YN );
+  if YN in ['y','Y'] then
+    fillchar( Sample, sizeof( Sample ), chr(0) );
+end;
+
+{
+.PG
+}
+procedure VerifyTask;
+var Ans:StrTyp;
+    Done, Dum: boolean;
+begin
+   PushWindow( GaugeWin );
+   write('\1BJ');
+   PopWindow;
+   write( '\1BH' );
+   LoadLabels( DiagFrame );
+   Done := false;
+   while not Done do begin
+      NextCmd;
+      case Cmd of
+         KF1: if not WkSpVfy then TellUsr( Msg(MGWKSP,6) );
+         KF2: Dum := FilChkRecPtrs( TxtFid );
+         KF6: begin
+                 Ans := '';
+                 if PmtStr( Msg(MGGENL,14), Ans ) then begin
+                    if Ans='diag' then begin
+                       WkSpDiag;
+                    end else if Ans='sample' then begin
+                       Sampler;
+                    end else if Ans='break' then begin
+                       debug := true;
+                       breakproc(0);
+                    end else begin
+                       Bell( BelErr );
+                    end;
+                 end;
+              end;
+         otherwise: Done := true;
+      end;
+   end;
+   Refresh;
+end;
+
+
+
+
+
+
+

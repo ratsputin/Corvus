@@ -1,0 +1,153 @@
+{!AP} {$S++}
+PROGRAM OmniMap;
+
+USES
+        {$U /ccutil/CCLIB}
+                cCdefn,
+             {  cCdrvIO,  }
+                cCotcIO,
+                cCcrtIO;
+
+
+CONST
+        fatal   = TRUE;
+        nonfatal= FALSE;
+
+PROCEDURE Home; begin CrtTitle(''); end;
+PROCEDURE Init;
+      begin
+      CCcrtIOinit;
+{!AP  CCdrvIOinit; }
+      CCotcIOinit;
+      CrtTpgm := 'OMNI-Map';
+      CrtTvrs := '1.3';
+      CrtTcpy := 'Customer Support, Release Date : 26 Sept, 1984';
+      end;
+
+PROCEDURE Err(ErrNo:integer; quit:boolean);
+
+begin
+        if quit then write (CHR(7),'*** Fatal e') else write ('E');
+        write ('rror #',ErrNo:1,' - ');
+        case ErrNo OF
+
+             1:         WRITELN('Transporter driver error');
+
+        end; { eACASEe@ }
+{!AP}   if quit then EXIT(omnimap);
+end;
+
+
+PROCEDURE Main;
+
+TYPE
+{!AP}   wurd=   PACKED RECORD
+                hi:     char;
+                lo:     char;
+                end;
+        ConstCmd=RECORD
+                protoid:wurd;
+                msgtype:wurd;
+                source :wurd;
+                devtype:wurd;
+                name   :PACKED ARRAY[1..10] OF CHAR;
+                end;
+
+{!AP}   TrickCmd= RECORD case boolean OF
+{!AP}             TRUE: (Cmd: ConstCmd);
+{!AP}             FALSE:(Buff:bytes   );
+{!AP}             end;
+
+var
+        rblk,
+        sblk:   TCparmBlk;
+        Rrslt,
+        Srslt:  TCrsltrcd;
+        Rcmd,
+{!AP}   Scmd:   TrickCmd;
+        map:    TChostSet;
+        lin, col: integer;
+        i, x, y:  integer;
+        Me, tn:   integer;
+        Dsta:   integer;
+
+PROCEDURE Show_Map;
+      var node: integer; st: String80;
+      begin
+      Home;
+      Dsta := TCWhoAmI (Me); Dsta := TCnetMap(map);
+      for node := 0 to 63 do begin
+          x := (node MOD 8)*4; y := node DIV 8+3; GoToXY (x,y);
+          if (node IN map) OR (node = Me)
+              then begin
+                  CvIntStr (node,st,DecRdx);
+                  while length(st) < 3 do st := concat (' ',st)
+                  end
+              else st := '  .';
+          if node = Me then st[1] := '<';
+          write (st);
+          if node = Me then write ('>');
+          end;
+      end;
+
+PROCEDURE Build_Scmd;
+
+      begin
+      with Scmd.CMD do begin
+           protoid.hi := chr(001); { protocol = hex 01FE         }
+           protoid.lo := chr(254);
+           msgtype.hi := chr(002); { message type = who are you? }
+           msgtype.lo := chr(000);
+           source.hi  := chr(000); { my station ID               }
+           source.lo  := chr(Me);
+           devtype.hi := chr(000); { device type = everything    }
+           devtype.lo := chr(255);
+           end;
+      end;
+
+      begin
+      Show_Map;
+      lin := 12; col := -1; Build_Scmd;
+      for tn := 0 to 63 do begin
+          if tn in Map then begin
+             x := tn MOD 8 *4+3; y := tn DIV 8+3; GoToXY (x,y);
+             write ('*',CHR(8));
+             Dsta := TCendRecv( 1, i );
+{!CC}        TCinitBlk (rblk,        @Rrslt ,        @Rcmd.BUFF  , NIL);
+{!UC}      { TCinitBlk (rblk, TCptrRR(Rrslt), TCptrBF(Rcmd.BUFF) , NIL); }
+             Dsta := TCsetRecv( rblk, 1, 18, 0 );
+{!CC}        TCinitBlk (sblk,        @Srslt ,        @Scmd.BUFF  , NIL);
+{!UC}      { TCinitBlk (sblk, TCptrRR(Srslt), TCptrBF(Scmd.BUFF) , NIL); }
+             Dsta := TCsndMesg( sblk, 1, 8, 0, tn );
+             repeat until rblk.rRslt <> CmdAcpt;
+             Dsta := TCendRecv( 1, i );
+             write (' '); {remove asterisk from Map}
+             if Rrslt.rcode=0 then
+{!AP}        with Rcmd.CMD do begin
+{!AP}           if (protoid.hi=chr(1)) AND (protoid.lo=chr(254))
+                AND (msgtype.hi=chr(16)) AND (msgtype.lo=chr(0))
+                then begin
+                     col := col + 1;
+                     if col=4 then begin
+                                   col := 0;
+                                   lin := lin + 1;
+                                   end;
+                     GoToXY (col*20,lin);
+                     write (tn:2,': ');
+                     case ord(devtype.lo) OF
+                         1: write ('D');
+                         5: write ('B');
+                         6: write ('O');
+                       end;
+                     write (' (',name,')');
+                     end;
+                end; { eAWithe@ eARcmde@ }
+             end; { eAife@ eARreAslt.rcodee@ }
+          end; { eAfore@ eAtne@ eA:=e@ eA0e@ eATOe@ eA63...e@ }
+      end;
+
+
+      begin
+      Init; Home; Main;
+      end.
+

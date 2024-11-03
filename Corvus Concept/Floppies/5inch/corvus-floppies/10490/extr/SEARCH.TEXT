@@ -1,0 +1,447 @@
+{$S main }
+
+
+function Match(var Pat:StrTyp;var Buf:BA;LCol,Lft,Rht:integer):boolean;
+var Fnd: boolean;
+    I, RCol: integer;
+    BC : Integer;
+
+begin
+  Match := false;
+  RCol := LCol + length(Pat) - 1;
+  if (LCol>=Lft) and (RCol<=Rht) then begin
+    I := 0;
+    repeat
+      BC := CnvBI(Buf[LCol+I]);
+      If ((Not CSense) and (BC in [97..122])) Then BC := BC - 32;
+      If CSense Then Fnd := Pat[I+1] = Chr(BC)
+        else Fnd := UpperCase(Pat[I+1]) = UpperCase(chr(BC));
+      I := I + 1;
+    until not Fnd or (I>=length(Pat));
+    if TokFnd and Fnd then begin
+      Fnd := IsWrdBnd(Buf,LCol-1) and IsWrdBnd(Buf,RCol);
+    end;
+
+    Match := Fnd;
+  end;
+end;
+
+
+function LinMatch(var Pat:StrTyp; Lin:integer; var Col:integer;
+                  Dir, Lft, Rht:integer):boolean;
+var
+  Fnd: boolean;
+  PatCol: integer;
+  LinImg: BA;
+begin
+  UpdtGauge( Lin, LstLin );
+  GetLine( LinImg, Lin );
+  PatCol := Col;
+  Fnd := false;
+  repeat
+    PatCol := PatCol + Dir;
+    Fnd := Match( Pat, LinImg, PatCol, Lft, Rht );
+  until (Lft>PatCol) or (Rht<PatCol) or Fnd;
+  if Fnd then Col := PatCol;
+  LinMatch := Fnd;
+end;
+
+
+function SrchFwd(var Pat:StrTyp; Top,Bot,Lft,Rht:integer):boolean;
+var
+  Done, Fnd: boolean;
+  OCurCol: integer;
+  OCurLin: integer;
+begin
+
+  (* search current line *)
+  OCurLin := CurLin;
+  Fnd := LinMatch( Pat, CurLin, CurCol, +1, Lft, Rht );
+
+  (* search remaining lines in file *)
+  if not Fnd then begin
+    OCurCol := CurCol;
+    CurCol := Lft-1;
+    Done := false;
+    while not Done and UsrIdle do begin
+      if RecFndNxt( TxtFid, Pat ) and (CurLin<=Bot) then begin
+         Fnd := LinMatch( Pat, CurLin, CurCol, +1, Lft, Rht );
+         Done := Fnd;
+      end else begin
+         Done := true;
+      end;
+    end;
+    if not Fnd then CurCol := OCurCol;
+  end;
+
+  if not Fnd then begin
+    SetUpNewTxt( OCurLin );
+  end else begin
+    SetUpNewTxt( CurLin );
+    CsrWid := length(Pat);
+  end;
+  SrchFwd := Fnd;
+end;
+
+
+function SrchBck(var Pat:StrTyp; Top,Bot,Lft,Rht: integer):boolean;
+var
+  Fnd, Done: boolean;
+  OCurCol: integer;
+  OCurLin: integer;
+begin
+
+  (* search current line *)
+  OCurLin := CurLin;
+  Fnd := LinMatch( Pat, CurLin, CurCol, -1, Lft, Rht );
+
+  (* search remaining lines *)
+  if not Fnd then begin
+    OCurCol := CurCol;
+    CurCol := Rht + 1;
+    Done := false;
+    while not Done and UsrIdle do begin
+      if RecFndPrv( TxtFid, Pat ) and (CurLin>=Top) then begin
+         Fnd := LinMatch( Pat, CurLin, CurCol, -1, Lft, Rht );
+         Done := Fnd;
+      end else begin
+         Done := true;
+      end;
+    end;
+    if not Fnd then CurCol := OCurCol;
+  end;
+
+  if not Fnd then begin
+    SetUpNewTxt( OCurLin )
+  end else begin
+    SetUpNewTxt( CurLin );
+    CsrWid := length(Pat);
+  end;
+  SrchBck := Fnd;
+end;
+
+
+procedure Search( Dir: char; Top, Bot, Lft, Rht: integer );
+var Fnd: boolean;
+begin
+  if Pat<>'' then begin
+    if Dir='>' then begin
+       TellUsr( Subst( @Pat, Msg(MGSRCH,2)) );
+       Fnd := SrchFwd( Pat, Top, Bot, Lft, Rht );
+    end else begin
+       TellUsr( Subst( @Pat, Msg(MGSRCH,3) ));
+       Fnd := SrchBck( Pat, Top, Bot, Lft, Rht );
+    end;
+
+    if not Fnd then begin
+      TellUsr( Subst( @Pat, Msg(MGSRCH,5) ));
+      Bell(BelErr);
+      Cmd := KBAD;
+    end else
+      ClrMsg;
+  end;
+end;
+
+
+procedure ReplPat( var Pat, Rpl: StrTyp; VfyChg: boolean;
+                   Top, Bot, Lft, Rht: integer; BFlag : Boolean );
+VAR Tmp: StrTyp;
+    I: integer;
+    OCurLin, ChgCnt: INTEGER;
+    FND: BOOLEAN;
+    DIF: INTEGER;
+
+
+procedure DOREPLACE( var Rpl: StrTyp );
+var I: integer;
+    Glotzy : Integer;
+    CapIt: boolean;
+begin
+   CapIt := false;
+   if (Pat<>'') and (Rpl<>'') and (CurCol<MaxLinLen) then begin
+      CapIt := (chr(NewTxt[Curcol]) in ['A'..'Z']) and
+               (chr(NewTxt[CurCol+1]) in ['a'..'z']) and
+               (Rpl[1] in ['a'..'z']);
+   end;
+
+   if Dif>0 then begin                   { eAOpene@ eAupe@ eAspacee@ eAfore@ eAthee@ eAnewe@ eAtexte@ }
+     moveright( NewTxt[CurCol], NewTxt[CurCol+Dif],
+                MaxLinLen-CurCol-Dif+1 );
+   end else if Dif<0 then begin
+     moveleft( NewTxt[CurCol-Dif], NewTxt[CurCol],
+               MaxLinLen-CurCol+Dif+1 );
+     fillchar( NewTxt[MaxLinLen+Dif+1], -Dif, ' ' );
+   end;
+
+   for I := 1 to length(Rpl) do begin    { eAInserte@ eAthee@ eAreplacemente@ }
+      Glotzy := Ord(Rpl[I]);
+      If Glotzy > 127 Then Glotzy := Glotzy - 256;
+      NewTxt[CurCol+I-1] := Glotzy
+      end;
+
+   if CapIt then NewTxt[CurCol] := ord( Rpl[1] ) - 32;
+
+   NewTxtMty := false;
+   FlushNewTxt;
+   CURCOL := CURCOL + LENGTH(RPL) - 1;
+end;
+
+{
+procedure ReplPat *MAIN*
+}
+BEGIN
+  if WrtOK then begin
+     CurCol := Lft-1;
+     OCurLin := CurLin;
+     DpyChg := VfyChg;
+     BeginEvent;
+     DIF := LENGTH( RPL ) - LENGTH( PAT );
+     FLUSHNEWTXT;
+     Cmd := KF6;
+     CHGCNT := 0;
+     FND := TRUE;
+     If BFlag Then SetUpNewTxt( Top )       { eASpeciale@ eAhandlinge@ eAfore@ eAmark/bounde@ }
+       Else SetUpNewTxt(CurLin);
+     if VfyChg then LoadLabels( ReplFrame );
+     Fnd := SrchFwd( Pat, Top, Bot, Lft, Rht );
+     while UsrIdle and Fnd do begin
+       if VfyChg then begin
+         ShowLine( CurLin );
+         PutCursor( CurLin, CurCol );
+         ClrMsg;
+         NextCmd;
+       end;
+       case Cmd of
+         KF4: begin
+             if VfyChg then TellUsr( Subst(@Pat,Msg(MGSRCH,3)));
+             if not SrchBck( Pat, Top, Bot, Lft, Rht ) then
+               TellUsr( Subst(@Pat,Msg(MGSRCH,5)));
+           end;
+         KF5: begin
+             if VfyChg then TellUsr( Subst(@Pat,Msg(MGSRCH,2)));
+             if not SrchFwd( Pat, Top, Bot, Lft, Rht ) then
+               TellUsr( Subst(@Pat,Msg(MGSRCH,5)) );
+           end;
+         KF6: begin
+             ChgCnt := ChgCnt + 1;
+             DoReplace( Rpl );
+             if VfyChg then TellUsr( Subst(@Pat,Msg(MGSRCH,2)));
+             Fnd := SrchFwd( Pat, Top, Bot, Lft, Rht );
+           end;
+         KF7: begin
+              ChgCnt := ChgCnt + 1;
+              Tmp := Rpl;
+              if PmtStr( Subst( @Pat,Msg(MGSRCH,7)), Tmp ) then begin
+                 DoReplace( Tmp );
+                 if VfyChg then TellUsr( Subst(@Pat,Msg(MGSRCH,2)));
+                 Fnd := SrchFwd( Pat, Top, Bot, Lft, Rht );
+              end;
+           end;
+         KF10: Fnd := false;
+       end;
+     end;
+     EndEvent;
+     SetUpNewTxt( OCurLin );
+     CurCol := 1;
+     TellUsr( Subst(AsStr(ChgCnt,10), Msg(MGSRCH,9)));
+     CsrWid := 1;
+  end;
+end;
+
+
+procedure ShwAll( Lin, Top, Bot, Lft, Rht: integer );
+var OCurLin,PatRow,PatLin,NumPats: integer;
+    i: integer;
+    Dum: StrTyp;
+    Term: KeyTyp;
+
+
+  procedure DpyLine( Lin: integer );
+  begin
+    if Lin<LstLin then begin
+      NumPats := NumPats + 1;
+      WinTop := Lin - NumPats + 1;
+      WinBot := LstLin;
+      ShowLine( Lin );
+      if Lin=PatLin then
+        PatRow := NumPats;
+    end;
+  end;
+
+{
+SHWALL *MAIN*
+}
+begin
+  TellUsr( Subst(@Pat,Msg(MGSRCH,2) ) );
+  LoadLabels( ShowFrame );
+
+  RdwRqd := false;
+  OCurLin := CurLin;
+  SetUpNewTxt( Lin );
+  if not RecFndNxt( TxtFid, Pat ) or (CurLin>Bot) then begin
+     SetUpNewTxt( OCurLin );
+     TellUsr( Subst(@Pat,Msg(MGSRCH,5)) );
+  end else begin
+     GotoXY( 0, TxtTop );
+     write( ClrEos );
+     NumPats := 0;
+     PatLin := CurLin;
+     SetUpNewTxt( PatLin );
+     DpyLine( PatLin );
+     while RecFndNxt( TxtFid, Pat ) and
+           (NumPats<BotRow-TxtTop) and
+           (CurLin<=Bot)
+     do begin
+        DpyLine( CurLin );
+     end;
+     TellUsr( Msg(MGSRCH,10));
+     CurCol := 1;
+     CsrWid := 1;
+     if NumPats>0 then begin
+       SetUpNewTxt( PatLin );
+       repeat
+         GotoXY( CurCol-1, TxtTop+PatRow-1 );
+         Key := GetKey( false, Cmd );
+         case Cmd of
+           KCSRU: begin
+               if PatRow>1 then begin
+                 if RecFndPrv( TxtFid, pat ) then
+                   PatRow := PatRow - 1;
+               end else begin
+                 Bell(BelErr);
+               end;
+             end;
+           KCR,
+           KCSRD: begin
+               if PatRow<NumPats then begin
+                 if RecFndNxt( TxtFid, pat ) then
+                   PatRow := PatRow + 1;
+               end else begin
+                 ShwAll( CurLin, Top, Bot, Lft, Rht );
+               end;
+             end;
+           KF5: SetUpNewTxt( OCurLin );
+           KF10: begin end;
+           KCSRL: if CurCol>1 then CurCol := CurCol - 1;
+           KCSRR: if CurCol<ScrWid then CurCol := CurCol + 1;
+         end;
+       until Cmd in [KF10, KF5]
+     end;
+     SetUpNewTxt( CurLin );
+     Redraw( CurLin-(BotRow div 5) );
+  end;
+  LoadLabels( SrchFrame );
+end;
+
+
+procedure DefPat( PatNo: integer );
+var Dum: boolean;
+begin
+   CurPat := PatNo;
+   Dum := PmtStr( Msg(MGSRCH,4), Ptrn[CurPat] );
+   if Pat<>Ptrn[CurPat] then RdwRqd := true;
+   Pat := Ptrn[CurPat];
+end;
+
+
+procedure CursrPat;
+var i : integer;
+    Tmp: Byte;
+begin
+  if chr(NewTxt[CurCol]) in WrdChr then begin
+    i := CurCol;
+    while (chr(NewTxt[CurCol]) in WrdChr) and (CurCol>1) do CurCol:= CurCol - 1;
+    if not( chr(NewTxt[CurCol]) in WrdChr) then CurCol := CurCol + 1;
+    while (i<MaxLinLen) and (chr(NewTxt[i]) in WrdChr) do i := i + 1;
+    Tmp := NewTxt[i];
+    NewTxt[i] := ord(' ');
+    BAToStr( NewTxt, CurCol, Ptrn[5] );
+    NewTxt[i] := Tmp;
+  end;
+end;
+
+
+procedure LastPat( Top,Bot,Lft,Rht: integer );
+begin
+  SetUpNewTxt(Bot);
+  Search('<',Top,Bot,Lft,Rht);
+  ShowLine(CurLin)
+end;
+
+
+procedure FirstPat( Top,Bot,Lft,Rht: integer );
+begin
+  SetUpNewTxt(Top);
+  Search('>',Top,Bot,Lft,Rht);
+  ShowLine(CurLin);
+end;
+
+
+procedure DoRepl( Top, Bot, Lft, Rht: integer; BFlag : Boolean );
+var OldPat: StrTyp;
+begin
+   OldPat := Pat;
+   CsrWid := 1;
+   if PmtStr( Msg(MGSRCH,6), Pat ) then begin
+      if Pat<>'' then begin
+         if OldPat <> Pat then begin
+            Ptrn[CurPat] := Pat;
+            Rpl := '';
+         end;
+         if PmtStr( Subst( @Pat,Msg(MGSRCH,7)), Rpl ) then begin
+            VfyChg := Confirm( Msg(MGSRCH,8), true );
+            ReplPat(Pat,Rpl,VfyChg,Top,Bot,Lft,Rht,BFlag);
+            LoadLabels(SrchFrame);
+         end;
+      end else begin
+         ClrMsg;
+      end;
+   end;
+end;
+
+
+procedure SearchTask( Top, Bot, Lft, Rht: integer; BFlag : Boolean );
+
+var
+  Done: boolean;
+
+begin
+  LoadLabels( SrchFrame );
+  FlushNewTxt;
+  ShwPat := true;
+  if Ptrn[CurPat]='' then begin
+    CursrPat;
+    CurPat := 5;
+  end;
+  Done := false;
+  DefPat( CurPat );
+  while not Done do begin
+    Pat := Ptrn[ CurPat ] ;
+    NextCmd;
+    CsrWid := 1;
+    case Cmd of
+      KF1:  DefPat( 1 );
+      KF2:  DefPat( 2 );
+      KF3:  begin CursrPat; DefPat( 5 ); end;
+      KF4:  begin Search('<',Top,Bot,Lft,Rht);ShowLine(CurLin);end;
+      KF5:  begin Search('>',Top,Bot,Lft,Rht);ShowLine(CurLin);end;
+      KF6:  TokFnd := not Confirm( Msg(MGSRCH,12), not TokFnd );
+      KF7:  DoRepl(Top,Bot,Lft,Rht,BFlag);
+      KF8:  ShwAll(Top,Top,Bot,Lft,Rht);
+      KF10: Done := true;
+      KF11: DefPat( 3 );
+      KF12: DefPat( 4 );
+      KF14: FirstPat( Top, Bot, Lft, Rht );
+      KF15: LastPat( Top, Bot, Lft, Rht );
+ (*   KF16: CSense := Confirm(Msg(MGSRCH,13), not CSense);  *)
+      KF18: ShwAll(CurLin,Top,Bot,Lft,Rht);
+      KTEXT:PutChar(Key);
+      otherwise: Done := not LocalEdit;
+    end;
+  end;
+  ShwPat := false;
+  CSFlg := False;
+(*FastFlg := True;*)
+  RdwRqd := true;
+end;
+

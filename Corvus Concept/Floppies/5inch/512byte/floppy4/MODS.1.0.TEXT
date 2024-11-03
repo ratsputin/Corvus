@@ -1,0 +1,21 @@
+File: MODS.1.0.TEXT
+Date: 07-Feb-84
+
+
+Corvus Concept Boot PROM Modifications -- Version 1.0
+
+
+Added support for Uniplex.  Also preliminary support for Concept
+    Plus.  It will be necessary to redo proms when actually try to
+    use with Concpet Plus.  The proms do not work with the Concept
+    at this time.   Uniplex support involves manipulation of the
+    memory management unit to provide logical adresses to the dynamic
+    ram at $80000 to $FFFFF and compensation for no display memory.
+
+Changed boot command procces to use Constellation II boot.  It also
+    uses boot file BOOT.CONCPEPT2, number $23.   This allows no changes
+    to the drive firmware for conversion to version 4.0 secondary boot
+    code.
+
+Added boot from selected server by entering server number when asking
+    for boot type (L,O,F,D).

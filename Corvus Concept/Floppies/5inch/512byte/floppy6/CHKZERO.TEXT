@@ -1,0 +1,52 @@
+{$I-}
+program ChkZero;
+type byte = -128..127;
+var fn : string[39];
+    f: file;
+    ior,blk,nblk,i,start,finish: integer;
+    ans: char;
+    Stop : boolean;
+    twoblocks : array[0..1024] of byte;
+begin
+  writeln('CHKZERO - Check text file for embedded 0');
+  write('Enter file name : '); readln(fn);
+  reset(f,fn); ior := ioresult;
+  if ior <>0 then
+     begin
+     writeln('IOresult = ',ior:1);
+     exit(ChkZero);
+     end;
+  blk := 2; Stop := FALSE;
+  repeat
+     writeln('Reading 2 blocks starting at block ',blk:1);
+     nblk := blockread(f,twoblocks,2,blk);
+     ior := ioresult;
+     if (nblk = 2) and (ior = 0) then
+        begin
+        i := 0;
+        while ( (i<1024) and (twoblocks[i] <> 0) ) do i := i+1;
+        start := i;
+        while ( (i<1024) and (twoblocks[i] = 0) ) do i := i+1;
+        finish := i;
+        if (i < 1024) then
+           begin
+           writeln(chr(7),'Found a block with a zero(s) embedded.');
+           write('zero start block number = ',blk + (start div 512) );
+           writeln('  start byte = ',start:1);
+           write('zero end block number = ',blk + (finish div 512) );
+           writeln('  end byte = ',finish:1);
+           ans := 'N';
+           write('Continue? [Y/N] N',chr(8)); read(ans); writeln;
+           Stop := NOT( (ans = 'Y') or (ans='y') );
+           end;
+        blk := blk + 2;
+        end
+     else
+        begin
+        writeln('Blockread failed...  IOresult = ',ior:1);
+        writeln('starting block = ',blk:1,'  number of blocks read = ',nblk:1);
+        Stop := TRUE;
+        end;
+     until (Stop);
+  close(f);
+end.

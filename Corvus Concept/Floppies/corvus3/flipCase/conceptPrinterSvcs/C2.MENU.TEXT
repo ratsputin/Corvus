@@ -1,0 +1,31 @@
+      /
+01 50bU - Utility Server Manager  13Utility 03Server !ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ÷ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿþÿÿÿÿÿÿÿ¿ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ 5ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ¿ÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿ   -          /
+01 85 H - Help                              08  Help   00x                 -          /
+01 90 E - Exit                              09  Exit   00x                 -          /
+02 10bU - User/Device Manager     10User    00Manager  00USERMGR           Y          /
+02 20 V - Volume Manager          11Volume  01Manager  00DRIVEMGR          Y          /
+02 30 A - Access Manager          12Access  02Manager  00ACCMGR            Y          /
+02 40bB - Boot Manager            14Boot    04Manager  00BOOTMGR           Y          /
+02 70bS - Select Drive            15Select  05Drive    00x                 -          /
+02 80 L - List Drives             17List    07Drives   00x                 -          /
+02 90 E - Exit                              09  Exit   01x                 -D         /
+03 10bM - Mirror                            00Mirror   00MIRROR            YS         /
+03 20 A - Archival Storage        12Archival02Storage  00MIRROR            YR         /
+03 30 R - Remote Backup           14Remote  04Backup   00MBACKUP           -          /
+03 70bS - Select Drive            15Select  05Drive    00x                 -          /
+03 80 L - List Drives             17List    07Drives   00x                 -          /
+03 90 E - Exit                              09  Exit   01x                 -X         /
+04 10bP - Parameter Manager                 00Par Mgr  00PARMGR            Y          /
+04 20bD - Disk Diagnostic                   02DiskDiag 00DDIAG             -          /
+04 30 O - Omninet Test                      04OmniTest 00OTEST             -          /
+04 50qF - Fixit                                        00FIXIT             -          /
+04 70bS - Select Drive            15Select  05Drive    00x                 -          /
+04 80 L - List Drives             17List    07Drives   00x                 -          /
+04 90 E - Exit                              09  Exit   01x                 -X         /
+06 10bP - Printer Service         10Printer 00Service  00PSMGR             -          /
+06 20bT - Time Service            12Time    02Service  00TSMGR             -          /
+06 90bE - Exit                              09  Exit   01x                 -X         /
+
+
+
+

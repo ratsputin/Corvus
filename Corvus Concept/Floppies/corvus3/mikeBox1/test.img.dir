@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'test.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FPASCL1 has 7 files,  0 to 6 (6), eov 500, size 13, free 7
+
+ 1: PASCAL          Data 21-Jul-82    6- 196( 190), 97280+512= 97792 bytes
+ 2: ASM68K          Data 21-Jul-82  196- 269(  73), 37376+512= 37888 bytes
+ 3: LINKER          Data 21-Jul-82  269- 320(  51), 26112+512= 26624 bytes
+ 4: LIBRARY         Data 21-Jul-82  320- 345(  25), 12800+512= 13312 bytes
+ 5: LOADER.IMAGE    Data 21-Jul-82  345- 346(   1),   512+512=  1024 bytes
+ 6: CODE            Data 21-Jul-82  346- 434(  88), 45056+512= 45568 bytes
+ 7: PASLIB.OBJ      Data 21-Jul-82  434- 487(  53), 27136+512= 27648 bytes

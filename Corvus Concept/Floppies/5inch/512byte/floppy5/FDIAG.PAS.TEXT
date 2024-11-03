@@ -1,0 +1,699 @@
+program FloppyDiag;
+
+const   {GLOBALS}                                                                               { .IX }
+
+    SECSIZE     =       128;    {number of bytes per sector}
+
+    ESCAPE      =       $1B;    {Hex for Escape character}
+    Escchr      =       '\1B';  {an Escape character}
+
+    NOTRACK     =       FALSE;  {error msg has no track number}
+    HASTRACK    =       TRUE;   {error msg has a track number}
+
+    {error return codes from floppy driver interface code}
+    GOOD        =       0;      {no error}
+    NOFLOPPY    =       1;      {no floppy controller card in slot}
+    INVSLOT     =       2;      {invalid slot number}
+    DCRCERR     =       3;      {CRC error}
+    DWRPROT     =       4;      {floppy write protected}
+    DRECNFND    =       5;      {record not found-track or sector}
+    DBUSYDV     =       6;      {device is busy}
+    DNOTRDY     =       7;      {device not ready}
+    DSEEKERR    =       8;      {seek error}
+    DWRFAULT    =       9;      {write fault}
+    UNKNOWN     =      -1;      {driver returned an unknown error code}
+
+    {error codes not returned but used internal by this program}
+    INVSECTOR   =      10;      {invalid sector number}
+    MISCOMPR    =      11;      {miscompare of readback data to write data}
+
+
+    {Msg type numbers}
+    SLOTINPUT   =       0;      {msg to get slot input}
+    SEEKMSG     =       1;      {msg telling user doing SEEK}
+    READMSG     =       2;      {msg telling user doing READ}
+    WRITEMSG    =       3;      {msg telling user doing WRITE}
+    RDBACKM     =       4;      {msg telling user doing READ-BACK}
+    REPEATMSG   =       5;      {msg asking user if want to continue}
+    GTSECMSG    =       6;      {msg asking user which sector on track to use}
+    CMPRSECS    =       7;      {msg telling user doing compare}
+
+    OpLine      =       4;      {operation message row}
+    ErrLine     =       9;      {err msg row}
+    Buf1Line    =      15;      {first line of Buffer display}
+    LftMarOp    =       4;      {left margin of OpLine message}
+    LftMarErr   =      10;      {left margin of ErrLine message}
+    LftMarBuf   =       3;      {left margin of first line of Buffer display}
+    MAXBUFDSPLINES =    8;      {max number of lines displayed per buffer, 16 bytes per line}
+
+    {tracks used by diagnostic program}
+    trk1 =    0;
+    trk2 =  $4C;
+    trk3 =  $2B;
+    trk4 =  $2C;
+    trk5 =  $4B;
+    NumberTracks =      5;      {number of tracks to do}
+
+type    {GLOBALS}                                                                               { .IX }
+    byte = -128..127;
+    secbuffer = array[1..SECSIZE] of byte;
+    ErrorArray = array[1..SECSIZE] of boolean;
+    str40 = string[40];
+    dual = record
+             case integer of
+               0 : (int : integer);
+               1 : (bytes : array[0..1] of byte);
+             end; {case}
+
+var   {GLOBALS}                                                                                 { .IX }
+    SlotNumber : integer;
+    Result : dual;
+    Continue : boolean;
+    track,sector : integer;
+    opstr : string[10];
+
+{ External procedures and functions }                                                           { .IX }
+
+FUNCTION Setup( SlNumb : integer ) : integer; {returns error code}
+ external;
+FUNCTION Seeks( trk1,trk2,trk3,trk4, SlNumb : integer ) : integer; {returns error code & track}
+ external;
+FUNCTION ReadSec( SlNumb, track, sector : integer; var Buffer : secbuffer ) : integer;
+ external;                                                        {returns error code & track}
+FUNCTION WriteSec( SlNumb, track, sector : integer; var Buffer : secbuffer ) : integer;
+ external;                                                        {returns error code & track}
+
+{debug procedures}                                                                              { .IX }
+
+{ Internal procedures and Functions }
+
+procedure clearscreen;                                                                          { .IX }
+{clear the current window}
+ Begin
+  writeln(Escchr,'J');   {clearscreen}
+ End; {clearscreen}
+
+procedure PosCursor(x,y : byte);                                                                { .IX }
+{position cursor at x,y}
+{ x is columns and y is rows}
+const
+   GOTOXY =  '\1B=';    {goto x,y escape sequence}
+Begin
+   write( GOTOXY,chr(x),chr(y) );
+End;  {PosCursor}
+
+procedure Clr1line;                                                                             { .IX }
+{clear line from current cursor position to end of that line}
+Begin
+  write(Escchr,'K');
+End;  {Clr1line}
+
+procedure Clearlines( row,col : byte; lines : integer );                                        { .IX }
+{clear lines number of lines starting at row,col position. }
+{ Exit with cursor at row,col.                             }
+var
+   i : integer;
+   r : byte;
+
+Begin
+  r := row;
+  for i:=1 to lines do begin
+    PosCursor(col,r);
+    Clr1line;
+    r := r+1;
+  end; {for}
+  PosCursor(col,row);
+End;  {Clearlines}
+
+Procedure ClrErrMsg;                                                                            { .IX }
+{Clear the err message lines}
+Begin
+ Clearlines(ErrLine,LftMarErr,2); {clear lines at row 5, starting at column 4, for 2 lines}
+End; {ClrErrMsg}
+
+Function trans( ch : char ) : integer;                                                          { .IX }
+{translate one char into its integer representation}
+Begin
+  trans := ord(ch) - ord('0');
+End;  {trans}
+
+Procedure header;                                                                               { .IX }
+{ clear window and display header message}
+ const
+     {version information                                                                         .IX }
+     VERDATE     =       '04-30-82';     {VERSION DATE}
+     VERNUMB     =       'Prelim 0.0.0';        {VERSION NUMBER}
+
+ Begin
+   clearscreen;
+   writeln('8 inch Floppy drive diagnostic ',VERNUMB,' ',VERDATE);
+ End;  {header}
+
+procedure DispGetMsg( MsgType : integer);                                                     { .IX }
+{displays messages for a given message type.  Assumes global variables track & sector,}
+{and opstr are assigned correct values.                                                        }
+Begin
+  Clearlines(OpLine,LftMarOp,2);{clear lines at row 2, starting at column 4, for 2 lines}
+  case MsgType of
+    SLOTINPUT   : write('Enter floppy controller slot number (1-4) :  ');
+    SEEKMSG     : write('Doing Seek of Tracks ',trk1:1,' ',trk2:1,' ',trk3:1,' ',trk4:1,' ',trk5:1,'.');
+    READMSG     : write('Doing READ of Track ',track:2,' sector ',sector:2,'.');
+    WRITEMSG    : write('Doing WRITE of Track ',track:2,' sector ',sector:2,'.');
+    RDBACKM     : write('Doing READ-BACK of Track ',track:2,' sector ',sector:2,'.');
+    REPEATMSG   : write('Do you want to continue? (Y/N)  ');
+    GTSECMSG    : write('Enter sector number for ',opstr,' to be used on Track ',track:2,' : ');
+    CMPRSECS    : write('Comparing sector : ',sector:2,' on track : ',track,'.');
+  end; {case}
+
+End; {DispGetMsg}
+
+Procedure DspErrorMsg( Reslt : dual; HaveTrack : boolean );                                     { .IX }
+{Display error msg for this error code}
+Begin
+  ClrErrmsg;
+  case Reslt.bytes[1] of
+      NOFLOPPY  :   write('no floppy controller card in slot.');
+      INVSLOT   :   write('invalid slot number.');
+      DCRCERR   :   write('CRC error.');
+      DWRPROT   :   write('floppy write protected.');
+      DRECNFND  :   write('record not found-track or sector.');
+      DBUSYDV   :   write('device is busy.');
+      DNOTRDY   :   write('device not ready.');
+      DSEEKERR  :   write('seek error.');
+      DWRFAULT  :   write('write fault.');
+      INVSECTOR :   write('invalid sector : ',sector:1,'.  Must be >= 1 or <= 26.');
+      MISCOMPR  :   write('data readback differs to data written, errors in inverse video.');
+      UNKNOWN   :   write('driver returned an unknown error code.');
+      Otherwise :   begin end;
+  end; {case}
+
+  if HaveTrack then begin
+    PosCursor(LftMarErr,ErrLine+1);
+    write('Error on Track :  ',Reslt.bytes[0]:3);
+  end;
+
+End; {DspErrorMsg}
+
+Function getslot : integer;                                                                     { .IX }
+{ get slot number from user}
+ var
+   SN : char;
+   Err : boolean;
+   res : dual;
+
+ function chkslot( SN : char ) : boolean;
+ {test if valid slotnumber}
+  const
+    LowestSN    =  '1';         {range of values low to hi }
+    HighestSN   =  '4';         {for SlotNumber            }
+  begin
+    chkslot := NOT ((SN>=LowestSN) and (SN<=HighestSN));
+  end; {chkslot}
+
+Begin {getslot}
+  repeat
+   DispGetMsg( SlotInput );
+   readln(SN);
+   Err := FALSE;
+   if SN <> Escchr then         {escape means stop}
+     if chkslot(SN) then begin  {see if valid SlotNumber}
+       Err := TRUE;
+       res.int := INVSLOT;
+       DspErrorMsg( res,NOTRACK );
+     end;
+  until(Not Err);
+
+  if SN <> Escchr then
+     getslot := trans( SN )
+  else
+     getslot := ESCAPE;
+
+End;  {getslot}
+
+Function CheckError( Reslt : dual ) : boolean;                                                  { .IX }
+{ determine if have error from floppy routines}
+Begin
+  CheckError := Reslt.bytes[1] <> GOOD;
+END; {CheckError}
+
+Function DoAgain : boolean;                                                                     { .IX }
+{ask user if they want to continue with the program}
+var
+   ans : char;
+   ok : boolean;
+
+Begin
+  DispGetMsg( REPEATMSG );
+  readln(ans);
+  ok := ( (ans='y') or (ans='Y') );
+  if ok then ClrErrMsg;
+  DoAgain := ok;
+End; {DoAgain}
+
+Function GetTrack( trackNumber : integer ) : integer;                                           { .IX }
+{ returns the track number for this pass}
+{uses the Global constants trk1,trk2,trk3,trk4,trk5}
+Begin
+  case trackNumber of
+    1 : GetTrack := trk1;
+    2 : GetTrack := trk2;
+    3 : GetTrack := trk3;
+    4 : GetTrack := trk4;
+    5 : GetTrack := trk5;
+    Otherwise : begin
+                end;
+  end; {case}
+end; {GetTrack}
+
+Function GetSector( var sector : integer ) : boolean;                                           { .IX }
+{gets sector number to read on this pass}
+{calls DispGetMsg which assumes global variable track}
+{is already assigned a valid track number.}
+var
+   Continue,Err : boolean;
+   res : dual;
+
+ function chksecnumber( sector : integer ) : boolean;
+ {test if valid sector number. return true if error}
+  const
+    Lowestsec   =   1;         {range of values low to hi }
+    Highestsec  =  26;         {for SectorNumbers         }
+  begin
+    chksecnumber := (sector<Lowestsec) or (sector>Highestsec);
+  end; {chkslot}
+
+Begin {GetSector}
+  Continue := TRUE;
+  repeat
+    DispGetMsg( GTSECMSG );
+    readln( sector );
+    Err := chksecnumber( sector );
+    if Err then begin
+      res.int := INVSECTOR;
+      DspErrorMsg( res,NOTRACK );
+      Continue := DoAgain;
+    end;
+  until( (NOT Continue) or (NOT Err) );
+
+  GetSector := Continue;
+
+End;  {GetSector}
+
+Function DoSlot( var SlotNumber : integer ) : boolean;                                          { .IX }           { .IX }
+{get slot number into SlotNumber.  returns whether user wants to stop or continue}
+{with diagnostic.                                                                }
+var
+   Continue : boolean;
+   Result : dual;
+
+Begin
+  Continue := TRUE;  {Assume user wants to continue}
+
+  repeat
+    SlotNumber := getslot;
+
+    if SlotNumber = ESCAPE then
+      Continue := FALSE
+    else begin
+      Result.int := Setup(SlotNumber );  {verify floppy in slot}
+      if CheckError( Result ) then begin {if error display msg}
+        DspErrorMsg( Result,NOTRACK );
+        Continue := DoAgain;             {and see if user wants to continue}
+      end;
+    end;
+  until ( Result.int = 0 ) or ( NOT Continue );
+
+  DoSlot := Continue;
+
+End; {DoSlot}
+
+
+Function DoSeek( SlotNumber : integer ) : boolean;                                              { .IX }
+{Seek tracks 0,4C,2B,2C,4B}
+{uses Global constants for track numbers}
+var
+   Continue : boolean;
+   Result : dual;
+
+Begin  {DoSeek}
+  Continue := TRUE;
+  repeat
+    DispGetMsg( SEEKMSG );      {tell user what doing}
+    Result.int := Seeks( trk2, trk3, trk4, trk5, SlotNumber );   {does restore command first}
+    if CheckError( Result ) then begin {if error display error msg}
+      DspErrorMsg( Result,HASTRACK );
+      Continue := DoAgain;             {and see if user wants to continue}
+    end;
+  until ( Result.int = 0 ) or ( NOT Continue );
+
+  DoSeek := Continue;
+
+End;  {DoSeek}
+
+Function DoRead( SlotNumber : integer ) : boolean;                                              { .IX }
+{Read the same sector number on tracks 0,4C,2B,2C,4B}
+{uses Global variables track , sector and opstr.    }
+var
+   Continue : boolean;
+   pass : integer;
+   Result : dual;
+   Buffer1 : secbuffer;
+
+Begin
+  Continue := TRUE;
+  pass := 1;
+  opstr:= 'Read';
+
+  repeat
+    track := GetTrack( pass );        {get value for global variable track}
+    sector := 10;  (*Continue := GetSector( sector );*){sector is a var parameter, uses track}
+    if Continue then begin
+      DispGetMsg( READMSG );      {tell user what doing}
+      Result.int := ReadSec( SlotNumber,track,sector,Buffer1 );
+      if CheckError( Result ) then begin {if error display error msg}
+        DspErrorMsg( Result,HASTRACK );
+        Continue := DoAgain;             {and see if user wants to continue}
+      end;
+    end;
+    pass := pass+1;
+  until ( pass>NumberTracks ) or ( NOT Continue );
+
+  DoRead := Continue;
+
+End;  {DoRead}
+
+Procedure DoWriteVerify( SlotNumber : integer );                                               { .IX }
+{Write then read back the same sector number on tracks 0,2B,2C,4B,4C.}
+{uses Global variables track, sector and opstr.                      }
+var
+   Continue : boolean;
+   Buffer1 : array[1..NumberTracks] of secbuffer;
+   Buffer2 : array[1..NumberTracks] of secbuffer;
+   sectors : array[1..NumberTracks] of integer;
+   i : integer;
+
+ Procedure BuildBuffer1( var buf : secbuffer; val : byte );                                    { .IX }
+ var
+   k : integer;
+ Begin
+   for k := 1 to SECSIZE do begin
+     buf[k] := val;
+     if val=127 then val := -128 else val := val+1;
+   end;
+ End;{BuildBuffer1}
+
+ Function getpattern( element : integer ) : byte;                                              { .IX }
+ var
+   x : integer;
+ Begin
+   case element of
+     1 : x := $AA;
+     2 : x := $55;
+     3 : x := $1A;
+     4 : x := $E5;
+     5 : x := $33;
+     Otherwise : x := $CC;
+   end;
+
+   if x > 128 then getpattern := x-256 else getpattern := x;
+
+ End; {getpattern}
+
+ Function WriteOutSectors : boolean;                                                           { .IX }
+ {write 5 sectors to the defined tracks}
+ {uses Buffer1, sectors as globals}
+ var
+   Continue : boolean;
+   pass : integer;
+   Result : dual;
+
+ Begin
+   pass := 1;
+   opstr := 'Write';
+
+   repeat
+     repeat
+       track := GetTrack( pass );        {get value for global variable track}
+       Continue := TRUE; (* GetSector( sector );*){sector is a var parameter, uses track}
+       sector := 10; (* temp *)
+       if Continue then begin
+         sectors[pass] := sector;     {keep track of which sector used}
+         DispGetMsg( WRITEMSG );      {tell user what doing}
+         Result.int := WriteSec( SlotNumber,track,sector,Buffer1[pass] );
+         if CheckError( Result ) then begin {if error display error msg}
+           DspErrorMsg( Result,HASTRACK );
+           Continue := DoAgain;             {and see if user wants to continue}
+         end;
+       end;
+     until ( Result.int = 0 ) or ( NOT Continue );
+     pass := pass+1;
+   until( (NOT Continue) or (pass>NumberTracks) );
+
+   WriteOutSectors := Continue;
+
+ End; {WriteOutSectors}
+
+ Function ReadBackSectors : boolean;                                                           { .IX }
+ {read back the 5 sectors written by Write5Sectors.}
+ {uses Buffer2, sectors as globals}
+ var
+   Continue : boolean;
+   pass : integer;
+   Result : dual;
+
+ Begin
+   pass := 1;
+   repeat
+     repeat
+       track := GetTrack( pass );        {get value for global variable track}
+       sector := sectors[pass];
+       DispGetMsg( RDBACKM );      {tell user what doing}
+       Result.int := ReadSec( SlotNumber,track,sector,Buffer2[pass] );
+       if CheckError( Result ) then begin {if error display error msg}
+         DspErrorMsg( Result,HASTRACK );
+         Continue := DoAgain;             {and see if user wants to continue}
+       end;
+     until ( Result.int = 0 ) or ( NOT Continue );
+     pass := pass+1;
+   until( (NOT Continue) or (pass>NumberTracks) );
+
+   ReadBackSectors := Continue;
+
+ End; {ReadBackSectors}
+
+ Procedure CmprSectors;                                                                          { .IX }
+ {compare Buffer1 to Buffer2 for Miscompares}
+ {report all miscompares to user.           }
+ {uses Buffer1,Buffer2, sectors as globals}
+ var
+   i : integer;
+   Continue : boolean;
+   MisCmpares : ErrorArray;
+
+  Procedure Cmp1to2( Buf1,Buf2 : secbuffer; var Errors : ErrorArray );                         { .IX }
+  {Compare Buffer1 to Buffer2 looking for miscompares}
+  var
+    i : integer;
+  Begin
+    for i := 1 to SECSIZE do
+      Errors[i] := (Buf1[i] <> Buf2[i]) ;
+  End;  {Cmp1to2}
+
+  Function DspMisCmp( Bufnumber : integer; Errors : ErrorArray ) : boolean;                    { .IX }
+  {Display Buffer1 and Buffer2.  Display any miscompares in inverse video}
+  {if had an miscompare ask user if want to continue.}
+   { the buffer display                                                                           .IX
+
+                   INFORMATION WRITTEN                              INFORMATION READ BACK
+                   -------------------                              ---------------------
+
+   00    0123 4567 89AB CDEF 0123 4567 89AB CDEF     00    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   10    0123 4567 89AB CDEF 0123 4567 89AB CDEF     10    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   20    0123 4567 89AB CDEF 0123 4567 89AB CDEF     20    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   30    0123 4567 89AB CDEF 0123 4567 89AB CDEF     30    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   40    0123 4567 89AB CDEF 0123 4567 89AB CDEF     40    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   50    0123 4567 89AB CDEF 0123 4567 89AB CDEF     50    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   60    0123 4567 89AB CDEF 0123 4567 89AB CDEF     60    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   70    0123 4567 89AB CDEF 0123 4567 89AB CDEF     70    0123 4567 89AB CDEF 0123 4567 89AB CDEF
+
+   }
+  var
+    Error : boolean;
+    dsplyline : byte;
+    line, index : integer;
+    r : dual;
+
+   Function ChngErr( NewErr, ErrState : boolean ) : boolean;                                   { .IX }
+    Begin
+     if ( NewERR and ( NOT ErrState ) ) then ChngErr := TRUE
+                                        else ChngErr := ErrState;
+    End; {ChngErr}
+
+   Function DspBufHeader( dline : byte ) : byte;                                              { .IX }
+   {display buffer display header.  update row position and return.}
+   Begin
+     PosCursor( 0, dline ); {start flush against window}
+     writeln('                    INFORMATION WRITTEN                              INFORMATION READ BACK');
+     writeln('                    -------------------                              ---------------------');
+     DspBufHeader := dline+2;  {begin of first line display area}
+   End;  {DspBufHeader}
+
+   Function DspBufLine(  Bufnumber, line : integer; dline : byte; var index : integer ) : boolean;   { .IX }
+   {display 16 bytes of each Buffer on row <dline>.}
+   {returns true if any miscompares.  Displays miscompares}
+   {in inverse video.  Uses Errors globally.            }
+    type
+       nibble = 0..15;
+       nibs =packed record
+                    case integer of
+                        0 : (b : byte);
+                        1 : (n : packed array[0..1] of nibble);
+                    end;
+    var
+      i,k : integer;
+      lm1,lm2 : byte;
+      mc,flg : boolean;
+      str1,str2 : string[45];
+      bits : nibs;
+
+      Function cnv( a : nibble ) : char;
+       Begin
+        if a>9 then cnv:= chr( (a-10) + ord('A') )
+               else cnv:= chr( a + ord('0') );
+       End; {cnv}
+
+       Procedure writeBlank( var lm1,lm2 : byte; dline : byte );
+       var
+         x : byte;
+         i : integer;
+       Begin
+         for i:=1 to 2 do begin
+          if i=1 then x := lm1 else x := lm2;
+          PosCursor( x,dline );
+          write(' ');
+         end;
+         lm1 := lm1+1; lm2 := lm2+1;
+       End; {writeBlank}
+
+    Begin {DspBufLine}
+      mc := FALSE;
+      str1 := '00    0123456789ABCDEF0123456789ABCDEF';
+      str2 := str1;
+
+      str1[1] := chr( (line-1) + ord('0') );    {change which 16 bytes being displayed}
+      str2[1] := str1[1];
+
+      k := 7; {position in Buffer1 string of next byte}
+      for i := 0 to 15 do begin
+         bits.b :=  Buffer1[Bufnumber,i+index];
+         str1[k] := cnv( bits.n[1] );
+         str1[k+1] := cnv( bits.n[0] );
+         k := k+2;
+      end;
+
+      k := 7; {position in Buffer2 string of next byte}
+      for i := 0 to 15 do begin
+         bits.b := Buffer2[Bufnumber,i+index];
+         str2[k] := cnv( bits.n[1] );
+         str2[k+1] := cnv( bits.n[0] );
+         k := k+2;
+      end;
+
+      lm1 := LftMarBuf;
+      lm2 := LftMarBuf+LENGTH(str1)+4+7;
+
+      PosCursor(lm1,dline);
+      write( COPY( str1,1,6) );
+      PosCursor(lm2,dline);
+      write( COPY( str2,1,6) );
+
+      lm1 := lm1+6;
+      lm2 := lm2+6;
+
+      k := 7; {position in Buffer1 string of next byte}
+      flg := TRUE;
+      for i := 0 to 15 do begin
+        if Errors[i+index] then write('\1BG4'); {set inverse video if error}
+        mc := ChngErr( Errors[i+index], mc );
+        PosCursor(lm1,dline);
+        write( COPY( str1,k,2) );
+        PosCursor(lm2,dline);
+        write( COPY( str2,k,2) );
+        lm1 := lm1+2; lm2 := lm2+2;
+        k := k+2; flg := NOT flg; if flg then writeBlank(lm1,lm2,dline);
+        write('\1BG0');
+      end;
+
+      index := index+16;
+      DspBufLine := mc;
+
+    End; {DspBufLine}
+
+  Begin  {DspMisCmp}                                                                           { .IX }
+    Error := FALSE; line := 1; index := 1;
+    dsplyline := Buf1Line;                   {init cursor pos variable to first line of Buffer display.}
+    dsplyline := DspBufHeader( dsplyline );  {display header}
+    repeat               {for each line of display : display the line with miscompares in inverse video}
+        {if any miscompares set Error flag} {Display 1 line of buffer1 and buffer2.}
+        Error := ChngErr( (DspBufLine( Bufnumber, line, dsplyline, index)), Error);
+        line := line+1;
+        dsplyline := dsplyline+1;
+    until( line>MAXBUFDSPLINES );
+
+    if Error then begin
+      r.int := MISCOMPR;
+      DspErrorMsg( r, NOTRACK );
+      DspMisCmp := DoAgain
+    end else
+      DspMisCmp := TRUE;
+
+  End;  {DspMisCmp}
+
+ Begin {CmprSectors}                                                                           { .IX }
+   i := 1;
+   repeat
+     sector := sectors[i]; track := GetTrack(i);
+     DispGetMsg( CMPRSECS );
+     Cmp1to2( Buffer1[i], Buffer2[i], MisCmpares ); {find miscompares}
+     Continue := DspMisCmp( i, MisCmpares );  {display buffers with errors, if error ask if want to continue.}
+     i := i+1;                                {next sector buffers to compare}
+   until( (NOT Continue) or (i>NumberTracks) );
+
+ End;  {CmprSectors}
+
+Begin  {DoWriteVerify}                                                                           { .IX }
+  {write out NumberTracks sectors}
+  for i := 1 to NumberTracks do
+    BuildBuffer( Buffer1[i],getpattern(i) );
+  Continue := WriteOutSectors;
+  if Continue then begin
+    {read back all sectors written}
+    Continue := ReadBackSectors;
+    if Continue then
+      {compare what was written with what was read}
+      CmprSectors;
+  end;
+End;  {DoWriteVerify}
+
+BEGIN  {FloppyDiag}                                                                             { .IX }
+
+  header;
+
+  Continue := DoSlot( SlotNumber );     {slot number is a var parameter}
+
+  if Continue then begin
+    Continue := DoSeek( SlotNumber );           {seek tracks}
+    if Continue then begin
+      Continue := DoRead( SlotNumber );         {read sectors}
+      if Continue then DoWriteVerify( SlotNumber );   {write then read back verify sectors}
+    end;
+  end;
+
+END.

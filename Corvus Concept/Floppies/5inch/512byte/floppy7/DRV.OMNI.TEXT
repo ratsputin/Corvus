@@ -1,0 +1,971 @@
+;
+; file :  drv.omni.text
+; date :  01-February-1984 kb
+;
+; Added version Date before TRANPDRV : 4-6-82  KB
+; Added changes to make driver Reentrant  : 4-8-82  kb
+; Added changes to prevent having more than 1 command active at a time  :  4-12-82  kb
+; Changed IORESULT definitions to use the global file definitions :  4-23-82  kb
+; Added include of /ccos/os.gbl.asm.text : 4-23-82  kb
+; Changed driver to new functional specification from Phil B.:  9-1-82  kb
+; Added busy wait on current command entry in DORCV because of bug in version
+;       6.4 transporter : 9-3-82  kb
+; Added peek command support code, does busy wait if a peek command : 9-7-82 kb
+; Added queue of parameter block on Current Command entry : 9-9-82 kb
+; Added chages to CALLUSER, turn on ints after entry, and DORCV, time out on wait
+;       for Recv Setup response :  9-15-82  kb
+; Changed queue, save function code.  IDOQUE will call TRNPST with function code in
+;       D2.  Doesn't setup receive socket entry if get queued entry.  :  9-15-82  kb
+; Turn on interrupts if queue in CURCMDO and turn off interrupts in IDOQUE after report
+;       error to caller :  9/16/82  kb
+; Added Omninet command block to queue entry :  9-16-82  kb
+; Added save of current command block :  9-17-82  kb
+; Call GETUREGS before IDOQUE in CHKPEEK :  9-22-82  kb
+; Added save and restore of IORESULT in SysCom in interrupt routine and
+;      test for interrupt routine processing Peek current command in CHKPEEK :  9-24-82  kb
+; Increased the depth of the queue, added Queueing functions, changed table structure
+;      for handling the current command queue : 9-27-82  kb
+; In IDOQUE will continue to dequeue until no more entries on queue or
+;      entry in use :  10-5-82  kb
+; In DORCV check in entry to unqueue after busy wait on Receive Setup response :  10-7-82  kb
+; In CHKPEEK make sure no error when call peek user int rtn : 10-7-82  kb
+; Added queue flags to prevent recursion on call to IDOQUE from DORCV and CHKPEEK : 10-7-82  kb
+; Changed IORESULT code returned when get time out on waiting for receive setup response.
+;       It is now IOEtimot.  : 10-13-82  kb
+;
+; Changed name of file to drv.omni.text : 6-29-83  kb
+; Added the UserData parameter to the unitstatus parameter block, the transporter table,
+;        and the user interrupt procedure interface : 6-29-83  kb
+; Added the Dequeue word to the user's interrupt routines parameter list: 7-12-83 kb
+; Changed Clear entry function codes from $8001..$8004 to $81..$84 : 7-13-83 kb
+; Changed queue warning code to OS.GBL.ASM value of 30 : 7-18-83 kb
+; Changed UnitUnmount to put Boot ROM interrupt vector into OmniNet vector : 7-25-83 kb
+; Added extra wait in STROBCMD : 8-1-83 kb
+; Added 4 byte to queue entry before QFC to make it equal in size to a table entry.
+;        11-11-83 kb
+; Added Userdata field to queue entry parameter block :  1-9-84 kb
+; Changed MOVEM.L to save D6 (UserData) in IDOQUE :  1-13-84 kb
+; Change get queue entry routines and put lock on entry to interrupt routine : 1-16-84 kb
+; Changed set/clear of INUSE flag in IDOQUE.  Need only to clear the bit if it was clear
+;      before set it.  INUSE will never change because of counted semaphore in int rtn entry.
+;      Therefore, curcmd entry will remain inuse and has not been processed till after exit
+;      dequeue procedure : 2-1-84 kb
+;
+; INCLUDE FILES USED :
+;       /ccos/os.gbl.asm.text                    ;OS GLOBAL EQUATES
+;
+; INCLUDE OS GLOBALS HERE
+            LIST       OFF
+            INCLUDE    'OS.GBL.ASM.TEXT'
+;;;;;;      INCLUDE    '/CCOS/OS.GBL.ASM.TEXT'
+            LIST       ON
+  page
+; EQUATES FOR DRIVER
+;
+; Bit Number definitions
+;
+BITD0      EQU          0                       ;BIT 0
+BITD1      EQU          1                       ;BIT 1
+BITD2      EQU          2                       ;BIT 2
+BITD3      EQU          3                       ;BIT 3
+BITD4      EQU          4                       ;BIT 4
+BITD5      EQU          5                       ;BIT 5
+BITD6      EQU          6                       ;BIT 6
+BITD7      EQU          7                       ;BIT 7
+;
+; Table Flag byte bit definitions
+;
+INUSE      EQU          BITD0                   ;EntryInUse bit flag
+;
+; Queue Flags word bit definitions
+;
+LOCK       EQU          BITD0                   ;Lock out IDOQUE calls flag
+;
+; ParameterBlock indices
+;
+CADR       EQU          0                       ;Index to CommandAddress
+PPTR       EQU          CADR+4                  ;Index to the ProcedurePointer
+;
+; Transporter command indices
+;
+TCmd       equ          0                       ;
+TCop       equ          TCmd+0                  ;byte - op code
+TCrADhi    equ          TCop+1                  ;byte - result address HI
+TCrADlo    equ          TCrADhi+1               ;word - result address MED, LO
+TCsock     equ          TCrADlo+2               ;byte - socket number
+TCdADhi    equ          TCsock+1                ;byte - data buffer address HI
+TCdADlo    equ          TCdADhi+1               ;word - data buffer address MED, LO
+TCdtaLN    equ          TCdADlo+2               ;word - data length
+TChdrLN    equ          TCdtaLN+2               ;byte - header length
+TCdest     equ          TChdrLN+1               ;byte - destination host number
+;
+; Peek command indices
+;
+TC6801ad   EQU          TCrADlo+2               ;word - 6801 address to peek
+TCpkpoc    EQU          TC6801ad+2              ;byte - direction (0=peek)
+;
+; Transporter commands
+;
+PKPOCMD    EQU          $08                     ;Peek/Poke command *kb 9/7/82*
+;
+; OmniNet Interrupt Reset address
+;
+OMRESET    EQU          $30FC1                  ;reset omninet interrupt strobe
+;
+; Result code compare levels for Current Command entry and Receive Socket etries
+;
+CCRSLT     EQU          -1                      ;if less than $FF then done
+RSRSLT     EQU          -2                      ;if less than $FE then done
+;
+; Strobe definitions
+;
+STRBADR    EQU          $30FA1                  ;strobe address
+RDYADR     EQU          $30F7F                  ;VIA Port A - has ready flag bit
+RDYBIT     EQU          BITD0                   ;Ready flag bit in Port A
+LONGTIME   EQU          30000       ;*kb 1/9/84* TimeOut loop counter for WAITRDY
+;
+; error codes (IORESULT)
+;
+INVCMD     EQU          IOEioreq                ;invalid cmd-(invalid I/O request)
+INVTBLID   EQU          IOEtblid                ;invalid table id
+INVPRM     EQU          IOEuiopm                ;invalid parameter
+INVFNC     EQU          IOEfnccd                ;invalid function code
+TRNPNR     EQU          IOEnotrn                ;transporter not ready error
+ENTINUSE   EQU          IOEtbliu                ;Entry In Use error
+QUEDENTRY  EQU          IOEquereq               ;Queued parameter block warning *kb 9/9/82*
+;
+; Interrupt Status definitions
+;
+NUMREGS    EQU          15                      ; number of registers pushed
+REGLEN     EQU          4*NUMREGS               ; # of bytes pushed on stacck by MOVEM in int rtn
+BASEI      EQU          $2000                   ; SR with supervisor set
+DISINT3    EQU          $2300                   ; Disable OmniNet Interruptnt
+INTMASK    EQU          $0700                   ; interrupt level mask
+LVL3       EQU          $0300                   ; level 3 interrupt status
+;
+; Unit I/O commands
+;
+UNMCMD     EQU           6                      ; unmount command
+
+; Boot ROM OmniNet interrupt vector             *kb 7/25/83*
+;
+UNMINTH    EQU          $10078                  ;ROM level 3 interrupt vector (OMNINET)
+;
+; Miscellaneous definitions
+;
+CARRYST    EQU          $0001                   ; CCR with carry set
+VEC3       EQU          $6C                     ; Address of OmniNet Interrupt Vector
+;
+ON         EQU          1                       ;listing control - start listing
+OFF        EQU          0                       ;listing control - stop listing
+;
+NOENABLE   EQU          16                      ; Reg D7 bit used as parameter for CURCMDO
+  page
+; OMNIINT - OmniNet Interrupt Handler
+;
+OMNIINT    MOVEM.L      D0-A6,-(SP)             ;Save all registers
+           BSR          CLRINT                  ;Reset the OmniNet interrupt
+
+; Allow only one active int routine at a time.  If currently in count then exit
+;
+           LEA          Cntr, A0                ;address of counted semaphore  *kb 1/16/84*
+           ADDQ.W       #1, (A0)                ;count for this call           *kb 1/16/84*
+           CMPI.W       #1, (A0)                ;is this the only one?         *kb 1/16/84*
+           BNE.S        OINTex10                ;no, then exit                 *kb 1/16/84*
+;
+           MOVEA.L      pSysCom.W, A6           ;get pointer SysCom     *kb 9/24/82*
+           MOVE.W       (A6), D4                ;save IORESULT          *kb 9/24/82*
+;
+; Find the first active entry with a finish state Result code
+;
+OINTrstrt  CLR.L        D2                      ;Index to Table entry   *kb 9/7/82*
+           LEA          TRNITBL,A0              ;Transporter Interrupt table address
+;
+OINTCHK    BTST         #INUSE,BITFLAGS(A0,D2.W) ;Is entry in use?    *kb 9/7/82*
+           BEQ.S        OINTINC                 ;No, try next if available
+;
+           MOVEA.L      RESLTPTR(A0,D2.W),A6    ;ResultPointer of active entry *kb 9/7/82*
+           MOVEQ        #RSRSLT,D1              ;Assume not Current Command entry
+           TST.W        D2                      ;If Index=0 then is Current Command
+           BNE.S        OINTNCC                 ;Not Current Command
+           MOVEQ        #CCRSLT,D1              ;Use $FF/sign extends hi bytes to $FF
+OINTNCC    CMP.B        (A6),D1                 ;is entry done?         *kb 9/7/82*
+           BLS.S        OINTINC                 ;no, try next
+;
+; Found an active entry with completion Result code
+;
+OINTFOND
+           BCLR         #INUSE,BITFLAGS(A0,D2.W) ;clear entry in use flag
+           BSR.S        GETUREGS                ;get the entry into registers *kb 9/15/82*
+           MOVE.W       REGLEN(SP),D1           ;enable interrupts
+           TST.W        D2                      ;is this Current Command Entry          *kb 9/9/82*
+           BNE.S        OINTNCC1                ;no, continue                           *kb 9/9/82*
+           BSR.S        IDOQUE                  ;process possible queued parameter block*kb 9/9/82*
+OINTNCC1
+           CLR.L        D7                      ;force no error & NOT dequeue call *kb 7/11/83*
+           MOVEM.L      D2/D4/A0,-(SP)          ;Save address, index, & IORESULT(D4) *kb 9/24/82*
+           BSR.S        CALLUSER                ;uses registers setup by GETUREGS *kb 9/15/82*
+           MOVEM.L      (SP)+,D2/D4/A0          ;Restore address, index, & IORESULT(D4) *kb 9/24/82*
+           MOVE.W       #DISINT3,SR             ;disable interrupts again
+;
+; Check if another Entry available to check
+;
+OINTINC    ADDI.W       #TIENTLEN,D2            ;Index to next entry    *kb 9/7/82*
+           CMPI.B       #TBLLEN,D2              ;At end of table        *kb 9/7/82*
+           BNE.S        OINTCHK                 ;No
+
+; See if interrupt ocurred while processing if did then restart
+;
+           LEA          Cntr, A0                ;processed at least this time through    *kb 1/16/84*
+           SUBQ.W       #1, (A0)                ;should go through table again?          *kb 1/16/84*
+           BNE.S        OINTrstrt               ;yes                 *kb 1/16/84*
+
+; Restore IORESULT and registers then exit exception
+;
+OINTEXIT   MOVEA.L      pSysCom.W, A6           ;get pointer SysCom     *kb 9/24/82*
+           MOVE.W       D4,(A6)                 ;restore IORESULT *kb 9/24/82*
+OINTex10   MOVEM.L      (SP)+,D0-A6
+           RTE
+  page
+;Added 9/7/82*
+;  CALLUSER - call user procedure
+;             only calls the user procedure if the procedure pointer is not null
+;             does not save any registers.
+;
+;       Entry : A2 - ProcedurePointer
+;               A4 - procedure's A4
+;               A5 - procedure's A5
+;               D1 - value to set Status Register
+;               D3 - ResultPointer
+;               D5 - BufferPointer
+;               D6 - UserData                              *kb 6/29/83*
+;               D7 - low word = error parameter
+;                    hi  word = dequeu parameter           *kb 7/12/83*
+;
+CALLUSER
+           MOVE.L       A2,D0                   ;see if have Nil pointer *kb 9/7/82*
+           BEQ.S        CUexit                  ;Nil, don't call any user routine
+
+; Valid ProcedurePointer - call user routine with Result and Buffer Pointers on stack
+;
+           ORI.W        #BASEI,D1               ;make sure supervisor
+           SWAP         D7                      ;switch words to      *kb 7/12/83*
+           MOVE.W       D7,-(SP)                ;  Push Dequeue flag  *kb 7/12/83*
+           SWAP         D7                      ;switch words back to *kb 7/12/83*
+           MOVE.W       D7,-(SP)                ;  Push Error Code
+           MOVE.L       D3,-(SP)                ;Push ResultPointer
+           MOVE.L       D5,-(SP)                ;Push BufferPointer
+           MOVE.L       D6,-(SP)                ;Push UserData       *kb 6/29/83*
+           MOVE.W       D1,SR                   ;turn on ints after get all entry*kb 9/15/82*
+           JSR          (A2)                    ;call user
+CUexit     RTS
+;
+; Added 9/15/82  kb
+; GETUREGS - get from the entry into register all fields.
+;
+;       Entry : (A0) = pointer to table
+;               (D2) = index to entry
+;       Exit  : (A2) = ProcedurePointer
+;               (A4) = procedure's A4
+;               (A5) = procedure's A5
+;               (D3) = ResultPointer
+;               (D6) = UserData        *kb 6/29/83*
+;               (D5) = BufferPointer
+;
+GETUREGS
+           MOVEA.L      PROCPTR(A0,D2.W),A2     ;get ProcedurePointer
+           MOVEA.L      A4SAVE(A0,D2.W),A4      ;setup user's A4 and A5
+           MOVEA.L      A5SAVE(A0,D2.W),A5      ;registers
+           MOVE.L       RESLTPTR(A0,D2.W),D3    ;ResultPointer
+           MOVE.L       BUFPTR(A0,D2.W),D5      ;Get BufferPointer
+           MOVE.L       USERDATA(A0,D2.W),D6    ;Get UserData        *kb 6/29/83*
+           RTS
+  page
+; Added 9/9/82 kb
+; IDOQUE  - See if Current Command has a non-empty queue.  If it is then process the
+;           Queued function code, parameter block and entry.
+;       Entry : (A0) = address of transporter table
+;               (D1) = SR when call user
+;               (D2) = index to current command entry
+;               Interrupts must be disabled     *kb 10/7/82*
+;       Exit  : all input registers maintained + D3,D4,D5,A2,A4,A5
+;
+IDOQUE     LEA          QFLAGS+1, A6            ;within queue processing? *kb 10/7/82*
+           BSET         #LOCK, (A6)             ;test and set*kb 10/7/82*
+           BON.S        IDQexit                 ;yes, exit  *kb 10/7/82*
+
+IDQagain   TST.B        QCOUNT(A0,D2.W)         ;q empty       *kb 9/27/82*
+           BEQ.S        IDQlckclr               ;yes, clear lock *kb 9/27/82*
+;
+; has parameter block on queue - install entry into table
+;
+           MOVEM.L      D1-D6/A0/A2/A4-A5,-(SP) ;Save INT RTN REGISTERS *KB 1/13/84*
+           CLR.L        D7                      ;Clear error code & ints won't be enabled
+           MOVEA.L      D7, A2                  ;must clear A2 for ENBINTS
+           BSR.S        TOPQADR                 ;A0 -> addr of queue entry *kb 1/16/84*
+           LEA          A4SAVE(A0), A3          ;use A3 for TRNPST call    *kb 1/16/84*
+           MOVEA.L      (A3)+, A4               ;get saved user's A4       *kb 1/16/84*
+           MOVEA.L      (A3)+, A5               ;get saved user's A5       *kb 1/16/84*
+           MOVE.W       (A3)+, D2               ;(D2) = function code      *kb 9/15/82*
+           BSR          TRNPST                  ;A3 -> Parameter Block in queue entry *kb 9/15/82*
+           MOVEM.L      (SP)+,D1-D6/A0/A2/A4-A5 ;Restore INT RTN REGISTERS *KB 1/13/84*
+;
+; call user's int routine if one exists for dequeue complete
+;
+           BSET         #INUSE,BITFLAGS(A0,D2.W) ;make sure Current Command entry not used
+           MOVE.W       SR, -(SP)               ;save state of bit test *kb 2/1/84*
+           MOVEM.L      D1-D6/A0/A2/A4-A5,-(SP) ;Save INT RTN REGISTERS *KB 1/13/84*
+           BSR.S        TOPQADR                 ;A0 -> addr of queue entry *kb 1/16/84*
+           CLR.L        D2                      ; make sure already 0
+           BSR.S        GETUREGS                ;get entry's registers for CALLUSER *KB 9/15/82*
+           SWAP         D7                      ;put Dequeue flag on  *kb 7/12/83*
+           MOVE.W       #1,D7                   ;  for int routine    *kb 7/12/83*
+           SWAP         D7                      ;switch words back    *kb 7/12/83*
+           MOVE.W       SR, -(SP)               ;save interrupt state *kb 9/27/82*
+           BSR.S        CALLUSER                ;D7 already has error code
+           MOVE.W       (SP)+, SR               ;Restore interrupt state *kb 9/27/82*
+           MOVEM.L      (SP)+,D1-D6/A0/A2/A4-A5 ;Restore INT RTN REGISTERS *KB 1/13/84*
+           MOVE.W       (SP)+, SR               ;restore state of bit test *kb 2/1/84*
+           BON.S        IDQclrq                 ;if was set before then don't clear *kb 2/1/84*
+           BCLR         #INUSE,BITFLAGS(A0,D2.W) ;clear entry in use flag (see 2/1/84 change)
+;
+; remove queue entry at Front of queue
+;
+IDQclrq    SUBQ.B       #1, QCOUNT(A0,D2.W)     ;remove count of entry *kb 9/27/82*
+           LEA          FRONT, A6               ;update front of queue *kb 9/27/82*
+           ADDQ.W       #1, (A6)                ;pointer               *kb 9/27/82*
+           CMPI.W       #NUMQENTS,(A6)          ;if front >= Number of queue entries *kb 9/27/82*
+           BCS.S        IDchkuse                ;no, see if entry is free  *kb 10/5/82*
+           CLR.W        (A6)                    ;then wrap to zero index *kb 9/27/82*
+ page
+;
+; see if entry free, if is try to unqueue more
+;
+IDchkuse   BTST         #INUSE, BITFLAGS(A0,D2.W) ;is entry in use *kb 10/5/82*
+           BOFF.S       IDQagain                ;no, then see if more to unqueue *kb 10/5/82*
+;
+; stopping. show out of unqueue group
+;
+IDQlckclr  LEA          QFLAGS+1, A6            ;clear recursion *kb 10/7/82*
+           BCLR         #LOCK, (A6)             ;prevention flag *kb 10/7/82*
+
+IDQexit    RTS
+  page
+; Added 9/27/82  kb
+; NEXTFREE - Get address of next free queue entry.  Assumes caller verified
+;            Queue is NOT full.
+;
+; TOPQADR  - Get address of top of queue.  Assumes caller verified Queue is NOT
+;            empty.
+;
+; Clobbers D0
+;
+;      Exit  : (A0) = address of entry           *kb 1/16/84*
+;
+NEXTFREE   MOVE.W      REAR, D0                 ;index to rear + 1 of queue
+           BRA.S       Qadr10
+;
+TOPQADR    MOVE.W      FRONT, D0                ;index to front of queue
+;
+Qadr10     MULU        #QENTLEN, D0             ;calc byte index
+           LEA         PBQUEUE, A0              ;                              *kb 1/16/84*
+           ADDA.L      D0, A0                   ; add to begin of table        *kb 1/16/84*
+           RTS
+;
+  page
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.W                     D7.W
+; 2 - WRITE       D0.W   D1.L   D2.W            D5.W     D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W       D0.W
+; 5 - STATUS      D0.W   D1.L   D2.W <--FUNCTION CODE    D7.W
+; 6 - UNMOUNT     D0.W                                   D7.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D0 & D7
+; INTERNAL REGISTER USEAGE :
+;
+;          D0 = TEMP - clobbered by STROBCMD
+;          D1 = CommandAddress
+;          D2 = index to table entry - available to all routines
+;          D3 = ResultPointer
+;          D4 = ProcedurePointer & IORESULT save in Interrupt routine
+;          D5 = BufferPointer - DORCV uses as a temp before uses as BufferPointer *kb 9/15/82*
+;          D6 = UserData for SETTBL and GETUREG and CALLUSER       *kb 6/29/83*
+;          D7 = IORESULT code (low word) & Bit 16 as parameter of CURCMDO
+;                  AND in CALLUSER hi word is Dequeue flag  *kb 7/12/83*
+;
+;          A0 = Transporter Interrupt Table address
+;          A1 = pointer to put in OmniNet interrupt vector
+;          A2 = save of SR (=0 means didn't save)
+;          A3 = ParameterBlock address
+;          A4 = user value - same as on entry
+;          A5 = user value - same as on entry
+;          A6 = TEMP - clobbered by STROBCMD and DISINTS
+;
+  page
+;
+           GLOBAL       TRANPDRV
+;
+; TRANSPORTER "PHYSICAL" DRIVER
+;
+TRANPDRV
+           bra.s        TPD001                  ;start of code
+           data.b       0                       ;device unblocked
+           data.b       16                      ;valid commands - unitstatus only
+           data.b       84,02,01                ;date - February 01, 1984
+           data.b       0                       ;fill
+           data.b       hmlen                   ;header message length
+hm         data.b       'OmniNet driver v 1.0d'
+hmlen      equ          %-hm                    ;
+
+TPD001     CMPI.W       #UNMCMD,D4              ;VALID COMMAND
+           BHI.S        TRNPERR                 ;NO
+           MOVEM.L      D1-D6/A0-A6,-(SP)       ;SAVE REGISTERS
+           CLR.L        D7                      ;CLEAR IORESULT & CURCMDO bit parameter
+           MOVE.L       D7,A2                   ;CLEAR A2 - assume don't save SR
+           MOVEA.L      D1,A3                   ;Address of ParameterBlock
+           LEA          TRNPTBL,A6              ;TURN THE COMMAND INTO A
+           LSL.W        #1,D4                   ;INDEX TO THE FUNCTION
+           MOVE.W       0(A6,D4.W),D4
+           JSR          0(A6,D4.W)              ;DO FUNCTION
+           MOVEM.L      (SP)+,D1-D6/A0-A6       ;RESTORE REGISTERS
+           RTS
+;
+; THE TRANSPORTER DRIVER JUMP TABLE
+;
+TRNPTBL    DATA.W       TRNPINST-TRNPTBL           ;UNITINSTALL
+           DATA.W       TRNPRD-TRNPTBL             ;UNITREAD
+           DATA.W       TRNPWR-TRNPTBL             ;UNITWRITE
+           DATA.W       TRNPCLR-TRNPTBL            ;UNITCLEAR
+           DATA.W       TRNPBSY-TRNPTBL            ;UNITBUSY
+           DATA.W       TRNPST-TRNPTBL             ;UNITSTATUS
+           DATA.W       TRNPUNMT-TRNPTBL           ;UNITUNMOUNT
+;
+; THE UNIT OPERATIONS READ, WRITE, CLEAR AND BUSY ON TRANSPORTER DRIVER
+;          ARE ILLEGAL.
+;
+TRNPRD
+TRNPWR
+TRNPCLR
+TRNPBSY
+;
+; Invalid Command Error
+;
+TRNPERR    MOVE.W       #INVCMD,D7
+           RTS
+  page
+;
+; TRNPINST - UNITINSTALL
+;          Initialize transporter interrupt table and clear OmniNet interrupt
+;          Put interrupt Handler entry point address in interrupt vector.
+;
+TRNPINST   BSR.S        DISINTS                 ;disable interrupts
+;
+           CLR.L        D0                      ;Index to Table entry
+           LEA          TRNITBL,A0              ;Transporter Interrupt table address
+;
+TINCLRT    CLR.W        QCOUNT(A0,D0.W)         ;Clear Queue entry count & flags *kb 9/27/82*
+           ADDI.W       #TIENTLEN,D0            ;Index to next entry
+           CMPI.W       #TBLLEN,D0              ;At end of table
+           BNE.S        TINCLRT                 ;No
+;
+           LEA          FRONT, A6
+           CLR.L        (A6)                    ;init Front and Rear ptrs to 1st entry *kb 9/27/82*
+;
+; Put Interrupt Handler entry address in OmniNet interrupt vector.
+;
+           LEA          OMNIINT,A1
+           BSR.S        STORVEC
+;
+; Reset the OmniNet interrupt.
+;
+           BSR.S        CLRINT
+           BRA.S        ENBINTS
+;
+; STORVEC - store the address in A1 into the omninet interrupt vector
+;
+STORVEC    MOVE.L       A1,VEC3.W
+           RTS
+;
+; CLRINT - Clear OmniNet interrupt
+;
+CLRINT     TST.B        OMRESET.L               ;Reset the OmniNet interrupt
+           RTS
+;
+; TRNPUNMT - UNITUNMOUNT     *kb 7/25/83*
+;          put in the OmniNet interrupt vector an interrupt clear routine
+;          as the interrupt handler.
+;
+TRNPUNMT   BSR.S        DISINTS                 ;Disable interrupts
+           MOVEA.L      UNMINTH.L,A1            ;Get interrupt rtn addr from Boot ROM
+           BSR.S        STORVEC                 ;put rtn addr in vector
+           BRA.S        ENBINTS                 ;Enable interrupts
+  page
+;
+; DISINTS - disable level 3 interrupts if current level is less than 3
+;          Entry : A2 = 0
+;          Exit  : if save then A2 = SR ELSE A2 = 0
+;
+DISINTS
+            MOVE.W     SR,D0
+            ANDI.W     #INTMASK, D0              ;REMOVE EXTRANEOUS INFO
+            CMPI.W     #LVL3,D0                  ;IF CURRENT STATE IS >= DON'T SAVE
+            BCC.S      DITEXIT                   ;DON'T SAVE
+            MOVE.W     SR,D0
+            MOVE.W     D0,A2                     ;save SR
+            MOVE.W     #DISINT3,SR               ;PREVENT OmniNet INTERUPTS
+DITEXIT     RTS
+;
+; ENBINTS - Restore saved SR if saved it
+;          Entry : if save then A2 = SR ELSE A2 = 0
+;          Exit  : if A2 -> SR then 0 -> A2             *kb 9/9/82*
+;
+ENBINTS     MOVE.W     A2,D0                     ;Is saved SR then Restore it
+            BEQ.S      EITEXIT                   ;DIDN'T SAVE SO EXIT
+            MOVE.W     D0,SR                     ;RESTORE SAVED SR VALUE
+            SUBA.L     A2, A2                    ;ZERO A2   *kb 9/9/82*
+EITEXIT     RTS
+  page
+;
+; TRNPST - UNITSTATUS
+;          Call the appropriate table manipulation routine.
+;
+;       Entry : (D2) = function code  {0..4, $81..$84}
+;               (A3) = address of parameter block
+;
+;       ParameterBlock = record
+;                           CommandAddress : pointer;
+;                           ProcedurePointer : pointer;
+;                           UserData : longint;            *kb 6/29/83*
+;                           end;
+;
+TRNPST     MOVE.W       D2,D0                   ;save full function code
+           BCLR         #BITD7, D2              ;Clear high bit if set
+           CMPI.W       #NUMENTS-1,D2           ;is this a valid function code
+           BHI.S        TRSTERR                 ;NO
+           TST.B        D0                      ;see what type of command
+           BMI.S        CLRENT                  ;Clear entry specified by D2
+           BEQ.S        CURCMDO                 ;Do a current command if 0
+           BRA          DORCV                   ;else must be a receive setup
+;
+; Invalid Function Code Error
+;
+TRSTERR    MOVEQ        #INVFNC,D7
+           RTS
+  page
+;
+; CLRENT - Clear entry specified by function code in D2.  Clear entry by
+;          marking the specified entry as NOT EntryInUse.
+;          If CommandAddres <> nil then also do a current command
+;
+CLRENT     BSR.S        DISINTS                 ;disable interrupts
+           LEA          TRNITBL,A0              ;address of table
+           BTST         #INUSE,BITFLAGS(A0)   ;if CurrentCommand entry in use
+           BON          INUSEERR                ;then Error
+
+           MULU         #TIENTLEN,D2            ;calculate index to entry
+           BCLR         #INUSE,BITFLAGS(A0,D2.W) ;Clear EntryInUse flag
+           BSR.S        ENBINTS                 ;enable interrupts
+
+           TST.L        (A3)                    ;is CommandAddress nil?
+           BNE.S        CURCMDO                 ;no, do a current command
+           RTS
+  page
+; CURCMDO - User wants a single interrupt command.  Use the Current Command
+;           entry (Index = 0) only.
+;          Entry : (D2) = function code
+;                  (A3) = address of ParameterBlock
+;                  (D7 BIT 16) = 0 do enable of interrupts
+;                              = 1 do not enable interrupts
+;          Exit  : (NC) = set up command
+;                  (C)  = failed, D7 has error code
+;
+CURCMDO    LEA          TRNITBL,A0              ;Address of Table
+           MOVE.W       D2, -(SP)               ;save function code *kb 9/15/82*
+           CLR.L        D2                      ;Use first entry
+;
+; Get register values from parameter block & Transporter command for setting up entry
+;
+           MOVEA.L      A3, A6                  ;Save Parameter Block address
+           MOVE.L       (A6)+,D1                ;Get CommandAddress
+           MOVE.L       (A6)+,D4                ;Get ProcedurePointer*kb 6/29/83*
+           MOVE.L       (A6),D6                 ;Get UserData        *kb 6/29/83*
+           MOVEA.L      D1, A6                  ;Command pointer
+           MOVE.L       TCrADhi-1(A6),D3        ;Get ResultPointer (hi byte is garbage)
+           MOVE.L       TCdADhi-1(A6),D5        ;Get BufferPointer (hi byte is garbage)
+;
+; Disable OmniNet interrupt then check if entry is in use.
+;
+           BSR.S        DISINTS
+           BTST         #INUSE,BITFLAGS(A0,D2.W)  ; If entry is INUSE then Error
+           BNE.S        CCCHKQUE                ;In use - see if Queue has room *kb 9/9/82*
+           MOVE.W       (SP)+, D0               ;don't need function code *kb 9/15/82*
+;
+; Setup table except do not show table in use yet
+;
+           BSR          SETTBL                  ;put values in entry
+;
+; Save the command
+;
+           MOVEA.L      D1, A6                  ; command address *kb 9/17/82*
+           MOVEQ        #TCMDLEN-1, D0          ; block length    *kb 9/17/82*
+           LEA          THECMD, A1              ; save area       *kb 9/17/82*
+           MOVE.L       A1, D1                  ; new command address *kb 9/17/82*
+CCSVCMD    MOVE.B       (A6)+, (A1)+            ;*kb 9/17/82*
+           DBF          D0, CCSVCMD             ;*kb 9/17/82*
+;
+; Strobe in the command
+;
+           BSR.S        STROBCMD
+           BNE.S        CCENBINT                ;Error, Transporter Not Ready   *kb 9/7/82*
+;
+; Now set INUSE flag and then enable interrupts
+;
+           BSET         #INUSE,BITFLAGS(A0,D2.W)
+           BSR.S        CHKENB                  ;Enable ints    *kb 9/7/82*
+;                                                               *kb 9/7/82*
+; Check if command is peek.  If is do a busy wait.              *kb 9/7/82*
+;                                                               *kb 9/7/82*
+CCCHKPK    BRA          CHKPEEK                 ;return after   *kb 9/7/82*
+;
+; Entry is in use see, see if can queue up the parameter block and the entry values
+;
+CCCHKQUE   CMPI.B       #NUMQENTS, QCOUNT(A0,D2.W) ;is q full?          *kb 6/29/83*
+           BCC.S        InUseEr1                ;yes, tell user can't   *kb 6/29/83*
+
+           MOVE.L       A0, -(SP)               ;save table address     *kb 9/9/82*
+           BSR          NEXTFREE                ;get next free entry addr *kb 9/27/82*
+           BSR          SETTBL                  ;put user call values in queue *kb 1/16/84*
+           LEA          QCMD(A0), A6            ;save adr of queue command blk *kb 1/16/84*
+           LEA          QFC(A0), A0             ;A0 -> function code in queue  *kb 1/16/84*
+           MOVE.W       4(SP), (A0)+            ;save function code, then ParamBlock *kb 9/27/82*
+           MOVE.L       A6,(A0)+                ;put in CommandAddress  *kb 9/16/82*
+           MOVE.L       D4, (A0)+               ;put in ProcedurePointer*kb 1/9/84*
+           MOVE.L       D6, (A0)                ;put in Userdata*kb 1/9/84*
+
+           MOVEA.L      D1, A0                  ;get caller's cmd block addr *kb 9/16/82*
+           MOVEQ        #QCMDLEN-1, D0          ;number of bytes to move(max)*kb 9/16/82*
+CCGETCMD   MOVE.B       (A0)+, (A6)+            ;move cmd blk from user's area*kb 9/16/82*
+           DBF          D0, CCGETCMD            ;   to queue entry's cmd blk *kb 9/16/82*
+
+           MOVE.L       (SP)+, A0               ;restore table address  *kb 9/9/82*
+           MOVE.W       (SP)+, D0               ;remove function code *kb 6/29/83*
+           MOVEQ        #QUEDENTRY, D7          ;return IORESULT warning*kb 9/9/82*
+
+           ADDQ.B       #1, QCOUNT(A0,D2.W)     ;add 1 to que count     *kb 9/27/82*
+           LEA          REAR, A6                ;update rear pointer   *kb 9/27/82*
+           ADDQ.W       #1, (A6)                ;pointer               *kb 9/27/82*
+           CMPI.W       #NUMQENTS,(A6)          ;if rear >= Number of queue entries *kb 9/27/82*
+           BCS.S        CCENBINT                ;no                    *kb 9/27/82*
+           CLR.W        (A6)                    ;then wrap to zero index *kb 9/27/82*
+           BRA.S        CCENBINT                ;enable ints and exit   *kb 9/16/82*
+
+; Entry In Use Error Exit
+;
+InUseEr1   MOVE.W       (SP)+, D0               ;remove function code *kb 6/29/83*
+INUSEERR   MOVEQ        #ENTINUSE,D7
+CCENBINT   BRA          ENBINTS                 ;enable interrupts      *kb 9/9/82*
+
+; CHKENB - see if should enable interrupts. if can call ENBINTS
+; Added 9/9/82  kb
+CHKENB
+           MOVEQ        #NOENABLE,D0            ;Should enable interrupts?
+           BTST         D0,D7
+           BON.S        CEexit                  ;no, check for peek command
+           BSR.S        CCENBINT                ;Enable ints
+CEexit     RTS
+  page
+;
+; STROBCMD - Strobe in CommandAddress into Transporter
+;          Entry : (D1) = CommandAddress
+;          Exit  : (EQ) = Transporter was ready and did strobe.         *kb 9/7/82*
+;                  (NE) = Transporter not ready, D7 has error code.     *kb 9/7/82*
+; clobbers registers D0,D3,A6
+;
+STROBCMD   LEA          STRBADR.L,A6            ;transporter strobe address
+           MOVE.L       D1,D0
+           SWAP         D0                      ;Do High first
+           BSR.S        WAITRDY
+           BEQ.S        STBERR                  ;transporter not ready
+           MOVE.B       D0,(A6)                 ;strobe in hi byte
+;
+           MOVE.L       D1,D0                   ;Do Medium byte of address
+           LSR.W        #8,D0
+           BSR.S        WAITRDY
+           BEQ.S        STBERR                  ;transporter not ready
+           MOVE.B       D0,(A6)                 ;strobe in hi byte
+;
+           MOVE.L       D1,D0                   ;Do Low byte
+           BSR.S        WAITRDY
+           BEQ.S        STBERR                  ;transporter not ready
+           MOVE.B       D0,(A6)                 ;strobe in hi byte
+
+           BSR.S        WAITRDY                 ;Wait for ready        *kb 8/1/83*
+           BEQ.S        STBERR                  ;transporter not ready *kb 8/1/83*
+;
+           CLR.L        D0                      ;Show no error
+           RTS
+;
+; Error Exit Transporter not ready
+;
+STBERR     MOVEQ        #TRNPNR,D7              ;Error code
+           RTS
+;
+; WAITRDY - Wait for Transporter ready or until timed out
+;
+WAITRDY    MOVE.W       #LONGTIME,D6            ;*kb 9/7/82*
+WAITLP     BTST         #RDYBIT,RDYADR.L        ;repeat
+           DBNE         D6,WAITLP               ;until count done or set
+           RTS                                  ;DBcc innstruction doesn't effect the cc's*kb 9/7/82*
+  page
+;
+; SETTBL - set entry in table from parameters passed
+;          Entry : (D2) = index to entry
+;                  (D3) = ResultPointer (hi byte must be cleared)
+;                  (D4) = ProcedurePointer
+;                  (D5) = BufferPointer (hi byte must be cleared)
+;                  (D6) = UserData                         *kb 6/30/83*
+;                  (A0) = address of table
+;                  (A4) = user's A4
+;                  (A5) = user's A5
+;
+SETTBL
+           ANDI.L       #$00FFFFFF, D3          ;clear hi byte
+           MOVE.L       D3,RESLTPTR(A0,D2.W)    ;Save ResultPointer
+           MOVE.L       D4,PROCPTR(A0,D2.W)     ;Save ProcedurePointer
+           ANDI.L       #$00FFFFFF, D5          ;clear hi byte
+           MOVE.L       D5,BUFPTR(A0,D2.W)      ;Save BufferPointer
+           MOVE.L       D6,USERDATA(A0,D2.W)    ;Save UserData  *kb 6/30/83*
+           MOVE.L       A4,A4SAVE(A0,D2.W)      ;Save User's A4 value
+           MOVE.L       A5,A5SAVE(A0,D2.W)      ;Save User's A5 value
+           RTS
+  page
+;
+; DORCV -  Do Receive command.  User expects two interrupts.  Use the Current
+;          Command entry and 1 Receive Socket entry, specified by the Socket
+;          Number parameter in the ParameterBlock.
+;       Entry : (D2) = function code which is entry index (verified)
+;               (A3) = ParameterBlock pointer
+;       temp uses D5 for function code before uses it for BufferPointer *kb 9/15/82*
+;
+DORCV      LEA          TRNITBL,A0
+           MOVE.L       D2, D5                  ;save function code for CurCmdO call *kb 9/15/82*
+           MULU         #TIENTLEN,D2            ;Calculate index to entry
+;
+; Disable OmniNet interrupts so won't get reentry while setting up receive
+;
+           BSR          DISINTS
+;
+; If Socket entry is INUSE then Error
+;
+           BTST         #INUSE,BITFLAGS(A0,D2.W)
+           BNE          INUSEERR                ;In use error - enable interrupts and exit
+           MOVE.W       D2,-(SP)                ;Save Index to Socket entry
+;
+; Setup Command entry
+;
+           MOVE.L       D5, D2                  ;get saved function code *kb 9/15/82*
+           MOVEQ        #NOENABLE, D0
+           BSET         D0, D7                  ; make sure CURCMDO does not enable interrupts
+           BSR          CURCMDO
+           MOVE.W       (SP)+,D2                ;restore index *kb 9/3/82*
+           TST.W        D7                      ; Error? (cmd send or in use)   *kb 9/7/82*
+           BNE.S        DRexit                  ; if any error or warning exit, *kb 9/15/82*
+           CLR.L        PROCPTR(A0)             ; force no proc call on current cmd interrupt
+;
+; Setup table except do not show table in use yet
+;
+           MOVEA.L      (A3)+, A6               ;get command address
+           MOVE.L       TCrADhi-1(A6),D3        ;Get ResultPointer      (hi byte is garbage)
+           MOVE.L       (A3)+,D4                ;Get ProcedurePointer
+           MOVE.L       (A3),D6                 ;Get UserData
+           MOVE.L       TCdADhi-1(A6),D5        ;Get BufferPointer      (hi byte is garbage)
+           BSR.S        SETTBL                  ;put values in entry
+;
+; set INUSE flag for socket entry and enable interrupts
+;
+           BSET         #INUSE,BITFLAGS(A0,D2.W) ; *kb 9/3/82*
+           BSR          ENBINTS                 ; *kb 9/3/82*
+;
+; WAIT until the transport has performed the command
+;
+           CLR.L        D7                      ; assume will work      *kb 9/16/82*
+           MOVEQ        #3, D6                  ; wait for 4 busy waits max. *kb 9/15/82*
+DRWAIT     BSR.S        BUSYWAIT                ;*KB 9/7/82*
+           DBNE         D6, DRWAIT              ;do until(response) or (time out) *kb 9/15/82*
+           BNE.S        DRCLR                   ; worked, report good   *kb 9/16/82*
+           MOVEQ        #IOEtimot, D7           ; FAILED - timed out    *kb 10/13/82*
+           BCLR         #INUSE,BITFLAGS(A0,D2.W) ; clear rcv socket entry *kb 9/16/82*
+;
+; If in use already cleared or timed out don't check queue
+;
+DRCLR      BCLR         #INUSE,BITFLAGS(A0)     ;free curcmd entry *kb 9/3/82*
+           BOFF.S       DRexit                  ;exit cleared in int rtn*kb 10/7/82*
+           TST.W        D7                      ;*kb 10/7/82*
+           BNE.S        DRexit                  ;error exit *kb 10/7/82*
+           CLR.L        D2                      ;make sure index is to cur cmd *kb 10/7/82*
+           MOVE.W       SR, D1                  ;if call user keep int level *kb 10/7/82*
+           BSR          DISINTS                 ;make sure won't int unqueue *kb 10/7/82*
+           BSR          IDOQUE                  ;see if anything on queue *kb 10/7/82*
+           CLR.L        D7                      ;make sure don't report error *kb 10/7/82*
+           BSR          ENBINTS                 ;turn ints back on *kb 10/7/82*
+DRexit     RTS
+  page
+;
+; Added 9/7/82
+; BUSYWAIT - wait for result code to change to NOT $FF or time out
+;       Entry : D3 - ResultPointer
+;       Exit  : A6 - ResultPointer
+;               (EQ) = timed out
+;               (NE) = result code <> $FF
+;
+BUSYWAIT   MOVEA.L      D3, A6                  ;ResultPointer  *kb 9/3/82*
+           MOVE.W       #LONGTIME, D0           ;wait approx. 10 millisecond max.
+BWwait     CMPI.B       #CCRSLT, (A6)           ;result still not changed? *kb 9/3/82*
+           DBNE         D0, BWwait              ;yes            *kb 9/3/82*
+           RTS                                  ;changed, exit  *kb 9/3/82*
+;
+; Added 9/7/82 kb
+; CHKPEEK - if command is a peek then do a busy wait until it is
+;           complete or it times out.
+;       Entry : A0 - pointer to table
+;               D3 - ResultPointer
+;               D2 - index to entry to get ProcedurePointer from
+;
+CHKPEEK    MOVEA.L      (A3), A6                ;get command address
+           CMPI.B       #PKPOCMD, (A6)          ;is it a Peek/Poke cmd?
+           BNE.S        CPexit                  ;no
+           TST.B        TCpkpoc(A6)             ;is it a Peek?
+           BNE.S        CPexit                  ;no, its a Poke
+;
+; Do  busy wait on this result
+;
+           BSR.S        BUSYWAIT                ;wait-returns with A6=ResultPointer
+;
+; Call user if procedure pointer is not nil
+;
+           BCLR         #INUSE,BITFLAGS(A0,D2.W) ;free curcmd entry *kb 9/3/82*
+           BOFF.S       CPexit                  ;if was already freed exit *kb 9/24/82*
+           MOVEM.L      D1-D5/D7/A0-A5,-(SP)    ;Save registers
+           MOVE.W       SR,D1                   ;don't disable interrupts
+           BSR          GETUREGS                ;get regs for CALLUSER *kb 9/22/82*
+           BSR          DISINTS                 ;IDOQUE needs ints disabled*kb 10/7/82*
+           BSR          IDOQUE                  ;see if something queued *kb 9/16/82*
+           CLR.L        D7                      ;force D7=0, not dequeue call *kb 7/12/83*
+           BSR          ENBINTS                 ;kb 10/7/82*
+           BSR          CALLUSER                ; *kb 9/9/82*
+           MOVEM.L      (SP)+, D1-D5/D7/A0-A5   ;restore registers
+;
+CPexit     RTS
+  page
+;
+; data area
+;
+; Transporter Interrupt Table
+;
+TRNITBL
+QCOUNT     EQU          %-TRNITBL               ;Index to Queue count *kb 9/27/82*
+           DATA.B       0                       ;*kb 9/27/82*
+BITFLAGS   EQU          %-TRNITBL               ;Index to Bit Flag byte *kb 9/27/82*
+           DATA.B       0                       ;see page 2 for bit flag definitions *kb 9/27/82*
+RESLTPTR   EQU          %-TRNITBL               ;Index to ResultPointer
+           DATA.L       0
+PROCPTR    EQU          %-TRNITBL               ;Index to ProcedurePointer
+           DATA.L       0
+BUFPTR     EQU          %-TRNITBL               ;Index to BufferPointer
+           DATA.L       0
+USERDATA   EQU          %-TRNITBL               ;Index to UserData   *kb 6/29/83*
+           DATA.L       0                       ;                    *kb 6/29/83*
+A4SAVE     EQU          %-TRNITBL               ;Index to Register A4 Save Area
+           DATA.L       0
+A5SAVE     EQU          %-TRNITBL               ;Index to Register A5 Save Area
+           DATA.L       0
+TIENTLEN   EQU          %-TRNITBL               ;length of 1 entry
+;
+; remaining 4 entries of Transporter Interrupt Table
+;
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0,0 ;*kb 6/29/83*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0,0 ;*kb 9/29/83*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0,0 ;*kb 9/29/83*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0,0 ;*kb 9/29/83*
+TBLLEN     EQU          %-TRNITBL               ;length in bytes of table
+NUMENTS    EQU          TBLLEN/TIENTLEN         ;number of entries
+;
+; queue flags Added 10/7/82 kb
+;
+QFLAGS     DATA.W      0                        ;queue flags
+;
+; queue state variables
+;
+FRONT      DATA.W      0                        ;Front of queue pointer (index)
+REAR       DATA.W      0                        ;Rear of queue pointer (index)
+
+; counted semaphore for entry control into interrupt routine
+;
+Cntr       DATA.W      0
+;
+; Entry Queue for Current Command calls
+; Each queue entry contains duplicate of 1 entry of table, function code,      *kb 1/16/84*
+; the parameter block sent to CURCMDO and the Transporter Command Block        *kb 1/16/84*
+; Added 9/9/82 kb
+; Modified 1/16/84 kb
+;
+PBQUEUE
+QENTRY     EQU          %-PBQUEUE               ;Index to entry & table entry duplicate
+           DATA.W       0                       ;queue counter & flags
+           DATA.L       0                       ;ResultPointer
+           DATA.L       0                       ;ProcedurePointer
+           DATA.L       0                       ;BufferPointer
+           DATA.L       0                       ;UserData            *kb 12/14/84*
+           DATA.L       0                       ;Register A4 Save Area
+           DATA.L       0                       ;Register A5 Save Area   *kb 11/11/83*
+;
+QFC        EQU          %-PBQUEUE               ;Index to function code *kb 9/15/82*
+           DATA.W       0                       ;                       *kb 9/15/82*
+QFCLEN     EQU          QPBLK-QFC               ;length of function code area   *kb 9/15/82*
+;
+QPBLK      EQU          %-PBQUEUE               ;Index to parameter block
+           DATA.L       0,0                     ;CommandAddress, ProcedurePointer
+           DATA.L       0                       ;and UserData *kb 1/9/84*
+QPBLEN     EQU          QCMD-QPBLK              ;length of parameter block portion of entry
+;
+QCMD       EQU          %-PBQUEUE               ;Index to Command Block *kb 9/16/82*
+           DATA.L       0,0,0                   ;                       *kb 9/16/82*
+QCMDLEN    EQU          QENTLEN-QCMD            ;length of command block*kb 9/27/82*
+QENTLEN    EQU          %-PBQUEUE               ;length of entry        *kb 9/27/82*
+;
+; The other queue entries
+;
+           DATA.W       0                       ; 2nd  queue counter & flags   *kb 1/16/84*
+           DATA.L       0,0,0,0,0,0             ;      rest of table entry     *kb 1/16/84*
+           DATA.W       0                       ;      function code           *kb 1/16/84*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0 ;      parameter and cmd blks  *kb 1/16/84*
+
+           DATA.W       0                       ; 3rd  queue counter & flags   *kb 1/16/84*
+           DATA.L       0,0,0,0,0,0             ;      rest of table entry     *kb 1/16/84*
+           DATA.W       0                       ;      function code           *kb 1/16/84*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0 ;      parameter and cmd blks  *kb 1/16/84*
+
+           DATA.W       0                       ; 4th  queue counter & flags   *kb 1/16/84*
+           DATA.L       0,0,0,0,0,0             ;      rest of table entry     *kb 1/16/84*
+           DATA.W       0                       ;      function code           *kb 1/16/84*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0 ;      parameter and cmd blks  *kb 1/16/84*
+
+           DATA.W       0                       ; 5th  queue counter & flags   *kb 1/16/84*
+           DATA.L       0,0,0,0,0,0             ;      rest of table entry     *kb 1/16/84*
+           DATA.W       0                       ;      function code           *kb 1/16/84*
+           DATA.W       0,0,0,0,0,0,0,0,0,0,0,0 ;      parameter and cmd blks  *kb 1/16/84*
+
+PBQLEN     EQU          %-PBQUEUE               ;length of queue
+NUMQENTS   EQU          PBQLEN/QENTLEN          ;number of queue entries *kb 9/27/82*
+;
+; CurCmd transporter command save area
+;
+THECMD     DATA.L       0,0,0
+TCMDLEN    EQU          %-THECMD                ;length of command block
+
+           END          TRANPDRV

@@ -1,0 +1,243 @@
+Program OCSinit;
+
+USES {$U /CCUTIL/CClib} CCdefn, CClblio, CCwndio,
+     {$U /Program/OCSlib} OCS, OCsfile;
+
+type post = packed array[1..512] of char;
+     str255 = string[255];
+var Fili: file of post;
+    Filo: text;
+    fil: Str;
+    Form: Str;
+    ok  : Boolean;
+    txt : Str;
+    l,i,o,x,s,wn : integer;
+    tegn  : char;
+    c,r,feltno:integer;
+
+Procedure Leschr;
+
+Begin
+   C:=C+1;
+   tegn:= ' ';
+   IF i > 512 then
+      Begin
+      get(Fili);
+      i:=1
+      End;
+   tegn:=Fili^[i];
+   i:=i+1
+END;
+
+
+procedure testcr;
+begin
+if tegn = '\0D' then
+  begin
+   C:=0;
+   R:=R+1
+  End;
+END;
+
+Procedure Editkey;
+
+Var f,mt,pkt : Integer;
+    kt : str;
+Begin
+      f:=0;
+      mt:=1;
+      LESchr;
+      if (tegn > '0') and (tegn <= '9') then
+         begin
+           pkt:=1;
+           Repeat
+            if mt > 0 then
+               begin
+               if (tegn >= '0') and (tegn <= '9') then
+                  begin
+                  f:=f*mt+(ORD(tegn)-48);
+                  mt:=mt*10
+                  end
+               Else
+                  mt:=0
+               end;
+             if mt = 0 then
+                begin
+                if pkt < 9 then
+                   kt[pkt]:=tegn;
+                pkt:=pkt+1
+                End;
+              LESchr;
+           until (tegn = '\20') or (tegn ='\22') or (tegn = '\27')
+               or (tegn = '\0D') or EOF(Fili);
+           if (f > 0) and (pkt> 1) and (f <= 40) then
+              begin
+              F:=F-1;
+              kt[0]:=CHR(pkt-1);
+              writeln(filo,'K');
+              Writeln(filo,F:3);
+              Writeln(filo,kt);
+              end;
+         End;
+       testcr;
+END;
+
+
+Procedure Editfelt;
+
+Var f,l,mt,wC : Integer;
+Begin
+      wC:=C-1;
+      L:=0;
+      f:=0;
+      mt:=1;
+      Repeat
+         if mt > 0 then
+            begin
+            if (tegn >= '0') and (tegn <= '9') then
+               begin
+                 f:=f*mt+(ORD(tegn)-48);
+                 mt:=mt*10
+               end
+            Else
+               mt:=0
+            end;
+         L:=L+1;
+         leschr;
+      until (tegn = '\20') or (tegn ='\22') or (tegn = '\27')
+               or (tegn = '\0D') or EOF(Fili);
+      if (f > 0) and (l > 0) and (f <= 256) then
+         begin
+         writeln(filo,'F');
+         Writeln(filo,F:3);
+         Writeln(filo,wC:3);
+         Writeln(filo,R:3);
+         Writeln(filo,L:3)
+         end;
+      testcr;
+END;
+
+
+Procedure Edittext;
+Begin
+        ok:=True;
+        writeln(filo,'T');
+        Writeln(filo,C:3);
+        Writeln(filo,R:3);
+        If (tegn = '\22') or (tegn = '\27') then
+           begin
+           leschr
+           end;
+        While ok do
+          Begin
+          If (tegn = '\22') or (tegn = '\27') then
+             begin
+             ok:=false;
+             leschr
+             end;
+          If (tegn = '\0D') or (Eof(Fili)) then
+             ok:=false;
+          if ok then
+             begin
+               write(filo,tegn);
+               leschr
+             end;
+          end;
+        writeln(filo);
+      testcr;
+ END;
+
+ Begin
+ REPEAT
+   Clear;
+   CCwndioinit;
+   R:=WINSYSTEM(2);
+   Clear;
+   R:=WINSYSTEM(3);
+   Clear;
+   CClblioinit;
+   LBLsinit;
+   s:=lblset(9,'Exit','\0D');
+   LBLson;
+   GOTOcr(20,5);
+   Writeln('Office & Computer System');
+   GOTOcr(20,10);
+   Writeln('SCREEN FORM GENERATOR');
+   GOTOcr( 20, 20);
+   write('Screen Input file: ');
+   GOTOcr( 20, 22);
+   Write('Screen Form file: ');
+   GOTOcr( 20, 24);
+   Write('Window          : ');
+   pfkey:=0;
+   fil:=' ';
+   form:=' ';
+   Repeat
+     Gettekst(40,20,16,fil);
+     if pfkey = 0 then
+       GETtekst(40,22,16,form);
+     if pfkey = 0 then
+       begin
+       TXT:='3';
+       GETtekst(40,24,1,txt);
+       end;
+   until (pfkey = 0) or (pfkey = 10);
+ if pfkey = 10 then
+ else
+   BEGIN
+   WN:=ORD(TXT[1])-48;
+   Reset(Fili,fil);
+   Rewrite(Filo,Form);
+   Writeln(Filo,'W');
+   Writeln(Filo,WN);
+   C:=0;
+   R:=0;
+   Feltno:=0;
+   i:=1;
+   o:=1;
+   Writeln;
+   Repeat
+     leschr;
+     if (tegn > '\00') then
+        Begin
+        testcr;
+        while (tegn >= '0') and (tegn <= '9') do
+              Editfelt;
+        While tegn = '#' do
+              Editkey;
+        While (tegn = '\22') or (tegn = '\27') do
+              EDITtext;
+        End;
+   UNTIL EOF(FILI);
+   Close(Fili);
+   Close(Filo,Lock);
+   if pfkey <> 10 then
+      BEGIN
+          Forminit(Form);
+          For X:=1 to 256 do
+            BEGIN
+            txt:=' ';
+            For s:=1 to OCStf[x].l do
+                txt[s]:='*';
+            Skrivfelt(x,Txt)
+            End;
+      End;
+   LBLsinit;
+   s:=lblset(9,'Exit','\0D');
+   LBLson;
+   R:=WINSYSTEM(2);
+   Write('Press RETURN for repeat or EXIT to terminate');
+   repeat
+   GETkey;
+   until (pfkey = 0) or (pfkey = 10);
+  end;
+  UNTIL pfkey = 10;
+ END.
+
+
+
+
+
+
+
+

@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'fsysdev.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FSYSDEV has 6 files,  0 to 6 (6), eov 500, size 106, free 6
+
+ 1: CODE            Data  4-Nov-82    6-  94(  88), 45056+512= 45568 bytes
+ 2: PASLIB.OBJ      Data  4-Nov-82   94- 148(  54), 27648+512= 28160 bytes
+ 3: CCLIB.OBJ       Data  4-Nov-82  148- 290( 142), 72704+512= 73216 bytes
+ 4: CFLIB.OBJ       Data  4-Nov-82  290- 336(  46), 23552+512= 24064 bytes
+ 5: C2LIB.OBJ       Data  4-Nov-82  336- 390(  54), 27648+512= 28160 bytes
+ 6: SYSTEM.UPDATE   Text  4-Nov-82  390- 394(   4),  2048+512=  2560 bytes

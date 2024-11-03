@@ -1,0 +1,38 @@
+;
+; file :  /kb/unitst.text
+; date :  19-JAN-1982  kb
+;
+; PROCEDURE TO DO UNITSTATUS CALL
+;
+                GLOBAL          UNITST
+;
+USTAT           EQU             5
+PSYSCOM         EQU             $180
+SCUTBL          EQU             20
+DEVLEN          EQU             26
+DRVADDR         EQU             2
+;
+; procedure UNITST(unitNo: integer; var somevar; func: integer);
+;
+UNITST
+                MOVE.L  (SP)+,A3        ;SAVE RETURN ADDRESS
+                MOVE.W  (SP)+,D2        ;FUNCTION PARAMETER
+                MOVE.L  (SP)+,D1        ;BUFFER ADDRESS
+                MOVE.W  (SP)+,D0        ;UNIT NUMBER
+                MOVE.W  D0,D6
+                MOVEQ   #USTAT,D4       ;COMMAND
+                MOVE.L  #PSYSCOM,A1
+                MOVE.L  (A1),A1         ;A1==> SYSCOM
+                CLR.W   (A1)            ;CLEAR IORESULT
+                MOVE.L  SCUTBL(A1),A1   ;A1==> DEVICE TABLE
+                TST.W   (A1)+           ;A1 ==> 1ST DEVICE ENTRY
+                MULU    #DEVLEN,D6      ;CALC TABLE OFFSET
+                MOVE.L  A3,-(SP)        ;PUSH RETURN ADDRESS
+                MOVE.L  DRVADDR(A1,D6.W),A1
+                JSR     (A1)            ;GOTO DRIVER
+                MOVE.L  #PSYSCOM,A1
+                MOVE.L  (A1),A1         ;SYSCOM ADDRESS
+                MOVE.W  D7,(A1)         ;SET IORESULT
+                RTS
+;
+                END

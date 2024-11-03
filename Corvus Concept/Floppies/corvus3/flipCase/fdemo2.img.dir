@@ -1,0 +1,23 @@
+
+Directory of UCSD disk image file 'fdemo2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FDEMO2 has 15 files,  0 to 6 (6), eov 500, size 117, free 15
+
+ 1: CS.8BY13        Data 22-May-83    6-  13(   7),  3584+ 72=  3656 bytes
+ 2: DRV.KYBD        Data  4-Feb-83   13-  18(   5),  2560+512=  3072 bytes
+ 3: DRV.SYSTRM      Data 18-Apr-83   18-  25(   7),  3584+512=  4096 bytes
+ 4: ED.DEMO.M       Data 23-Jun-83   25-  49(  24), 12288+473= 12761 bytes
+ 5: ED.DEMO.S       Data 23-Jun-83   49-  66(  17),  8704+172=  8876 bytes
+ 6: EX.PRNT1.TEXT   Text  8-Jun-83   66-  84(  18),  9216+512=  9728 bytes
+ 7: GERUNDS         Data 13-Jul-89   84-  91(   7),  3584+512=  4096 bytes
+ 8: GERUNDS.OBJ     Data 13-Jul-89   91-  96(   5),  2560+512=  3072 bytes
+ 9: GERUNDS.TEXT    Text 13-Jul-89   96- 110(  14),  7168+512=  7680 bytes
+10: GERUNDS2        Data 13-Jul-89  110- 118(   8),  4096+512=  4608 bytes
+11: GERUNDS2.OBJ    Data 13-Jul-89  118- 125(   7),  3584+512=  4096 bytes
+12: GERUNDS2.TEXT   Text 13-Jul-89  125- 141(  16),  8192+512=  8704 bytes
+13: KEYS.ED.TEXT    Text 17-Jan-88  141- 155(  14),  7168+512=  7680 bytes
+14: SYSMSG          Data  9-Jun-83  155- 183(  28), 14336+345= 14681 bytes
+15: W               Data 13-Jul-89  183- 383( 200), 102400+512= 102912 bytes

@@ -1,0 +1,33 @@
+
+Directory of UCSD disk image file 'fdocs2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FDOCS2 has 25 files,  0 to 6 (6), eov 500, size 40, free 25
+
+ 1: MSDOS_TN.TEXT   Text  7-Apr-83    6-  72(  66), 33792+512= 34304 bytes
+ 2: MANUAL3.TEXT    Text  5-Nov-84   72- 114(  42), 21504+512= 22016 bytes
+ 3: C2OVER.TEXT     Text 29-Jun-82  114- 148(  34), 17408+512= 17920 bytes
+ 4: CPMSTUFF.TEXT   Text  9-May-83  148- 182(  34), 17408+512= 17920 bytes
+ 5: FDOCS.HPIC      Data  2-Oct-84  182- 212(  30), 15360+512= 15872 bytes
+ 6: IBM.UCSD.INTERP Data 30-Mar-83  212- 238(  26), 13312+512= 13824 bytes
+ 7: IV.ZAP.TEXT     Text 20-Jul-83  238- 264(  26), 13312+512= 13824 bytes
+ 8: IVMAKEFLOP.TEXT Text 26-Jul-83  264- 290(  26), 13312+512= 13824 bytes
+ 9: C2MASTER.TEXT   Text  3-Feb-82  290- 316(  26), 13312+512= 13824 bytes
+10: SECBOOT.TEXT    Ux2003  1-Apr-82  316- 338(  22), 11264+512= 11776 bytes
+11: IVCRCLIST.TEXT  Text  2-Aug-83  338- 358(  20), 10240+512= 10752 bytes
+12: IBMBCI.TEXT     Text  8-Jul-83  358- 376(  18),  9216+512=  9728 bytes
+13: IV.MN.TEXT      Text  5-Aug-83  376- 392(  16),  8192+512=  8704 bytes
+14: SYSTEM.LIBRARY  Data 16-Jun-82  392- 406(  14),  7168+512=  7680 bytes
+15: C2MOUNT.TEXT    Text  3-Feb-82  406- 414(   8),  4096+512=  4608 bytes
+16: C2USERMGR.TEXT  Text  3-Feb-82  414- 422(   8),  4096+512=  4608 bytes
+17: IBM.MSDOS.BIOS  Ux00  3-Aug-83  422- 429(   7),  3584+512=  4096 bytes
+18: C2INTER.TEXT    Text  3-Feb-82  429- 435(   6),  3072+512=  3584 bytes
+19: DOCS.TEXT       Text  9-May-83  435- 441(   6),  3072+512=  3584 bytes
+20: C2NETTYPES.TEXT Text  2-Dec-82  441- 445(   4),  2048+512=  2560 bytes
+21: USERLIB.TEXT    Text  4-Aug-83  445- 449(   4),  2048+512=  2560 bytes
+22: C2OSTYPES.TEXT  Text  2-Dec-82  449- 453(   4),  2048+512=  2560 bytes
+23: C2STATUS.TEXT   Text 22-Jun-82  453- 457(   4),  2048+512=  2560 bytes
+24: IBM.UCSD.BTPARM Data 27-Apr-83  457- 459(   2),  1024+512=  1536 bytes
+25: IBM.UCSD.DRIVER Data 30-Mar-83  459- 460(   1),   512+512=  1024 bytes

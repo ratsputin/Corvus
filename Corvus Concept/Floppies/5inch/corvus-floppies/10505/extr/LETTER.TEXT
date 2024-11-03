@@ -1,0 +1,40 @@
+
+
+
+         October 7,1983
+
+
+
+
+
+
+
+         Alisa -
+
+
+
+         The floppies enclosed are a portion of the CCOS 1.2
+         release.  Glenda must use this system for her
+         development.  Replace the corresponding files on
+         Glenda's drive with the new versions on the diskettes.
+         Use the new PASCAL compiler and libraries.  You will
+         have to re-compile and link your software.  The new
+         EDWORD is very similar to the old EDWORD.  Replace the
+         BOOT.CONCEPT file in your Corvus volume with the version
+         on the /FSYSGEN diskette.  Use the Boot Manager file in
+         the Const II utilities (function key command F4 from the
+         dispatcher level).
+
+         The forms enclosed are for product support to track the
+         preliminary releases of 1.2.  This will help you get the
+         final version of the system when it is available.
+         Please fill them out and send them to the specified
+         place.
+
+
+         If you have any problems with the diskettes, the forms
+         or any other software problems call me at (408) 946-7700
+         ext. 255.
+
+
+                             Keith Ball

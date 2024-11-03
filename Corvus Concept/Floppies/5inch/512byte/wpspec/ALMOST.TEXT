@@ -1,0 +1,329 @@
+.ft 'Beta Release WordProc''Page %'
+.po 10
+                   eABeta Release WordProce@
+
+
+     This is WordProc 1.2. Virtually all known bugs not
+related to enhanced character editing have been fixed.  The
+next release of WordProc will be version 2.0, with an
+integrated spelling checker and other goodies.  No schedule
+for this one yet.
+     In no particular order, the changes, bug fixes, and
+enhancements to version 1.1d/1.1 Special are as follows:
+
+Now is the time for all goodjjjj jjj jjj
+  men to come to the aid of their
+  countries.
+  eHNow is the time e@    dddd
+This isn't underlined.
+
+     eAWorde@ eAwrape@ eAworkse@ eAcorrectly.  e@ Previously, it would wrap
+wordseA as eAthough the right margin was one position less than
+eAit really was.
+
+     eAWorkspacee@ eAdirectoriese@ eAaree@ eAinviolate.e@ There is no way I
+know of to clobber a directory.  The mysterious blank lines
+that would show up are no more (although if you have a in the
+directory, you should save all the files and recreate it).
+The [MoveText] menu is disabled for directories, and you
+cannot type over the names of the MOMDIR, CURDIR, COPY, or
+PRINT workpads.
+
+     eAMark/bounde@ eAerrore@ eAfixed.e@ The range error that would
+sometimes crop up during a [Mark]/[Bound][Save] operation has
+been fixed.
+     eASinglee@ eAsheete@ eAprintinge@ eAsimplified.e@ You can now print any
+portion of a document in single sheet mode- just press
+[SglSheet] in the [Print] menu.  The .SF dot command is still
+limited in that it will (obviously) not take effect if it is
+not in the text being printed.  Note that a .CF command will
+eHalwayse@ countermand the single sheet option.
+
+     eAEnhancemente@ eAprintinge@ eAprobleme@ eAfixed.e@ Enhancements are
+always turned off at the end of a printed line, eliminating
+the problems that sometimes cause large portions of a
+document to be printed with (unwanted) enhancements.
+
+
+
+     eAFormse@ eAerrore@ eAfixed.e@ The spacing errors sometimes
+encountered when printing forms have been fixed.
+     eAPrinte@ eAbuge@ eAfixed.e@ Some errors in print operations- such
+as mysterious ".END" symbols- have been fixed.
+     eAEditListe@ eAbuge@ eAfixed.e@ The bug that caused the system to
+crash when an ALT character was typed in [EditList] has been
+fixed.
+     eAFramee@ eAlabelse@ eAconsistent.e@ The "frame labels", those
+little inverse video flags in the command window that let you
+know what part of the system you're in, are now always
+displayed.
+
+     eAGotoe@ eAoperatione@ eAchanged.e@ [Goto] now moves the entire
+screen, instead of a three line window.
+
+     eAReplacee@ eAoperatione@ eAchanged.e@ The operation of [Replace]
+has been changed.  Previously, [Replace] would always start
+looking at the beginning of a workpad.  Now, it proceeds from
+the cursor point forwards.  If you want to replace all
+occurrences of a string in a document, but still return to
+your starting point, use the sequence [Mark] [Goto] [First-
+Ln] [Search] [Replace] (whatever) [Goto] [GotoMark].
+
+eAInserte@ eAtogglee@ eAoperational.e@ Pressing [Ins Char] again now
+resets Typeover mode.
+
+eAAutomatice@ eAreturne@ eAtoe@ eAmaine@ eAmenue@ eAlevel.e@ Previously, if you were
+in some sections of the program such as [Document] or [Ad-
+just], typing text (as you might do if you forgot to exit
+the level) would cause only a beep.  Now, if you type a text
+character, the system assumes you're finished with whatever
+you were doing and drops you back to the main menu level.
+
+eAShortcutse@ eAtoe@ eAenhancements.e@ Many people expressed a desire to
+more easily access the often used boldface and underline
+enhancements.  Now, pressing <Control>-U toggles underline
+on and off, and pressing <Control>-B toggles boldface on and
+off.  The standard [Enhance] menu still works, of course,
+and enhancements set with this "shortcut" method will
+reflect in the "Enhancements Set" display in [Enhance].
+
+eAEasye@ eAaborte@ eAofe@ eAfilee@ eAsaves.e@ Pressing the BREAK key will abort
+file saves and remove the partial file.  Note that if a file
+already exists on a volume, an aborted save will leave the
+original file intact, as it is not erased until the new file
+is closed.
+
+eAEasye@ eAaborte@ eAofe@ eAprinte@ eAoperations.e@ There are two ways to abort
+a print operation.  Pressing BREAK while formatting is going
+on will abort the print and clear the PRINT workpad.  After
+formatting has occurred, you can use the [ABORT] key in the
+[Print] menu to do the same thing.  Note that since many
+printers have large buffers for received text, this does
+eHnote@ necessarily mean that printing will stop instantly- just
+that the Concept will stop sending characters.  A limitation
+of this is that aborting a direct spool will leave an open
+pipe; use the Const II utilities to delete it.
+
+eACleare@ eAcopye@ eAbuffere@ eAimplemented.e@ In response to popular de-
+mand, there is a "Clear Copy Buffer" option in the [Move-
+Text] menu.  Just press [F3].
+
+eALargee@ eAdocumente@ eAprinting.e@ The printing of very large docu-
+ments (i.e.  over 125K total length) is now handled more
+gracefully.  eHNote:e@ Documents that fall in this class can tie
+the Concept up for a long time, since no editing will be
+possible until the last line has been written to the PRINT
+workpad.
+
+eAEditinge@ eApossiblee@ eAine@ eA[Search].e@ You can now type while in the
+[Search] menu, which makes correcting small errors much
+easier.
+
+eASorte@ eAremoved.e@ [Sort] is gone from the [Lists] and [Mark]/
+[Bound] e@menus.  The WordProc sort was very slow, and would
+(admittedly rarely) turn your workpad to dogfood...and
+[Undo] was unimplemented since [Sort] required so many
+operations (you would have had to press [Undo] a eHlote@ to
+cancel a [Sort]).  The workpad structure used in WordProc
+makes a quick sort almost impossible; use the [SortFile] key
+in ISYS.  It's more than 40 times faster than the WordProc
+sort, anyway.  eHNote:e@ Since the sort routine was used to sort
+the workspace directory, directories will no longer be in
+alphabetical order- workpads will appear in the order they
+were created.
+
+eAProgramminge@ eAmode.e@ A new option, Programming Mode, has been
+added to the [Settings] menu.  Programming Mode changes some
+of the operational characteristics of WordProc to make it
+a more congenial environment for programmers.  These changes
+are:
+.nj
+
+
+  1. Auto indent is always active:  pressing [Re-
+     turn] will always cause the cursor to return
+     to a position immediately below the first
+     character of the previous line.
+
+  2. Moving through a document by pressing [Re-
+     turn] will position the cursor on the first
+     character of each line as you go.
+
+  3. Comments- i.e., all text between { and }, is
+     automatically in boldface, UNLESS the first
+     character after the opening brace is a dollar
+     sign (for compiler directives).
+
+  4. Insert Mode is left on during all movement
+     operations.  You may move the cursor,
+     scroll, and perform [Goto] operations without
+     turning it off.  Any other function key (or
+     [Ins Char]) will reset typeover mode.
+
+
+eAGenerale@ eANotese@
+
+Few people use subdirectories since they could not, until
+recently, be deleted.  Effective with WordProc 1.1, subdirec-
+tories can be deleted if they're empty.  Intelligent use of
+subdirectories can make your workspace much neater, espe-
+cially if you routinely use large workspaces.
+
+The [LoadTabs] and [SaveTabs] functions in the [Settings]
+menu makes it possible for each workpad to have its own
+margin/tab settings.  The methodology I use is to create a
+tab rack with the same name as the workpad.  WordProc 2.0
+will make this automatic.
+
+
+eAUndocumented things you may not have known about:e@
+
+WordProc can include other workpads in a [Print] operation.
+The dot command syntax is:
+
+       .IN <name>
+
+where <name> is the name of the workpad (eHnote@ a text file) to
+be included in the printout.
+
+
+Many users have requested a way to temporarily stop printing
+to allow printwheel changes on letter quality printers.
+Effective with WordProc 1.1, there is a command that allows
+this: the "\\pause" command.
+
+During a print operation, if WordProc sees this string imbed-
+ded in the text, printing will stop, and the same "printing
+paused..." message that occurs in single sheet feed mode
+will appear to alert the user.  At this time a printwheel
+can be changed, and [Print] [Continue] pressed to resume
+printing.  eHNote:e@ Some printers will not print a line until a
+carriage return has been received.  Obviously, this command
+will not work correctly on these printers.
+
+
+eALatee@ eAnotes
+
+I have changed the format of the system message file.  Cur-
+rently, only WordProc and LookUp use the system message file
+(this is the data file SYSMSG).  However, LookUp has not
+been recoded yet; so, temporarily, WordProc uses a seperate
+version of SYSMSG called WPSYSMSG.  eHBoth this and eHthe eHstan-e@
+eHdard SYSMSG file must be on your system.e@ LookUp will be up-
+graded to handle the new system message file structure (and,
+I might add, files of any size) in the near future.
+
+This version of WordProc is eHnote@ a release but is a Beta test
+version.  There may be have been new bugs introduced, al-
+though I'm not aware of any.  Do eHnote@ call customer service
+with problems and questions on this version of WordProc;
+call me directly- (408) 559-7000 ext.  4628.
+
+I would also like to take this opportunity to add that writ-
+ten bug reports and comments are MUCH better than phone-ins.
+Soon, I hope to have a Concept-run bulletin board system
+that will allow customers to call in and leave messages, but
+for now...
+
+.pg
+eAFilese@ eAincludede@ eAwithe@ eAthise@ eArelease:e@
+
+
+eHWordProc 1.2e@
+.nj
+
+CC.WP-    Main WordProc file; goes on the /ISYS volume.
+WPSYSMSG- Special system message file for CC.WP. Can go
+          on either /CCSYS or /ISYS.
+KEYS.ISYS- New function key labels. Replaces file of the
+           same name on /CCSYS.
+
+
+eHSpelling checker
+e@
+DMS-      Dictionary management system. This is the
+          spelling checker that will be built into a
+          future version of WordProc. No documentation,
+          but the operation should be fairly obvious.
+          Currently, it can only work on text files,
+          so you must [Save] a workpad as a text file
+          before running it. Any changes made to the
+          text file by DMS will eHnote@ be reflected by
+          the workpad until you [Load] the file back
+          in. Goes on /ISYS.
+
+VSI.DICTIONARY- This is the dictionary file used by
+                DMS. It is small (although it will
+          grow as you use it), and is eHnote@ guaranteed
+          to be free if misspelled words! This file
+          can go anywhere but DMS will not find it
+          unless it's on the default volume when DMS
+          is called. This file can grow to amazing
+          size; you should put it where there's lots
+          of space.
+
+eHPrinter support
+
+eANote:e@ You may already have these files; if the dates
+      on your files match these dates, then you do
+      not need to replace them.
+
+CC.SETDCP- Replaces file of same name on /CCSYS.
+DRV.EPRNT- Ditto.
+BLDALT-    Replaces file of same name on /CCUTIL.
+BLDACT-    Ditto.
+
+Printer action tables and alternate character tables created
+under the old system eHwill not worke@ with these files; you
+must recreate them with the new utilities. More complete
+documentation can be found in the file READ.ME.TEXT on the
+enclosed disk(s).
+.pg
+eANotese@ eAone@ eAversion 1.3e@
+
+Believe it or not, there were even some bugs lurking in
+version 1.2! The ones that have since been squashed are:
+
+
+4/23/84
+
+* Error in [Mark]/[Bound] caused SEARCH and REPLACE opera-
+tions to proceed from the cursor point onwards, instead of
+being restricted to the bounded area.
+
+* Another error in [Mark]/[Bound]...  the line length for
+[Save]s was computed incorrectly when the left margin of the
+bounded area was not 1, causing the right ends of lines to
+be dropped. Fixed.
+
+
+4/25/84
+
+* The [SaveFile] command did not properly check for I/O er-
+rors, and would cheerfully report "File saved" when it was,
+in fact, not, due to such things as too little volume space.
+
+4/26/84
+
+* Hack in PRNT module to turn enhancements off at the ends
+of lines when spooling from WordProc directly; additional
+form feed sent at the end of printing. This cures a prob-
+lem that would crop up at odd times: large portions of doc-
+uments being printed with enhancements (i.e. underlines,
+boldface) where only plain text should appear.
+
+5/13/84
+
+* A string range error would occur if the title of an IPC
+field was longer than 20 chars in the [Lists] mode.  Fixed
+so that only the first 20 characters are considered.
+
+
+eAFinale@ eAnotee@ eAone@ eAcommunications...e@
+
+Due to the absurd number of phone calls I've been getting,
+my phone is now eHpermanentlye@ forwarded to the message center,
+which means you can no longer call and get me directly.
+Hopefully, this will let me get some work done during
+business hours. I get groups of messages four times per day
+and will get back to you ASAP.

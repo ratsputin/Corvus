@@ -1,0 +1,165 @@
+program pipes;
+{---------------------------------------------------------------}
+{ pipes - change parameters of spooler driver
+{
+{ date : 13-Feb-1984
+{ file : pipes.text
+{
+{ Keith Ball
+{ last modified : 21-Feb-1984
+{
+{---------------------------------------------------------------}
+const
+    pgmname =  'Pipes';
+    vrsn    =  '1.0a';
+    date    =  '21-Feb-1984';
+
+    SpoolDrv =  3;           {spooler driver unit number}
+    DataComm = 32;           {data com 2 driver unit number}
+
+    {function codes to unitstatus functions of driver}
+    ChngPiName = 18;         {change pipe name}
+    CloseFunc  = 19;         {close pipe}
+    ChngMessg  = 20;         {change message}
+    SlotServer = 21;         {change slot and server numbers}
+
+type
+    str40 = string[40];
+
+var
+    i: integer;
+    s: string[120];
+
+procedure DoClose;
+    var ior: integer;
+    begin
+    unitstatus(SpoolDrv,ior,CloseFunc); ior := ioresult;
+    if ior <> 0 then writeln('Pipe close failed.  Error = ',ior);
+    end;
+
+procedure CallDriver(fnccode: integer; errmsg: str40);
+    var ior,eq: integer;
+    begin
+    eq := pos('=',s);
+    if (eq = 0) then exit(CallDriver);
+
+    if (eq = length(s)) then s := ''
+                        else s := copy(s,eq+1,length(s));
+
+    unitstatus(SpoolDrv,s,fnccode); ior := ioresult;
+    if ior <> 0 then writeln(errmsg,'  Error = ',ior);
+    end;
+
+procedure DoMessage;
+    begin
+    CallDriver(ChngMessg,'Message change failed.');
+    end;
+
+procedure DoPipeName;
+    var i: integer;
+    begin
+    for i := 1 to length(s) do
+        if (s[i] >= 'a') and (s[i] <= 'z') then
+           s[i] := chr( ord(s[i]) - $20 );
+    CallDriver(ChngPiName,'Pipe name change failed.');
+    end;
+
+function ConvertInt(st: str40): integer;
+    var temp,i: integer;
+        Stop: boolean;
+    begin
+    temp := 0; i := 1; Stop := FALSE;
+    while (i <= length(st)) and (NOT Stop) do begin
+        if (st[i] >= '0') and (st[i] <= '9') then
+           temp := (temp * 10) + (ord(st[i]) - ord('0'))
+        else
+           Stop := TRUE;
+        i := i + 1;
+        end;
+    if Stop then ConvertInt := -1
+            else ConvertInt := temp;
+    end;
+
+procedure DoServerSlot;
+    var i,eq,l,ior: integer;
+        slt,srv: str40;
+        ss: record
+              slot,server: integer;
+              end;
+    begin
+    eq := pos('=',s);
+    if (eq = 0) or (eq+1 >= length(s)) then exit(DoServerSlot);
+
+    s := copy(s,eq+1,length(s));
+    l := pos('/',s);
+    if (l = 0) then l := length(s);
+    slt := copy(s,1,l-1);
+    if (l+1 <= length(s)) then srv := copy(s,l+1,length(s))
+                          else srv := '';
+
+    with ss do begin
+        slot   := ConvertInt(slt);
+        if (slot < 1) or (slot > 5) then begin
+           writeln('Invalid slot number :  ',slt);
+           exit(DoServerSlot);
+           end;
+
+        server := ConvertInt(srv);
+        if (server < 0) or (slot > 63) then begin
+           writeln('Invalid server number :  ',srv);
+           exit(DoServerSlot);
+           end;
+        end;
+
+    unitstatus(SpoolDrv,ss,SlotServer); ior := ioresult;
+    if ior <> 0 then writeln('Slot/Server number change failed.',
+                                     '  Error = ',ior);
+    end;
+
+procedure Attach;
+{attach enhanced printer driver to spooler driver}
+    var i: integer;
+    begin
+    i := SpoolDrv;
+    unitstatus(6,i,$82); i := ioresult; {attach eprnt to unit 3}
+    if i <> 0 then writeln('Failed to attach printer driver to spooler driver.');
+    end;
+
+procedure Detach;
+{attach enhanced printer driver to dtacom1 driver}
+    var i: integer;
+    begin
+    i := DataComm;
+    unitstatus(6,i,$82); i := ioresult; {attach eprnt to unit 32}
+    if i <> 0 then
+       writeln('Failed to attach printer driver to data comm 2 driver.');
+    end;
+
+begin
+if argc = 0 then begin
+   writeln(pgmname,' - ',vrsn,'  ',date);
+   writeln('Valid command line parameters :');
+   writeln('   close  - close the current pipe.');
+   writeln('   m=     - change the message to what follows =.');
+   writeln('   n=     - change the pipe name to what follows =.');
+   writeln('   s=     - change the slot/server numbers to what follows =.');
+   writeln('   attach - attach printer driver to unit 3.');
+   writeln('   detach - attach printer driver back to unit ',DataComm,'.');
+   writeln;
+   writeln('Examples :');
+   writeln('   pipes attach m=This_is_a_message');
+   writeln('   pipes n=NEC');
+   exit(pipes);
+   end;
+
+for i := 1 to argc do begin
+    s := argv[i]^;
+    if (s[1] >= 'a') and (s[1] <= 'z') then s[1] := chr(ord(s[1]) - $20);
+         if (s[1] = 'C') then DoClose
+    else if (s[1] = 'M') then DoMessage
+    else if (s[1] = 'N') then DoPipeName
+    else if (s[1] = 'S') then DoServerSlot
+    else if (s[1] = 'A') then Attach
+    else if (s[1] = 'D') then Detach;
+    end;
+end.

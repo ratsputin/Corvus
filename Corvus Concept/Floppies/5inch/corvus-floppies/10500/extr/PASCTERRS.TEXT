@@ -1,0 +1,161 @@
+0 File: pascterrs.text
+0 Date: 28-Apr-83
+10 Too many digits
+11 Digit expected after '.' in a real number
+12 Integer Overflow
+13 Digit expected in the exponent of a real number
+14 End of line encountered in a string constant
+15 Invalid character in input
+16 Premature end of file in source program
+17 Extra characters encountered after the end of the program
+18 End of file encountered in a comment
+20 Illegal symbol 
+21 Error in simple type
+22 Error in declaration part
+23 Error in parameter list of a procedure or function
+24 Error in constant
+25 Error in type   
+26 Error in field list of a record declaration
+27 Error in factor of an expression
+28 Error in variable
+29 Identifier expected
+30 Integer expected 
+31 '(' expected
+32 ')' expected
+33 '[' expected
+34 ']' expected
+35 ':' expected
+36 ';' expected
+37 '=' expected
+38 ',' expected
+39 '*' expected
+40 ':=' expected
+41 program keyword expected
+42 of keyword expected
+43 begin keyword expected
+44 end keyword expected
+45 then keyword expected
+46 until keyword expected
+47 do keyword expected
+48 to or downto keyword expected
+50 if keyword expected
+51 '.' expected
+52 implementation keyword expected
+53 interface keyword expected
+100 Identifier declared twice in the same block
+101 Identifier is not of the appropriate class
+102 Identifier not declared
+103 Sign not allowed
+104 Number expected
+105 Lower bound exceeds upper bound
+106 Incompatible subrange types
+107 Type of constant must be integer
+108 Type must not be real
+109 Tagfield must be a scalar or subrange
+110 Type incompatible with tagfield type
+111 Index type must not be real
+112 Index type must be scalar or subrange
+113 Index type must not be integer or longint
+114 Unsatisfied forward reference
+115 Forward reference type identifier cannot appear in
+115 a variable declaration
+116 Forward declaration - repetition of parameter list not
+116 allowed
+117 Forward declared function - repetition of result type not
+117 allowed
+118 Function result type must be scalar, subrange, or pointer
+119 File is not allowed as a value parameter
+120 Missing result type in function declaration
+121 F-format for real type only
+122 Error in type of parameter to a standard function
+123 Error in type of parameter to a standard procedure
+124 Number of actual parameters does not agree with
+124 declaration
+125 Illegal parameter substitution
+126 Result type of parametric function does not agree with
+126 declaration
+127 Expression is not of set type
+128 Only tests for equality allowed
+129 Strict inclusion not allowed
+130 Comparison of file variables not allowed
+131 Illegal type of operand(s)
+132 Operand type must be boolean
+133 Set element type must be scalar or subrange
+134 Set element types not compatible
+135 Type of variable is not array or string
+136 Index type is not compatible with declaration
+137 Type of variable is not record
+138 Type of variable must be file or pointer
+139 Illegal type of loop control variable
+140 Illegal Expression type
+141 Assignment of files not allowed
+142 Case selector incompatible with selecting expression
+143 Subrange bounds must be scalar
+144 Operand type conflict
+145 Assignment to standard function is not allowed
+146 Assignment ot formal function is not allowed
+147 No such field in this record
+148 Type error in read
+149 Actual parameter must be a variable
+150 Multiply defined case selector
+151 Missing corresponding variant declaration
+152 real or string tagfields not allowed in variant record
+153 Previous declaration was not forward
+154 Substitution of standard procedure or function not allowed
+155 Multiple defined label
+156 Multiple declared label
+157 Undefined label
+158 Undeclared label
+159 Value parameter expected
+160 Multiple defined record variant
+161 File not allowed here
+162 Unknown compiler directive (not external or forward)
+163 Variable cannot be a packed field
+164 Set of real is not allowed
+165 A field of a packed record cannot be a var parameter
+166 Case selector expression must be a scalar or a subrange
+167 String sizes must be equal
+168 String too long
+169 Value out of range
+170 Cannot take the address of a standard procedure or
+170 function
+171 Assignment to function result must be done inside that
+171 function
+172 Control variable of a for statement must be local
+173 BUFFERED or UNBUFFERED expected
+174 NORMAL, LOCK, PURGE, or CRUNCH expected
+175 File variable expected
+176 Must be within the procedure or function that is begin EXITed
+177 Cannot pass cexternal as procedure or function parameter
+178 Label value must be 0 to 9999
+190 No such unit in this file
+300 Too many nested record scopes
+301 Set limits out of range (0..2031 is maximum set)
+302 String limits out of range
+303 Too many nested procedures or functions
+304 Too many nested include or uses files
+305 Include not allowed in interface section
+306 Pack and unpack are not implemented
+307 Too many units
+308 Set constant out of range
+309 Maximum comparable packed array of char type is of size 255
+310 Too many nested with statements
+311 Too many nested function calls
+312 Record too big (maximum size is 32766 bytes)
+313 Too many elements in array (maximum size or elements is 32766)
+314 Too many variables in one scope (maximum is 32766 bytes)
+350 Procedure too large
+351 File name in option too long
+400 Not enough room for code file
+401 Error in rereading code file
+402 Error in reopening text file
+403 Unable to open uses file
+404 Error in reading uses file
+405 Error in opening include file
+406 Error in rereading previously read text block
+407 Not enough room for intermediate code file
+408 Error in writing code file
+409 Error in reading intermediate code file
+410 Unable to open listing file
+9999 
+

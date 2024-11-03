@@ -1,0 +1,172 @@
+{ CCDRVHDR.TEXT -------------------------------------------------------
+{
+{       CCDRVHDR -- Corvus CONCEPT Driver Header Access Unit
+{
+{       Copyright 1982 by Corvus Systems, Inc.
+{                         San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  09-03-82  KB   Original unit
+{
+{----------------------------------------------------------------------
+}
+
+UNIT CCdrvhdr;
+
+INTERFACE
+
+USES {$U /ccos/os.globals} GLOBALS;
+
+CONST
+        {return codes}
+        GOOD            =        0;
+        BADUNITNO       =       -1;
+
+TYPE
+        pHdrDate = ^HDate;
+        HDate    =  RECORD
+                        Year  : INTEGER;
+                        Month : INTEGER;
+                        Day   : INTEGER;
+                        END; {RECORD}
+
+        pstring80 = ^s80;
+        s80       = STRING[80];
+
+VAR
+        drvHdrDate      :       HDate;          {drive header date record}
+
+FUNCTION CCHdrDate( UnitNumber : INTEGER ) : INTEGER;
+FUNCTION CCHdrMsg( UnitNumber, Result : INTEGER ) : pstring80;
+
+IMPLEMENTATION
+
+TYPE
+        myint   =       RECORD
+                          CASE BOOLEAN OF
+                          TRUE  : (int : INTEGER);
+                          FALSE : (byt : ARRAY[0..1] OF byte);
+                          END;
+
+        pHeader =       ^Header;
+        Header  =       RECORD
+                          Branch  :  INTEGER;     {Branch instruction}
+                          BlkDev  :  byte;        {Blocked device boolean}
+                          Cmds    :  byte;        {valid command types}
+                          Date    :  PACKED RECORD{date of driver version}
+                                       Yr  : byte;
+                                       Mo  : byte;
+                                       Day : byte;
+                                       END;
+                          HdrMsg  :  string80;    {adds filler before header message}
+                          END; {RECORD}
+
+
+PROCEDURE InitDate;
+  BEGIN
+    WITH drvHdrDate DO BEGIN
+         Year  := 0;
+         Month := 0;
+         Day   := 0;
+         END; {WITH}
+  END; {InitDate}
+
+FUNCTION GetDevTbl : pdevtable;
+  VAR
+        atpsyscom       :       ^psyscom;
+        lsyscom         :       psyscom;
+
+  BEGIN
+    atpsyscom := POINTER( SysComPLoc );
+    lsyscom := atpsyscom^;
+    GetDevTbl := lsyscom^.sysdevtab;
+  END; {GetDevTbl}
+
+FUNCTION GetDrvrHdr( unitno : INTEGER; pDevTbl : pdevtable ) : pHeader;
+  BEGIN
+    GetDrvrHdr := POINTER( ORD4( pDevTbl^.dt[unitno].driver ) );
+  END; {GetDevTbl}
+
+FUNCTION MyOrd( msb, lsb : byte ) : INTEGER;
+{convert 2 bytes to INTEGER}
+  VAR i : myint;
+  BEGIN
+    i.byt[0] := msb;  i.byt[1] := lsb;
+    MyOrd := i.int;
+  END; {MyOrd}
+
+FUNCTION ValidUnit( unitno : INTEGER ) : BOOLEAN;
+  {returns true if unitno is a valid unitnumber}
+  VAR
+        pDevTbl :       pdevtable;
+
+  BEGIN
+    {get pointer to device table}
+    pDevTbl := GetDevTbl;
+
+    IF unitno <= pDevTbl^.maxdevno THEN
+         {may not be correct for floppy}
+         ValidUnit := pDevTbl^.dt[unitno].Mounted
+    ELSE ValidUnit := FALSE;
+
+  END; {ValidUnit}
+
+FUNCTION CCHdrDate {( UnitNumber : INTEGER ) : INTEGER} ;
+  {returns a error code :  0 = valid date record}
+  {                       -1 = invalid unit number}
+  VAR
+        pDrvrHdr : pHeader;
+
+  BEGIN
+  CCHdrDate := GOOD; {assume worked}
+
+  {init date record to nil}
+  InitDate;
+
+  {validate unit number}
+  IF ValidUnit( UnitNumber ) THEN BEGIN
+       {get dev table ptr}
+       {get drive entry pointer}
+       pDrvrHdr := GetDrvrHdr( UnitNumber, GetDevTbl );
+
+       {get date from header record into global date record}
+       WITH drvHdrDate DO BEGIN
+            Year  := MyOrd( 0, pDrvrHdr^.Date.Yr );
+            Month := MyOrd( 0, pDrvrHdr^.Date.Mo );
+            Day   := MyOrd( 0, pDrvrHdr^.Date.Day );
+            END; {WITH}
+       END {THEN}
+
+  ELSE CCHdrDate := BADUNITNO;
+
+  END; {CCHdrDate}
+
+FUNCTION CCHdrMsg {( UnitNumber, Result : INTEGER ) : pstring80} ;
+  {Result: a error code :  0 = valid date record}
+  {                       -1 = invalid unit number}
+  {Returns a nil pointer if Result <> 0}
+  {otherwise returns a pointer to the header msg string}
+  VAR
+        pDrvrHdr : pHeader;
+
+  BEGIN
+  Result := GOOD; {assume worked}
+  {init msg pointer to nil}
+  CCHdrMsg := NIL;
+
+  {validate unit number}
+  IF ValidUnit( UnitNumber ) THEN BEGIN
+       {get dev table ptr}
+       {get drive entry pointer}
+       pDrvrHdr := GetDrvrHdr( UnitNumber, GetDevTbl );
+       CCHdrMsg := @pDrvrHdr^.HdrMsg;
+       END
+  ELSE Result := BADUNITNO;
+
+  END; {CCHdrDate}
+
+END.  {unit CCdrvhdr}
+
+
+

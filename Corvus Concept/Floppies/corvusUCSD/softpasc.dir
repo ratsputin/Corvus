@@ -1,0 +1,9 @@
+
+Directory of UCSD disk image file 'softpasc.raw'
+
+Unknown density, disk image size 693248, 1354 blocks of 512 bytes each
+
+Volume PASCAL has 2 files,  0 to 6 (6), eov 1440, size 0, free 1313
+
+ 1: PASCAL.COMPILER Code 13-May-83    6- 113( 107), 54784+512= 55296 bytes
+ 2: SYSTEM.SYNTAX   Data 14-May-83  113- 127(  14),  7168+512=  7680 bytes

@@ -1,0 +1,154 @@
+
+File:  DOCS.TEXT                               10-May-83
+
+This file describes documentation available on the various
+computers and interfaces supported by Corvus.
+
+Entries are listed in the following format:
+
+Name of document       Author          Date            Source file
+Brief description of contents
+
+1.  Apple II
+
+---------              Denise          10-May-83       BCI.TEXT
+Commented listing of the flat cable CDSEND/CDRECV routine for
+Apple DOS
+
+Tech Note 4            Denise          10-May-83       B33DOC.TEXT
+Describes the modification made to Apple DOS by Corvus.
+
+----------             Denise          10-May-83       APPLE.DOC.TEXT
+Describes how to call CDSEND/CDRECV from Apple DOS and Apple
+Pascal.
+
+Tech Note 1            Lynn            ?
+Describes the layout of a disk set up for use with Apple
+(Constellation I format).
+
+Tech Note 2            Lynn            ?
+Describes the layout of a CP/M volume for the Apple II.
+
+Tech Note 3            Lynn            ?
+Describes the installation and operation of the Corvus Apple
+CP/M implementation.
+
+
+
+
+
+
+
+
+
+
+
+2.  Apple III
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3.  IBM/PC and IBM/XT
+
+
+
+
+
+
+
+
+
+
+
+
+                       Donna            ?              MSODS_TN.TEXT
+Describes the Corvus interface to DOS 1.1.
+
+4.  CP/M
+
+
+
+
+
+
+
+
+
+
+                       Denise                          CPM.TEXT
+Describes the Corvus interface to CP/M 2.2.
+
+5.  Concept
+
+
+
+
+
+
+
+
+
+
+
+6.  General disk documentation
+
+Disk Technical Reference Manual
+                       Concept         ?                Manual
+Describes all disk commands.
+
+
+
+
+
+
+
+
+
+
+
+
+
+7.  General OMNINET documentation
+
+Omninet Technical Reference Manual
+
+
+
+
+
+
+
+
+
+
+8.  General Bank documentation
+
+
+
+
+
+
+
+
+
+
+9.  General Constellation II documentation
+
+Constellation II overview              June 1982
+
+Constellation II internals             Dec 1982
+
+

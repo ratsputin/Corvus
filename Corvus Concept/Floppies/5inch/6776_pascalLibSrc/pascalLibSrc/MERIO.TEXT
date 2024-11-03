@@ -1,0 +1,335 @@
+; File: merio.text
+; Date: 10-Sep-82
+;
+        
+        ident   merio
+        
+        global  %_RESET,%_CLOSE,%_REWRT,%_EOF,%_EOLN
+        global  %_BLKRD,%_BLKWR,%_UREAD,%_UWRIT,%_IORES
+        global  %_GET,%_PUT,%_UPARR,%_SEEK,%_UCLR,%_UBUSY
+        global  %_UNITST
+        
+;
+; System EQU's
+;
+
+PSYSCOM equ     $180            ; Address of pointer to SYSCOM
+
+;
+; jsvect - jump to routine in system vector
+;
+; Parameters: D0.W - routine offset
+;
+
+jsvect
+        move.l  PSYSCOM.W,a0    ; (A0) = syscom
+        move.l  8(a0),a0        ; (A0) = sysvect
+        move.l  0(a0,d0.W),a0   ; (A0) = desired entry point
+        jmp     (a0)            ; Call routine
+        
+;
+; FIB record offsets and scalar definitions
+;
+
+F_TVALID equ    0               ; ISO file, F^ defined
+F_IEMPTY equ    1               ; Interactive, F^ undefined
+F_IVALID equ    2               ; Interactive, F^ defined
+F_TEMPTY equ    3               ; ISO file, F^ undefined
+
+FIBEOL  equ     4
+FIBEOF  equ     5
+FIBTEXT equ     6
+FIBSTAT equ     7
+FIBRSIZ equ     8
+FIBUNIT equ     12
+FIBUPAR equ     576
+
+;
+; lget - Do a GET(F)
+;
+; Parameters: A0.L - FIB address
+;
+; This routine preserves all registers
+;
+
+lget    movem.l d0-d7/a0-a6,-(sp)
+        move.l  a0,-(sp)        ; Push FIB address
+        moveq   #20,d0          ; FGET = routine #20
+        bsr.s   jsvect
+        movem.l (sp)+,d0-d7/a0-a6
+        rts
+        
+;
+; %_REWRT - Rewrite a file
+;
+; Parameters: ST.L - File Address
+;             ST.L - Address of Name String
+;             ST.W - Kind: -2=text, -1=file, 0=inter,
+;                            >0=bytes/record
+;             ST.W - Buffering info
+;
+
+%_REWRT
+        moveq   #1,d3           ; 1 = Rewrite
+        bra.s   rsetwrt
+
+;
+; %_RESET - Reset a file
+;
+; Parameters: ST.L - File Address
+;             ST.L - Address of Name String
+;             ST.W - Kind: -2=text, -1=file, 0=inter,
+;                            >0=bytes/record
+;             ST.W - Buffering info
+;
+
+%_RESET
+        clr.w   d3              ; 0 = Reset
+rsetwrt move.l  (sp)+,a2        ; Pop return address
+        addq.W  #2,sp           ; Ignore buffering info
+        move.w  (sp)+,d2        ; Pop File Kind
+        move.l  (sp)+,d0        ; Pop address of string
+        move.l  (sp)+,d1        ; Pop file address
+        move.l  a2,-(sp)        ; Push return address so can rts
+        movem.l d0-d7/a0-a6,-(sp)
+                                ; Params for FOPEN
+        move.l  d0,-(sp)        ;  1. Push string address
+        move.l  d1,-(sp)        ;  2. Push file address
+        move.b  d3,-(sp)        ;  3. Push new/old flag
+                                ; Params for FINIT
+        move.l  d1,-(sp)        ;  1. Push file address
+        move.w  d2,-(sp)        ;  2. File kind or rec size
+        moveq   #24,d0          ;
+        jsr     jsvect          ; Call #24 = FINIT
+        moveq   #28,d0          ;
+        jsr     jsvect          ; Call #28 = FOPEN
+        movem.l (sp)+,d0-d7/a0-a6
+        rts
+        
+;
+; %_CLOSE - Close a file
+;
+; Parameters: ST.L - File Address
+;             ST.W - Mode: 0=Normal, 1=Lock, 2=Purge
+;
+
+%_CLOSE
+        moveq   #32,d0          ; #32 = FCLOSE
+        jmp     jsvect          ; Returns directly to user
+        
+;
+; %_EOF - End of file predicate
+;
+; Parameters:  ST.L - File address
+;
+; Returns:     ST.B - Boolean Result
+;
+; This routine preserves all registers.
+;
+
+%_EOF
+        move.l  a0,-(sp)        ; Save A0
+        move.l  8(sp),a0        ; Get file address
+        move.b  FIBEOF(a0),10(sp) ; Pass answer to caller
+        move.l  4(sp),6(sp)     ; Get Return Address
+        move.l  (sp)+,a0        ; Restore A0
+        addq.l  #2,sp           ; Bump SP
+        rts
+
+;
+; %_EOLN - End of line predicate
+;
+; Parameters:  ST.L - File address
+;
+; Returns:     ST.B - Boolean Result
+;
+; This routine preserves all registers.
+;
+
+%_EOLN
+        move.l  a0,-(sp)        ; Save A0
+        move.l  8(sp),a0        ; Get file address
+        cmpi.b  #F_TEMPTY,FIBSTAT(a0)
+        BNE.s   e_noget         ; F^ must be valid ...
+        bsr.s   lget            ; ... if file is TEXT
+e_noget move.b  FIBEOL(a0),10(sp); Pass answer to caller
+        move.l  4(sp),6(sp)     ; Get Return Address
+        move.l  (sp)+,a0        ; Restore A0
+        addq.l  #2,sp           ; Bump SP
+        rts
+
+;
+; %_BLKRD - Blockread
+;
+; Parameters: ST.L - File Address
+;             ST.L - Buffer address
+;             ST.W - # Blocks to read
+;             ST.W - Block Number, -1 = Sequential
+;
+; Returns:    ST.W - # Blocks actually read
+;
+; *** OOPS! THIS ROUTINE SHOULD PRESERVE ALL REGISTERS ***
+;
+
+%_BLKRD
+        moveq   #1,d0           ; 1 = blockread
+        bra.s   b_rd_wr
+
+;
+; %_BLKWR - Blockwrite
+;
+; Parameters: ST.L - File Address
+;             ST.L - Buffer address
+;             ST.W - # Blocks to write
+;             ST.W - Block Number, -1 = Sequential
+;
+; Returns:    ST.W - # Blocks actually written
+;
+; *** OOPS! THIS ROUTINE SHOULD PRESERVE ALL REGISTERS ***
+;
+
+%_BLKWR
+        clr.w   d0              ; 0 = blockwrite
+b_rd_wr move.l  (sp)+,a2        ; Pop return address
+        move.w  (sp)+,d1        ; Block Number
+        move.w  (sp)+,d2        ; # Blocks
+        move.l  (sp)+,d3        ; Buffer Address
+        move.l  (sp)+,d4        ; File Address
+        movem.l d1-d7/a0-a6,-(sp)
+        clr.w   -(sp)           ; Make room for result
+        move.l  d4,-(sp)        ; Push file address
+        move.l  d3,-(sp)        ; Push buffer address
+        move.w  d2,-(sp)        ; Push number of block
+        move.w  d1,-(sp)        ; Push starting block
+        move.b  d0,-(sp)        ; Push read/write flag
+        moveq   #44,d0          ;
+        jsr     jsvect          ; #44 = blockio
+        move.w  (sp)+,d0        ; Pop actual no. blocks read
+        movem.l (sp)+,d1-d7/a0-a6
+        move.w  d0,-(sp)        ; Push the result
+        jmp     (a2)
+        
+;
+; %_UREAD - Unitread
+;
+; %_UWRIT - Unitwrite
+;
+; Parameters: ST.W - Unit number
+;             ST.L - Buffer address
+;             ST.L - # Bytes to read
+;             ST.L - Block Number, 0 = Sequential
+;             ST.W - Mode
+;
+
+%_UREAD
+        moveq   #4,d0           ; #4 = unitread
+        jmp     jsvect          ; Returns directly to user
+
+%_UWRIT
+        clr.w   d0              ; #0 = unitwrite
+        jmp     jsvect          ; Returns directly to user
+
+;
+; %_UNITST - Unitstatus
+;
+; Parameters: ST.W - Unit number
+;             ST.L - Communication area address
+;             ST.L - Mode/Command
+;
+
+%_UNITST
+        moveq   #100,d0         ; #100 = unitread
+        jmp     jsvect          ; Returns directly to user
+
+;
+; %_IORES - Ioresult
+;
+; Parameters: None.
+;
+; Returns:    ST.W - Ioresult
+;
+; This routine preserves all registers
+;
+
+%_IORES
+        clr.w   -(sp)           ; Make room for the result
+        move.l  2(sp),(sp)      ; Set up return address
+        move.l  a0,-(sp)        ; Save A0
+        move.l  PSYSCOM.w,a0    ; (A0) = %syscom
+        move.w  (a0),8(sp)      ; Fetch IORESULT
+        move.l  (sp)+,a0        ; Restore A0
+        rts
+
+;
+; %_GET - Get
+;
+; %_PUT - Put
+;
+; Parameters: ST.L - File Address
+;
+
+%_GET
+        moveq   #20,d0          ; #20 = GET
+        jmp     jsvect          ; Returns directly to user
+        
+%_PUT
+        moveq   #16,d0          ; #16 = PUT
+        jmp     jsvect          ; Returns directly to user
+
+;
+; %_UPARR - Computes the address of F^
+;
+; Parameters: ST.L - Address of file
+;
+; Returns:    ST.L - Address of F^
+;
+; This routine saves all registers.
+;
+
+%_UPARR
+        move.l  a0,-(sp)
+        move.l  8(sp),a0        ; Get address of file
+        cmpi.b  #F_IVALID,FIBSTAT(a0) ; Does state = FIVALID?
+        beq.s   unoget          ; Yes. No need to call GET
+        cmpi.b  #F_TVALID,FIBSTAT(a0) ; Does state = FTVALID?
+        beq.s   unoget          ; Yes. No need to call GET
+        bsr     lget            ;
+unoget  move.l  (a0),8(sp)      ; Get address of f^
+        move.l  (sp)+,a0
+        rts
+        
+;
+; %_SEEK - Seek
+;
+; Parameters: ST.L - Address of file
+;             ST.L - Record number to seek
+;
+
+%_SEEK
+        moveq   #48,d0          ; #48 = SEEK
+        jmp     jsvect          ; Returns directly to user
+
+;
+; %_UCLR - Unit Clear
+;
+; Parameters: ST.W - Unit to clear
+;
+
+%_UCLR
+        moveq   #8,d0           ; #8 = UNITCLEAR
+        jmp     jsvect          ; Returns directly to user
+        
+;
+; %_UBUSY - Unit Busy
+;
+; Parameters: ST.W - Unit to check
+;
+; Returns:    ST.B - Boolean Result
+;
+
+%_UBUSY
+        moveq   #12,d0          ; #12 = UNITBUSY
+        jmp     jsvect          ; Returns directly to user
+        
+        end
+

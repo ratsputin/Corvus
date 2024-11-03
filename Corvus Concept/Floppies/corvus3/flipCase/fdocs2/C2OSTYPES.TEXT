@@ -1,0 +1,30 @@
+           Code  Operating system  Mnemonic
+           ----  ----------------  --------
+              1  Apple Pascal      APUCSD
+              6  Apple run-time    APRT
+              3  UCSD II.0         UCSDII
+             15  UCSD IV.0         UCSD40
+             16  Concept OS        CONCEPT
+              
+              7  CP/M              CPM
+             17  CP/M-86           CPM86
+              
+              4  IBM DOS           IBMDOS
+              
+              2  Apple DOS 3.3     APDOS33
+              5  Apple SOS         A3SOS
+              
+              8  RT-11             RT11
+              9  RSX-11            RSX11
+             
+             10  Pet               ?
+             
+             11  NEWDOS            NEWDOS
+             12  NEWDOS-80         NEW80
+             
+             13  Atari DOS 2.0     ATARI
+             
+             14  UNIX              UNIX
+             
+Next available number = 18
+

@@ -1,0 +1,11 @@
+
+Directory of UCSD disk image file 'arizonaCCsrc#1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume ARIZONA has 3 files,  0 to 6 (6), eov 500, size 2, free 3
+
+ 1: CCLIB.OBJ       Data 20-Sep-83    6- 222( 216), 110592+512= 111104 bytes
+ 2: CIILIB.OBJ      Data  2-Feb-84  222- 412( 190), 97280+512= 97792 bytes
+ 3: CC.C2BATCH.TEXT Text  2-Mar-84  412- 498(  86), 44032+512= 44544 bytes

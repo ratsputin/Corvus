@@ -1,0 +1,204 @@
+program LdPrtAlt;
+
+{**************************************************************}
+{                                                              }
+{ LdPrtAlt - Load a Printer Alternate character translation    }
+{            table.                                            }
+{                                                              }
+{ Execute : ldprtalt [<filename>]                              }
+{                                                              }
+{           If no file name is present on the command line     }
+{           then the program asks for one.  If only [RETURN]   }
+{           is pressed, then the program exits.                }
+{                                                              }
+{           The table is loaded into the driver code space.    }
+{                                                              }
+{**************************************************************}
+
+USES {$U /CCUTIL/CCLIB } CCdefn, CCcrtIO,
+                         CCwndIO,CCdirIO,
+     {$U CCDCPIO       } CCdcpIO,
+     {$U BLDALT.EQU    } BldAltEQU;
+
+CONST
+       pgmVERSION      =   '[1.0a]';
+       pgmNAME         =   'LDPRTALT';
+       pgmTITLE        =   'Load Printer Alternate Character Translation Table';
+
+TYPE
+       pAltTbl         =   ^AltTbl;
+
+VAR
+     AltTable :  AltTbl;
+     pAltTable : pAltTbl;
+
+     FilName : String80;
+     F : FILE OF AltTbl;
+
+  PROCEDURE PrintTitle;
+  BEGIN
+    CrtAction(EraseALL);
+    WRITE(pgmNAME, pgmVERSION,' - ', pgmTITLE);
+  END;{PrintTitle}
+
+  FUNCTION ChkPrinter : BOOLEAN;
+  BEGIN {ChkPrinter}
+    IF NOT PrtAvail THEN
+       BEGIN
+       PrintTitle;
+       WRITELN('  ERROR => No printer driver available');
+       END;
+
+    ChkPrinter := PrtAvail;
+  END; {ChkPrinter}
+
+  FUNCTION Init : BOOLEAN;
+  VAR  ior  : INTEGER;
+  BEGIN {Init}
+    CCcrtIOinit;
+    CCwndIOinit;
+    CCdcpIOinit;
+    CrtAction(DefStrOn);
+
+    FilName := '';
+
+    ior := WinSystem(WsysCmd);
+    Init := (ior = 0);
+    IF ior <> 0 THEN EXIT(Init);
+
+    Init := ChkPrinter;
+  END; {Init}
+
+  FUNCTION GetFname( VAR fname : String80 ) : BOOLEAN;
+  BEGIN
+    IF argc <> 0 THEN
+        BEGIN
+        fname := argv[1]^;
+        GetFname := TRUE;
+        END
+    ELSE
+        BEGIN
+        PrintTitle; WRITELN;
+        WRITE('Enter file name : ');
+        IF GetString(fname)  <> Escape THEN
+           GetFname := LENGTH(fname) <> 0
+        ELSE GetFname := FALSE;
+        END;
+  END; {GetFname}
+
+  FUNCTION GetFile( fname : String80 ) : BOOLEAN;
+  BEGIN {GetFile}
+
+    {$I-} RESET(F, fname); {$I+}
+    GetFile := (IORESULT = 0);
+    IF IORESULT <> 0 THEN
+        BEGIN
+        WRITE('  ERROR => Cannot open file.');
+        EXIT(GetFile);
+        END;
+
+    {$I-} READ(F, AltTable); {$I+}
+    GetFile := (IORESULT = 0);
+    IF IORESULT <> 0 THEN WRITE('  ERROR => Cannot read file.');
+
+    {$I-} CLOSE(F); {$I+} {close of read should never fail}
+  END; {GetFile}
+
+  FUNCTION ValidTable : BOOLEAN;
+  {check if table is valid  - first integer is <= MAXSTR}
+                            { strings all valid length }
+  VAR i, m : INTEGER;
+      OK : BOOLEAN;
+
+  BEGIN
+    WITH AltTable DO
+       BEGIN
+       m := ActualStrs - 1;
+       i := 0;  OK := FALSE;
+
+       IF (m <= MAXSTR) AND (m >= 0) THEN
+          BEGIN
+          OK := TRUE;
+          WHILE (i <= m) AND (OK) DO
+            BEGIN
+            OK := (LENGTH(StrList[i]) <= ALTSTRLEN);
+            i := i + 1;
+            END;
+          END;
+       END;
+
+    ValidTable := OK;
+    IF NOT OK THEN WRITE('  ERROR => Invalid Table.');
+  END; {ValidTable}
+
+  FUNCTION MoveTable(VAR tbladr : pAltTbl) : BOOLEAN;
+  {if valid then move into driver space if room}
+  VAR topdrvrs, botmcode, table : pBytes;
+      save108, save10C : ^pBytes;
+      l : LONGINT;
+      i, tl : INTEGER;
+
+  BEGIN
+    save108 := POINTER($108);
+    topdrvrs := save108^;
+    tbladr := POINTER(ORD4(topdrvrs));
+    save10C := POINTER($10C);
+    botmcode := save10C^;
+    l := ORD4(botmcode) - ORD4(topdrvrs);
+    MoveTable := FALSE;
+
+    IF l > SIZEOF(AltTable) THEN
+      WITH AltTable DO
+         BEGIN
+         MoveTable := TRUE;
+         STptr := POINTER( ORD4(tbladr) + SIZEOF(Indices) + SIZEOF(STptr) );
+         tl := SIZEOF(AltTable);
+         IF ODD(tl) THEN tl := tl + 1;
+         save108^ := POINTER(ORD4(tbladr) + tl);
+         table := @STptr;
+         FOR i := 0 TO (tl - 1) DO
+              topdrvrs^[i] := table^[i];
+         END
+    ELSE WRITE('  ERROR => No room for Table.');
+  END; {MoveTable}
+
+  FUNCTION InstalTbl(tbladr : pAltTbl) : BOOLEAN;
+  {if moved to driver space then make unitstatus call to driver}
+  BEGIN
+    UNITSTATUS( PRT, tbladr^, FCINSTALT );
+    InstalTbl := (IORESULT = 0);
+    IF IORESULT <> 0 THEN WRITE('  ERROR => Failed to install Table.');
+  END; {InstalTbl}
+
+  PROCEDURE RemovTbl;
+  VAR topdrvrs, botmcode : pBytes;
+      save108, save10C : ^pBytes;
+      tl : INTEGER;
+
+  BEGIN
+    save108 := POINTER($108);
+    topdrvrs := save108^;
+    save10C := POINTER($10C);
+    botmcode := save10C^;
+
+    WITH AltTable DO
+       BEGIN
+       tl := SIZEOF(AltTable);
+       IF ODD(tl) THEN tl := tl + 1;
+       save108^ := POINTER(ORD4(topdrvrs) - tl);
+       END;
+  END;
+
+  PROCEDURE LdFile( fname : String80 );
+  BEGIN
+    PrintTitle;
+    IF GetFile(fname) THEN
+        IF ValidTable THEN
+           IF MoveTable(pAltTable) THEN
+              IF NOT InstalTbl(pAltTable) THEN RemovTbl;
+  END; {LdFile}
+
+BEGIN {LdPrtAlt}
+  IF Init THEN
+       IF GetFname(FilName) THEN LdFile(FilName);
+END. {LdPrtAlt}

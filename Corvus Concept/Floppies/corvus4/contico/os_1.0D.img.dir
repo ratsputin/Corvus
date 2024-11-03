@@ -1,0 +1,26 @@
+
+Directory of UCSD disk image file 'os_1.0D.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 18 files,  0 to 6 (6), eov 500, size 51, free 18
+
+ 1: ...OS.1.0D...   Data 22-Aug-82    6-   7(   1),   512+512=  1024 bytes
+ 2: CCOS.1.0B       Data 22-Jul-82    7-   8(   1),   512+512=  1024 bytes
+ 3: LOGIN           Data  3-Mar-83    8-  46(  38), 19456+512= 19968 bytes
+ 4: .TEXT           Text 10-Sep-84   46-  52(   6),  3072+371=  3443 bytes
+ 5: C2.MENU.TEXT    Text  1-Aug-83   52-  60(   8),  4096+512=  4608 bytes
+ 6: CC.MN.TEXT      Text  5-Aug-83   60-  74(  14),  7168+512=  7680 bytes
+ 7: CORVUS.LIBRARY  Data  5-Jan-82   74- 150(  76), 38912+512= 39424 bytes
+ 8: IV.VMGR.CODE    Ux2002 29-Mar-83  150- 179(  29), 14848+512= 15360 bytes
+ 9: MAINT           Data  8-Feb-83  179- 201(  22), 11264+512= 11776 bytes
+10: APP.TEXT        Text  2-Oct-84  201- 207(   6),  3072+512=  3584 bytes
+11: TOFC.TEXT       Text  2-Oct-84  207- 213(   6),  3072+512=  3584 bytes
+12: CH1.TEXT        Text  2-Oct-84  213- 227(  14),  7168+512=  7680 bytes
+13: CH2.TEXT        Text  2-Oct-84  227- 291(  64), 32768+512= 33280 bytes
+14: CH3.TEXT        Text  2-Oct-84  291- 309(  18),  9216+512=  9728 bytes
+15: CH4.TEXT        Text  2-Oct-84  309- 339(  30), 15360+512= 15872 bytes
+16: CH5.TEXT        Text  2-Oct-84  339- 349(  10),  5120+512=  5632 bytes
+17: CH6.TEXT        Text  2-Oct-84  349- 365(  16),  8192+512=  8704 bytes
+18: CH7.TEXT        Text  2-Oct-84  365- 449(  84), 43008+512= 43520 bytes

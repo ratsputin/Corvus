@@ -1,0 +1,164 @@
++-------+----------------+-------+----------------+---+---------+-----------------------------------
+DVOL    DFILE            SVOL    SFILE            PGM DATE      DESCRIPTION
+                                                      
+FBOOT   +----------------+-------+----------------+---+---------+----------------------------
+FBOOT   ASSIGN           CCOS    ASSIGN.ASM.TEXT  LF  20-Sep-83 CCOS load driver processing
+FBOOT   ASSIGN           CCOS    ASSIGN.TEXT      LF  20-Sep-83 CCOS load driver processing
+FBOOT   CC.DISPAT        CCOS    CC.DISPAT.TEXT   LF  20-Sep-83 CCOS dispatcher
+FBOOT   CC.EXEC          CCOS    CC.EXEC.TEXT     LF  20-Sep-83 CCOS exec file processing
+FBOOT   CC.FILMGR        CCOS    CC.FILMGR.TEXT   LF  20-Sep-83 CCOS file manager
+FBOOT   CC.FILMGR        CCOS    CC.FILMGR1.TEXT  LF  20-Sep-83 CCOS file manager
+FBOOT   CC.KERNEL        CCOS    OS.MAIN          LF  20-Sep-83 Corvus Concept OS
+FBOOT   CC.SETUP         CCOS    P.SETUP.TEXT     LF  20-Sep-83 CCOS initialization processing
+FBOOT   CC.SETUP         CCOS    P.SETUP1.TEXT    LF  20-Sep-83 CCOS initialization processing
+FBOOT   CC.SYSMGR        CCOS    CC.SYSMGR.TEXT   LF  20-Sep-83 CCOS system utilities
+FBOOT   CC.WNDMGR        CCOS    CC.WNDMGR.TEXT   LF  20-Sep-83 CCOS window manager
+FBOOT   CC.WNDMGR        CCOS    CC.WNDMGR1.TEXT  LF  20-Sep-83 CCOS window manager
+FBOOT   CC.WNDMGR        CCOS    CC.WNDMGR2.TEXT  LF  20-Sep-83 CCOS window manager
+FBOOT   CC.WNDMGR        CCOS    CC.WNDMGR3.TEXT  LF  20-Sep-83 CCOS window manager
+FBOOT   CF18.4AP.DATA    ....    ....             C2  20-Sep-83 Disk firmware file
+FBOOT   CSD.DEFAULT      ....    ....             ..  20-Sep-83 Display character set
+FBOOT   CSK.DEFAULT      CHARSET CSK.REV4.TEXT    KB  20-Sep-83 Default keyboard char set
+FBOOT   DDIAG            ....    ....             C2  20-Sep-83 Disk diagnostic program
+FBOOT   DIAG.DATA        ....    ....             C2  20-Sep-83 Disk diagnostic data
+FBOOT   DRV.ADISK        CCFLPY                   KB  20-Sep-83 Apple 5" floppy disk drvr
+FBOOT   DRV.CDISK1       CCOSDRV                  KB  20-Sep-83 Corvus disk driver (256k)
+FBOOT   DRV.CDISK2       CCOSDRV                  KB  20-Sep-83 Corvus disk driver (512k)
+FBOOT   DRV.DISPHZ       CCOSDRV                  MB  20-Sep-83 Display driver - horizontal
+FBOOT   DRV.DISPVT       CCOSDRV                  MB  20-Sep-83 Display driver - vertical
+FBOOT   DRV.DTACOM       CCOSDRV                  KB  20-Sep-83 Data comm driver
+FBOOT   DRV.EPRNT        CCOSDRV                  KB  20-Sep-83 Printer driver
+FBOOT   DRV.FDISK1       CCFLPY                   KB  20-Sep-83 Corvus SSSD floppy disk drvr
+FBOOT   DRV.FDISK2       CCOSDRV                  KB  20-Sep-83 Corvus DSDD floppy disk drvr
+FBOOT   DRV.KYBD         CCOSDRV                  KB  20-Sep-83 Keyboard driver
+FBOOT   DRV.OMNINET      CCOSDRV                  KB  20-Sep-83 Omninet transporeter driver
+FBOOT   DRV.SYSTRM       CCOSDRV                  KB  20-Sep-83 SYSTERM driver
+FBOOT   DRV.TIMER        CCOSDRV                  KB  20-Sep-83 Timer driver
+FCCLIB  +----------------+-------+----------------+---+---------+----------------------------
+FCCLIB  C2LIB.OBJ                                 LF  20-Sep-83 CCOS Const II library
+FCCLIB  CCLIB.OBJ                                 LF  20-Sep-83 CCOS system library
+FCCLIB  CODE             SVS     SVS              LF  20-Sep-83 SVS code generator
+FCCLIB  PASLIB.OBJ       SVS     SVS              LF  20-Sep-83 SVS Pascal library
+FCCSYS1 +----------------+-------+----------------+---+---------+----------------------------
+FCCSYS1 ACCMGR           ....    ....             C2  20-Sep-83 Const II
+FCCSYS1 BOOTMGR          ....    ....             C2  20-Sep-83 Const II
+FCCSYS1 C2.MISC.TEXT     ....    ....             C2  20-Sep-83 Const II
+FCCSYS1 CC.C2MGR         ....    ....             C2  20-Sep-83 Const II
+FCCSYS1 DRIVEMGR         ....    ....             C2  20-Sep-83 Const II
+FCCSYS1 FIXIT            ....    ....             C2  20-Sep-83 Const II
+FCCSYS2 +----------------+-------+----------------+---+---------+----------------------------
+FCCSYS2 MBACKUP          ....    ....             C2  20-Sep-83 Const II
+FCCSYS2 MIRROR           ....    ....             C2  20-Sep-83 Const II
+FCCSYS2 PARMGR           ....    ....             C2  20-Sep-83 Const II
+FCCSYS2 USERMGR          ....    ....             C2  20-Sep-83 Const II
+FCCSYS3 +----------------+-------+----------------+---+---------+----------------------------
+FCCSYS3 ASM68K           SVS     SVS              LF  20-Sep-83 SVS MC68000 assembler
+FCCSYS3 BOOT.FLOPPY                               LF  20-Sep-83 Floppy boot code
+FCCSYS3 CC.EDCHAR                                 MB  20-Sep-83 Edit character set program
+FCCSYS3 CC.HELP          CCOS    CC.HELP.TEXT     LF  20-Sep-83 CCOS help processing
+FCCSYS3 CC.SETDCP        CCUTIL1 CCSETDCP.TEXT    KB  20-Sep-83
+FCCSYS3 FFRMT                                     KB  20-Sep-83 Corvus SSSD floppy formatter
+FCCSYS3 FUTIL                                     MB  20-Sep-83 Corvus DSDD floppy utility pgm
+FCCSYS3 HELP.TEXT        CCUTIL  HELP.TEXT        ..  20-Sep-83 Help program text
+FCCSYS3 LIBRARY          SVS     SVS              LF  20-Sep-83 SVS library program
+FCCSYS3 LINKER           SVS     SVS              LF  20-Sep-83 SVS object linker
+FCCSYS3 LOADER.IMAGE     SVS     SVS              LF  20-Sep-83
+FCCSYS3 PRTWND                                    LF  20-Sep-83 Print window program
+FCCSYS3 WRITEBOOT        CCOS    WRITEBOOT.TEXT   LF  20-Sep-83 Write boot code to SSSD floppy
+FCCSYS4 +----------------+-------+----------------+---+---------+----------------------------
+FCCSYS4 CC.MNTMGR        ....    ....             C2  20-Sep-83 Const II
+FCCSYS4 DESPOOL                                   LF  20-Sep-83 Despool program
+FCCSYS4 MOVE             CCUTIL1 CCMOVE.TEXT      LF  20-Sep-83 Corvus disk block move program
+FCCSYS4 OS.GBL.ASM.TEXT                           LF  20-Sep-83
+FCCSYS4 SPOOL                                     LF  20-Sep-83 Spool program
+FCCSYS4 UNCAT                                     MB  20-Sep-83
+FCCSYS4 WNDUTIL                                   LF  20-Sep-83 Window utilities (save/load/prnt)
+FCCSYS4 ZAP              CCUTIL1 CCZAP.TEXT       LF  20-Sep-83 Corvus disk zap program
+FEDWORD +----------------+-------+----------------+---+---------+----------------------------
+FEDWORD ED                                        DR  20-Sep-83 EdWord
+FEDWORD KEYS.ED.TEXT                              DR  20-Sep-83 EdWord keys text
+FEDWORD SYSMSG                                    KL  20-Sep-83 System message file
+FFORTRN +----------------+-------+----------------+---+---------+----------------------------
+FFORTRN CFLIB.OBJ                                 LF  20-Sep-83 CCOS Fortran system library
+FFORTRN FORTRAN          SVS     SVS              LF  20-Sep-83 SVS Fortran compiler
+FFORTRN FTNCTERRS.TEXT   SVS     SVS              LF  20-Sep-83 SVS Fortran compiler error msgs
+FFORTRN FTNLIB.OBJ       SVS     SVS              LF  20-Sep-83 SVS Fortran library
+FFORTRN FTNRTERRS.TEXT   SVS     SVS              LF  20-Sep-83 SVS Fortran compiler error msgs
+FGRAPH  +----------------+-------+----------------+---+---------+----------------------------
+FGRAPH  CC.GR.FONTS      ....    ....             DDD 20-Sep-83 Corvus Graph font file
+FGRAPH  CC.GR.LST.TEXT   ....    ....             DDD 20-Sep-83 Corvus Graph ----
+FGRAPH  CC.GR.TMPLTS     ....    ....             DDD 20-Sep-83 Corvus Graph template file
+FGRAPH  CC.GRAPH         ....    ....             DDD 20-Sep-83 Corvus Graph
+FISYS1  +----------------+-------+----------------+---+---------+----------------------------
+FISYS1  CC.CALC                                   KL  20-Sep-83 ISYS calculator program
+FISYS1  CC.CALEN                                  KL  20-Sep-83 ISYS calendar program
+FISYS1  CC.CLOCK                                  KL  20-Sep-83 ISYS clock program
+FISYS1  CC.DCOMM                                  LF  20-Sep-83 ISYS data comm program
+FISYS1  CC.GR.IPC.TEXT   ....    ....             DDD 20-Sep-83 Corvus Graph ----
+FISYS1  CC.ISYS          CCOS    CC.ISYS.TEXT     LF  20-Sep-83 ISYS dispatcher
+FISYS1  CC.LOOKUP                                 KL  20-Sep-83 ISYS lookup program
+FISYS1  CC.SORT                                   DR  20-Sep-83 ISYS sort program
+FISYS2  +----------------+-------+----------------+---+---------+----------------------------
+FISYS2  CC.WP                                     KL  20-Sep-83 ISYS word processing
+FISYS2  KEYS.ISYS                                 KL  20-Sep-83 ISYS keys text
+FISYS2  SYSMSG                                    KL  20-Sep-83 System message file
+FLGICLC +----------------+-------+----------------+---+---------+----------------------------
+FLGICLC CC.LGICLC        CCLC                     MB  20-Sep-83 LogiCalc
+FLGICLC HELP.LC.TEXT     CCLC    HELP.LC.TEXT     MB  20-Sep-83 LogiCalc help text
+FLGICLC KEYS.LC.TEXT     CCLC    KEYS.LC.TEXT     MB  20-Sep-83 LogiCalc keys
+FLGICLC KEYS.LCI.TEXT    CCLC    KEYS.LCI.TEXT    MB  20-Sep-83 LogiCalc keys (ISYS)
+FPAINT  +----------------+-------+----------------+---+---------+----------------------------
+FPAINT  CSD.06.08        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.06.10        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.08.09        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.08.13        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.09.14        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.10.09        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.14.15        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.BLOCK        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.CORVUS       ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.FULL         ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.MAZE         ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.MINI         ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.SCRIPT       ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  CSD.SOLID        ....    ....             DDD 20-Sep-83 Corvus Paint character set
+FPAINT  PAINT.MOUSE      ....    ....             DDD 20-Sep-83 Corvus Paint program
+FPASCAL +----------------+-------+----------------+---+---------+----------------------------
+FPASCAL PASCAL           SVS     SVS              LF  20-Sep-83 SVS Pascal compiler
+FPASCAL PASCTERRS.TEXT   SVS     SVS              LF  20-Sep-83 SVS Pascal compiler error msgs
+FPSYS   +----------------+-------+----------------+---+---------+----------------------------
+FPSYS   BLIB.R2.CODE     ....    ....             STM 20-Sep-83 p-System Basic library
+FPSYS   BLIB.R4.CODE     ....    ....             STM 20-Sep-83 p-System Basic library
+FPSYS   CC.PSYSTEM                                LF  20-Sep-83 p-System loader
+FPSYS   CPLIB                                     LF  20-Sep-83 p-System Concept library
+FPSYS   DESPOOL.CODE                              LF  20-Sep-83 p-System despool program
+FPSYS   RTLIB2.CODE      ....    ....             STM 20-Sep-83 p-System Fortran library
+FPSYS   RTLIB4.CODE      ....    ....             STM 20-Sep-83 p-System Fortran library
+FPSYS   SPOOL.CODE                                LF  20-Sep-83 p-System spool program
+FPSYS   SYSTEM.INTERP    ....    ....             STM 20-Sep-83 p-System interpreter
+FPSYS   SYSTEM.LIBRARY   ....    ....             STM 20-Sep-83 p-System library
+FPSYS   SYSTEM.MISCINFO  ....    ....             STM 20-Sep-83 p-System support file
+FPSYS   SYSTEM.PASCAL    ....    ....             STM 20-Sep-83 p-System OS
+FSYSGEN +----------------+-------+----------------+---+---------+----------------------------
+FSYSGEN BLDACT           CCUTIL1                  KB  20-Sep-83
+FSYSGEN BLDALT           CCUTIL1                  KB  20-Sep-83
+FSYSGEN BOOT.CONCEPT                              KB  20-Sep-83 CCOS secondary boot code
+FSYSGEN CSD.06.10        ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN CSD.06.10.ALT    ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN CSD.07.11        ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN CSD.07.11.ALT    ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN CSD.08.13.ALT    ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN CSD.09.14.ALT    ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN CSD.IBM          ....    ....             ..  20-Sep-83 Display character set
+FSYSGEN DEBUG            CCOS    DEBUG.TEXT       LF  20-Sep-83
+FSYSGEN OTEST            ....    ....             C2  20-Sep-83 Const II
+FSYSGEN PAT.CITOH        ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN PAT.DIABLO630    ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN PAT.EPSONMX      ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN PAT.NEC          ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN PAT.NOENHANCE    ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN PAT.OKIDATA      ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN PAT.TOSHIBA      ....    ....             KB  20-Sep-83 Printer action table
+FSYSGEN SYSGEN           ....    ....             C2  20-Sep-83 Const II
+FSYSGEN TERMINAL         CCUTIL1 TERMINAL.TEXT    KB  20-Sep-83 Terminal program
+FSYSGEN VOLUTIL          VSI     on floppy        LF  20-Sep-83 Volume utility program

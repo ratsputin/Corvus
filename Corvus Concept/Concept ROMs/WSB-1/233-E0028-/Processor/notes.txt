@@ -1,0 +1,40 @@
+Processor board in base of drawer
+label:
+  PCO 1092
+  Installed
+U309
+  Signetics
+  82S181
+  label:
+    MAP
+    0.4A
+U706/ROM0L is:
+  Texas Instruments
+  TMS2532JDL-45
+  DBP8201
+  label:
+    CC
+    0.6L
+U708/ROM1L is:
+  F
+  MBM2732-35
+  8136 E30
+  label:
+  KDM-L
+  27-2-82
+U709/ROMLU is:
+  F
+  MBM2732-35
+  8136 E30
+  label:
+  KDM-H
+  27-2-82
+U710/ROM0U is:
+  Texas Instruments
+  TMS2532JL-45
+  DBP8144
+  label:
+    CC
+    0.6H
+
+

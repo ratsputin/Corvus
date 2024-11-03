@@ -1,0 +1,9 @@
+
+Directory of UCSD disk image file 'dreen_7.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume DREEN.7 has 1 files,  0 to 6 (6), eov 500, size 422, free 1
+
+ 1: 7THEODORE.TEXT  Text  0-Bad-100    6-  78(  72), 36864+512= 37376 bytes

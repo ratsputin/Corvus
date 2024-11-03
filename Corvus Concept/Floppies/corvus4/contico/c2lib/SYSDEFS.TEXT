@@ -1,0 +1,257 @@
+{---------------------------------------------------------------------------------------}
+{ UNIT:         SysDefs                                                                 }
+{                                                                                       }
+{ Copyright 1982 by Corvus Systems, Inc.                                                }
+{                                                                                       }
+{ Author:       Donna Ono                                                               }
+{                                                                                       }
+{ Purpose:      This unit provides Constellation II operating system, directory, and    }
+{               boot file descriptor codes.  These codes are used in conjunction with   }
+{               Constellation II tables to identify the type of system (processor type  }
+{               or operating system) or the native directory structure....              }
+{                                                                                       }
+{ Revision History:                                                                     }
+{               v 1.0   19-May-82       DSO     unit creation                           }
+{               v 1.1   24-May-82       DSO     Updated to use units in /CCLIB/CClib    }
+{---------------------------------------------------------------------------------------}
+
+UNIT SysDefs;
+
+INTERFACE
+
+USES    {SysDefs public}
+   {$U /CCLIB/CCLIB.OBJ       } CCdefn,         { constant and type definitions         }
+   {$U /CCDECLS/CCdrvIO.OBJ   } CCdrvIO,        { host_types                            }
+   {$U /CCDECLS/CVtables.OBJ  } CVtables;       { Corvus Volume records                 }
+
+CONST   {SysDefs public}
+   SysDefsRev = '1.0';
+   SysMgrSem  = 'SysMgrS4';     { system manager semaphore                              }
+   system     = 'SYSMGR    ';   { system name                                           }
+   syspsw     = '        ';     { system password                                       }
+   LoginMax   = 3;              { maximum login failures                                }
+   OSmin      = 1;              { lowest index of O.S. names                            }
+   OSmax      = 17;             { highest index of O.S. names                           }
+   HTmin      = 0;              { lowest ORD of host_types                              }
+   HTmax      = 2;              { highest ORD of host_types (actually 8)                }
+   STmin      = 0;              { lowest ORD of slot_types                              }
+   STmax      = 5;              { highest ORD of slot_types                             }
+
+   DI_UCSD         =    1;      { UCSD II.0                          }
+   DI_CPM          =    2;      { Control Program for Microcomputers }
+   DI_MDOS         =    3;      { MDOS                               }
+   DI_PET          =    4;      { Commodore PET                      }
+   DI_APDOS33      =    5;      { Apple DOS 3.3                      }
+   DI_ATARI        =    6;      { Atari DOS 2.0                      }
+   DI_RT11         =    7;      { RT-11                              }
+   DI_RSX11        =    8;      { RSX-11                             }
+   DI_NEWDOS       =    9;      { TRS-80 NewDOS                      }
+   DI_NEW80        =   10;      { TRS-80 NewDOS - 80                 }
+   DI_UNIX         =   11;      { UNIX                               }
+   DI_A3SOS        =   12;      { Apple III SOS                      }
+   DI_IBMDOS       =   13;      { IBM Personal Computer DOS          }
+   DI_CONCEPT      =   14;      { Corvus Concept OS                  }
+   DI_CPM86        =   15;      { CP/M 86                            }
+
+   OS_APUCSD       =    1;      { Apple Pascal                       }
+   OS_APDOS33      =    2;      { Apple DOS 3.3                      }
+   OS_UCSDII       =    3;      { UCSD II.0                          }
+   OS_IBMDOS       =    4;      { IBM Personal Computer DOS          }
+   OS_A3SOS        =    5;      { Apple III SOS                      }
+   OS_APRT         =    6;      { Apple Run-Time                     }
+   OS_CPM          =    7;      { Control Program for Microcomputers }
+   OS_RT11         =    8;      { RT-11                              }
+   OS_RSX11        =    9;      { RSX-11                             }
+   OS_PET          =   10;      { Commodore PET                      }
+   OS_NEWDOS       =   11;      { TRS-80 NewDOS                      }
+   OS_NEW80        =   12;      { TRS-80 NewDOS - 80                 }
+   OS_ATARI        =   13;      { Atari DOS 2.0                      }
+   OS_UNIX         =   14;      { UNIX                               }
+   OS_UCSD40       =   15;      { UCSD IV.0                          }
+   OS_MERLIN       =   16;      { SVS Merlin                         }
+   OS_CPM86        =   17;      { CP/M 86                            }
+
+   BT_oApl2        =    1;      { Apple Pascal Omninet               }
+   BT_fApl2        =    3;      { Apple Pascal Flat Cable            }
+   BT_oLSI11       =    5;      { RT-11 Omninet                      }
+   BT_fLSI11       =    7;      { RT-11 FlatCable                    }
+   BT_oIBMPC       =    9;      { IBM Personal Computer Omninet      }
+   BT_fIBMPC       =   11;      { IBM Personal Computer Flat Cable   }
+   BT_oX820        =   13;      { Xerox Omninet                      }
+   BT_fX820        =   15;      { Xerox Flat Cable                   }
+   BT_oConcept     =   41;      { Corvus Concept OS Omninet          }
+   BT_fConcept     =   43;      { Corvus Concept OS Flat Cable       }
+
+   CP_Concept      =   11;      { Corvus Concept processor types     }
+
+TYPE    {SysDefs public}
+   OSrange    = OSmin..OSmax;                   { number of a boot O.S. name            }
+   OSname     = String[16];                     { name of a single opsys                }
+   OSarray    = ARRAY[OSrange] OF OSname;       { all opsys names                       }
+
+   HTrange    = HTmin..HTmax;                   { number of a host type name            }
+   HTname     = String[16];                     { name of a single host_type            }
+   HTarray    = ARRAY[HTrange] OF HTname;       { all host_type names                   }
+
+   STrange    = STmin..STmax;                   { number of a slot type description     }
+   STdesc     = String[40];                     { description of a singe slot type      }
+   STarray    = ARRAY[STrange] OF STdesc;       { all slot_type descriptions            }
+
+VAR     {SysDefs public}
+   NullName:    Name;           { key = string of $FF designates empty CVT entry        }
+   OStable:     OSarray;        { table of boot O.S. names                              }
+   HTtable:     HTarray;        { table of host_type names                              }
+   STtable:     STarray;        { tabel of slot_type descriptions                       }
+
+PROCEDURE SysDefsInit   {SysDefs public}
+     {input}
+     {output}
+    ;
+
+FUNCTION  CnvOrdHT      {SysDefs public}
+   ( {input}      HTcode:       HTrange
+     {output}
+   ): host_types;
+
+PROCEDURE NUrngchk      {SysDefs public}
+   ( {input}      NUrec:        NUtype;
+     {output} VAR OSrngerr:     BOOLEAN;
+              VAR HTrngerr:     BOOLEAN
+   );
+
+{$P}
+IMPLEMENTATION
+
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    SysDefsInit                                                             }
+{                                                                                       }
+{ INPUT:        (none)                                                                  }
+{                                                                                       }
+{ OUTPUT:       (none)                                                                  }
+{                                                                                       }
+{ DESCRIPTION:  Defines text for opsys, ORD of host_types, and ORD of sloD_types.       }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE SysDefsInit;  {SysDefs public}
+
+VAR
+   CharNum:     INTEGER;        { index into NullName                                   }
+
+BEGIN   {PROCEDURE SysDefsInit}
+
+{-------------------------------------}
+{ Define a null CVT key of type Name. }
+{-------------------------------------}
+
+FOR CharNum := 1 TO NameLen DO
+   NullName[CharNum] := CHR($FF);
+
+{---------------------}
+{ Define opsys names. }
+{---------------------}
+
+OStable[ 1] := 'Apple Pascal    ';
+OStable[ 2] := 'Apple DOS 3.3   ';
+OStable[ 3] := 'UCSD II.0       ';
+OStable[ 4] := 'IBM DOS         ';
+OStable[ 5] := 'Apple SOS       ';
+OStable[ 6] := 'Apple run-time  ';
+OStable[ 7] := 'CP/M            ';
+OStable[ 8] := 'RT-11           ';
+OStable[ 9] := 'RSX-11          ';
+OStable[10] := 'Commodore PET   ';
+OStable[11] := 'NEWDOS          ';
+OStable[12] := 'NEWDOS-80       ';
+OStable[13] := 'Atari DOS 2.0   ';
+OStable[14] := 'UNIX            ';
+OStable[15] := 'UCSD IV.0       ';
+OStable[16] := 'SVS Merlin      ';
+OStable[17] := 'CP/M 86         ';
+
+{-------------------------}
+{ Define host_type names. }
+{-------------------------}
+
+HTtable[ 0] := 'user station    ';      { user_station          }
+HTtable[ 1] := 'disk server     ';      { file_server           }
+HTtable[ 2] := 'printer server  ';      { printer_server        }
+(*                                        currently out of range HTrange
+HTtable[ 3] := 'name server     ';      { name_server           }
+HTtable[ 4] := 'modem server    ';      { modem_server          }
+HTtable[ 5] := 'database server ';      { db_server             }
+HTtable[ 6] := 'ON interconnect ';      { ON_interconnect       }
+HTtable[ 7] := 'X25 gateway     ';      { X25_gateway           }
+HTtable[ 8] := 'SNA gateway     ';      { SNA_gateway           }
+*)
+{---------------------------------}
+{ Define slot_types descriptions. }
+{---------------------------------}
+
+STtable[0] := 'NO disk interface';
+STtable[1] := 'a Corvus disk interface';
+STtable[2] := 'an Omninet interface';
+STtable[3] := 'a Concept 8" flexible disk interface';
+STtable[4] := 'a Concept 5 1/4" flexible disk interface';
+STtable[5] := 'an Apple 5 1/4" flexible disk interface';
+
+END;    {PROCEDURE SysDefsInit}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ FUNCTION:     CnvOrdHT:       host_types;                                             }
+{                                                                                       }
+{ INPUT:        HTcode:         HTrange;                                                }
+{                                                                                       }
+{ OUTPUT:       (none)                                                                  }
+{                                                                                       }
+{ DESCRIPTION:  Converts an integer between OSmin and OSmax to the corresponding        }
+{               host_types value such that ORD(CnvOrdHT) = HTcode.                      }
+{---------------------------------------------------------------------------------------}
+
+FUNCTION  CnvOrdHT;     {SysDefs public}
+
+BEGIN   {FUNCTION  CnvOrdHT}
+
+CASE HTcode OF
+   0: CnvOrdHT := user_station;
+   1: CnvOrdHT := file_server;
+   2: CnvOrdHT := printer_server;
+   3: CnvOrdHT := name_server;          { currently out of range HTrange }
+   4: CnvOrdHT := modem_server;         { currently out of range HTrange }
+   5: CnvOrdHT := db_server;            { currently out of range HTrange }
+   6: CnvOrdHT := ON_interconnect;      { currently out of range HTrange }
+   7: CnvOrdHT := X25_gateway;          { currently out of range HTrange }
+   8: CnvOrdHT := SNA_gateway;          { currently out of range HTragne }
+   END;
+
+END;    {FUNCTION  CnvOrdHT}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    NUrngchk                                                                }
+{                                                                                       }
+{ INPUT:        NUrec:          NUtype;                                                 }
+{                                                                                       }
+{ OUTPUT:       OSrngerr:       BOOLEAN;                                                }
+{               HTrngerr:       BOOLEAN                                                 }
+{                                                                                       }
+{ DESCRIPTION:  Returns OSrngerr = FALSE if OSmin <= NUrec.opsys <= OSmax,              }
+{                                  TRUE otherwise.                                      }
+{               Returns HTrngerr = FALSE if HTmin <= ORD(NUrec.hosttype) <= HTmax,      }
+{                                  TRUE otherwise.                                      }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE NUrngchk;     {PROCEDURE NUrngchk}
+
+BEGIN   {PROCEDURE NUrngchk}
+
+WITH NUrec DO
+   BEGIN
+   OSrngerr := ( (opsys < OSmin) OR (OSmax < opsys) );
+   HTrngerr := ( (ORD(hosttype) < HTmin) OR (HTmax < ORD(hosttype)) );
+   END;
+
+END;    {PROCEDURE NUrngchk}
+
+{$P}
+END.    {UNIT SysDefs}

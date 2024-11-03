@@ -1,0 +1,273 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                         File: IECBUS-BEDIENUNG                            *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Meilhaus electronic gmbh                  *)
+(*                                                                           *)
+(*                           All Rights Reserved.                04-Nov-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+{$R-}
+{$I-}
+
+program IECBUS2;
+
+uses {$U OS.GLOBALS} globals;
+
+const ESC  = '\1B';
+      ENDE = '^';
+      
+type alfa4 = packed array[1..4] of char;
+     alfa8 = packed array[1..8] of char;
+   alfa255 = packed array[1..255] of char;
+     
+var gsyscom: psyscom;
+         p : ^psyscom;
+      addr : longint;
+         i : integer;
+  infoout,
+    infoin : char;
+  inr, out : alfa255;
+        OK : boolean;
+    CR, LF : char;
+
+function  peek(addr : longint) : integer;
+  type mem = array[0..9] of -128..127;
+  var p: ^mem;
+begin
+     p := pointer(addr);
+     peek :=  p^[0] ;
+end; {peek}
+
+procedure erase;
+   begin
+     write(ESC,'J');
+   end; {erase}
+
+procedure poke (addr : longint; i : integer);
+  type rec = record case integer of
+                      1: (b: array[0..3] of -128..127);
+                      2: (w: array[0..1] of integer);
+                      3: (l: longint);
+             end;
+  var p: ^rec; r: rec;
+begin
+          p := pointer(addr);
+                r.l := addr;
+                    p^.b[0] := i;
+end; {poke}
+
+procedure initialize;
+   begin
+     poke (200519, 30 ); {9600 Bd, Takt int., 8 Bit, 1 Stop}
+     poke (200517, 9 ); {DTR, IRQ Ena., RTS low, No Parity}
+   end; {initialize}
+
+procedure outchar (infoout : char);
+  var ii : integer;
+  begin
+       repeat
+       ii := peek(200515);
+       if ii < 0 then ii := ii + 256;
+       ii := ii div 16;
+       ii := ii mod 2;
+       until ii = 1;
+       poke (200513, ord ( infoout));
+  end; {outchar}
+
+procedure inchar (var infoin : char);
+var ii : integer;
+  begin
+    repeat
+      ii := peek(200515);
+      if ii < 0 then ii := ii + 256;
+      ii := ii div 8;
+      ii := ii mod 2;
+    until ii = 1;
+    infoin := chr ( peek ( 200513) );
+  end; {inchar}
+
+
+procedure outstring ( out : alfa255);
+var l : integer;
+  begin
+  l := 0;
+  repeat
+     l := l + 1;
+     if out[l] = ENDE then out[l] := CR;
+     outchar ( out[l] );
+  until out[l] = CR
+  end;  {outstring}
+
+procedure liesst ( var  inr : alfa255);
+var l : integer;
+  inc : char;
+  begin
+  l := 0;
+  repeat
+     l := l + 1;
+     inchar ( inc );
+     inr[l] := inc;
+  until inc = CR;
+  end; {liesst}
+
+procedure adresseholen (var a, b : integer);
+var geradr : integer;
+
+  begin
+    OK := TRUE;
+    writeln;
+    write('Geraeteadresse ? ');
+    readln(geradr);
+    if geradr < 10 then
+      begin
+        a := 48; b:= 48 + geradr
+      end else
+    if (geradr > 9) and (geradr < 31) then
+      begin
+        a := 48 + (geradr div 10);
+        b := 48 + (geradr mod 10);
+      end else begin OK := FALSE;
+                     writeln('Geraeteadresse falsch')
+               end
+  end; {adresseholen}
+
+procedure ausgabe;
+type string255 = string[255];
+var     l,
+     a, b  : integer;
+      info : packed array [1..255] of char;
+     hinfo : string255;
+begin
+   writeln; writeln('Ausgabe auf den IEEE488-Bus');
+   writeln;
+   hinfo := '~WRT  ,';
+   for l := 1 to 7 do info[l] := hinfo[l];
+
+   adresseholen ( a, b);
+
+   if OK then
+     begin
+       info[5] := chr ( a );
+       info[6] := chr ( b );
+       writeln;
+       write ('Ausgabeinformation ? ');
+       readln (hinfo);
+       for l := 1  to length(hinfo) do info[l+7] := hinfo[l];
+       info[l+7] := ENDE; {Endezeichen}
+       outstring (info)
+     end
+end; {ausgabe}
+
+procedure eingabe;
+type string255 = string[255];
+var l, a, b : integer;
+       info : packed array [1..255] of char;
+      hinfo : string255;
+begin
+  writeln; writeln('Einlesen vom IEEE488-Bus');
+  writeln;
+  hinfo := '~RED  ';
+  for l := 1 to 6 do info[l] := hinfo[l];
+
+  adresseholen (a, b);
+
+  if OK then
+    begin
+      info[5] := chr (a);
+      info[6] := chr (b);
+      info[7] := ENDE;  {Endezeichen}
+      outstring (info);
+      liesst (inr);
+      l := 0;
+      repeat
+        l := l + 1;
+        write(inr[l]);
+      until inr[l]=CR
+    end   {if}
+end; {eingabe}
+
+procedure trigger;
+type string255 = string[255];
+var l, a, b : integer;
+       info : packed  array [1..255] of char;
+      hinfo : string255;
+begin
+  writeln; writeln('Triggerung eines IEEE488-Bus Geraetes');
+  writeln;
+  hinfo := '~TRG  ';
+  for l := 1 to 6 do info[l] := hinfo[l];
+
+  adresseholen (a, b);
+
+  if OK then
+    begin
+      info[5] := chr (a);
+      info[6] := chr (b);
+      info[7] := ENDE;  {Endezeichen}
+      outstring (info);
+    end  {if}
+end; {trigger}
+
+procedure clear;
+type string255 = string[255];
+var l, a, b : integer;
+       info : packed array [1..255] of char;
+      hinfo : string255;
+begin
+  writeln; writeln('Ruecksetzen eines IEEE488-Bus Geraetes');
+  writeln;
+  hinfo := '~CLR  ';
+  for l := 1 to 6 do info[l] := hinfo [l];
+
+  adresseholen (a, b);
+
+  if OK then
+    begin
+      info[5] := chr (a);
+      info[6] := chr (b);
+      info[7] := ENDE;  {Endezeichen}
+      outstring (info);
+    end  {if}
+end; {clear}
+
+begin {hauptprogramm}
+       CR := chr(13); LF := chr(10);
+
+       initialize;
+
+       erase;
+       writeln('9600 Bd / 8 Bit / No Parity / 1 Stop');
+       writeln('Port 2 / Escape f. 4885A = ~');
+     repeat
+       writeln;
+       writeln('        **************************        ');
+       writeln('        ****  CORVUS CONCEPT  ****        ');
+       writeln('        **************************        ');
+       writeln;
+       writeln('                   als                    ');
+       writeln;
+       writeln('    **********************************    ');
+       writeln('    ****  IEEE488-BUS KONTROLLER  ****    ');
+       writeln('    **********************************    ');
+       writeln;
+       writeln;
+       writeln('            Bitte waehlen Sie:            ');
+       writeln;
+       writeln('             1) Daten-Ausgabe             ');
+       writeln('             2) Daten-Eingabe             ');
+       writeln('             3) Triggerung                ');
+       writeln('             4) Clear                     ');
+
+       read (infoin); erase;
+       if infoin = '1' then ausgabe else
+       if infoin = '2' then eingabe else
+       if infoin = '3' then trigger else
+       if infoin = '4' then clear   else
+          infoin := '5';
+     until infoin = '5';
+
+       writeln;
+       writeln('         <<<< Auf Wiedersehn >>>>         ');
+end. {hauptprogramm}

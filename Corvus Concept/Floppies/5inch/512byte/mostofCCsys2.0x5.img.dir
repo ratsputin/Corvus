@@ -1,0 +1,50 @@
+
+Directory of UCSD disk image file 'mostofCCsys2.0x5.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY has 43 files,  0 to 6 (6), eov 1440, size 133, free 43
+
+ 1: FUTIL           Ux365 10-Jan-84    6-  92(  86), 44032+512= 44544 bytes
+ 2: ASM68K          Ux195  1-Feb-84   92- 167(  75), 38400+512= 38912 bytes
+ 3: ASSIGN          Ux195  1-Feb-84  167- 180(  13),  6656+512=  7168 bytes
+ 4: CC.BLDPARMS     Ux195 21-Jun-84  180- 206(  26), 13312+512= 13824 bytes
+ 5: CC.C2MGR        Ux195 17-Mar-84  206- 296(  90), 46080+512= 46592 bytes
+ 6: CC.DISPAT       Ux195  1-Feb-84  296- 325(  29), 14848+512= 15360 bytes
+ 7: CC.EDCHAR       Ux195  1-Feb-84  325- 376(  51), 26112+512= 26624 bytes
+ 8: CC.EXEC         Ux195  1-Feb-84  376- 392(  16),  8192+512=  8704 bytes
+ 9: CC.FILMGR       Ux195  1-Feb-84  392- 444(  52), 26624+512= 27136 bytes
+10: CC.HELP         Ux195  1-Feb-84  444- 453(   9),  4608+512=  5120 bytes
+11: CC.KERNEL       Ux195 11-Nov-85  453- 501(  48), 24576+512= 25088 bytes
+12: CC.MNTMGR       Ux195  1-Feb-84  501- 626( 125), 64000+512= 64512 bytes
+13: CC.SETDCP       Ux195  1-Feb-84  626- 678(  52), 26624+512= 27136 bytes
+14: CC.SETUP        Ux195  1-Feb-84  678- 715(  37), 18944+512= 19456 bytes
+15: CC.SYSMGR       Ux195  1-Feb-84  715- 738(  23), 11776+512= 12288 bytes
+16: CC.WNDMGR       Ux195  1-Feb-84  738- 774(  36), 18432+512= 18944 bytes
+17: CCTERRS.TEXT    Ux193 23-Jan-84  774- 788(  14),  7168+512=  7680 bytes
+18: CODE            Ux195  1-Feb-84  788- 893( 105), 53760+512= 54272 bytes
+19: CSD.DEFAULT     Ux195  1-Feb-84  893- 895(   2),  1024+512=  1536 bytes
+20: CSK.DEFAULT     Ux195  1-Feb-84  895- 897(   2),  1024+512=  1536 bytes
+21: DEBUG           Ux195  1-Feb-84  897- 909(  12),  6144+512=  6656 bytes
+22: DESPOOL         Ux195 21-Sep-84  909- 990(  81), 41472+512= 41984 bytes
+23: DIAG.DATA       Ux195  1-Feb-84  990- 991(   1),   512+512=  1024 bytes
+24: DRV.ADISK       Ux195  1-Feb-84  991- 997(   6),  3072+512=  3584 bytes
+25: DRV.CDISK1      Ux195  1-Feb-84  997-1001(   4),  2048+512=  2560 bytes
+26: DRV.CDISK2      Ux195  1-Feb-84 1001-1005(   4),  2048+512=  2560 bytes
+27: DRV.DISPHZ      Ux195  1-Feb-84 1005-1016(  11),  5632+512=  6144 bytes
+28: DRV.DISPVT      Ux195  1-Feb-84 1016-1027(  11),  5632+512=  6144 bytes
+29: DRV.DTACOM      Ux195  1-Feb-84 1027-1035(   8),  4096+512=  4608 bytes
+30: DRV.EPRNT       Ux195  1-Feb-84 1035-1040(   5),  2560+512=  3072 bytes
+31: DRV.FDISK1      Ux195  1-Feb-84 1040-1044(   4),  2048+512=  2560 bytes
+32: DRV.FDISK2      Ux195  1-Feb-84 1044-1049(   5),  2560+512=  3072 bytes
+33: DRV.KYBD        Ux195  1-Feb-84 1049-1054(   5),  2560+512=  3072 bytes
+34: DRV.OMNINET     Ux195  1-Feb-84 1054-1057(   3),  1536+512=  2048 bytes
+35: DRV.SYSTRM      Ux195  1-Feb-84 1057-1064(   7),  3584+512=  4096 bytes
+36: DRV.TIMER       Ux195  1-Feb-84 1064-1068(   4),  2048+512=  2560 bytes
+37: HELP.TEXT       Ux193 14-Oct-85 1068-1072(   4),  2048+ 22=  2070 bytes
+38: KEYS.ED.TEXT    Ux193  1-Feb-84 1072-1086(  14),  7168+512=  7680 bytes
+39: LINKER          Ux195  1-Feb-84 1086-1139(  53), 27136+512= 27648 bytes
+40: LOADER.IMAGE    Ux195  1-Feb-84 1139-1140(   1),   512+512=  1024 bytes
+41: SPOOL           Ux195 21-Sep-84 1140-1217(  77), 39424+512= 39936 bytes
+42: SYSMSG          Ux195  1-Feb-84 1217-1250(  33), 16896+397= 17293 bytes
+43: WNDUTIL         Ux195  1-Feb-84 1250-1307(  57), 29184+512= 29696 bytes

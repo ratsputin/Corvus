@@ -1,0 +1,24 @@
+; File: mergotoxy.text
+; Date: 25-Sep-81
+
+        ident   mergotox
+        
+        global  %_gotoxy
+        
+;
+; %_GOTOXY - gotoxy
+;
+; Parameters: ST.W - X coordinate
+;             ST.W - Y coordinate
+;
+; !!! NOT YET DONE !!!
+;
+
+%_GOTOXY
+        MOVE.L  (SP)+,A2        ; Pop return address
+        MOVE.W  (SP)+,D2        ; Pop Y value
+        MOVE.W  (SP)+,D3        ; Pop X value
+        JMP     (A2)
+
+        end
+

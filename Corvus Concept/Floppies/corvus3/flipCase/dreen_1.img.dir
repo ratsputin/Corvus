@@ -1,0 +1,20 @@
+
+Directory of UCSD disk image file 'dreen_1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume DREEN.1 has 12 files,  0 to 6 (6), eov 500, size 0, free 12
+
+ 1: BUGRPT          Data 17-Feb-83    6-  64(  58), 29696+512= 30208 bytes
+ 2: CPM.BUGS        Data 21-May-83   64-  76(  12),  6144+122=  6266 bytes
+ 3: IBM.PSERV       Data  4-Oct-83   76- 110(  34), 17408+366= 17774 bytes
+ 4: AP2.BUGS        Data 11-Sep-83  110- 122(  12),  6144+122=  6266 bytes
+ 5: CCOS.PSERV      Data  9-Nov-83  122- 167(  45), 23040+488= 23528 bytes
+ 6: DRB.BUGS        Data  2-Dec-83  167- 269( 102), 52224+ 74= 52298 bytes
+ 7: DRB.PSERV       Data 17-Nov-83  269- 303(  34), 17408+366= 17774 bytes
+ 8: ALL.OS.BUGS     Ux4e75  9-Nov-83  303- 315(  12),  6144+122=  6266 bytes
+ 9: CCBUG.TEXT      Text 10-Apr-84  315- 339(  24), 12288+512= 12800 bytes
+10: TI.PSERV        Data 30-Jan-84  339- 373(  34), 17408+366= 17774 bytes
+11: TI.BUGS         Data 30-Jan-84  373- 418(  45), 23040+488= 23528 bytes
+12: 1IBM.BUGS       Data  9-Apr-84  418- 500(  82), 41984+490= 42474 bytes

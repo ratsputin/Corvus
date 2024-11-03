@@ -1,0 +1,33 @@
+
+Directory of UCSD disk image file 'floppy4_bootproms.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY4 has 26 files,  0 to 6 (6), eov 1440, size 149, free 26
+
+ 1: BLD.CC.TEXT     Text 16-Nov-83    6-  10(   4),  2048+512=  2560 bytes
+ 2: BLD.CP.TEXT     Text  2-Jul-83   10-  14(   4),  2048+512=  2560 bytes
+ 3: BLD.UP.LST.TEXT Text 22-Sep-83   14-  18(   4),  2048+512=  2560 bytes
+ 4: BLD.UP.TEXT     Text 23-Sep-83   18-  22(   4),  2048+512=  2560 bytes
+ 5: BLD.VN.TEXT     Text 28-Jun-83   22-  26(   4),  2048+512=  2560 bytes
+ 6: CC.PROM         Data 18-Nov-83   26-  43(  17),  8704+512=  9216 bytes
+ 7: CC.PROM.TEXT    Text 18-Nov-83   43- 505( 462), 236544+512= 237056 bytes
+ 8: CURR.SP.TEXT    Text 26-Oct-83  505- 541(  36), 18432+512= 18944 bytes
+ 9: DECISION.TEXT   Text  6-Dec-83  541- 579(  38), 19456+512= 19968 bytes
+10: LDNETPRNT       Data 10-Feb-84  579- 584(   5),  2560+512=  3072 bytes
+11: LDNETPRNT.OBJ   Data 10-Feb-84  584- 586(   2),  1024+512=  1536 bytes
+12: LDNETPRNT.TEXT  Text 10-Feb-84  586- 592(   6),  3072+512=  3584 bytes
+13: MODS.0.7.TEXT   Text  7-Jun-83  592- 596(   4),  2048+512=  2560 bytes
+14: MODS.1.0.TEXT   Text  7-Feb-84  596- 600(   4),  2048+512=  2560 bytes
+15: OLD.PROM.TEXT   Text  6-Feb-84  600- 690(  90), 46080+512= 46592 bytes
+16: P.PROM.DS.TEXT  Text 15-Nov-83  690- 748(  58), 29696+512= 30208 bytes
+17: P.PROM.EQ.TEXT  Text  9-Feb-84  748- 782(  34), 17408+512= 17920 bytes
+18: P.PROM.FB.TEXT  Text 13-Jun-83  782- 892( 110), 56320+512= 56832 bytes
+19: P.PROM.FD.TEXT  Text 13-May-83  892- 974(  82), 41984+512= 42496 bytes
+20: P.PROM.FE.TEXT  Text 13-Jun-83  974-1010(  36), 18432+512= 18944 bytes
+21: P.PROM.LD.TEXT  Text 25-Jan-84 1010-1036(  26), 13312+512= 13824 bytes
+22: P.PROM.OD.TEXT  Text 13-Jan-84 1036-1112(  76), 38912+512= 39424 bytes
+23: P.PROM.SP.TEXT  Text 14-Dec-83 1112-1150(  38), 19456+512= 19968 bytes
+24: P.PROM.TEXT     Text 27-Jan-84 1150-1242(  92), 47104+512= 47616 bytes
+25: P.PROM.KB.TEXT  Text 15-Nov-83 1242-1274(  32), 16384+512= 16896 bytes
+26: TST.CC          Data 16-Nov-83 1274-1291(  17),  8704+512=  9216 bytes

@@ -1,0 +1,1443 @@
+; KEYBOARD DRIVER
+; file : drv.kybd.text
+; date : 10-JAN-83 kb
+; files used in INCLUDE statements :
+;           drv.kybdtm.text
+;           /ccos/os.gbl.asm.text
+;
+; Made changes for Context Switching :  2-2-82  kb
+; Made changes for integration /using OS globals :  3=24=82  kb
+; ADDED version date before KBRDDRV : 4-6-82  kb
+; bug fix :  added LEA SAVINTL,A0 in unitbusy after A0 clobbered by CLRHADI  : 4-8-82  kb
+; Changed table init in unitinstall so OS loads tables and inits Translation Table before
+;   Keyboard driver is loaded :  4-13-82  kb
+; added definitions of EscapeSharp table and Release table record lengths to Equates : 4-13_82  kb
+; changed address of flag word for display ctl-Q and ctl-S to symbol defined in OS globals
+;   file   :  4-15-82   kb
+; Changed IORESULT definitions to use the global file definitions :  4-23-82  kb
+; Removed volume name from kbrd.timr.text include  : 4-23-82  kb
+; Changed overrun processing in interrupt handler to NOT process character if overrun.  It
+;       gives error and ignores the keycode in the data register.  Change deletes lines of
+;       code to test for error type.  New code marked with *062882* in comment field. : 6-28-82 kb
+; Added new driver header from driver standards : 7-7-82 kb
+; Added control-Break to do coldstart : 7-7-82 kb
+; Added SENDRAW flag into driver to allow user to get all characters, therefore no Control-Q or
+;       Control-S processing.  Changed Unitstatus :  8-19-82  kb
+; Added Control-S to be interpreted as stop or restart CRT output : 9-10-82 lf
+; Added Local Break processing to BRKPROC code and added Test and Clear Break flag to
+;      unitstatus : 1-5-82  kb
+; Added return of number chars available in buffer to unitstatus functions.  Reorganized and
+;      restructured the unitstatus code : 1-10-83  kb
+;
+; INCLUDE OS GLOBAL FILE HERE
+;
+            LIST       OFF
+            INCLUDE    '/CCOS/OS.GBL.ASM.TEXT'
+            LIST       ON
+            PAGE       59
+;
+; EACH TABLE HAS ITS OWN POINTER WHICH TELLS WHERE THE TABLE IS.
+; THE POINTERS ARE IN A TABLE (TRANSLATION TABLE) WHOSE ADDRESS IS IN THE
+; SYSTEM COMMUNICATIONS AREA.
+; THE FOLLOWING TABLES ARE ACCESSED IN THIS MANNER.
+;   1) SHIFTTBL
+;   2) REGTBL
+;   3) ESCTBL
+;   4) SMCSTBL
+;   5) CAPQULT
+;   6) RELTABLE
+;   7) BRKKEYC
+;
+; THE TRANSLATION TABLE IS IN THE ABOVE ORDER ALSO.
+;
+; THE TRANSLATION TABLE IS LOADED AND INITIALIZED BEFORE THE KEYBOARD DRIVER IS LOADED AND INSTALLED
+; BY THE OS.
+;
+; PROBLEM - CANNOT ASSUME USER DEFINED TABLES (THOSE ABOVE) ARE ON A WORD
+; BOUNDARY.  CONSEQUENTLY, USE ONLY BYTE INSTRUCTIONS TO ACCESS THEM.
+  page
+;
+; EQUATES FOR ALL KEYBOARD SOFTWARE
+;
+; BIT NUMBER DEFINITIONS
+;
+BITD0       EQU        0                         ;BIT 0
+BITD1       EQU        1                         ;BIT 1
+BITD2       EQU        2                         ;BIT 2
+BITD3       EQU        3                         ;BIT 3
+BITD4       EQU        4                         ;BIT 4
+BITD5       EQU        5                         ;BIT 5
+BITD6       EQU        6                         ;BIT 6
+BITD7       EQU        7                         ;BIT 7
+;
+; SHARED FLAGS WORD BIT POSITIONS
+;
+HADINT      EQU        BITD0                     ;HAD AN INTERRUPT FLAG
+REPEAT      EQU        BITD2                     ;REPEAT FLAG
+FASTB       EQU        BITD3                     ;FAST KEY CLOSED
+PTRBIT      EQU        BITD4                     ;PTR TO PRIMARY STATE RECORD
+ERRFLG      EQU        BITD5                     ;TRANSMISSION ERR FLAG
+SENDRAW     EQU        BITD6                     ;SEND CHARS UNPROCESSED(E.G. NO XON/XOFF)
+LOCALBRK    EQU        BITD7                     ;LOCAL BREAK FLAG
+;
+; STATE RECORD FLAG WORD (LOW ORDER BYTE) BIT POSITIONS
+;
+BUFMPTY     EQU        BITD0                     ;BUFFER EMPTY FLAG
+NEWCHNG     EQU        BITD1                     ;NEW REPEAT KEY SEQUENCE FLAG
+CONTRPT     EQU        BITD2                     ;IN MIDDLE OF REPEAT SEQ FLAG
+;
+; INTERNAL FLAG BYTE BIT POSITIONS
+;
+BUFFUL      EQU        BITD1                     ;BUFFER FULL FLAG
+CLOSURE     EQU        BITD2                     ;KEY CLOSURE FLAG
+;
+; QUALIFIER FLAG BYTE BIT POSITIONS
+;
+SHIFT       EQU        BITD0                     ;SHIFT KEY
+CONTROL     EQU        BITD1                     ;CONTROL KEY
+CAPSLCK     EQU        BITD2                     ;CAPS LOCK KEY
+FAST        EQU        BITD3                     ;FAST KEY
+ALTERNAT    EQU        BITD4                     ;ALTERNATE KEY
+COMMAND     EQU        BITD5                     ;COMMAND KEY
+;
+; CAPSLOCK/QUALIFIER TABLE BIT POSITIONS
+;
+CAPBIT      EQU        BITD7                     ;CAPS LOCK CHARACTER OK FLG
+ESCSBIT     EQU        BITD6                     ;QUALIFIER HAS ESC # SEQUENCE
+; QUALIFIER BITS SAME AS QUALIFIER FLAG BYTE
+  page
+;
+; BIT MASKS
+;
+BUFFULM     EQU        $02                       ;BUFFER FULL MASK
+BUFMTM      EQU        $01                       ;BUFFER EMPTY MASK
+;
+; MISCELLANEOUS BIT POSITIONS AND MASKS
+;
+D0TOD4      EQU        $1F                       ;MASK TO CLEAR D7-D5(CONTROL CODE)
+;
+; SHIFT AND REGULAR TABLE TABLE_CODES
+;
+ESCSHRP     EQU        $9D                       ;ESCAPE # TABLE_CODE
+SMCST       EQU        $9E                       ;STANDARD MULTIPLE CHARS
+QKEY        EQU        $9F                       ;QULAIFIERTTABLE_CODE
+;
+QULREL      EQU        $9E                       ;RELEASE TABLE QUALIFIER ACTION CODE
+;
+NULLKC      EQU        $FF                       ;NULL KEYCODE
+;
+; SPECIAL ASCII CHARACTERS
+;
+ESCAPE      EQU        $1B                       ;ESCAPE CONTROL CHARACTER
+SHARP       EQU        $23                       ;SHARP OR POUND CHARACTER
+QUSMARK     EQU        $3F                       ;QUESTION MARK
+CTLQ        EQU        $11                       ;CONTROL Q CHARACTER CODE
+CTLS        EQU        $13                       ;CONTROL S CHARACTER CODE
+;
+; ADDRESSES OF KEYBOARD UART'S I/O REGISTERS
+;
+KBRDDP      EQU        $30F01                    ;DATA INPUT PORT
+KBRDSR      EQU        $30F03                    ;STATUS REGISTER
+KBRDCR      EQU        $30F05                    ;COMMAND REGISTER
+KBRDCTR     EQU        $30F07                    ;CONTROL REGISTER
+;
+; COMMAND AND CONTROL REGISTER VALUES
+;
+TURNOFF     EQU        $02                       ;TURN OFF UART (CMD)
+B600        EQU        $17                       ;600 BAUD AND 8 BIT XMIT (CTL)
+TRNBRK      EQU        $08                       ;XMIT A BREAK (CMD)
+GOKBRD      EQU        $09                       ;TURN ON INTS & UART (CMD)
+;
+; BIT MASKS FOR UART ERROR BIT FLAGS
+;
+FRMERR      EQU        $02                       ;FRAMING ERROR
+OVRRUN      EQU        $04                       ;OVERRUN ERROR
+;
+; IORESULT ERROR CODES
+;
+KDEVERR     EQU         IOEkybte                 ;TRANSMIT ERROR
+INVPRM      EQU         IOEuiopm                 ;INVALID UNIT I/O PARAMETER
+NOTLEGIT    EQU         IOEioreq                 ;NOT LEGITIMATE CALL
+NORPTER     EQU         IOEnotim                 ;NO REPEAT AVAILABLE(TIMER ERR)
+INVFNC      EQU         IOEfnccd                 ;invalid function code
+;
+; STATE RECORD INDICES DEFINITIONS
+;
+FRONT       EQU        0                         ;FRONT OF QUEUE PTR
+REAR        EQU        FRONT+4                   ;REAR OF QUEUE PTR
+NEWLEN      EQU        REAR+4                    ;NEW KEY SEQUENCE LENGTH
+NEWKEYS     EQU        NEWLEN+1                  ;NEW KEY SEQUENCE
+FLGS        EQU        NEWKEYS+10                ;FLAG WORD
+CURLEN      EQU        FLGS+2                    ;CURRENT KEY SEQUENCE LENGTH
+CURINDX     EQU        CURLEN+1                  ;CURRENT INDEX INTO KEY SEQUENCE
+CURKSEQ     EQU        CURINDX+1                 ;CURRENT KEY SEQUENCE
+RPTCNT      EQU        CURKSEQ+10                ;CURRENT REPEAT COUNT
+STATLEN     EQU        RPTCNT+1                  ;# OF BYTES OF A STATE RECORD
+;
+; SYSTEM COMMUNICATIONS AREA DEFINITIONS
+;
+KTRNTBL     EQU        SCcurrk                   ;INDEX TO PTR TO TRANSLATION TABLE
+PDEVTAB     EQU        SCdevtab                  ;INDEX TO PTR TO DEVICE TABLE
+SPNDFLG     EQU        SCsusreq                  ;SUSPEND FLAG-PASCAL BOOLEAN
+;
+; DEVICE TABLE DEFINITIONS - USED BY KEYBOARD TIMER ROUTINES
+;
+DEVLEN      EQU        UTlen                     ;LENGTH OF ENTRY
+DRVADDR     EQU        UTiodrv                   ;INDEX TO DRIVER ADDRESS
+MOUNTED     EQU        UTmtd                     ;INDEX TO MOUNTED FLAG
+;
+; TRANSLATION TABLE INDICES
+;
+SHIFTTBL    EQU        0*4                       ;SHIFT TABLE
+REGTBL      EQU        1*4                       ;REGULAR TABLE
+ESCTBL      EQU        2*4                       ;ESC # TABLE
+SMCSTBL     EQU        3*4                       ;STANDARD MULT CHAR TABLE
+CAPQULT     EQU        4*4                       ;CAPS/QUALIFIER FLAG TABLE
+RELTABLE    EQU        5*4                       ;RELEASE TABLE
+BRKKEYC     EQU        6*4                       ;BREAK KEYCODE TABLE
+; Record lengths for Translation tables
+;
+ETRLEN   EQU           10                        ;record length for ESCAPE SHARP(#) SEQUENCE TABLE
+RLRLEN   EQU            2                        ;record length for RELEASE TABLE
+;
+; TIMER INTERFACE DEFINITIONS
+;
+USTAT       EQU        5                         ;UNIT STATUS COMMAND CODE
+CREATE      EQU        1                         ;FUNCTION CODE - CREATE
+DELETE      EQU        2                         ;FUNCTION CODE - DELETE
+;
+; CRT/KBRD SHARED FLAG BYTE DEFINITIONS
+;
+CRTSHRF     EQU        SYSKYBDFLG                ;LOCATION OF BYTE - symbol defined in OS.GBL.ASM
+;
+STOPGO      EQU        BITD7                     ;STOP GO FLAG BIT D7
+;
+; REPEAT CONTROL EQUATES
+;
+WAITTIM     EQU        5                         ;# OF 100 MILLISEC. TO WAIT
+FASTRPT     EQU        4                         ;# OF FAST REPEAT SEQUENCEES
+;
+; MISCELLANEOUS EQUATES
+;
+CARRYST     EQU        $01                       ;CCR WITH CARRY SET
+;
+UNMCMD      EQU        6                         ;UNMOUNT COMMAND CODE
+;
+VEC6        EQU        $78                       ;ADDRESS OF INT VECTOR #6
+;
+DISINTS     EQU        $0700                     ;DISABLE 68000 INTERRUPTS
+;
+TRUE        EQU        1                         ;PASCAL BOOLEAN TRUE
+;
+ON          EQU        1                         ;LISTING CONTROL
+OFF         EQU        0
+  page
+;
+; INTERRUPT SERVICE ROUTINE.
+;
+; GLOBAL REGISTER DEFINITIONS FOR INTERRUPT HANDLER :
+;    D0 = KEYCODE (LSB IS KEYCODE, OTHER 3 BYTES = 0)
+;    D1 = TEMP
+;    D2 = TEMP
+;    D3 = NUMBER OF CHARACTERS TO PUT IN BUFFER.
+;    D4 = TEMP
+;    D5 = TEMP (ADDR OF CAPS QUAL TABLE IN PQUAL)
+;    D6 = INDEX INTO TRANSLATION TABLE TO SPECIFIC PTR
+;
+;    A0 = TEMP
+;    A1 = TEMP
+;    A2 = FRONT BUFFER POINTER FROM PRIMARY STATE RECORD
+;    A3 = REAR   "       "      "      "      "     "
+;    A4 = PRIMARY STATE RECORD BASE POINTER
+;    A5 = SECONDARY STATE RECORD BASE POINTER
+;    A6 = ADDRESS OF CHARACTERS TO PUT IN BUFFER
+;
+  page
+;
+; BEGIN INTERRUPT SERVICE ROUTINE.  THIS IS THE ENTRY POINT.  IT'S ADDRESS
+; MUST BE PLACED IN AUTO VECTOR INTERRUPT #7 VECTOR BEFORE KEYBOARD INTERRUPT
+; IS TURNED ON.
+;
+INTSTART
+            MOVEM.L    D0-A6,-(SP)               ;SAVE REGISTERS ON STACK
+;
+            LEA        SHRFLGS+1,A0              ;TELL UNIT I/O INTERRUPTED
+            BSET       #HADINT,(A0)
+;
+            BSR.S      GKEYCOD                   ;GET KEYCODE FROM UART DATA PORT
+            BCS.S      ERROR                     ;ERROR WITH DATA TRANSMISSION
+;
+; SETUP PRIMARY & SECONDARY STATE RECORD BASE POINTERS
+;
+INTOVR      BSR        GETSTATE                  ;ROUTINE IS IN KBRDRD AREA
+;
+; SETUP FRONT & REAR POINTERS
+;
+            MOVE.L     FRONT(A4),A2              ;ALWAYS USE PRIMARY
+            MOVE.L     REAR(A4),A3
+;
+; CHECK FOR BREAK KEY CLOSURE.  IF THIS IS A SUSPEND CURRENT PROCESS OPERATION
+;
+            MOVE.W     #BRKKEYC,D6               ;GET ADDR OF BREAK TABLE
+            BSR        GTBLADR
+            CMP.B      (A0),D0                   ;IS BREAK CLOSURE KEYCODE?
+            BNE.S      NOTBRK                    ;NO
+            BSR.S      BRKPROC                   ;ELSE PROCESS START/STOP
+            BRA.S      EXIT                      ;LEAVE WHEN DONE
+;
+; SETUP BUFFER FULL FLAG - BF := (FRONT=REAR) & (NOT BUFFER EMPTY)
+;
+NOTBRK      LEA        IFLAGS,A0
+            BCLR       #BUFFUL,(A0)              ;ASSUME BUFFER IS NOT FULL
+            CMPA.L     A2,A3                     ;DOES (FRONT=REAR)
+            BNE.S      NOTFULL                   ;NO, NOT BUFFER FULL
+;
+            BTST       #BUFMPTY,FLGS+1(A4)       ;USE PRIMARY
+            BNE.S      NOTFULL                   ;BUFFER EMPTY, SO NOT FULL
+;
+            BSET       #BUFFUL,(A0)              ;BUFFER FULL
+;
+; PROCESS KEY - CHECK IF CLOSURE OR RELEASE
+;
+NOTFULL     BTST       #BITD7,D0                 ;IS IT A CLOSURE (D7 SET)?
+            BEQ.S      DORELS                    ;NO, DO RELEASE
+;
+            BSET       #CLOSURE,(A0)             ;(A0)=IFLAGS
+            BSR.S      CLSRPR                    ;PROCESS CLOSURE
+            BRA.S      EXIT
+;
+DORELS      BCLR       #CLOSURE,(A0)             ;PROCESS KEY RELEASE
+            BSR        RELSPR
+;
+; EXIT INTERRUPT SERVICE ROUTINE
+;
+EXIT        BSR        COPYSTR                   ;COPY PRIMARY TO SECONDARY
+EXITER      MOVEM.L    (SP)+,D0-A6               ;RESTORE REGISTERS
+KUNRTE      RTE
+;
+; PROCESS ERROR ON KEYCODE (OVERRUN,FRAME,ETC.)
+;
+ERROR       LEA        SHRFLGS+1,A0              ;ADDRESS OF FLAGS
+            BSET       #ERRFLG,(A0)              ;SHOW XMIT ERROR
+            BRA.S      EXITER                    ;*062882* IGNORE KEYCODE AND EXIT
+;
+; before version 6-28-82 processed overrun error keycode.  This caused system to
+; appear as if key never released and would repeat until next keypress.
+  page
+;
+; GKEYCOD  - TEST FOR TRANSMISSION ERROR AND GET KEYCODE.
+;     EXIT : (C)  - TRANSMISSION ERROR
+;            (NC) - GOOD KEYCODE IN D0
+;            (D1) - STATUS REGISTER(ERROR BITS ONLY)
+;            (D0) - UART DATA PORT BYTE
+;
+GKEYCOD     CLR.L      D0                        ;MAKE SURE HI 3 BYTES ARE 0
+;
+; READ STATUS REGISTER TO CLEAR IRQ BIT AND GET ERROR FLAGS
+; ALWAYS READ DATA PORT SO IF OVERRUN THEN FOR NEXT CHAR IT WILL BE CLEARED.
+;
+            MOVE.B     KBRDSR.L,D1               ;GET STATUS OF RECEIVE
+            MOVE.B     KBRDDP.L,D0               ;READ UART DATA PORT
+;
+            ANDI.B     #FRMERR+OVRRUN,D1         ;TEST FOR OVERRUN & FRAMING ERROR
+            BNE.S      GKERR                     ;FOUND AN ERROR
+;
+            CLR.L      D1                        ;SHOW NO ERROR
+            RTS
+;
+GKERR       MOVE.W     #CARRYST,CCR              ;SHOW ERROR
+            RTS
+  page
+;
+; BRKPROC - IF CONTROL-BREAK THEN COLDSTART ELSE               *1-5-82 kb*
+;           IF SHIFT-BREAK THEN SET THE SUSPEND FLAG IN        *1-5-82 kb*
+;             THE SYSTEM COM AREA.                             *1-5-82 kb*
+;           ELSE SET THE LOCAL BREAK FLAG                      *1-5-82 kb*
+;
+BRKPROC     LEA        QUALFR,A0                 ;CHECK FOR CONTROL FLAG SET
+            BTST       #CONTROL,(A0)
+            BON.S      BKPCOLD                   ;YES, DO COLDSTART
+            BTST       #SHIFT, (A0)              ;IS IT SHIFT?
+            BOFF.S     BKPLOCAL                  ;NO, SET LOCAL BREAK FLAG
+            MOVE.L     PSYSCOM.W,A0              ;SHIFT BREAK, SET SUSPEND
+            MOVE.B     #TRUE,SPNDFLG(A0)         ;SET AS PASCAL BOOLEAN TRUE
+            RTS
+;
+BKPCOLD     MOVE.W     #$2700,SR                 ;TURN OFF INTERRUPTS
+            MOVEA.L    $10004.L,A0               ;GET COLDSTART VECTOR
+            JMP        (A0)                      ;DO COLDSTART
+
+;
+BKPLOCAL    LEA        SHRFLGS+1, A0
+            BSET       #LOCALBRK, (A0)
+            RTS
+  page
+;
+; CLSRPR - KEY CLOSURE PROCESS
+; PROCESS A KEY CLOSURE KEYCODE.
+;
+CLSRPR      BCLR       #BITD7,D0                 ;CLEAR CLOSURE BIT IN KEYCODE
+;
+; GET TABLE_CODE FOR KEYCODE.  TEST IF SHIFTED OR REGULAR
+;
+            MOVE.W     #SHIFTTBL,D6              ;ASSUME SHIFTED-GET PTR
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+            LEA        QUALFR,A1                 ;TEST IF SHIFT BIT SET
+            BTST       #SHIFT,(A1)
+            BNE.S      CLSSHFT                   ;SHIFT BIT SET
+            MOVE.W     #REGTBL,D6                ;ELSE USE REGULAR TABLE
+            BSR        GTBLADR
+;
+CLSSHFT     MOVE.B     0(A0,D0.W),D1             ;INDEX TABLE BY KEYCODE
+;
+; USE TABLE_CODE TO SELECT OPERATION
+;
+            CMPI.B     #ESCSHRP,D1               ;IS IT ESC # SEQUENCE($9D)
+            BNE.S      CLS10                     ;NO
+            BSR.S      PESCSHP                   ;PROCESS ESC #
+            BRA.S      CLSPCHR                   ;PUT CHARS IN BUFFER
+;
+CLS10       CMPI.B     #SMCST,D1                 ;IS IT MULT CHAR SEQUENCE($9E)
+            BNE.S      CLS20                     ;NO
+            BSR.S      PSMCS                     ;PROCESS MULT CHAR SEQ
+            BRA.S      CLSPCHR                   ;PUT CHARS IN BUFFER
+;
+CLS20       CMPI.B     #QKEY,D1                  ;IS IT A QUALIFIER($9F)?
+            BNE.S      CLS30                     ;NO
+            BSR        PQUAL                     ;PROCESS QUALIFIER
+            BRA.S      CLSEXIT                   ;EXIT, NO CHAR TO PUT
+;
+CLS30       BSR        PSCHAR                    ;THEN CODE IS A CHARACTER CODE
+            BCS.S      CLSEXIT                   ;FOUND CONTROL-S OR Q,EXIT
+;
+; PUT CHARACTERS IN BUFFER - (D3)=# OF CHARS, (A6)=ADDR OF CHARS
+;
+CLSPCHR     BSR        PUTCHRS                   ;PUT CHARS IN BUFFER
+            BCS.S      CLSEXIT                   ;EXIT IF DIDN'T PUT ALL IN BUFFER
+;
+; UPDATE STATE OF SHARED MEMORY
+;
+            BSR        UPDATSR
+CLSEXIT     RTS
+  page
+;
+; PESCSHP - GET ESCAPE # SEQUENCE
+;       ENTRY : (D0) = KEYCODE, (D1) = TABLE_CODE($9D)
+;       EXIT  : (A6) = ADDRESS OF ESC # SEQUENCE, (D3) = # OF CHARS TO PUT(4)
+;
+PESCSHP     CLR.L      D2
+            MOVE.W     #ESCTBL,D6                ;GET POINTER TO ESC # TABLE
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+;
+; FIND THE CORRECT TABLE ENTRY
+;
+PESERCH     CMP.B      0(A0,D2.W),D0             ;LOOK FOR KEYCODE
+            BEQ.S      PEGOTE                    ;FOUND IT
+            ADDI.W     #ETRLEN,D2                ;GO TO NEXT ENTRY
+            BRA.S      PESERCH
+;
+; CHECK QUALIFIER BYTE TO PICK CORRECT CHARACTER PAIR
+;
+PEGOTE      LEA        2(A0,D2.W),A6             ;ADDRESS OF 1ST CHAR PAIR
+            LEA        QUALFR,A0                 ;CALCULATE INDEX INTO ENTRY
+;
+            BTST       #COMMAND,(A0)             ;MAKE COMMAND BOOLEAN
+            SNE        D2
+            BTST       #SHIFT,(A0)               ;MAKE SHIFT BOOLEAN
+            SNE        D4
+            ANDI.W     #2,D2                     ;COMMAND=2, SHIFT=1
+            ANDI.W     #1,D4                     ;COMMAND&SHIFT=3
+            OR.W       D4,D2                     ;UC/US=0
+;
+            LSL.L      #1,D2                     ;INDEX := (D2)*2
+            ADDA.L     D2,A6                     ;GET ADDRESS OF CHAR PAIR
+;
+; PUT ESC # PLUS CHAR PAIR IN TEMP BUFFER
+;
+            LEA        CHARS,A0                  ;ADDRESS OF TEMP BUFFER
+            MOVE.B     #ESCAPE,(A0)+             ;PUT IN ESCAPE CODE
+            MOVE.B     #SHARP,(A0)+
+            MOVE.B     (A6)+,(A0)+
+            MOVE.B     (A6)+,(A0)+
+;
+            LEA        CHARS,A6                  ;WHERE CHARS ARE
+            MOVEQ      #4,D3                     ;# OF CHARS
+            RTS
+  page
+; PSMCS - PROCESS STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+;         TABLE ENTRIES ARE VARIABLE LENGTH.
+;         ENTRY : (D0) = KEYCODE, (D1) = TABLE_CODE($9E)
+;         EXIT  : (A6) = ADDRESS OF MULTIPLE CHAR SEQUENCE,
+;                 (D3) = # OF CHARS TO PUT(4)
+;
+; SEARCH TABLE BY KEYCODE
+;
+PSMCS       MOVE.W     #SMCSTBL,D6               ;GET ADDRESS OF SMCS TABLE
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+            CLR.L      D4
+            CLR.L      D2
+;
+PSSERCH     CMP.B      0(A0,D2.W),D0             ;IS IT THIS KEYCODE?
+            BEQ.S      PSFND                     ;YES
+;
+            MOVE.B     1(A0,D2.W),D4             ;I :=(SMCS_TABLE[I+1])+I+2
+            ADD.W      D4,D2
+            ADDQ.W     #2,D2
+            BRA.S      PSSERCH
+;
+; GET ADDRESS & # OF CHARACTERS
+;
+PSFND       CLR.L       D3                       ;MAKE SURE HI BYTE IS ZERO
+            MOVE.B     1(A0,D2.W),D3             ;GET LENGTH (2ND BYTE OF ENTRY)
+            LEA        2(A0,D2.W),A6             ;STRING IS 3RD FIELD
+            RTS
+  page
+;
+; PQUAL - PROCESS QUALIFIER KEYCODE.
+;         IF CLOSURE SET THE QUALIFIER FLAG ELSE RELEASE SO CLEAR THE FLAG.
+;         ENTRY : (D0) = KEYCODE, (D1) = TABLE_CODE($9F)
+;
+PQUAL       CLR.L      D4
+;
+; SEARCH QUALIFIER KEYCODE ARRAY FOR KEYCODE
+;
+            MOVE.W     #CAPQULT,D6               ;GET ADDRESS OF CAP QUALIFIER TABLE
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+            MOVE.L     A0,D5                     ;SAVE ADDRESS FOR CHKESCSQ
+            MOVE.B     0(A0,D0.W),D4             ;GET FLAG BYTE FOR THIS KEYCODE
+            MOVEQ      #BITD5,D2                 ;DO (D2)=6 TO 0 BY -1 UNTIL(BIT SET)
+;
+PQSERCH     BTST       D2,D4                     ;IS IT THIS QUALIFIER?
+            BNE.S      PQFND                     ;YES
+;
+            DBF        D2,PQSERCH                ;POINT AT NEXT QUALIFIER BIT
+            BRA.S      PQEXIT                    ;IF DID LAST ONE IGNORE KEYCODE
+;
+; FOUND ENTRY - SET BIT IF CLOSURE ELSE CLEAR BIT WHEN RELEASE
+;
+PQFND       LEA        QUALFR,A0
+            BSR.S      QCHNG                     ;CHANGE BIT
+;
+; FAST - SPECIAL CASE - MODIFY SHARED MEMORY FLAG BIIT IF IS FAST KEYCODE.
+;
+            CMPI.B     #FASTB,D2                 ;IS IT D3-FAST FLAG
+            BNE.S      PQCESC                    ;NO,CHK FOR ESC # SEQ
+            LEA        SHRFLGS+1,A0              ;CHANGE FAST FLAG
+            BSR.S      QCHNG
+;
+PQCESC      BSR.S      CHKESCSQ                  ;SEE IF HAVE ESC # SEQ
+PQEXIT      RTS
+  page
+;
+; QCHNG - SET BIT ON CLOSURE & CLEAR BIT ON RELEASE
+;         ENTRY : (D2) = BIT NUMBER TO CHANGE, CLOSURE FLAG SETUP,
+;                 (A0) = ADDRESS OF FLAG BYTE
+;
+QCHNG       LEA        IFLAGS,A1                 ;GET CLOSURE FLAG
+            BTST       #CLOSURE,(A1)             ;IS IT CLOSURE?
+            BEQ.S      QCRELSK                   ;NO, IT A RELEASE
+;
+            BSET       D2,(A0)                   ;SET BIT ON CLOSURE
+            BRA.S      QCEXIT
+;
+QCRELSK     BCLR       D2,(A0)                   ;CLEAR BIT ON RELEASE
+QCEXIT      RTS
+;
+; CHKESCSQ - IF QUALIFIER HAS ESC # SEQUENCE THEN PUT IT IN BUFFER.
+;           ENTRY : (D5) = ADDRESS OF CAPS_QUALIFIER TABLE
+;                   (D0) = KEYCODE
+;
+CHKESCSQ    MOVE.L     D5,A1                     ;GET ADDRESS OF TABLE
+            BTST       #ESCSBIT,0(A1,D0.W)       ;FLAG SET
+            BEQ.S      CESEXIT                   ;NO
+;
+            LEA        IFLAGS,A0                 ;IF RELEASE THEN SET D7 OF KEYCODE
+            BTST       #CLOSURE,(A0)
+            BNE.S      CESNSET                   ;CLOSURE,DON'T SET
+            BSET       #BITD7,D0
+;
+; GET AND PUT ESC # SEQUENCE
+;
+CESNSET     BSR        PESCSHP                   ;GET SEQUENCE
+            BSR        PUTCHRS                   ;PUT IN BUFFER
+            BCS.S      CESEXIT                   ;FAILED
+            BSR        BUFUPDAT                  ;UPDATE STATE
+CESEXIT     RTS
+  page
+;
+; PSCHAR - PROCESS THE TABLE_CODE AS A SINGLE CHARACTER CODE
+;         ENTRY : (D0) = KEYCODE, (D1) = TABLE_CODE (CHARACTER_CODE)
+;         EXIT  : (A6) = ADDRESS OF SINGLE CHARACTER,
+;                 (D3) = # OF CHARS TO PUT(1)
+;                 (D4) = CLEARED
+;                 (NC) = CHARACTERS TO BE PLACED IN BUFFER.
+;                 (C)  = NO CHARACTERS FOR BUFFER, FOUND CONTROL-S OR Q.
+;
+; TEST FOR CONTROL CHARCTER
+;
+PSCHAR      LEA        QUALFR,A0                 ;TEST CONTROL FLAG IN QUALFIER
+            BTST       #CONTROL,(A0)             ;IS IT CONTROL?
+            BEQ.S      PSCTCL                    ;NO, TRY CAPS LOCK
+;
+; MAKE CONTROL CODE IF CHARACTER CODE > '?' ($3F)
+;
+            CMPI.B     #QUSMARK,D1               ;IS IT A QUESTION MARK OR HIGHER?
+            BLO.S      PSCSETU                   ;YES, DON'T MAKE IT CONTROL
+;
+            ANDI.B     #D0TOD4,D1                ;CLEAR BITS D7,D6 & D5 TO
+            BSR.S      CHKCTLSQ                  ;MAKE IT A CONTROL CODE
+            BCS.S      PSCEXIT                   ;FOUND A CONTROL-S OR Q
+            BRA.S      PSCSETU                   ;NO, LEGIT CONTROL CHAR
+;
+; NOT CONTROL, SO TEST IF CAPS LOCK
+;
+PSCTCL      BTST       #CAPSLCK,(A0)
+            BEQ.S      PSCSETU                   ;NO, THEN USE ORIGINAL TABLE_CODE
+;
+            MOVE.W     #CAPQULT,D6               ;IF CAPS LOCK BIT (D7) IS
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+            BTST       #CAPBIT,0(A0,D0.W)        ;SET THEN USE SHIFT CHARACTER CODE
+            BEQ.S      PSCSETU                   ;ELSE USE THIS CODE
+;
+            MOVE.W     #SHIFTTBL,D6              ;GET ADDR OF SHIFT TABLE
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+            MOVE.B     0(A0,D0.W),D1             ;IN RANGE
+;
+; STORE CHAR IN TEMP BUFFER ** ENTRY BY RELSPR **
+;
+PSCSETU     BSR.S      CHKALT                    ;IF ALTERNATE SET, SET D7 OF CHAR
+            MOVEQ      #1,D3                     ;ONLY 1 CHAR
+            LEA        CHARS,A6
+            MOVE.B     D1,(A6)
+            CLR.L      D4
+PSCEXIT     RTS
+  page
+;
+; CHKCTLSQ - CHECK FOR A CONTROL-Q (XON) OR CONTROL-S (XOFF).
+;            IF FIND CHANGE CRT/KBRD SHARED FLAG STOPGO.
+;           ENTRY : (D1) = CHARACTER TO BE EXAMINED
+;           EXIT  : (C)  = FOUND A CONTROL Q OR S
+;                   (NC) = DIDN'T FIND EITHER CHARACTER
+;                   (D4) = CLEARED IF (NC)
+;
+CHKCTLSQ    LEA        SHRFLGS+1,A0              ;IF SEND RAW THEN DON'T *KB 8/19/82*
+            BTST       #SENDRAW,(A0)             ;PROCESS XON/XOFF       *KB 8/19/82*
+            BON.S      CQSNFND                   ;IS SET, SAY LEGIT CHAR *KB 8/19/82*
+            BSR.S      TSTALT                    ;IF ALTERNATE SET DON'T CHECK
+            BNE.S      CQSNFND                   ;EXIT, AND HAVE A CHAR
+            LEA        CRTSHRF.L,A0              ;ADDR OF SHARED FLAG BYTE
+            CMPI.B     #CTLQ,D1                  ;IS IT CONTROL-Q?
+            BNE.S      CHKCTLS                   ;NO
+            BCLR       #STOPGO,(A0)              ;FOUND SO CLEAR-GO
+            BRA.S      CQSFND
+;
+CHKCTLS     CMPI.B     #CTLS,D1                  ;IS IT CONTROL-S?
+            BNE.S      CQSNFND                   ;NO, EXIT WITH (NC)
+; --------- BSET       #STOPGO,(A0)              ;XOFF SO STOP           *LF 09/10/82*
+            BCHG       #STOPGO,(A0)              ;XOFF SO STOP or        *LF 09/10/82*
+                                                 ;   START IF STOPPED    *LF 09/10/82*
+CQSFND      MOVE.W     #CARRYST,CCR              ;SHOW FOUND ONE
+            RTS
+;
+CQSNFND     CLR.L      D4                        ;SHOW D1 IS LEGIT CHAR
+            RTS
+;
+; CHKALT - IF ALTERNATE FLAG IS SET THEN TURN CHAR INTO 8 BIT CODE. SET BIT D7.
+;           ENTRY : (D1) = CHARACTER TO BE EXAMINED
+;
+CHKALT      BSR.S      TSTALT                    ;ALTERNATE FLAG SET?
+            BEQ.S      CAEXIT                    ;NO
+            BSET       #BITD7,D1                 ;SET BIT D7 FOR ALTERNATE SET
+CAEXIT      RTS
+;
+; TSTALT - EXIT : (EQ) = NOT ALTERNATE CHARACTER SET
+;                 (NE) = USE ALTERNATE CHARACTER SET
+;
+TSTALT      LEA        QUALFR,A0
+            BTST       #ALTERNAT,(A0)
+            RTS
+  page
+;
+; PUTCHRS - PUT CHARACTER CODE SEQUENCE IN BUFFER
+;           ENTRY : (A6) = ADDRESS OF CHARACTER CODE SEQUENCE
+;                   (D3) =  # OF CHARS TO PUT IN BUFFER
+;           EXIT  : (C)  = FAILED TO PLACE ALL CHARS
+;                   (NC) = SUCCESSFUL  (A6 & D3 PRESERVED)
+; USES D4 AS OLD REAR.
+;
+PUTCHRS     MOVEM.L    D3/A6,-(SP)               ;SAVE REGS ON STACK
+            MOVE.L     A3,D4                     ;SAVE REAR
+            SUBQ       #1,D3                     ;DO I=0 TO (#CHARS-1)
+;
+PUTONE      MOVE.B     (A6)+,D1                  ;GET NEXT CHAR
+            BSR.S      PUTACH                    ;TRY TO PUT IN BUFFER
+            DBCS       D3,PUTONE                 ;IF PUT & MORE LEFT, DO AGAIN
+;
+            BCC.S      PUTEXIT                   ;IF ALL MOVED EXIT
+            MOVEA.L    D4,A3                     ;ELSE RESTORE REAR - FAILED
+PUTEXIT     MOVEM.L    (SP)+,D3/A6               ;RESTORE REGISTERS
+            RTS
+;
+; PUTACH - PUT A SINGLE CHARACTER IN BUFFER IF NOT FULL.
+;          ENTRY : (D1) = BYTE TO PUT IN BUFFER, (D4) = OLD REAR,
+;                  (A3) = CURRENT REAR POINTER
+;          EXIT  : (C)  = FAILED (BUFFER_FULL)
+;                  (NC) = SUCCESSFUL
+;
+PUTACH      LEA        IFLAGS,A0                 ;BUFFER FULL IS AN INTERNAL
+            BTST       #BUFFUL,(A0)              ;IS BUFFER FULL?
+            BNE.S      PUTERR                    ;YES, DO ERROR RETURN
+;
+; PUT CHARACTER IN CIRCULAR QUEUE AT REAR
+;
+            MOVE.B     D1,(A3)+                  ;UPDATE POINTER ALSO
+;
+; IF REAR > ENDBUFFER THEN REAR := @BUFFER
+;
+            LEA        BUFFER+BUFLEN,A1
+            CMPA.L     A1,A3
+            BNE.S      PUTROK                    ;NOT BEYOND BUFFER
+            LEA        BUFFER,A3
+;
+; IF (FRONT=REAR) THEN BUFFER FULL
+;
+PUTROK      CMPA.L     A2,A3
+            BNE.S      PUTCHE
+            BSET       #BUFFUL,(A0)              ;(A0)=ADDR OF IFLAGS
+;
+PUTCHE      CLR.L      D1                        ;SHOW SUCCESSFUL
+            RTS
+;
+PUTERR      MOVE.W     #CARRYST,CCR              ;SHOW FAILED
+            RTS
+  page
+;
+; UPDATSR - UPDATE PRIMARY STATE RECORD, SHARED FLAGS, & INTERNALS
+;           ENTRY : (D3) = # CHARS IN ADDED TO BUFFER
+;                   (A3) = CURRENT REAR POINTER
+;                   (A6) = ADDRESS OF CHARS
+;
+UPDATSR     MOVE.B     D3,NEWLEN(A4)             ;NEW KEY SEQ LENGTH
+            SUBQ.W     #1,D3
+            CLR.L      D1
+UPDKEYS     MOVE.B     (A6)+,NEWKEYS(A4,D1.W)    ;PUT NEW KEY SEQ IN PRIMARY
+            ADDQ.W     #1,D1
+            DBF        D3,UPDKEYS
+;
+            BSET       #NEWCHNG,FLGS+1(A4)       ;SET NEW.NEW_CHANGE FLAG
+            BSR.S      BUFUPDAT
+            LEA        PREVKC,A0
+            MOVE.B     D0,(A0)                   ;SAVE KEYCODE
+            RTS
+;
+; BUFUPDAT - UPDATE BUFFER EMPTY FLAG, REAR PTR, & RESET FLAG
+;
+BUFUPDAT    MOVE.L     A3,REAR(A4)               ;PUT IN CURRENT REAR
+            BCLR       #BUFMPTY,FLGS+1(A4)       ;CLEAR BUFFER_EMPTY FLAG
+            LEA        IFLAGS,A0                 ;ONLY CHANGE RESET IF DOING
+            BTST       #CLOSURE,(A0)             ;CLOSURE PROCESS
+            BEQ.S      BUPEXIT                   ;RELEASE
+            LEA        WAIT,A0                   ;RESET WAIT TIMER
+            CLR.W      (A0)
+;
+BUPEXIT     RTS
+  page
+;
+; RELSPR - PROCESS KEY RELEASE
+;          ENTRY : (D0) = KEYCODE
+;
+; IF (KEYCODE = PREVIOUS_KEYCODE) THEN SHUT-OFF REPEAT IN NEW
+;
+RELSPR      LEA        PREVKC,A0
+            CMP.B      (A0),D0                   ;THE SAME?
+            BNE.S      RELNSM                    ;NO
+            MOVE.B     #NULLKC,(A0)              ;SET PREV KEYCODE TO NULL
+            CLR.B      NEWLEN(A4)                ;KEYCODE-LENGTH = 0
+            BSET       #NEWCHNG,FLGS+1(A4)       ;SETR NEW KEY SEQ CHANGE
+;
+; IF (NULL KEYCODE = PREVIOUS KEYCODE) THEN RESET TIMER
+;
+RELNSM      CMPI.B     #NULLKC,(A0)              ;IS IT NULL ($FF)?
+            BNE.S      RELRTBL                   ;NO, THEN SEARCH RELEASE TABLE
+            LEA        WAIT,A0                   ;ELSE RESET WAIT TIMER
+            CLR.W      (A0)
+;
+; SEARCH RELEASE TABLE BY KEYCODE TO GET ACTION CODE
+;
+RELRTBL     MOVE.W     #RELTABLE,D6              ;GET ADDRESS OF RELEASE TABLE
+            BSR        GTBLADR                   ;RETURNS PTR IN A0
+;
+RELSRCH     CMP.B      (A0),D0
+            BEQ.S      RELTAL                    ;FOUND ENTRY
+            CMPI.B     #NULLKC,(A0)              ;IS IT END OF TABLE
+            BEQ.S      RELEXIT                   ;YES, IGNORE CHARACTER
+            ADDQ.L     #RLRLEN,A0                ;LOOK AT NEXT ENTRY
+            BRA.S      RELSRCH
+;
+; FOUND ENTRY - EXAMINE ACTION CODE
+;
+RELTAL      MOVE.B     1(A0),D1                  ;GET ACTION CODE
+;
+            CMPI.B     #QULREL,D1                ;IS IT A QUALIFIER?
+            BNE.S      RELNQ                     ;NO
+            BSR        PQUAL                     ;PROCESS A QUALIFIER
+            BRA.S      RELEXIT                   ;EXIT, NOTHING IN BUFFER
+;
+RELNQ       CMPI.B     #ESCSHRP,D1               ;IS IT AN ESC # SEQUENCE
+            BNE.S      RELSCH                    ;NO, THEN ITS A SINGLE CHAR
+            BSET       #BITD7,D0                 ;RELEASE ESC # KEYCODE HAS D7 SET
+            BSR        PESCSHP
+            BRA.S      RELPUT
+;
+RELSCH      BSR        PSCSETU                   ;SETUP FOR SINGLE CHAR
+;
+; PUT CHARACTERS IN BUFFER
+;
+RELPUT      BSR        PUTCHRS                   ;** MAY GET AWAY WITH A SHORT
+            BCS.S      RELEXIT                   ;IF FAILED EXIT
+;
+; UPDATE STATE RECORD
+;
+            BSR        BUFUPDAT
+RELEXIT     RTS
+  page
+;
+; COPYSTR - COPY PRIMARY STATE RECORD INTO SECONDARY
+;
+COPYSTR     MOVEA.L    A4,A0                     ;A0 TEMP PRIMARY
+            MOVEA.L    A5,A1                     ;A1 TEMP SECONDARY
+            MOVE.W     #STATLEN/2-1,D4           ;# WORDS IN STATE - 1
+;
+COPY10      MOVE.W     (A0)+,(A1)+               ;DO (D4)=# WORDS IN STATE RECD-1
+            DBF        D4,COPY10                 ; TO 0
+            RTS
+;
+; GTBLADR - GET TRANSLATION TABLE ADDRESS FROM TRANSLATION TABLE PTR TABLE
+;           ENTRY : (D6) = INDEX INTO TABLE TO PTR WANTED
+;           EXIT  : (A0) = ADDRESS OF TABLE WANTED
+;
+GTBLADR     MOVEA.L    PSYSCOM.W,A0              ;ADDRESS OF SYS COM
+            MOVEA.L    KTRNTBL(A0),A0            ;ADDRESS OF PTR TABLE
+            MOVEA.L    0(A0,D6.W),A0             ;ADDRESS OF TABLE WANTED
+            RTS
+  page
+;
+; UNIT I/O FUNCTIONS FOR THE KEYBOARD
+;
+; PARAMETERS :    D0.W - UNIT NUMBER
+;                 D1.L - ADDRESS OF BUFFER
+;                 D2.W - COUNT (IN BYTES)
+;                 D3.W - BLOCK NUMBER (NOT USED BY THIS DEVICE)
+;                 D4.W - COMMAND
+;                 D5.W - ACCESS MODE (NOT USED BY THIS DEVICE)
+;
+;                 INPUT PARAMETERS :                     RESULT :
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.W                     D7.W
+; 2 - WRITE       D0.W   D1.L   D2.W                     D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W        D6.W
+; 5 - STATUS      D0.W   D1.L   D2.W                     D7.W
+; 6 - UNMOUNT     D0.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D6 & D7.
+; INTERNAL REGISTER USEAGE :
+;           D0 - BYTE TO SEND TO USER
+;           D1 - TEMP
+;           D2 - COUNT OF BYTES USER WANTS
+;
+;           A0 - TEMP
+;           A1 - TEMP
+;           A2 - FRONT BUFFER POINTER
+;           A3 - USER BUFFER ADDRESS
+;           A4 - PRIMARY STATE RECORD BASE POINTER
+;           A5 - SECONDARY STATE RECORD BASE POINTER
+;           A6 - TEMP
+;
+  page
+            GLOBAL     KBRDDRV
+;
+; KEYBOARD DRIVER
+;
+KBRDDRV
+            BRA.S      KBRD001                   ;*070782* JUMP AROUND HEADER
+            DATA.B     0                         ;DEVICE NOT BLOCKED
+            DATA.B     31                        ;VALID CMDS - ALL
+            DATA.B     83,01,10,0                ;DATE January 10, 1983
+            DATA.B     hmlen                     ;HEADER MSG LENGTH
+xxx010      DATA.B     'KEYBOARD driver'         ;HEADER MSG
+hmlen       EQU        %-xxx010
+;
+KBRD001     CMPI.W     #UNMCMD,D4                ;VALID COMMAND
+            BHI.S      KBRDERR                   ;NO
+;************ wait till change to D6 for busy return ************
+;****       MOVEM.L    D0-D5/A0-A6,-(SP)         ;SAVE REGISTERS
+;**********************************************************
+            movem.l    D1-D6/A0-A6,-(SP)         ;*** temp*
+            CLR.L      D7                        ;CLEAR IORESULT
+            MOVEA.L    D1,A3                     ;ADDRESS OF USERS BUFFER
+            LEA        KBRDTBL,A1                ;TURN THE COMMAND INTO A
+            LSL.W      #1,D4                     ;INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D4.W),D4
+            JSR        0(A1,D4.W)                ;DO FUNCTION
+;************ wait till change to D6 for busy return ************
+;****       MOVEM.L    (SP)+,D0-D5/A0-A6         ;RESTORE SAVED REGISTER VALUES
+;**********************************************************
+            movem.l    (SP)+,D1-D6/A0-A6         ;*** temp*
+            RTS
+;
+; Invalid Command Error
+;
+KBRDERR     MOVE.W     #NOTLEGIT,D7
+            RTS
+;
+; THE KEYBOARD DRIVER JUMP TABLE
+;
+KBRDTBL     DATA.W     KBRDINST-KBRDTBL          ;UNITINISTALL
+            DATA.W     KBRDRD-KBRDTBL            ;UNITREAD
+            DATA.W     KBRDWR-KBRDTBL            ;UNITWRITE
+            DATA.W     KBRDCLR-KBRDTBL           ;UNITCLEAR
+            DATA.W     KBRDBSY-KBRDTBL           ;UNITBUSY
+            DATA.W     KBRDST-KBRDTBL            ;UNITSTATUS
+            DATA.W     KBRDUNMT-KBRDTBL          ;UNITUNMOUNT
+;
+; KBRDWR - UNITWRITE
+; WRITE TO THE KEYBOARD IS AN ERROR.
+;
+KBRDWR      MOVE.W     #NOTLEGIT,D7
+            RTS
+  page
+;
+; KBRDRD - UNITREAD
+; GET USER SPECIFIED NUMBER OF CHARACTERS INTO USER'S BUFFER
+;
+KBRDRD
+KRDNXT      DBF        D2,KRDGET                 ;IF NOT ALL DONE GET NEXT CHAR
+            RTS                                  ;ELSE EXIT
+;
+; REPEAT - GET NEXT BYTE - UNTIL (NOT HAD_INTERRUPT);
+;
+KRDGET      BSR.S      CLRHADI                   ;CLEAR HAD INTERRUPT FLAG
+;
+; (A4) - PRIMARY STATE REC'D PTR, (A5) - SECONDARY STATE REC'D PTR
+;
+KRDRST      BSR.S      GETSTATE                  ;GET STATE REC'D BASE PTRS
+;
+; COPY PRIMARY INTO SECONDARY
+;
+            BSR.S      COPYSTR                   ;USE ROUTINE IN KEY INT RTN
+            MOVEA.L    FRONT(A5),A2
+;
+; ALWAYS USE SECONDARY STATE RECORD
+;
+            BTST       #CONTRPT,FLGS+1(A5)       ;SEE IF IN MIDDLE OF REPEAT SEQ
+            BNE.S      KRDDRPT                   ;YES, DO REPEAT CHAR GET
+;
+; IF BUFFER_EMPTY THEN TRY TO DO NEW REPEAT SEQUENCE
+;
+            BTST       #BUFMPTY,FLGS+1(A5)       ;BUFFER EMPTY?
+            BNE.S      KRDTR                     ;YES, CHECK IF CAN DO REPEAT
+            LEA        SHRFLGS+1,A0
+            BCLR       #REPEAT,(A0)              ;CLEAR REPEAT FLAG
+;
+; GET CHARACTER FROM BUFFER (USE_KEY_SEQ := FALSE;)
+;
+            BSR.S      GETCHR
+            BRA.S      KRDCINT                   ;TRY TO FLIP STATE REC'DS
+;
+; SEE IF CAN DO REPEAT
+;
+KRDTR       BSR        CHKRPT
+            BCS.S      KRDGET                    ;NO REPEAT&BUF MT- WAIT FO CHAR
+;
+; OK TO DO REPEAT - CHKRPT SETS IT UP IF OK.
+;
+KRDDRPT     BSR.S      GETRPT                    ;GET NEXT REPEAT CHAR
+;
+; TRY TO FLIP STATE RECORDS - MAKE THIS SECONDARY THE PRIMARY
+;
+KRDCINT     BSR.S      TRYFLIP                   ;ALWAYS CLEARS HAD_INTERRUPT
+            BNE.S      KRDRST                    ;FAILED SO RESTART
+;
+; CHECK IF HAD INTERRUPT DURING TRYFLIP
+;
+            BSR.S      CLRHADI                   ;CLEAR AND TEST HAD INT FLAG
+            BNE.S      KRDRST                    ;YES, RESTART
+;
+; NO INTERRUPTION WHEN GETTING NEXT CHAR SO PUT VALID CHAR IN BUFFER
+;
+            MOVE.B     D0,(A3)+                  ;ALSO POINT TO NEXT FREE BTE
+;
+; CHECK ERROR FLAG FOR KBRD XMIT ERROR
+;
+            BCLR       #ERRFLG,(A0)              ;(A0)=SHRFLGS+1
+            BEQ.S      KRDNXT                    ;NO ERROR
+            MOVE.B     #KDEVERR,D7               ;SET IORESULT FOR ERROR
+            BRA.S      KRDNXT                    ;GO DO NEXT CHAR
+  page
+;
+; CLRHADI - TEST AND CLEAR HAD INTERRUPT BIT FLAG
+;      Exit : A0 = address of SHRFLGS+1
+;
+CLRHADI     LEA        SHRFLGS+1,A0
+            BCLR       #HADINT,(A0)              ;TEST BEFORE CLEAR
+            RTS
+;
+; GETSTATE - GET BASE POINTERS FOR SECONDARY AND PRIMARY STATE RECORDS.
+;            EXIT :  (A4) = PRIMARY BASE POINTER
+;                    (A5) = SECONDARY BASE POINTER
+;
+GETSTATE    LEA        STRECA,A4                 ;ASSUME PRIMARY IS A
+            LEA        STRECB,A5
+;
+            BTST       #PTRBIT,(A0)              ;IS A THE PRIMARY?
+            BNE.S      GSEXIT                    ;YES
+            EXG        A4,A5                     ;NO, B IS PRIMARY.
+GSEXIT      RTS
+  page
+;
+; GETCHR - GET CHARACTER FROM CIRCULAR QUEUE BUFFER.
+;   EXIT : (D0) = CHARACTER BYTE
+;
+GETCHR      MOVE.B     (A2)+,D0                  ;ALSO UPDATE POINTER
+;
+; IF (FRONT > END OF BUFFER) THEN FRONT := @BUFFER
+;
+            LEA        BUFFER+BUFLEN,A0          ;ADDRESS OF END BUFFER + 1
+            CMPA.L     A0,A2
+            BNE.S      GCCHKE                    ;NOT THE SAME
+;
+            LEA        BUFFER,A2                 ;RESET FRONT
+;
+; BUFFER_EMPTY := (FRONT=REAR)
+;
+GCCHKE      CMPA.L     REAR(A5),A2
+            SEQ        D1                        ;FORM BOOLEAN
+            ANDI.B     #BUFMTM,D1                ;FORM FLAG
+            OR.B       D1,FLGS+1(A5)             ;PUT IN FLAGS BYTE
+;
+            MOVE.L     A2,FRONT(A5)              ;UPDATE PTR IN 2ND STATE
+            RTS
+  page
+;
+; GETRPT - GET NEXT CHARACTER FROM ALREADY SETUP CURRENT REPEAT KEY SEQUENCE.
+;    ENTRY : ALREADY TO GET NEXT CHAR FROM CUR KEY SEQ
+;    EXIT  : (D0) = NEXT CHARACTER (BYTE)
+;
+GETRPT      CLR.L      D1
+            MOVE.B     CURINDX(A5),D1            ;GET INDEX
+            MOVE.B     CURKSEQ(A5,D1.W),D0       ;GET CHARACTER
+;
+; CHECK IF DONE WITH SEQUENCE
+;
+            ADDQ.B     #1,D1                     ;UPDATE INDEX
+            CMP.B      CURLEN(A5),D1             ;IS LEN > INDEX
+            BCS.S      GREXIT                    ;YES, NOT DONE
+;
+; DONE WITH THIS SEQUENCE - SEE IF SHOULD DO ANOTHER
+;
+            CLR.L      D1                        ;INIT INDEX TO RESTART
+            SUBQ.B     #1,RPTCNT(A5)             ;DECREMENT REPEAT COUNTER
+            BNE.S      GREXIT                    ;STILL MORE REPEATS
+            BCLR       #CONTRPT,FLGS+1(A5)       ;DISCONTINUE REPEAT
+;
+; SAVE CURRENT INDEX AND SPLIT
+;
+GREXIT      MOVE.B     D1,CURINDX(A5)
+            RTS
+;
+;
+;
+; TRYFLIP - IF (NOT HAD_INTERRUPT) THEN MAKE THE CURRENT SECONDARY STATE
+;           RECORD THE PRIMARY STATE RECORD. (TOGGLE PTRBIT)
+;     EXIT : (EQ) - FLIPPED
+;            (NE) - FAILED
+;
+TRYFLIP     BSR.S      CLRHADI                   ;HAD_INT?
+            BNE.S      TFEXIT                    ;YES - FAILED.
+;
+            BCHG       #PTRBIT,(A0)              ;FLIP BIT-(A0)=SHRFLGS+1
+            CLR.L      D1                        ;SHOW FLIPPED BIT
+;
+TFEXIT      RTS
+  page
+; CHKRPT - CHECK IF SHOULD DO REPEAT. IF SHOULD THEN SETUP NEW KEY SEQUENCE.
+;   EXIT : (C) = CANNOT REPEAT, NO CHARACTERS AVAILABLE SO WAIT.
+;          (NC)= REPEAT OK AND READY TO GO
+;
+; IF (REPEAT AND NOT RESET) THEN CAN REPEAT
+;
+CHKRPT      LEA        SHRFLGS+1,A0
+            BCLR       #REPEAT,(A0)
+            BEQ.S      CREXITC                   ;TIMER DIDN'T TICK
+            MOVE.W     WAIT,D1                   ;IF CAN'T REPEAT THEN EXIT
+            BTST       #FASTB,(A0)               ;IF FAST THEN  ONLY WAIT FR ONE
+            BNE.S      CRTST1                    ;IS FAST
+            CMPI.W     #5,D1                     ;WAIT AT LEAST 1/2 SECOND
+            BCS.S      CREXITC                   ;NOT ENOUGH WAIT
+CRTST1      TST.W      D1                        ;REDUNDANT IF NOT FAST
+            BEQ.S      CREXITC                   ;IF WAIT=0 THEN DON'T REPET YET
+;
+; CAN REPEAT : 1ST CHECK IF A NEW KEY SEQUENCE AVAILABLE.
+;
+            BCLR       #NEWCHNG,FLGS+1(A5)       ;CHANGE AVAILABLE?
+            BEQ.S      CRNNEW                    ;NO
+;
+            MOVE.B     NEWLEN(A5),CURLEN(A5)     ;CURENT LENGTH := NEW LENGTH
+            MOVE.B     CURLEN(A5),D1             ;GET LENGTH FOR LOOP
+            LEA        NEWKEYS(A5),A0
+            LEA        CURKSEQ(A5),A1            ;IF LENGTH=0 THEN NULL
+;
+CRMKS       SUBQ.B     #1,D1                     ;MOVE KEY SEQUENCE FROM NEW
+            BMI.S      CRNNEW
+            MOVE.B     (A0)+,(A1)+               ;TO CURRENT
+            BRA.S      CRMKS
+;
+; IF CURRENT KEY SEQUENCE IS NULL THEN ERROR EXIT-CANNOT REPEAT.
+;
+CRNNEW      TST.B      CURLEN(A5)
+            BEQ.S      CREXITC                   ;NULL KEY SEQUENCE, EXIT
+;
+; SETUP FOR REPEAT
+;
+            BSET       #CONTRPT,FLGS+1(A5)       ;CONTINUE REPEAT IS TRUE
+            CLR.B      CURINDX(A5)               ;INIT SEQUENCE INDEX
+            MOVEQ      #FASTRPT,D1               ;ASSUME FAST
+            LEA        SHRFLGS+1,A0              ;IF FAST REPEAT 5 TIMES
+            BTST       #FASTB,(A0)               ;IS FAST TRUE?
+            BNE.S      CRUFST                    ;YES
+            MOVEQ      #1,D1                     ;NORMAL, REPEAT ONCE
+CRUFST      MOVE.B     D1,RPTCNT(A5)             ;ALWAYS CLEARS CARRY
+            BRA.S      CREXIT
+;
+; CANNOT REPEAT - SET CARRY AND EXIT
+;
+CREXITC     MOVE.W     #CARRYST,CCR
+CREXIT      RTS
+  page
+;
+; KBRDBSY - UNITBUSY FOR KEYBOARD
+;    EXIT : (D6.B) = PASCAL BOOLEAN FOR KEYPRESS
+;
+;
+KBRDBSY     BSR        CLRHADI                   ;CLEAR INTERRUPTS
+;
+KBSYRT      BSR        GETSTATE                  ;GET STATE REC'D BASE PTRS
+;
+            BSR        COPYSTR                   ;COPY PRIMARY INTO SECONDARY
+;
+; IF (FAST) THEN WAITED := (WAIT<>0) ELSE WAITED := (WAIT>=5);
+;
+            MOVE.W     WAIT,D1                   ;GET WAIT VALUE
+            LEA        SHRFLGS+1,A0
+            BTST       #FASTB,(A0)               ;FAST?
+            BEQ.S      KBSYNF                    ;NO
+            TST.W      D1
+            SNE        D1                        ;WAIT<>0 BOOLEAN
+            BRA.S      KBSYDNR
+;
+KBSYNF      CMPI.W     #5,D1
+            SCC        D1                        ;WAIT>=5 BOOLEAN
+;
+; NEW REPEAT CHAR AVAIL := (REPEAT)&(WAITED)&(BUFFER_EMPTY)&(NEW.LENGTH<>0)
+;                        &(NOT CONTINUE_REPEAT);
+;
+KBSYDNR     BTST       #REPEAT,(A0)
+            SNE        D0                        ;REPEAT BOOLEAN
+            BTST       #BUFMPTY,FLGS+1(A5)
+            SNE        D3                        ;BUFFER_EMPTY BOOLEAN
+            TST.B      NEWLEN(A5)
+            SNE        D4                        ;NEW.LENGTH<>0 BOOLEAN
+            BTST       #CONTRPT,FLGS+1(A5)
+            SEQ        D2                        ;NOT CONTINUE REPEAT BOOLEAN
+            AND.B      D1,D0                     ;COMBINE WAITED & REPEAT
+            AND.B      D2,D0                     ;AND IN CONTINUE_REPEAT
+            AND.B      D3,D0                     ;AND IN (NEW.LENGTH<>0)
+            AND.B      D4,D0                     ;NEW_REPEAT CHAR AVAIL BOOLEAN
+            BEQ.S      KBSYNNR                   ;NO NEW REPEAT CHAR AVAILABLE
+;
+; PROCESS A NEW REPEAT CHAR SEQUENCE AVAILABLE - PUT CHARS IN BUFFER
+;
+            BSR.S      BUSYRPT                   ;TRY TO PUT CHARS IN BUFFER
+            BCC.S      KBSYEXIT                  ;PUT IN BUFFER-D0 IS RETURN FLAG
+            BRA.S      KBRDBSY                   ;FAILED-RESTART
+;
+; KEYPRESS := (NOT BUFFER_EMPTY) OR (CONTINUE_REPEAT);
+;
+KBSYNNR     NOT.B      D3                        ;(D3) WAS BUFFER_EMPTY
+            NOT.B      D2                        ;(D2) WAS NOT CONTINUE_REPEAT
+            MOVE.B     D2,D0                     ;CONTINUE_REPEAT BOOLEAN
+            OR.B       D3,D0                     ;KEYPRESS BOOLEAN
+;
+; IF NO INTERRUPT THEN DONE ELSE RESTART
+;
+            BSR        CLRHADI                   ;TEST & CLEAR HAD_INTERRUPT
+            BNE.S      KBSYRT                    ;HAD AN INTERRUPT SO DO AGAIN
+;
+KBSYEXIT    ANDI.B     #1,D0    ;*** temp*       ;MAKE PASCAL BOOLEAN
+            RTS
+;
+; BUSYRPT -  SO UNITBUSY IS GUARANTEED CORRECT, ON A NEW REPEAT CHARACTER SEQUENCE
+;            PUT THE CHARACTERS IN THE BUFFER.
+;           DOES NOT CHANGE THE VALUE OF REGISTER D0.
+;           EXIT : (C)  = FAILED TO PUT CHARS IN BUFFER.
+;                  (NC) = PUT CHARS IN BUFFER.
+;
+BUSYRPT     MOVE.L     FRONT(A4),A2              ;USE PRIMARY/SETUP PTRS FOR
+            MOVE.L     REAR(A4),A3               ;PUTCHRS & BUFUPDAT
+;
+; GET ADDRESS AND # OF CHARS OF REPEAT CHARACTER SEQUENCE
+;
+            CLR.L      D3
+            LEA        NEWKEYS(A4),A6            ;ASSUME NEW KEY SEQUENCE
+            MOVE.B     NEWLEN(A4),D3             ;# OF CHARS
+            BTST       #NEWCHNG,FLGS+1(A4)       ;NEW CHANGE?
+            BNE.S      BSYRUNEW                  ;YES
+            LEA        CURKSEQ(A4),A6            ;USE CURRENT KEY SEQUENCE
+            MOVE.B     CURLEN(A4),D3             ;# OF CHARS
+;
+; IF (FAST) THEN #_SEQS := 5 ELSE #_SEQS := 1;
+;
+BSYRUNEW    MOVEQ      #FASTRPT-1,D5             ;ASSUME FAST-# OF CHAR SEQUENCES
+            LEA        SHRFLGS+1,A0              ;TO PUT IN BUFFER
+            BTST       #FASTB,(A0)               ;FAST?
+            BNE.S      BSYRFST                   ;YES
+            MOVEQ      #0,D5                     ;USE # - 1 FOR LOOP
+;
+; DISABLE INTERRUPTS. IF WERE INTERRUPTED THEN FAILED-- WILL HAVE TO RESTART
+;
+BSYRFST     LEA        SAVINTL,A0                ;SAVE CURRENT INTERRUPT LEVEL
+            MOVE.W     SR,(A0)
+            ORI.W      #DISINTS,SR               ;DISABLE INTERRUPTS
+            BSR        CLRHADI                   ;CLOBBERS A0
+            BEQ.S      BSYRNINT                  ;WASN'T INTERRUPTED
+;
+            LEA        SAVINTL,A0
+            MOVE.W     (A0),SR                   ;RESTORE INT LEVEL
+            MOVE.W     #CARRYST,CCR              ;SHOW FAILED
+            RTS
+;
+; PUT CHARACTERS IN BUFFER
+;
+BSYRNINT    LEA        IFLAGS,A0                 ;SETUP FOR PUTCHRS & BUPUPDAT
+            BCLR       #BUFFUL,(A0)              ;NO BUFFER FULL ERROR
+            BCLR       #CLOSURE,(A0)             ;SO DON'T RESET TIMER
+;
+BSYRPUT     BSR        PUTCHRS                   ;PUT CHARS IN BUFFER
+            BSR        BUFUPDAT                  ;UPDATE STATE RECORD
+            DBF        D5,BSYRPUT
+;
+            MOVE.W     SAVINTL,SR                ;RESTORE CURRENT INT LEVEL
+            CLR.L      D5
+            RTS
+  page
+;
+; KBRDCLR - UNITCLEAR
+; SET STATE RECORD TO IT'S INITIAL STATE.
+;
+KBRDCLR     BSR        CLRHADI
+;
+KCLRRST     BSR        GETSTATE
+;
+            MOVEA.L    A5,A6                     ;COPY OF 2NDARY STATE RECORD
+            LEA        INITST,A0                 ;COPY INITIAL STATE INTO
+            LEA        STATLEN(A0),A1            ;SECONDARY STATE
+;
+KCLR10      MOVE.W     (A0)+,(A6)+
+            CMPA.L     A0,A1
+            BNE.S      KCLR10
+;
+; INITIALIZE FRONT & REAR POINTERS
+;
+            LEA        BUFFER,A0
+            MOVE.L     A0,FRONT(A5)
+            MOVE.L     A0,REAR(A5)
+;
+; TRY TO FLIP STATES - IF FAIL RESTART
+;
+            BSR        TRYFLIP
+            BNE.S      KCLRRST                   ;FAILED
+;
+; IF NO INTERRUPT THEN DONE ELSE RESTART
+;
+            BSR        CLRHADI                   ;TEST & CLEAR HAD_INTERRUPT
+            BNE.S      KCLRRST                   ;HAD AN INTERRUPT SO DO AGAIN
+;
+            RTS
+  page
+;
+; Routine rewritten on 1/10/83 change. kb
+; KBRDST - UNITSTATUS
+;           ENTRY : (A3) = BUFFER ADDRESS
+;                   (D2) = FUNCTION CODE
+;
+KBRDST      CMPI.W     #2, D2
+            BHI.S      KSTERR
+            LEA        KSTTBL,A1                 ;TURN THE FUNCTION CODE INTO
+            LSL.W      #1,D2                     ;AN INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D2.W),D2
+            JMP        0(A1,D2.W)                ;DO FUNCTION
+;
+; Invalid Function Code Error
+;
+KSTERR      MOVEQ      #INVFNC,D7
+            RTS
+;
+; THE KEYBOARD STATUS JUMP TABLE
+;
+KSTTBL      DATA.W     STSNDRAW-KSTTBL           ;Send Raw
+            DATA.W     STGETBRK-KSTTBL           ;Test and Clear Break flag
+            DATA.W     STNUMCHR-KSTTBL           ;Get nummber of chars available
+
+; STSNDRAW - set or clear send raw flag
+;  Function code :   0 Send characters to caller unprocessed by internal filtering,
+;                      e.g. no XON/XOFF.
+;                      Parameter Block:  1 word, 0=clear and 1=set.
+;
+;
+STSNDRAW    BSR        CLRHADI                   ;CLEAR HAD INT FLAG
+
+STSRRST     LEA        SHRFLGS+1,A0              ;GET FLAG ADDRESS
+            BCLR       #SENDRAW,(A0)             ;ASSUME WANTS CLEAR
+            TST.W      (A3)                      ;DOES CALLER WANT IT CLEAR?
+            BEQ.S      STSRCKI                   ;YES
+            BSET       #SENDRAW,(A0)             ;NO, SAY SEND THEM RAW
+            LEA        CRTSHRF.L,A0              ;MAKE SURE NOT WAITING FOR CONTROL-Q
+            BCLR       #STOPGO,(A0)
+
+STSRCKI     BSR        CLRHADI                   ;CHECK IF HAD AN INTERRUPT
+            BNE.S      STSRRST                   ;HAD INTERRUPT, RESTART
+            RTS
+  page
+; STGETBRK - test and  clear break flag
+; Break processing added on 1/5/83. kb  Restructured on 1/10/83 kb
+;  Function code :   1 Put the value of the Break flag in the parameter then clear
+;                      the Break flag.
+;                      Parameter Block:  1 word, 0=was clear and 1=was set.
+;
+STGETBRK    CLR.W      (A3)                      ;ASSUME FALSE         *kb 1-5-83*
+            LEA        SHRFLGS+1,A0              ;GET FLAG ADDRESS
+            BCLR       #LOCALBRK, (A0)           ;IS IT FALSE?         *kb 1-5-83*
+            BOFF.S     STGBEXIT                  ;YES, EXIT            *kb 1-5-83*
+            ADDQ.W     #1, (A3)                  ;NO, THEN SAY IS TRUE *kb 1-5-83*
+STGBEXIT    RTS                                  ;                     *kb 1-5-83*
+
+; STNUMCHR - return number of characters available
+; Added 1/10/83 kb
+;  Function code :   2 Put the number of characters available in the parameter.
+;                      Parameter Block:  1 word, number of characters
+;
+STNUMCHR    BSR        CLRHADI                   ;CLEAR HAD INT FLAG
+
+STNCrst     BSR        GETSTATE                  ;get address of secondary state record
+            MOVE.W     #BUFLEN, D0               ;assume buffer full
+            LEA        IFLAGS, A0                ;address of buffer full flag
+            BTST       #BUFFUL, (A0)             ;is buffer full?
+            BON.S      STNCsave                  ;yes, save number of chars in parm block
+
+            MOVE.L     REAR(A5), D0              ;get address of end + 1
+            SUB.L      FRONT(A5), D0             ;subtract the beginning
+            BGE.S      STNCsave                  ;if negative then buffer wraps
+            ADD.W      #BUFLEN, D0               ;then must add total length to get true number
+
+STNCsave    MOVE.W     D0, (A3)                  ;save number of chars in user parameter block
+
+            BSR        CLRHADI                   ;CHECK IF HAD AN INTERRUPT
+            BNE.S      STNCrst                   ;HAD INTERRUPT, RESTART
+            RTS
+  page
+;
+; KBRDUNMT  - UNITUNMOUNT
+;   TURN OFF KEYBOARD'S UART
+;
+KBRDUNMT    MOVE.B     #TURNOFF,KBRDCR.L
+            BSR        TIMUNMT                   ;DELETE KBRD TIMER RTN FROM TIMER TABLE
+            LEA        KUNRTE,A0                 ;POINT KBRD INTERRUPT VECTOR
+            MOVE.L     A0,VEC6.W                 ;AT RTE INSTRUCTION
+            RTS
+  page
+;
+; KBRDINST - UNITINSTALL  ====>  RESET KEYBOARD SYSTEM
+; ASSUMES THAT THE TRANSLATION TABLES ARE LOADED, THE TRANSLATION TABLES PTR TABLE IS INITIALIZED
+; AND IT'S ADDRESS IS PLACED IN THE SYSCOM BEFORE THE KEYBOARD DRIVER IS LOADED.
+;
+KBRDINST
+            MOVE.B     #TURNOFF,KBRDCR.L         ;TURN OFF KBRD
+            LEA        SHRFLGS,A0                ;CLEAR INT HANDLER FLAGS
+            CLR.L      (A0)+                     ;INCLUDES QUALIFIERS,SHRFLGS
+            CLR.W      (A0)                      ;CLEAR WAIT TIMER
+            BSR        KBRDCLR                   ;INIT STATE RECORD
+            LEA        INTSTART,A0               ;SETUP AUTOVECTOR #7
+            MOVE.L     A0,VEC6.W                 ;WITH ADDR OF INT HANDLER
+;
+; INSTALL TIMER CODE FOR KBRD AUTO REPEAT SERVICE RTN IN TIMER DRIVER TABLE
+;
+            BSR.S      TIMINST
+;
+; TURN ON KEYBOARD UART
+;
+            MOVE.B     KBRDSR.L,D0               ;RESET UART
+            MOVE.B     KBRDDP.L,D0               ;CLEAR RECEIVE
+            MOVE.B     #B600,KBRDCTR.L           ;8 BITS, 600 BAUD XMISSION
+            LEA        KBRDCR.L,A0
+            MOVE.B     #TRNBRK,(A0)              ;FORCE BREAK OF KBRD
+            MOVE.W     #33333,D0                 ;DELAY FOR UART TO DO BREAK
+KIN20       DBF        D0,KIN20                  ;NEED MINIMUM OF 33.3 MILLISECS
+;                                                ;XMIT AT LEAST 20 BREAK BITS
+            MOVE.B     #GOKBRD,(A0)              ;TURN ON UART & INTERRUPTS
+            RTS
+  page
+;
+; TIMER ROUTINES IN FILE :  drv.kybdtm.text
+;
+            INCLUDE    'DRV.KYBDTM.TEXT'
+  page
+;
+; CONSTANT DATA AREA
+;
+; INITIAL VALUES FOR THE PRIMARY AND SECONDARY STATE RECORDS
+;
+INITST      DATA.L     0,0                       ;ALL ZEROS(0) EXCEPT BUFFER EMPTY
+            DATA.B     0,0,0,0,0,0,0,0,0,0,0,0,1,0,0 ;IS TRUE (BIT D0 OF
+            DATA.B     0,0,0,0,0,0,0,0,0,0,0     ; FLAG LOW ORDER BYTE = 1)
+  page
+;
+; VARIABLE DATA AREA
+; FLAGS
+;
+SHRFLGS     DATA.W     0                         ;SHARED FLAGS
+IFLAGS      DATA.B     0                         ;INTERNAL FLAGS
+QUALFR      DATA.B     0                         ;QUALIFIER FLAGS
+WAIT        DATA.W     0                         ;WAIT TIMER COUNTER
+;
+; TIMER INTERFACE PARAMETER BLOCK
+;
+TIMPBK      DATA.L     0                         ;ADDRESS OF SERVICE RTN
+            DATA.W     2,0                       ;CNT-EVERY 100 MS./FLG CONTINUOUS MODE
+TABLEID     DATA.W     0
+;
+; STATE RECORDS
+;
+STRECA      DATA.L     0,0                       ;STATE RECORD A
+            DATA.B     0,0,0,0,0,0,0,0,0,0,0,0,1,0,0
+            DATA.B     0,0,0,0,0,0,0,0,0,0,0
+STRECB      DATA.L     0,0                       ;STATE RECORD B
+            DATA.B     0,0,0,0,0,0,0,0,0,0,0,0,1,0,0
+            DATA.B     0,0,0,0,0,0,0,0,0,0,0
+;
+CHARS       DATA.L     0,0                       ;TEMP KEY SEQUENCE BUFFER
+            DATA.W     0                         ;MAX. # CHARS :  10
+;
+PREVKC      DATA.W     0                         ;PREVIOUS KEYCODE (BYTE)
+;
+SAVINTL     DATA.W     0                         ;SAVE AREA FOR PREVIOUS INT LEVEL
+;
+; CHARACTER BUFFER - 256 BYTES
+;
+BUFFER      DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+BUFLEN      EQU        %-BUFFER                  ;# OF BYTES IN BUFFER
+            END        KBRDDRV

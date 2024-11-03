@@ -1,0 +1,213 @@
+PROGRAM misc; 
+
+{$I DCL}
+
+{  Routines to unpack real or double numbers, returning a signed
+mantissa in the range (-2,-1] or [1,2), and an exponent in the 
+range [-127,+127] for single, or [-1024,+1023] for double.    } 
+  
+ (******
+PROCEDURE r_unpack  
+  (value:SNGL;                     { In: value to unpack }  
+   VAR mantissa:SNGL;              { Out: unpacked mantissa } 
+   VAR exponent:INTEGER );  { Out: unpacked exponent }  
+VAR
+   u:UNP_REAL;
+BEGIN 
+   %pf_unpk(value, u);
+   exponent := u.exp - 23;
+   u.exp := -23;
+   %pf_pack(mantissa, u);
+END;  
+ *****)
+
+PROCEDURE d_unpack  
+  (value:DBLE;                      { In: value to unpack } 
+   VAR mantissa:DBLE;               { Out: unpacked mantissa }  
+   VAR exponent:INTEGER );      { Out: unpacked exponent }  
+VAR 
+   u:UNP_REAL;
+BEGIN 
+   %pd_unpk(value, u);
+   exponent := u.exp - 52;
+   u.exp := -52;
+   %pd_pack(mantissa, u);
+END;
+{ Routines to fetch the exponent of a real or double number.  
+  If abs(arg) is in [1,2), the exponent is zero. }  
+  
+  
+FUNCTION r_logb(arg:SNGL) : INTEGER;  
+VAR 
+   u:UNP_REAL;
+BEGIN 
+   IF arg.int = 0 THEN BEGIN  
+      r_logb := r_min_exp;   
+   END  
+   ELSE BEGIN 
+      %pf_unpk(arg, u);
+      r_logb := u.exp + 23;
+   END; 
+END;  
+  
+  
+FUNCTION d_logb(arg:DBLE) : INTEGER;  
+VAR 
+   u:UNP_REAL;
+BEGIN 
+   IF arg[1] = 0 THEN BEGIN 
+      d_logb := d_min_exp;   
+   END  
+   ELSE BEGIN 
+      %pd_unpk(arg, u);
+      d_logb := u.exp + 52;
+   END;   
+END;
+{  Routines to multiply a real number by a power of two.  If the
+parameters are the output of "r_unpack" or "d_unpack",  
+the original value is recreated.                               }
+  
+  (******
+PROCEDURE r_pack  
+  (value:SNGL;            { In: value to multipy by power of 2 }
+   power_of_two:INTEGER;      { In: the power of 2 }
+   VAR result:SNGL;       { Out: scaled value } 
+   VAR error:ERROR_TYPE);    { Out: error flag }
+VAR 
+   u:UNP_REAL;
+BEGIN 
+   %pf_unpk(value, u);
+   u.exp := u.exp + power_of_two; 
+   IF u.exp < r_min_exp THEN BEGIN
+      error := underflow; 
+   END
+   ELSE IF u.exp > r_max_exp THEN BEGIN
+      error := overflow;
+   END
+   ELSE BEGIN 
+      %pf_pack(result, u);
+   END; 
+END;
+  ****)
+  
+  
+FUNCTION r_halfsz 
+  (arg:SNGL)                     { In: value to round up }
+  : REAL;                        { Out: rounded value } 
+VAR 
+   temp:SNGL; 
+   u:UNP_REAL;
+BEGIN 
+   %pf_unpk(arg, u);
+   u.lower := (u.lower + 2048) DIV 4096;
+   u.exp := u.exp + 12;
+ {---change 12 to 11 when worrying about near infinity---??}
+   %pf_pack(temp, u);
+   r_halfsz := temp.reel; 
+END;
+{  Error handlers; one each for integer, real, double, complex }
+  
+PROCEDURE report_error
+  (routine_name:SIX_CHAR_NAME;
+   error:ERROR_TYPE); 
+VAR 
+   i:INTEGER; 
+   error_msg:PACKED ARRAY [1..24] OF CHAR;
+  
+BEGIN 
+   error_msg := 'Error number x in yyyyyy'; 
+   for i:=1 TO 6 DO 
+      error_msg[18+i] := routine_name[i]; 
+   error_msg[14] := chr( ord('0') + ord(error) ); 
+   writeln(error_msg);   {??----change this----}
+END;
+  
+  
+FUNCTION i_error
+  (routine_name:SIX_CHAR_NAME;
+   error:ERROR_TYPE)
+   : INTEGER; 
+BEGIN 
+   report_error(routine_name, error); 
+   i_error := 0;
+END;  
+  
+  
+FUNCTION r_error  
+  (routine_name:SIX_CHAR_NAME;  
+   error:ERROR_TYPE)  
+   : REAL;  
+BEGIN 
+   report_error(routine_name, error); 
+   r_error := 0.0;  
+END;  
+  
+  
+PROCEDURE d_error   
+  (result:DBLE; 
+   routine_name:SIX_CHAR_NAME;  
+   error:ERROR_TYPE);   
+BEGIN 
+   report_error(routine_name, error); 
+   result[1] := 0;   result[2] := 0;  
+END;  
+  
+  
+PROCEDURE c_error 
+  (result:COMPLEX;  
+   routine_name:SIX_CHAR_NAME;  
+   error:ERROR_TYPE);   
+BEGIN 
+   report_error(routine_name, error); 
+   result.re := 0.0;   result.im := 0.0;  
+END;  
+{  Routines to test for illegal numbers; for now, only unnormalized,
+max negative, & max positive reals are illegal. 
+Return an error code as function result & 1st parameter, which is 
+4 for illegal value. }
+  
+  (*****
+FUNCTION r_check  
+  (VAR error:ERROR_TYPE;
+   value:SNGL)
+   : ERROR_TYPE;
+VAR 
+   u:UNP_REAL;
+BEGIN 
+   %pf_unpk(value, u);
+   IF u.knd = 5 THEN  error:=not_a_number  ELSE  error:=none;
+   r_check := error;
+END;
+  
+  
+FUNCTION d_check  
+  (VAR error:ERROR_TYPE;
+   value:DBLE)
+   : ERROR_TYPE;
+VAR
+   u:UNP_REAL;
+BEGIN 
+   %pd_unpk(value, u);
+   IF u.knd = 5 THEN  error:=not_a_number  ELSE  error:=none;
+   d_check := error;
+END;
+  
+  
+FUNCTION c_check
+  (VAR error:ERROR_TYPE;
+   value:COMPLEX) 
+   : ERROR_TYPE;
+VAR
+   fake:SNGL;
+BEGIN 
+   fake.reel := value.re;
+   c_check := r_check(error, fake);
+   if error = none THEN BEGIN 
+      fake.reel := value.im;
+      c_check := r_check(error, fake);
+   END; 
+END;
+   ******)
+
+{$C-}  BEGIN  END.
+  

@@ -1,0 +1,291 @@
+{---------------------------------------------------------------------------------------}
+{ UNIT:         CVcrypt: Name and Psw encryption/decryption routines                    }
+{                                                                                       }
+{ Copyright 1982 by Corvus Systems, Inc.                                                }
+{                                                                                       }
+{ AUTHOR:       Donna Ono                                                               }
+{                                                                                       }
+{ PURPOSE:      Provides the Corvus Volume table management routines with Name and Psw  }
+{               encryption/decryption capabilities.                                     }
+{                                                                                       }
+{ RESTRICTIONS: PROCEDURE CVcryptInit must be invoked before any other procedures in    }
+{               this unit may be called.                                                }
+{                                                                                       }
+{ REVISION HISTORY:                                                                     }
+{               09-Jun-82       DSO     Unit created.                                   }
+{---------------------------------------------------------------------------------------}
+
+UNIT CVcrypt;
+
+INTERFACE
+
+USES    {CVcrypt public}
+   {$U /CCOS/OS.GLOBALS.OBJ } globals,
+   {$U       BT.CVdefn        } CVdefn,         { general type declarations             }
+   {$U       BT.CVtabs        } CVtables;       { Corvus Volume table declarations      }
+
+CONST   {CVcrypt public}
+   CVcryptRev   = '1.0';
+
+TYPE    {CVcrypt public}
+   CVprivate    = RECORD
+                     CASE INTEGER OF
+                        NameLen:        ( CNameFld:     Name;                       );
+                        PswLen:         ( CPswFld:      Psw;                        );
+                        1:              ( c:            PACKED ARRAY[1..16] OF CHAR );
+                        END;
+
+PROCEDURE CVcryptInit;  {CVcrypt public}
+
+PROCEDURE CVnameENCR    {CVcrypt public}
+   ( {input}      DEcrypt:      CVprivate;
+     {output} VAR ENcrypt:      CVprivate
+   );
+
+PROCEDURE CVnameDECR    {CVcrypt public}
+   ( {input}      ENcrypt:      CVprivate;
+     {output} VAR DEcrypt:      CVprivate
+   );
+
+PROCEDURE CVpswENCR     {CVcrypt public}
+   ( {input}      DEcrypt:      CVprivate;
+     {output} VAR ENcrypt:      CVprivate
+   );
+
+PROCEDURE CVpswDECR     {CVcrypt public}
+   ( {input}      ENcrypt:      CVprivate;
+     {output} VAR DEcrypt:      CVprivate
+   );
+
+IMPLEMENTATION
+
+CONST   {private}
+   BaseSeed     = 3;            { "seed" for initializing MapBase array                 }
+   MaskMod      = 9;            { used in computing a mask for encrypting characters    }
+
+   {------------------------------------------------------------------------------------}
+   { The current values of BaseSeed, MaskMod, NameLen, and PswLen (3, 9, 10, and 8,     }
+   { respectively), along with the code in CVcryptInit, generate the following          }
+   { encryption map values:                                                             }
+   {                                                                                    }
+   {    (CharNum)       NameMapBase     NameMapIncr     PswMapBase      PswMapIncr      }
+   {                                                                                    }
+   {        1               31               2              25               2          }
+   {        2              146               1              36               1          }
+   {        3              135               1             122              -1          }
+   {        4               26               1             150               1          }
+   {        5               99               1              43               2          }
+   {        6                0               1              18               1          }
+   {        7                7               2              96              -1          }
+   {        8               78               1             112               1          }
+   {        9              125               1                                          }
+   {       10               98               1                                          }
+   {------------------------------------------------------------------------------------}
+
+VAR     {private}
+   NameMapBase: ARRAY [1..NameLen] OF INTEGER;  { stores TYPE Name encryption info      }
+   NameMapIncr: ARRAY [1..NameLen] OF INTEGER;  { stores TYPE Name encryption info      }
+   PswMapBase:  ARRAY [1..PswLen]  OF INTEGER;  { stores TYPE Psw encryption info       }
+   PswMapIncr:  ARRAY [1..PswLen]  OF INTEGER;  { stores TYPE Psw encryption info       }
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CVcryptInit                                                             }
+{                                                                                       }
+{ INPUT:        (none)                                                                  }
+{                                                                                       }
+{ OUTPUT:       (none)                                                                  }
+{                                                                                       }
+{ DESCRIPTION:  Initializes private variables for Name and Psw encryption/decryption.   }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CVcryptInit;  {public}
+
+VAR
+   CharNum:     INTEGER;        { used in initializing Name/PswMapBase & Name/PswMapIncr}
+   Base:        INTEGER;        { used in initializing Name/PswMapBase array            }
+   Incr:        INTEGER;        { used in initializing Name/PswMapIncr array            }
+
+BEGIN   {PROCEDURE CVcryptInit}
+
+{----------------------------------------------------}
+{ Initialize base and increment for Name encryption. }
+{----------------------------------------------------}
+
+Base := BaseSeed;                                       { arbitrary "seed"              }
+
+FOR CharNum := 1 TO NameLen DO
+   BEGIN
+   Base := ABS(Base*NameLen+CharNum) MOD 166;           { arbitrary INTEGER in 0..165   }
+   Incr := (CharNum MOD 2) + 1;                         { if CharNum even then 1 else 2 }
+   IF Incr = 2 THEN                                     { if MAX(ORD(CHAR-32)) * Incr   }
+      IF (MaskMod-1) + Base + 90*Incr > 255 THEN        {      > MAX(ORD(BYTE)) then    }
+         Incr := 1;                                     {    Incr := 1 fixes the problem}
+   NameMapBase[CharNum] := Base;
+   NameMapIncr[CharNum] := Incr;
+   END;
+
+{---------------------------------------------------}
+{ Initialize base and increment for Psw encryption. }
+{---------------------------------------------------}
+
+Base := BaseSeed;                                       { arbitrary "seed"              }
+
+FOR CharNum := 1 TO PswLen DO
+   BEGIN
+   Base := ABS(Base*PswLen+CharNum) MOD 166;            { arbitrary INTEGER in 0..165   }
+   Incr := (CharNum MOD 2) + 1;                         { if CharNum even then 1 else 2 }
+   IF Incr = 2 THEN                                     { if MAX(ORD(CHAR-32)) * Incr   }
+      IF (MaskMod-1) + Base + 90*Incr > 255 THEN        {      > MAX(ORD(BYTE)) then    }
+         Incr := 1;                                     {    Incr := 1 fixes the problem}
+   IF Base Mod 2 = Incr MOD 2 THEN                      { if base and incr are both odd }
+      BEGIN                                             {    or both even then make the }
+      Base := 255 - (MaskMod-1) - Base;                 {    slope negative... just for }
+      Incr := 0 - Incr;                                 {    the hell of it, no special }
+      END;                                              {    reason)                    }
+   PswMapBase[CharNum] := Base;
+   PswMapIncr[CharNum] := Incr;
+   END;
+
+END;    {PROCEDURE CVcryptInit}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CVnameENCR                                                              }
+{                                                                                       }
+{ INPUT:        DEcrypt:        CVprivate;                                              }
+{                                                                                       }
+{ OUTPUT:       ENcrypt:        CVprivate                                               }
+{                                                                                       }
+{ DESCRIPTION:  Encodes DEcrypt.c (an unpacked array of CHARs) for NameLen characters.  }
+{               Any output from this procedure will be sorted into the same order as    }
+{               the input.                                                              }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CVnameENCR;   {public}
+
+VAR
+   MaskVal:     INTEGER;        { added to characters 2 through NameLen                 }
+   CharNum:     INTEGER;        { index into packed arrays of CHAR                      }
+   CharVal:     INTEGER;        { ordinate value of a CHAR                              }
+
+BEGIN   {PROCEDURE CVnameENCR}
+
+MaskVal := 0;
+
+FOR CharNum := 1 TO NameLen DO
+   BEGIN
+   CharVal := ORD(DEcrypt.c[CharNum]);
+   CharVal := MaskVal + NameMapBase[CharNum] + ((CharVal - 32) * NameMapIncr[CharNum]);
+   ENcrypt.c[CharNum] := CHR(CharVal);
+   IF CharNum = 1 THEN
+      MaskVal := (ORD(DEcrypt.c[1])-32) MOD MaskMod;
+   END;
+
+END;    {PROCEDURE CVnameENCR}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CVnameDECR                                                              }
+{                                                                                       }
+{ INPUT:        ENcrypt:        CVprivate;                                              }
+{                                                                                       }
+{ OUTPUT:       DEcrypt:        CVprivate                                               }
+{                                                                                       }
+{ DESCRIPTION:  Decodes ENcrypt.c (an unpacked array of CHARs) for NameLen characters.  }
+{               This is the inverse of CVnameENCR.                                      }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CVnameDECR;   {public}
+
+VAR
+   MaskVal:     INTEGER;        { subtracted from characters 2 through NameLen          }
+   CharNum:     INTEGER;        { index into packed arrays of CHAR                      }
+   CharVal:     INTEGER;        { ordinate value of a CHAR                              }
+
+BEGIN   {PROCEDURE CVnameDECR}
+
+MaskVal := 0;
+
+FOR CharNum := 1 TO NameLen DO
+   BEGIN
+   CharVal := ORD(ENcrypt.c[CharNum]);
+   CharVal := ((CharVal - MaskVal - NameMapBase[CharNum]) DIV NameMapIncr[CharNum]) + 32;
+   DEcrypt.c[CharNum] := CHR(CharVal);
+   IF CharNum = 1 THEN
+      MaskVal := (ORD(DEcrypt.c[1])-32) MOD MaskMod;
+   END;
+
+END;    {PROCEDURE CVnameDECR}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CVpswENCR                                                               }
+{                                                                                       }
+{ INPUT:        DEcrypt:        CVprivate;                                              }
+{                                                                                       }
+{ OUTPUT:       ENcrypt:        CVprivate                                               }
+{                                                                                       }
+{ DESCRIPTION:  Encodes DEcrypt.c (an unpacked array of CHARs) for PswLen characters.   }
+{               The output from this procedure will not neccessarily sort into the same }
+{               order as the input.                                                     }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CVpswENCR;    {public}
+
+VAR
+   MaskVal:     INTEGER;        { added to characters 2 through PswLen                  }
+   CharNum:     INTEGER;        { index into packed arrays of CHAR                      }
+   CharVal:     INTEGER;        { ordinate value of a CHAR                              }
+
+BEGIN   {PROCEDURE CVpswENCR}
+
+MaskVal := 0;
+
+FOR CharNum := 1 TO PswLen DO
+   BEGIN
+   CharVal := ORD(DEcrypt.c[CharNum]);
+   CharVal := MaskVal + PswMapBase[CharNum] + ((CharVal - 32) * PswMapIncr[CharNum]);
+   ENcrypt.c[CharNum] := CHR(CharVal);
+   IF CharNum = 1 THEN
+      MaskVal := (ORD(DEcrypt.c[1])-32) MOD MaskMod;
+   END;
+
+END;    {PROCEDURE CVpswENCR}
+
+{$P}
+{---------------------------------------------------------------------------------------}
+{ PROCEDURE:    CVpswDECR                                                               }
+{                                                                                       }
+{ INPUT:        ENcrypt:        CVprivate;                                              }
+{                                                                                       }
+{ OUTPUT:       DEcrypt:        CVprivate                                               }
+{                                                                                       }
+{ DESCRIPTION:  Decodes ENcrypt.c (an unpacked array of CHARs) for PswLen characters.   }
+{               This is the inverse of CVpswENCR.                                       }
+{---------------------------------------------------------------------------------------}
+
+PROCEDURE CVpswDECR;    {public}
+
+VAR
+   MaskVal:     INTEGER;        { subtracted from characters 2 through PswLen           }
+   CharNum:     INTEGER;        { index into packed arrays of CHAR                      }
+   CharVal:     INTEGER;        { ordinate value of a CHAR                              }
+
+BEGIN   {PROCEDURE CVpswDECR}
+
+MaskVal := 0;
+
+FOR CharNum := 1 TO PswLen DO
+   BEGIN
+   CharVal := ORD(ENcrypt.c[CharNum]);
+   CharVal := ((CharVal - MaskVal - PswMapBase[CharNum]) DIV PswMapIncr[CharNum]) + 32;
+   DEcrypt.c[CharNum] := CHR(CharVal);
+   IF CharNum = 1 THEN
+      MaskVal := (ORD(DEcrypt.c[1])-32) MOD MaskMod;
+   END;
+
+END;    {PROCEDURE CVpswDECR}
+
+END.    {UNIT CVcrypt}
+

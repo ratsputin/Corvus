@@ -1,0 +1,751 @@
+{PASCAL PROGRAM TO MAKE CONCEPT LOOK LIKE A TERMINAL :
+        IT READS FROM THE KEYBOARD (USER INPUT)
+                AND WRITES TO THE DATACOM2 PORT
+        IT READS FROM THE DATACOM2 PORT
+                AND WRITES TO THE CONSOLE
+}
+{ who          date            mod                             }
+{ rpk          11/1            initial release
+  ?            11/4            mod for baud
+  rpk          11/9            mod to only listen to control c from kbrd
+  rpk           1/16           major renovation for vt100 lookalike
+                                   CURRENT VERSION ONLY EMULATES THE HOST TO TERMINAL DIRECTION. NEXT VERSION
+                                   WILL ALSO PROVIDE TERMINAL TO HOST EMULATION.
+  rpk           2/7            modified to new(1.1) display driver - also handles perverse echo
+                               problem(does not xmit char if incoming escape is pendingcompletion)
+}
+{NOTES:     The concept obviously treats a "CR" like a "CR" "LF" hence anybody thinking its talking to a
+normal terminal will send a cr lf and get  effectively cr lf lf!!  Hence there is code to search for a
+cr and mark it so that an immediately following lf can e dealt with in one of a number of ways depending on
+the mode selected(usually ignored).  The most usual interpretation of cr lf sent to a trerminal is as a nl
+hence only the cr will be issued to the console. SOMEBODY please find a way to defeat this.
+
+
+vt100 emulation is incoming only -outgoing is pending based on what corvus' desires are.
+
+
+
+
+}
+PROGRAM TTY;
+{                      NB:  many of the variables are world global because of the hassle of
+                            initialization - you only want to do it once.
+
+}
+
+
+CONST
+
+        KBRD  =   35;   {KEYBOARD UNIT }
+        DCOM  =   32;   {DATACOMM UNIT }
+        CONS  =   1;    {CONSOLE  CRT }
+
+        CMAX  =   30;   {MAX NUMBER OF CHARACTERS ALLOWED IN ESCAPE SEQUENCE}
+
+        UNDR = 72;    {UNDERSCORE BIT ENCODED FOR ESC e}
+        BOLD = 65;    {BOLD FACE BIT ENCODED}
+        ATOFF = 64;   {ATTRIBUTES OFF}
+        BLNK =  64;   {NO BLINK}
+        INVRS= 68;   {REVERSE VIDEO}
+
+
+        CR = '\0D';            CAN = '\18';            SUB = '\1A';
+        ESC = '\1B';           CTRMON = '\1D';   {SET MONITOR MODE CTRL ]}
+        LF = '\0A';            LBRK = '\5B';           OH = '\4F';
+        NBS = '\23';           DOT = '\2E';
+        LPRN = '\28';          RPRN = '\29';           CTRLC = '\03';
+        EQU = '\3D';           US = '\1F';
+        SEMI = '\3B';          SMLE  = '\65';
+
+                                          {NOTE VT52 INTERFACE is fairly trivial -hence does not
+                                          have all the hoo hah as for vt100 -see look52}
+TYPE
+
+       SEQ = (CSI,AUX,DECP,G0C,G1C,SMPL,NULL);   {The type of escape sequence found :
+                                                       csi =  standard control seq initialiser esc[
+                                                       aux = auxiliary keypad mode             escO
+                                                       decp = dec private mode                 esc#
+                                                       g0c = character select mode             esc(
+                                                       g1c = character select mode             esc)
+                                                       smpl = simple escape sequence           esc
+                                                       null = no escape sequence found
+                                                       }
+       EMUL = (VT52,VT100,NONE);  {TYPE OF EMULATION BEING PROVIDED}
+       TRM = SET OF CHAR;
+       BFR = PACKED ARRAY [0..CMAX] OF CHAR;
+       SMLBF = PACKED ARRAY [0..1] OF CHAR;
+VAR
+
+        RTRN :BOOLEAN;  {SET IF LAST CHARACTER WAS A CARRIAGE RETURN}
+
+        MON : BOOLEAN; {SIMPLISTIC MONITOR MODE}
+        CSITRM,AUXTRM,DECTRM,G0CTRM,G1CTRM,SMPTRM,NULTRM,STRTUP : TRM;
+        TERMINAL : EMUL;
+        C: CHAR;
+        FESC : BOOLEAN;  {TRUE IF AN ESCAPE CODE IS FOUND IN STREAM FROM HOST}
+        ASEQ : SEQ;      { A GIANT SWITCH VARIABLE}
+
+        CH:SMLBF;        {CHARACTER THAT IS  WRIT}
+        CH1:SMLBF;        {CHARACTER THAT IS READ }
+        mm:SMLBF;        {debugger}
+        CHOLD:BFR;   {HOLDS RAW HOST TO TERMINAL ESCAPE SEQUENCE}
+        CSCR:BFR;    {HOLDS TRANSLATED ESCAPE SEQUENCE -HOST TO TERMINAL}
+        CKEY:BFR;    {HOLDS RAW KEYBOARD TO HOST ESCAPE SEQUENCES}
+        CHST:BFR;   {HOLDS TRANSLATED SEQUENCE -CORVUS TO EMULATED TERMINAL TO HOST}
+
+        XHOLD,XSCR,XKEY,XHST: 0..CMAX;    {INDEX INTO RESPECTIVER BUFFERS}
+
+
+{************************************************************************************************************}
+
+{PROCEDURES NOW DEFINED}
+
+
+PROCEDURE PUTSCREEN(C:CHAR);   { PUTS A CHARACTER OUT TO SCREEN AFTER REVIEWING CR/LF STATUS}
+forward;
+PROCEDURE LOOK100(C:CHAR);     {LOOK FOR A VT100 ESCAPE SEQUENCE}
+forward;
+PROCEDURE LOOK52(C:CHAR);      {look for a vt52 escape sequence}
+forward;
+PROCEDURE FLUSHOLD;            {FLUSH THE ESCAPE STREAM TO SCREEN BECUZ OF ERROR IN TRANSLATION}
+forward;
+PROCEDURE CSIPROC(C:CHAR);     {PROCESS A CSI ESCAPE SEQUENCE}
+forward;
+PROCEDURE AUXPROC(C:CHAR);     {PROCESS AN AUX ESCAPE SEQUENCE}
+forward;
+PROCEDURE DECPROC(C:CHAR);     {PROCESS A DEC ESCAPE SEQUENCE}
+forward;
+PROCEDURE G0CPROC(C:CHAR);     {PROCESS A G0C ESCAPE SEQUENCE}
+forward;
+PROCEDURE G1CPROC(C:CHAR);     {PROCESS A G1C ESCAPE SEQUENCE}
+forward;
+PROCEDURE SMPPROC(C:CHAR);     {PROCESS A SMP ESCAPE SEQUENCE}
+forward;
+procedure cursmov(c:char); {set up escape buffer for cursor moving and mopve cursor}
+forward;
+PROCEDURE PUTESC(C:CHAR);  {PUT ESCAPE "SEQUENCE" INTO HOLDING PEN UNTIL SEQUENCE IS COMPLETE}
+forward;
+PROCEDURE CANESC;   {CANCELS A HOST TO TERMINAL  ESCAPE SEQUENCE }
+forward;
+FUNCTION FINDNXT(VAR QQ:BFR; CC:CHAR;IBEG,IEND:INTEGER):INTEGER; {starting at ibeg search for cc in qq until
+                                                                 iend is reached and return position }
+forward;
+FUNCTION CONVSTR(IBEG,IEND:INTEGER;QQ:BFR):INTEGER;
+forward;                      {convert a character string in qq between ibeg and iend to an integer --eg.
+                               6260 are two characters representing 20 -which is the desired decimal output}
+
+FUNCTION CHARENHANCE(X:INTEGER):CHAR; {CONVERTS A CHARACTER AT POSITION X IN CHOLD TO CONCEPT CHAR
+                                       ENHANCEMENT}
+
+forward;
+{****************************************************************************************************}
+
+FUNCTION CHARENHANCE;
+ BEGIN
+  CASE CHOLD[X] OF
+    '0':
+       CHARENHANCE := CHR(ATOFF);
+    '1':
+       CHARENHANCE := CHR(BOLD);
+    '4':
+       CHARENHANCE := CHR(UNDR);
+    '5':
+       CHARENHANCE := CHR(BLNK);
+    '7':
+       CHARENHANCE := CHR(INVRS);
+    OTHERWISE:
+       CHARENHANCE := CHR(ATOFF);
+  END
+END;
+
+
+
+FUNCTION FINDNXT;  {FIND OCCURRENCE OD CHARACTER IN STRING}
+ LABEL
+
+ 10;
+
+ VAR
+   I,J:INTEGER;
+
+ BEGIN
+   FINDNXT := -1;
+   FOR I := IBEG  TO IEND DO
+    BEGIN
+     IF QQ[I] = CC
+       THEN
+        BEGIN
+         FINDNXT := I;
+         GOTO 10
+        END;
+    END;
+10:
+END;
+
+
+FUNCTION CONVSTR; {COVERT A STRING OF 3 CHARS OR LESS TO DECIMAL EQUIVALENT}
+LABEL
+ 10;
+
+VAR
+ I,J,K:INTEGER;
+
+BEGIN
+I := IEND -IBEG;
+K := 100;
+
+ IF I > 2
+  THEN
+   BEGIN
+    WRITELN('BAD CONVERSION',I);
+    CONVSTR := -1;
+    GOTO 10
+   END
+  ELSE IF I = 1
+    THEN K := 10
+  ELSE IF I = 0
+    THEN K := 1 ;
+
+I := 0;
+FOR J := IBEG TO IEND  DO
+ BEGIN
+
+  I := I + ((ord(QQ[J]) - ord('0')) * K);
+  K := K DIV 10;
+ END;       {FOR}
+{write('conv--',I);}
+CONVSTR := I;
+10:
+ END; {FINISH CONVSTR}
+
+
+PROCEDURE PUTSCREEN;   { PUTS A CHARACTER OUT TO SCREEN AFTER REVIEWING CR/LF STATUS}
+ BEGIN
+   IF C = CR
+     THEN
+       BEGIN
+        RTRN := TRUE;
+        UNITWRITE(CONS,CH1,1);      {WRITE TO SCREEN}
+       END
+     ELSE IF (C = LF) AND (RTRN = TRUE)
+      THEN RTRN := FALSE
+     ELSE
+       BEGIN
+        RTRN := FALSE;
+        UNITWRITE(CONS,CH1,1);      {WRITE TO SCREEN}
+       END
+  END;
+
+
+{-------------------------------------------------------------------}
+
+PROCEDURE LOOK100;     {LOOK FOR A VT100 ESCAPE SEQUENCE}
+
+VAR
+
+ CC:CHAR;
+
+
+BEGIN
+ CASE ASEQ OF
+
+   NULL:    {USUALLY ONLY ENTERED THE VERY FIRST TIME IN ANB ESCAPE SEQUENCE}
+    BEGIN
+     CC := CHOLD[1];   {IN AN ESCAPE SEQUENCE THIS CHARACTER IS THE DISCRIMINATOR --EG.  CHOLD[0]
+                         IS "ESC" AND CC IS WHAT MAKES A UNIQUE DISCRIMINATOR}
+
+     CASE CC OF
+      LBRK:            {CSI ESCAPE SEQUENCE}
+       ASEQ := CSI;
+      OH:              {AUXILIARY KEYPAD ESCAPE SEQUENCE}
+       ASEQ := AUX;
+      NBS:             {DEC PRIVATE ESCAPE SEQUENCE}
+       ASEQ := DECP;
+      LPRN:            {CHANGE CHARACTER SET MODE 0}
+       ASEQ := G0C;
+      RPRN:            {CHANGE CHARACTER SET MODE 1}
+       ASEQ := G1C;
+      OTHERWISE:       {ASSUME A SIMPLKE ESCAPE SEQUENCE}
+       ASEQ := SMPL;
+     END   {CASE CC OF}
+    END;
+
+   CSI:              {WE HAVE CSI SEQ -SEE IF IT IS COMPLETELY INPUT YET}
+     begin
+{     write('lookcsi',c);     }
+     IF C IN CSITRM
+       THEN  CSIPROC(C)
+       ELSE IF XHOLD >= CMAX
+        THEN FLUSHOLD;        {SOMETHING IS WRONG -SIMPLY DUMP ESCAPE STREAM TO SCREEN!!!}
+     end;
+
+   AUX:              {WE HAVE AUX SEQ -SEE IF IT IS COMPLETELY INPUT YET}
+     IF C IN AUXTRM
+       THEN  AUXPROC(C)
+       ELSE IF XHOLD >= CMAX
+        THEN FLUSHOLD;        {SOMETHING IS WRONG -SIMPLY DUMP ESCAPE STREAM TO SCREEN!!!}
+
+
+
+   DECP:             {WE HAVE DECP SEQ -SEE IF IT IS COMPLETELY INPUT YET}
+     IF C IN DECTRM
+       THEN  DECPROC(C)
+       ELSE IF XHOLD >= CMAX
+        THEN FLUSHOLD;        {SOMETHING IS WRONG -SIMPLY DUMP ESCAPE STREAM TO SCREEN!!!}
+
+
+
+   G0C:              {WE HAVE G0C SEQ -SEE IF IT IS COMPLETELY INPUT YET}
+     IF C IN G0CTRM
+       THEN  G0CPROC(C)
+       ELSE IF XHOLD >= CMAX
+        THEN FLUSHOLD;        {SOMETHING IS WRONG -SIMPLY DUMP ESCAPE STREAM TO SCREEN!!!}
+
+
+
+   G1C:              {WE HAVE G1C SEQ -SEE IF IT IS COMPLETELY INPUT YET}
+     IF C IN G1CTRM
+       THEN  G1CPROC(C)
+       ELSE IF XHOLD >= CMAX
+        THEN FLUSHOLD;        {SOMETHING IS WRONG -SIMPLY DUMP ESCAPE STREAM TO SCREEN!!!}
+
+
+
+   SMPL:             {WE HAVE SMPL SEQ -SEE IF IT IS COMPLETELY INPUT YET}
+     IF C IN SMPTRM
+       THEN  SMPPROC(C)
+       ELSE IF XHOLD >= CMAX
+        THEN FLUSHOLD;        {SOMETHING IS WRONG -SIMPLY DUMP ESCAPE STREAM TO SCREEN!!!}
+
+ END    {CASE}
+END;    {LOOK100}
+
+
+{=========================================================================================================
+             BELOW ARE THE VARIOUS ESCAPE SEQUENCE PROCESSING ROUTINES
+}
+
+PROCEDURE AUXPROC;
+ BEGIN
+  FLUSHOLD;
+ END;
+
+PROCEDURE DECPROC;
+ BEGIN
+  FLUSHOLD;
+ END;
+
+PROCEDURE G0CPROC;
+ BEGIN
+  FLUSHOLD;
+ END;
+
+PROCEDURE G1CPROC;
+ BEGIN
+  FLUSHOLD;
+ END;
+
+PROCEDURE SMPPROC;
+ BEGIN
+  FLUSHOLD;
+ END;
+
+{******************************************************************************************************}
+
+PROCEDURE LOOK52;
+ LABEL
+  10;
+
+ var
+  cc:char;
+
+ BEGIN
+  IF XHOLD < 2         {IF SO THEN AN ESC SEQ NOT HAD}
+   THEN GOTO 10
+   ELSE
+    BEGIN
+    CC := CHOLD[1];
+    CASE CC OF
+
+   'A':   {CURSOR UP}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := CC;
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'B':   {CURSOR DOWN}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := CC;
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'C':   {CURSOR RIGHT}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := CC;
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'D':   {CURSOR LEFT}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := CC;
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'F':   {ENTER GRAPHICS MODE -TO BE DONE}
+     BEGIN
+      FLUSHOLD;
+     END;
+
+   'G':   {EXIT GRAPHICS MODE - TO BE  DONE}
+     BEGIN
+      FLUSHOLD;
+     END;
+
+   'H':   {CURSOR TO HOME}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := CC;
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'I':   {REVERSE LINE FEED -TEMPORARILY LIKE ESC A}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := 'A';
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'J':   {CLEAR TO END OF SCREEN}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := 'Y';
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'K':   {ERASE TO END OF LINE}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := CC;
+      UNITWRITE(CONS,CSCR,2);
+     END;
+
+   'Z':   {SEND ID SEQUENCE}
+     BEGIN
+      CSCR[0] := ESC;
+      CSCR[1] := '/';
+      CSCR[2] := 'Z';
+      UNITWRITE(DCOM,CSCR,3);
+      CANESC;
+     END;
+
+   '=':   {ENTER ALTERNATE KEYPAD MODE -- TO BE DONE}
+     BEGIN
+      FLUSHOLD;
+     END;
+
+   '>':   {EXITR ALTERNATE KEYPAD MODE -TO BE DONE}
+     BEGIN
+      FLUSHOLD;
+     END;
+
+   '<':   {ENTER VT100 MODE}
+     BEGIN
+      TERMINAL := VT100;
+      CANESC;
+     END;
+
+   'Y':   {CURSOR ADDRESSING INPUT IS ROW COL -CONCEPT OUT IS COL ROW}
+     BEGIN
+     {write('aty',xhold,fesc); }
+      IF XHOLD < 4
+        THEN GOTO 10
+        ELSE
+         BEGIN
+          CSCR[0] := ESC;
+          CSCR[1] := EQU;
+          CSCR[2] := CHR(ORD(CHOLD[3]) - ORD(US)); {COLUMN}
+          CSCR[3] := CHR(ORD(CHOLD[2]) - ORD(US)); {ROW}
+          UNITWRITE(CONS,CSCR,4);
+         END
+     END;
+   OTHERWISE:
+      ;
+
+   END    {CASE}
+  END; {ELSE}
+    CANESC;
+ 10:
+
+ END;
+
+PROCEDURE CSIPROC;  {PROCESS CSI ESCAPE SEQUENCES}
+ label
+
+10;
+
+
+ var
+
+   i,j,k,l,m : integer;
+
+ begin
+  {write('csiproc ',c,xhold); }
+   case c of  {based on last character of escape sequence}
+
+    'A':                        {cursor up -  esc [ # A}
+      cursmov('A');
+    'B':                        {cursor down - esc [ # B}
+      cursmov('B');
+    'C':                        {cursor forward - esc [ # C}
+      cursmov('C');
+    'D':                        {cursor backward - esc [ # D}
+      cursmov('D');
+    'H':
+    10:                    {position cursor - esc [ row ; col H -corvus is - esc = col row}
+      BEGIN
+      cscr[0] := esc;  {set up output escape buffer}
+      cscr[1] := equ;
+      i := findnxt(chold,semi,2,5);
+      if (i <= 2) or (xhold <= 4) {then simplistic origin}
+       then
+        begin
+         cscr[2] := '\01';    {reset to origin???}
+         cscr[3] := '\01'
+        end
+       else
+        begin
+         j := i -1;  {preparte to convert row}
+         k := convstr(2,j,chold);
+         cscr[3] := chr(k);
+        {write('row--',k);}
+           {now convert from other side of semi colon to end}
+         k := 0;
+         j := i+1;
+         i := xhold - 2; {last position of number}
+         k := convstr(j,i,chold);
+         cscr[2] := chr(k);
+        {write('col--',k); }
+        end;
+        unitwrite(cons,cscr,4);
+        canesc;
+      END;
+   'J':                         {erase IN WINDOW      - esc [ * J   for * =0 erase to eos
+                                                                            1 erase from bos
+                                                                            2 erase display}
+       BEGIN
+        cscr[0] := esc;
+        case chold[2] of
+        '1':             {ERASE FROM BEGINNING OF SCREEN TO CURRENT POSITION -LEAVE CURSOR}
+           ;      {to be done}
+        '2':             {ERASE entire SCREEN }
+          BEGIN
+           cscr[1] := 'J';
+           unitwrite(cons,cscr,2);
+          END;
+         OTHERWISE:
+                     {ERASE FROM HERE TO END OF SCREEN  -LEAVE CURSOR}
+          BEGIN
+           cscr[1] := 'Y';
+           unitwrite(cons,cscr,2);
+          END;
+        END;     {case}
+        canesc;
+      END; {J}
+
+     'K':              {erase in line  - esc { * K          ----- * = 0   erase to end of line
+                                                                    = 1   erase from beginning of line
+                                                                    = 2   erase line}
+
+       BEGIN
+        cscr[0] := esc;
+        CASE chold[2] OF
+        '1':             {ERASE FROM BEGINNING OF line TO CURRENT POSITION -LEAVE CURSOR}
+           ;      {to be done}
+        '2':             {ERASE entire line}
+           ;      {to be done}
+         OTHERWISE:   {default  erase from cursor to end of line}
+          BEGIN
+           cscr[1] := 'K';
+           unitwrite(cons,cscr,2);
+          END;
+        END;     {case}
+        canesc;
+      END; {K}
+
+     'c':                 {report device attributes  --currently not implemented}
+        flushold;
+
+     'f':                 {for current purposes, same as H above}
+        goto 10;
+
+     'g':                 {tab clear modes ---eventually have to simulate}
+        flushold;
+
+     'h':                 {set internal modes}
+        flushold;         {to be done}
+
+     'l':                 {reset internal modes --- to be done}
+        flushold;
+
+     'm':                 {select graphic rendition  -  esc [ #;..;# m   or esc [ # m}
+       BEGIN
+        CSCR[0] := ESC;   {SET UP OUTPUT BUFFER}
+        CSCR[1] := SMLE;
+        J := 2;
+        WHILE J < XHOLD DO
+         BEGIN
+          CSCR[2] := CHARENHANCE(J);
+          UNITWRITE(CONS,CSCR,3);
+          J := J+2;
+         END
+       END;
+
+     'n':                 {device   status report -to be done  esc [ * n  * = 5 then report status as either
+                                                                       esc [ 0 n or esc [ 3 n
+                                                                          * = 6 then report status as
+                                                                          esc [ row; col R
+
+        flushold;
+
+     'q':                 {load led displays - not implemented }
+        flushold;
+
+     'x':                 {request to sent terminal parameters --- to be done}
+        flushold;
+
+     'y':                 {invoke confidence tests??? - not implemented}
+        flushold;
+  end;          { case }
+  canesc;
+END;  {procedure}
+
+procedure cursmov; {set up escape buffer for cursor moving and mopve cursor}
+const
+ n = 2;
+var
+ i,j,k:integer;
+
+begin
+  cscr[0] := esc;
+  cscr[1] := c;
+
+  k := xhold - 2;  {position of last char of parameter if any}
+  if xhold <= 3
+    then i := 1    {only one position moved}
+    else i := convstr(2,k,chold);
+
+  for j := 1 to i do
+    unitwrite(cons,cscr,2)
+end; {cursmov}
+
+
+
+PROCEDURE PUTESC;  {PUT ESCAPE "SEQUENCE" INTO HOLDING PEN UNTIL SEQUENCE IS COMPLETE}
+ BEGIN
+   {WRITE('PUTESC ',C);  }
+   CHOLD[XHOLD] := C;
+   XHOLD := XHOLD + 1;
+
+
+   CASE TERMINAL OF
+     VT52:
+       LOOK52(C);
+     VT100:
+       LOOK100(C);
+     NONE:
+       PUTSCREEN(C);
+     OTHERWISE:
+       PUTSCREEN('?');
+    END;
+ END;
+
+
+
+
+PROCEDURE CANESC;   {CANCELS A HOST TO TERMINAL  ESCAPE SEQUENCE }
+ BEGIN
+   ASEQ := NULL;
+   FESC := FALSE;
+   XHOLD := 0;
+   XSCR  := 0;
+ END;
+
+PROCEDURE MONITOR(VAR MC:SMLBF);
+ BEGIN
+  IF MC[0] = ESC
+   THEN MC[0] := DOT
+ END;
+
+PROCEDURE FLUSHOLD; {DUMP CHOLD TO SCREEN -RESET PARAMETERS}
+ BEGIN
+  CANESC;
+ END;
+{************************************************************************************************************}
+
+BEGIN     {VT52/100 EMULATOR}
+                            { first the codes that termiate the various escape sequences }
+
+       CSITRM := ['A','B','C','D','H','J','K','c','f','g','h','l','m','n','q','x','y'];
+       AUXTRM := ['M','P','Q','R','S','l','m','n','p','q','r','s','t','u','v','w','x','y','z'];
+       DECTRM := ['3','4','5','6','8'];
+       G0CTRM := ['A','B','0','1','2'];
+       G1CTRM := ['A','B','0','1','2'];
+       SMPTRM := ['Z','=','>','8','7','D','E','H','M','c','l'];
+       NULTRM := [];
+
+       TERMINAL := VT52;    {DEFAULT}
+       STRTUP := [LBRK,OH,NBS,LPRN,RPRN]; {STARTING CHARS FOR ESCAPE SEQ (AFTER ESC)}
+       CANESC;                          {CANCEL ALL ESCAPE SEQUENCES}
+       RTRN := FALSE;
+       MON := FALSE;
+
+
+
+
+
+        REPEAT
+                {HOST TO TERMINAL DIRECTION}
+
+
+                IF  UNITBUSY(DCOM)
+                        THEN
+                         BEGIN
+                            UNITREAD(DCOM,CH1,1);     {READ A CHAR}
+                            C := CH1[0];
+                            IF MON
+                              THEN MONITOR(CH1);
+                            IF (C = CAN) OR (C = SUB)
+                             THEN  CANESC
+                             ELSE IF FESC                {HAS AN ESCAPE BEEN FOUND}
+                              THEN PUTESC(C)
+                             ELSE IF C = ESC             {IS THIS THE FIRST INSTANCE OF ESC CODE?}
+                              THEN
+                               BEGIN
+                                FESC := TRUE;
+                                PUTESC(C)
+                               END
+                             ELSE                          {HERE SIMPLY OUTPUT CHAR TO SCREEN}
+                              PUTSCREEN(C)
+                           END;   {HOST TO TERMINAL DIRECTION}
+
+
+
+                 {_________________________________________________________________________________}
+                 {TERMINAL TO HOST DIRECTION}
+
+
+                IF  UNITBUSY(KBRD)
+                        THEN BEGIN
+                                UNITREAD(KBRD,CH,1);
+                                IF CH[0] = CTRMON  {USE AS A TOGGLE}
+                                  THEN MON := NOT MON
+                                  ELSE IF NOT FESC
+                                  THEN UNITWRITE(DCOM,CH,1);
+                        END;
+        UNTIL  CH[0] = CTRLC
+END.
+

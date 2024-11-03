@@ -1,0 +1,81 @@
+
+         To  : Distribution
+         From: Keith Ball
+
+         file: VOLLCK.DOC.TEXT
+         date: December 6, 1983
+
+         Re: Proposal on implementation of volume locking
+
+
+         Changes to driver and mount table
+               how to lock volume
+                 if lock bit clear and never lock clear then
+                   do test and set on volume's directory lock
+                     flag
+                   if locked then change access in mount table
+                                  to RO
+                             return write protected
+                                 don't do write
+                   else write user name to locked dir file entry
+                        set lock bit in mount table
+                 else already locked
+               lock bit
+               never lock volume flag
+
+         Changes to C2 disk structures
+               volume table
+                   volume lock ok flag
+               directory entry
+                   lock bit flag
+                   user number locked
+                   last word in dir file entry in block 2 of
+                    p-sys dir.  Bit flag is bit 7 of byte index
+                    26.  User number is remaining 15 bits of
+                    bytes index 26 and 27.  All indices are from
+                    byte 0 of block.
+
+         Changes to mount manager
+               change access from RO to RW if volume
+                currently unlocked
+               mounting volume if user locked but never unlocked
+               mounts volume as RO instead of RW if locked by
+                other than user
+               automatically unlocks if locked by user
+               puts user number for drive volume is on in mount
+                table.
+
+         Changes to boot/logon/driver init process
+               mounting volume if user locked but never unlocked
+               mounts volume as RO instead of RW if locked by
+                other than user
+               automatically unlocks if locked by user
+               puts user number for drive volume is on in mount
+                table.
+
+         Unlock program
+               user
+                   unlocks if user owns
+                      checks the user number
+                   reports user who owns if cannot unlock.
+               system manager
+                   same program as user program
+                   if cannot unlock asks for drive password
+                   command line password
+               must be command line driven
+                   unlock <volname> <drive password>
+
+         Changes to C2 utilites for table changes
+               drive based tables
+               driver mount tables
+
+         Upgrades in future
+               unlocking volumes if user is not active
+                   interrupt driven. Requires interrupts,
+                    tranpsorter driver, and net mgt software.
+                   use C2 lookup protocol. Use the where
+                    is host XYZ? msg and Ident msg.
+               locking and unlocking on file open and closes
+                   Maybe possible in systems with vectors for
+                   system calls, like MSDOS 2.0, and where we
+                   have ability to change OS, like CCOS.

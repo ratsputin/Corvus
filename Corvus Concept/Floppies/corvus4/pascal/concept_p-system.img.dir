@@ -1,0 +1,13 @@
+
+Directory of UCSD disk image file 'concept_p-system.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 5 files,  0 to 6 (6), eov 500, size 206, free 5
+
+ 1: SYSTEM.INTERP   Code 26-Apr-83    6-  30(  24), 12288+512= 12800 bytes
+ 2: SYSTEM.MISCINFO Data 19-Apr-83   30-  32(   2),  1024+512=  1536 bytes
+ 3: SYSTEM.PASCAL   Code 26-Apr-83   32- 154( 122), 62464+512= 62976 bytes
+ 4: SYSTEM.STARTUP  Code 13-May-83  154- 227(  73), 37376+512= 37888 bytes
+ 5: SYSTEM.LIBRARY  Data 13-May-83  227- 294(  67), 34304+512= 34816 bytes

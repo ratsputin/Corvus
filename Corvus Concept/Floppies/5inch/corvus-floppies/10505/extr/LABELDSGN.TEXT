@@ -1,0 +1,654 @@
+
+file :  /dsgn/labeldsgn.text
+date :  16-MAR-1982   kb
+
+This is the definition and design document for the changes to SYSTERM for the
+function key/label/command string management.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Information needed :
+
+ 1) How to position cursor?
+      call Display Unitwrite with following Escape sequence :
+        ESC,=,mmmm,nnnn
+           where   ESC = $1B
+                    =  = $3D
+                  mmmm = byte value representing cursor x-coordinate
+                         character cell position, window relative.
+                  nnnn = byte value representing cursor y-coordinate
+                         character cell position, window relative.
+ 2) How to get Inverse Video display for the labels?
+      General case of changing Video display Atrributes.
+      Send the following Escape sequence :
+        ESC,G,n
+              where  ESC = $1B
+                   G  = $47
+                   n  = select one : ASCII 0 ($30) - normal
+                                     ASCII 4 ($34) - inverse video
+                                     ASCII 8 ($38) - normal,underscore
+                                     ASCII > ($3E) - inverse and underscore
+ 3) How to find out current window number?
+        A window is defined by a window record kept in the address
+        space of the routine that created the window.  The current
+        window is specified by the pointer to a window record that
+        is in the System Communications Area.
+ 4) How to select a window as the current window?
+ 5) How to home and clear a window?
+      Call Display Unitwrite with ESC,J.
+ 6) How to get the Label window record pointer?
+
+Software needed :
+
+ 1) OS with :
+    a) Window management software
+    b) Display driver
+
+Hardware needed :
+
+ 1) Display and cable
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The SYSTERM driver will support its current functions plus will have additional
+capabilities to handle the function keys and command key in a transparent mode.
+The Unit I/O functions supported are :
+
+      1) Unitread               5) Unitclear
+      2) Unitwrite              6) Unitbusy
+      3) Unitinstall            7) Unitstatus
+      4) Unitunmount
+
+The Unitstatus has 6 Label window functions.   These are Initialize the table
+and buffer, Assign values to a given table entry, Turn off the display
+and translation of the labels and function keys, Turn on the display and
+translation, Push the Label table on the stack, and Pop the Label table off
+the stack.
+
+The driver will have 2 major data structures.  The Label table and the Internal
+buffer.  The Label table has the form :  1 byte of flags, 6 label characters,
+1 byte for the number of command string characters, 40 bytes for Command string
+at its maximum length.  Currently, no flags are defined.  The table has 40
+entries, one for each of the possible qualified function key values.   The
+Internal buffer is 40 bytes accessed as a circular queue.  It is used to keep
+command strings from translated function keys and look ahead characters.  It
+is 40 bytes to prevent a buffer full condition when moving a Command string
+into the buffer.
+
+The 40 label values are divided into 2 groups, the Command release set and
+the Command closure set.  These groups are in turn divided into 2 sub-groups,
+shifted and unshifted.  Only one of the Command level groups is dispalyed at
+a time.  The shifted and unshifted labels (a label pair) for the same function
+key are displayed in the same columns with the shifted above the unshifted
+label.  Labels are displayed in their own window at the bottom of the screen.
+
+The label window is created by the OS during system initialization before the
+UnitInstall function for this driver is called.  The pointer to the window
+record for the Label window is available indirectly via the Sytems Communications
+Area.
+
+The labels are displayed as a contiguous pair of inverse video (black on
+white) characters.  Each label pair is 7 characters wide by 2 lines tall.  The
+first character of each of the 2 lines is an inverse video "|".  This is used
+to seperate the labels on the same line.  The next six (6) characters are
+the 6 characters for the corresponding key value from the Label table.  Here
+is a rough example of a label pair display.
+
+         |slabel           slabel = inverse video shifted function key label
+         |ulabel           ulabel = inverse video unshifted function key label
+
+The label display for all 10 label pairs is not contiguous.  The label pairs
+are divided into 2 groups, like the function keys on the Keyboard.  The first
+group is the label pair display for function keys F1 to F5.  The second group
+is for function keys F6 to F10.  The contiguous label pair groups are seperated
+by 2 columns (5 lines, 2 characters per line) of regular video blanks.  Also,
+the label pair groups have a column of inverse video "|" characters on the left
+end of the contiguous label pair display.  Below is a graphic description of
+the label display.
+
+|  F1  |  F2  |  F3  |  F4  |  F5  |  |  F6  |  F7  |  F8  |  F9  |  F10 |
+|      |      |      |      |      |  |      |      |      |      |      |
+^ label^                           ^                                     ^
+^ pair ^                           ^---extra "|" character column--------^
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The following is a description of the SYSTERM driver functions.
+
+---------------------------------------------------------------------------
+Unitwrite :
+
+The Unitwrite function calls the Display driver to display the contents of the
+user buffer.
+
+---------------------------------------------------------------------------
+Unitbusy :
+
+This driver may have characters in it's Internal buffer.  Therefore, if characters
+are in this buffer Unitbusy returns true.  If no characters are in the Internal
+buffer then the driver calls the Keyboard driver to determine if there are
+characters available from it.   Return the boolean result returned by the
+Keyboard driver.
+
+---------------------------------------------------------------------------
+Unitclear :
+
+First, call the Initialize routine to initialize the Label table and turn off
+the Label window display.  Then call the Keyboard and Display drivers Unitclear
+functions.
+
+---------------------------------------------------------------------------
+Unitinstall :
+
+This function initializes the SYSTERM driver.  The Keyboard and Display
+drivers must be installed before this driver's install routine is called.  This
+driver gets input from the Keyboard and outputs to the Display.  Therefore,
+the unit numbers for the Keyboard and Display drivers are acquired.  If either
+or both of the drivers are not installed then a driver internal flag is set
+showing that the SYSTERM driver cannot function and an error return code is
+sent back to the OS.  The Label table and Label window are then initialized by
+a call to the Initialize procedure.  This turns off the window display, marks
+the labels as off and initializes the buffer variables to empty buffer (Front,
+Rear, and Buffer empty flag).
+
+---------------------------------------------------------------------------
+Unitunmount :
+
+This procedure removes the labels from the screen and turns the driver off.
+The Turnoff procedure is called to remove the label display from the Label
+window and mark the window turned off.  The Keyboard
+or the Display drivers are NOT called to have them unmount, since they are
+used but not controlled by SYSTERM.  However, the Display and Keyboard unit
+numbers acquired by the Install routine are marked as "undefined".
+
+---------------------------------------------------------------------------
+Unitstatus :
+
+The Unitstatus function is a catch all procedure for device dependent functions.
+This driver has 6 functions distinguished by the Control parameter value.  The
+SYSTERM driver's function's values are :  $FF for Init, $FE for SetKey, $FD for
+TurnOff, $FC for TurnOn, $FB for Pop, and $FA for Push. If Unitstatus is
+called with the Control parameter equal to any other value then call the Display
+driver. The desired function is then a Display function.  Currently, the Display
+driver uses the values 1, 2, and 3 for various window management functions.
+
+Unitstatus function descriptions :
+
+Init :
+
+ This function initializes the label table and makes sure the Label display
+ is cleared.  An internal flag is cleared which prevents the driver from
+ translating the function keys (On flag is cleared).  The Buffer variables
+ are initialized to empty buffer.
+
+ All of the label table entries are initialized to :
+
+        1) flags - ?  **currently undefined, so for now 0
+        2) labels - assigned to 6 blank characters ($20)
+        3) command string length - set to 4, the length of the ESC # sequence
+           returned by the Keyboard driver for a function key.
+        4) command string - set to the character sequence of the corresponding
+           function key.
+
+           e.g.  F1 alone or the first table entry is :
+                 ESC,#,0,0  where the zeros are ASCII characters for zero
+
+                 SHIFT-F1 is :
+                 ESC,#,0,A
+
+                 COMMAND-SHIFT-F1 is :
+                 ESC,#,1,E
+
+TurnOff :
+
+ This function removes the label display from the window and stops the driver
+ from translating function key/command key input from the Keyboard driver.
+ It calls the Display to clear the Label window.  It clears the On flag to
+ tell the Unitread procedure to ignore ESC # sequences.  It does NOT change
+ any of the Label table entries.  However, it does initialize all the Buffer
+ variables to empty Buffer.
+
+TurnOn :
+
+ This function displays the current labels in the Label window and restarts
+ the driver translating function/command key input from the Keyboard driver.
+ The current labels are defined by the Command flag.  If the Command flag is
+ clear then the current labels are the Command key release group; labels numbers
+ 0 to 19. If the flag is set then the current labels are the Command key closure
+ group; labels 20 to 39.  This procedure clears the Command flag.  It sets
+ the On flag to tell the Unitread procedure to start processing ESC # sequences.
+ It does not change any of the Label table entries.
+
+Setkey :
+
+ This function replaces an entry in the Label table with the values passed in
+ the parameter block.  It also will display the label in the Label window if
+ the entry changed is one that is currently being displayed.
+
+ The parameter block has the form :
+
+     a) 1 word of Key number,
+     b) 6 bytes of Label characters,
+     c) 1 byte of Command string length,
+     d) and that length of bytes of characters representing the Command string.
+
+ The Key number is the Table entry ID defining which entry should be changed.
+ The numbers range from 0 to $27 (hexidecimal) which are equivalent to the
+ ASCII hex digits returned by the Keyboard driver as the last 2 characters
+ of the ESC # sequence for the function keys.  For example, F1 has the
+ sequence ESC,#,0,0 returned by the Keyboard driver and it's Key number is 00.
+ Another, COMMAND-SHIFT-F1 has the sequence ESC,#,1,E returned by the Keyboard
+ driver and it's Key number is $1E.   The 6 byte Label characters are what
+ is displayed.  Therefore, they should all be displayable character codes.
+ Furthermore, if the label is shorter than 6 characters, the calling routine
+ should pad the label with blank characters (ASCII space - $20).  The Command
+ string length is the number of characters(bytes) in the parameter block
+ Command string.  The maximum length is 40 characters.  The Command string is
+ the sequence of characters that are returned by the SYSTERM Unitread function
+ when it detects the corresponding function key ESC # sequence in the input
+ character stream from the Keyboard driver.
+
+ This procedure can detect two errors.  If the Key number is out of range,
+ which is an INVALID TABLE ENTRY ID error or if the Command string is to long.
+ The last is either a new error type or an INVALID PARAMETER error.
+
+ If the Command string length is 0 the Command string is considered to be a
+ null string.  When the function key with the null Command string is detected
+ by the driver no characters are placed in the buffer.  The key is ignored.
+
+Push :
+
+ This procedure pushes the Label table onto the stack.  It must only be called
+ through the OS Unit I/O routines.  In order to insure that the correct return
+ addresses are used, the 2 Unit I/O return addresses, the user's return address,
+ and any internal SYSTERM return addresses are removed from the stack before
+ the Label table is pushed on the stack.  After the table is pushed, the Unit
+ I/O and user return addresses are pushed back on the stack.
+
+ The entire Label table is not pushed.  Only the "used" portions of the entries
+ are pushed.  Therefore, if the Command string for an entry is less than the
+ maximum only the defined length of bytes are pushed.
+
+ The user's register values for all registers except A4, A5, A6 and A7, are
+ destroyed.
+
+ This procedure does not turn off the label display.
+
+Pop :
+
+ This procedure performs the opposite function as Push.  It restores the entries
+ of the Label table from the stack.  It also must be called only via the OS
+ Unit I/O interface.  It assumes that the Label table is the next thing on
+ the stack following the 2 Unit I/O return addresses and the 1 user return
+ address.  After the Label table is restored the new current labels are
+ displayed.
+
+ The user's register values for all registers except A4, A5, A6 and A7, are
+ destroyed.
+
+---------------------------------------------------------------------------
+
+Unitread :
+
+This function gets input from the Keyboard driver and returns the characters
+received or translates the character stream into Command strings or label
+display operations.  Translation only occurs if the On flag is set.  It
+maintains an Internal buffer to keep characters from the Keyboard driver
+when it does a lookahead operation and to place Command strings when the input
+stream contains a function key ESC # sequence.  Consequently, user input may
+come from the Internal buffer and not directly from the Keyboard driver.  If
+the On flag is set and a Command key release or closure is detected then
+the current labels are changed and the corresponding label group is displayed
+in the Label window.  Since this is the SYSTERM driver, character input is not
+echoed to the Display driver.  Only Label window operations will effect the
+screen during this function.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Label window operations :
+
+   1) Blanking out entire window.  Done by TurnOff.
+   2) Display all current labels.  Done by :
+        a) Unitread on a Command key release or closure.
+   3) Display a single current label.  Done by Setkey when a displayed entry
+      is changed.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+pseudo code design
+
+---------------------------------------------------------------------------
+Unitread :
+
+if (On flag is set) then {label display is Turned On}
+ For i:=1 to (number of characters user wants) do begin
+
+   repeat
+     Restart := false;  {assume ok}
+     if (Internal buffer is empty) then begin  {get char from Keyboard}
+       chr := Next character from Keyboard driver.
+       if ( (chr=ESC) and (KBRD Unitbusy returns true) ) then begin
+          put ESC in the Internal buffer.
+          Bffer_empty := false;
+          Update buffer pointers including wrap around.
+          chr := Next character from Keyboard driver.
+          if (chr="#") then Process_ESC_#_sequence. {may find an invalid sequence}
+                       else put chr in Internal buffer & update buffer pointers
+                             including wrap around of Rear pointer.
+          Restart := true; <-- always restart because :
+                                1) either wasn't ESC # so return chars in buffer
+                                2) was ESC # -
+                                   a) Command string in buffer
+                                   b) command key - have no chars to return
+       end; {process possible ESC # sequence}
+
+     end else begin {get char from Internal buffer}
+       chr := Next char from Internal buffer.
+       Update buffer pointers, which includes wrap around.
+       if (Front=Rear) then Buffer_empty := true;
+     end;
+   until (NOT Restart);
+   put chr in users buffer.
+   increment users buffer address by one to next free char location.
+ end; {for loop}
+else Call Keyboard driver to input characters to user's buffer.
+Return.
+
++++++++++++++
+
+procedure Process_ESC_#_sequence :
+
+  put "#" character (in chr) into Internal buffer.
+  get next 2 characters available from Keyboard driver.
+  Put the 2 characters in the Internal buffer.
+  Update the buffer pointers, including wrap around.
+  if (the 2 characters are both ASCII Hex) then begin
+    convert the 2 characters to one byte of Hex.
+    {see if function key or command key}
+    if (Hex byte in [0..$27]) then begin {function key}
+      Back-up buffer rear pointer to remove ESC # AH AH sequence from
+       Internal buffer.
+      Calculate index to Label table entry by multiplying Hex byte by 48 (decimal)
+      Put Command string from entry in Internal buffer.
+      {buffer was empty after removed ESC # sequence so no buffer full}
+      {condition can occur - buffer length = to max. Command string length}
+      Update buffer pointers including wrap around.
+    end else
+      if (Hex byte in [$FE,$FF] then Process_Command_Key; {closure or release}
+  end;{else don't have valid function or command key sequence-return chars}
+      {in Internal buffer.}
+
+++++++++++++
+
+procedure Process_Command_Key :
+
+  Back-up buffer rear pointer to remove ESC # AH AH sequence from
+   Internal buffer.
+  Buffer_empty := true;
+  if (Hex byte = $FF) then begin {command key closure}
+    set Command flag;
+    current labels := 20 to 39;
+  end else begin {command key release}
+    clear Command flag;
+    current labels := 0 to 19;
+  end;
+  Display current labels in Label window. {make sure don't wipe out current}
+   procedure described in TurnOn.         {window when write to label window}
+
+?????????????????????????????
+
+Must get current window number when do a label window display operation.
+
+    a) get current window number from System Commmunicatons area.
+    b) save it
+    c) make current window number the Label window <- call window manager
+    d) do label window operation
+    e) make current window number the saved window #, put it in the
+       System Communications area.
+
+---------------------------------------------------------------------------
+
+Unitinstall :
+
+ Initialize Display and Keyboard unit number save areas to "undefined" unit
+  number ($FFFF).
+ Initialize On flag to false;
+ Get address of Device table from System Communication Area.
+ Get MAX_DEVICES from Device table.
+ Add 2 to Device table address to point at first entry.
+ Get unit # for Display driver.
+   Display driver unit number := MAX_DEVICE;
+ Calculate index to Display driver Device table entry.
+ if (Device_table.Mounted[Display_unit_#]) then begin
+    {have a display driver}
+    put the Display driver unit number in the Display driver unit number save area.
+    Get unit # for Keyboard driver.
+      Keyboard driver unit number := MAX_DEVICE - 1;
+    Calculate index to Keyboard driver Device table entry.
+    if (Device_table.Mounted[Keyboard_unit_#]) then
+       {have a keyboard driver}
+       call Initialize table/display/buffer procedure (Init).
+    else  ERROR --> No Keyboard.
+ end else
+    ERROR --> No Display.
+ Return.
+
+---------------------------------------------------------------------------
+
+Unitbusy :
+
+ if ( (Not Buffer_empty) and (On flag is set) ) then
+      {Labels are on and have a char in buffer}
+      Unitbusy := true;
+ else {either buffer is empty or Labels are off}
+      Unitbusy := Unitbusy(Keyboard)
+
+---------------------------------------------------------------------------
+Unitunmount :
+
+ Call TurnOff to clear Label window and clear On flag.
+ Initialize Display and Keyboard unit number save areas to "undefined" unit
+  number ($FFFF).
+
+---------------------------------------------------------------------------
+Unitstatus :
+
+ Case (Control) of
+   ($FF) : Init;
+   ($FE) : SetKey(buffer_address);
+   ($FD) : TurnOff;
+   ($FC) : TurnOn;
+   ($FB) : Pop;
+   ($FA) : Push;
+   Otherwise : Call Display driver;
+ end;
+
++++++++++++++++
+
+Init :
+
+  Call Turnoff to clear Label window and mark Labels as Off ( On flag := false).
+
+  with Label_table do    {Init Label table}
+   For i:=0 to 39 do begin
+     flags[i] := 0;
+     labels[i] := '      '; {six blanks}
+     command_length[i] := 4;
+     command_string[i] := 'ESC #'||convertToASCII(i);
+   end;                             |
+                                    +--->converts the single byte value of i
+                                         to 2 bytes of ASCII hex which represent
+                                         i's value.
+ Return.
+
++++++++
+
+SetKey :
+
+    Validate ParameterBlock.KeyNumber;
+      if (KeyNumber>=0) and (KeyNumber<=MaxEntries) then Valid := true
+      {MaxEntries = 39}                             else Valid := false;
+    if (Vaild) then begin
+      Validate ParameterBlock.CmdStrgLen;
+        if (CmdStrgLen>=0) and (CmdStrgLen<=MaxLength) then Valid := true
+        {MaxLength = 40}                               else Valid := false;
+      if (Valid) then begin
+        Calculate index to entry.  {this is actual byte index}
+          index := ParameterBlock.KeyNumber * EntryLength; {i think its 48 bytes}
+        Put in labels,command string length, and command string.
+          for i:= 1 to 6+1+(ParameterBlock.CmdStrgLen) do
+             {move all chars from Parameter Block to entry}
+             Label_table[index+i-1] := ParameterBlock.Labels[i];
+        if (Command flag is set) then Base := 20
+                                 else Base := 0;
+        if ( (KeyNumber>=Base) and (KeyNumber<=Base+19) and (On flag is set) ) then
+           Display the current labels in Label window.
+      end else ERROR <-- INVALID PARAMETER.
+    end else ERROR <-- INVALID TABLE ENTRY ID.
+    Return.
+
++++++++
+
+TurnOff :
+
+    Get current window pointer from Systems Communications area.
+    Save it.
+    Call the Display driver Select function to make the Label window the current
+      window.
+    if (Select worked-IORESULT=0) then begin
+      Output a '<ESC>G0<ESC>J' to the Display driver to change the video attribute of
+       the Label window to normal and then Home & Clear it.
+      if (output worked) then begin
+        On flag := false; {clear}
+        Init buffer to empty.
+          Buffer_empty := true;
+          Front := @Buffer;
+          Rear := @Buffer;
+      end;
+    end;
+    Restore saved window record pointer to current window.
+    Return.
+
++++++++
+
+TurnOn :
+
+       Command flag := clear {current labels are release group}
+
+********* THIS is the display Current Labels routine **************
+*****                            ^-- Routine needed by Process Command key routine.
+                                        and Pop and SetKey.
+     Get current window pointer from Systems Communications area.
+     Save it.
+     Call the Display driver Select function to make the Label window the current
+       window.
+     if (Select worked-IORESULT=0) then begin
+       Get Base Index to current labels to be displayed in the window.
+         if (Command flag is set) then Base := 20
+                                  else Base := 0;
+       Display current labels in window.
+         Display each label pair half flush against the window sides.
+         Display of a line builds a line buffer then calls the Display driver to
+           display the entire line.
+         Display the shifted labels of the current labels.
+            Ypos := 0; {shifted is in top row of window}
+            Xpos := 0; {left half is flush against left side of window}
+            {put a video attribute Escape sequence in buffer to get inverse
+              video.}
+{constant}--LineBuffer[1,2,3] := '<ESC>G4';   {<ESC> is the Escape char $1B}
+            for i:=1 to 5 do begin {put shifted label pair in for left group}
+               j := 4+(i-1)*7; {first char index to put in}
+               lineBuffer[j] := '|';
+               for k:= 1 to 6 do begin {put 6 char label in buffer}
+                  m := k+j; {index of next line buffer character loc}
+                  lineBuffer[m] := Label_table[Base+i-1].labels[k];
+               end;
+            end;
+          __j := 4+(5*7); {char loc after first group}
+{constant}  LineBuffer[j] := '|'; {group terminator char}
+{part of }  j := j+1;
+{Line    }  LineBuffer[j,j+1,j+2] := '<ESC>G0';   {<ESC> is the Escape char $1B}
+{buffer. }  j := j+3;
+        |___LineBuffer[j] := '<CR>'; {EOL char-$0D}
+
+           {do right half}
+            Xpos := (Label Window width) - Number of characters in right display
+                Number of chars of right half := 5*7;
+{constant}--LineBuffer[1,2,3] := '<ESC>G4';   {<ESC> is the Escape char $1B}
+            for i:=1 to 5 do begin {put shifted label pair in for right group}
+               j := 4+(i-1)*7; {first char index to put in}
+               lineBuffer[j] := '|';
+               for k:= 1 to 6 do begin {put 6 char label in buffer}
+                  m := k+j; {index of next line buffer character loc}
+                  lineBuffer[m] := Label_table[Base+5+i-1].labels[k];
+               end;
+            end;
+{constant}--LineBuffer[m+1] := '|'; {group terminator char}
+          __j := 4+(5*7); {char loc after first group}
+{constant}  LineBuffer[j] := '|'; {group terminator char}
+{part of }  j := j+1;
+{Line    }  LineBuffer[j,j+1,j+2] := '<ESC>G0';   {<ESC> is the Escape char $1B}
+{buffer. }__j := j+3;
+{constant}--LineBuffer[j] := '<CR>'; {EOL char-$0D}
+
+         Display the unshifted labels of the current labels.
+            {put a video attribute Escape sequence in buffer to get inverse
+              video.}
+            Same as shifted lables except Ypos := 1, unshifted labels always
+             in row below shifted labels.
+
+         Restore saved window record pointer to current window.
+********** End of Display current Labels ************************
+
+       if (successfully displayed labels) then On flag := true; {set}
+     end;
+     Return.
+
+@@@@@@@
+dddd
+The Line buffer has constants for the parts that remain the same as the labels
+change.   The areas with zero fill are the label display areas.  The Xpos and
+the Ypos are for positioning the label display half.
+The Line buffer has the form :
+
+           LineBuffer
+           PositionSeq  data.b    '<ESC>='              ;positon cursor
+           Ypos         data.b    0                     ;y coordinate
+           Xpos         data.b    0                     ;x coordinate
+                        data.b    '<ESC>G4'             ;set inverse video
+           LabelsArea   data.b    5(0,0,0,0,0,0,0)      ;label area-repeated 5 times
+                        data.b    '|'                   ;end of group
+                        data.b    '<ESC>G0'             ;group seperator
+                        data.b    '<CR>'                ;end of line-$0D
+
+
++++++++
+
+Pop :
+
+   Remove the 4 return addresses from the stack.{includes call from Unitstatus}
+   Save them.
+   for i := MaxEntries to 1 by -1 do begin
+     remove CommandStringLength,Label, and Flag from stack for entry i.
+     if (Label_table[i].CommandStringLength <> 0) then
+       for j := CommandStingLength to 1 by -1 do {pop command string from stack}
+         Label_table[i].CommandSting[j] := (SP)+;
+   end;
+   Display Current labels.
+   Restore the saved return addresses to the stack.
+   Return.
+
++++++++
+
+Push :
+
+   Remove the 4 return addresses from the stack.{includes call from Unitstatus}
+   Save them.
+   for i := 1 to MaxEntries  do begin
+     if (Label_table[i].CommandStringLength <> 0) then
+       for j := 1 to CommandStingLength do {push command string on stack}
+         -(SP) := Label_table[i].CommandSting[j];
+     push on to stack Flags, Label, and CommandStringLength for entry i.
+   end;
+   Restore the saved return addresses to the stack.
+   Return.

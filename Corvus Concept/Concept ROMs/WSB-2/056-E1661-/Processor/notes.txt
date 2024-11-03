@@ -1,0 +1,20 @@
+Processor board in base of drawer
+  sticker 8010-11818-01 (Corvus p/n)
+  rev A
+U309/MAPPER is:
+  Signetics 
+  N82S181N K8413
+  label is:
+    CC0.5A
+U706/ROM0L is:
+  Hitachi
+  HN482732AG-30
+  label:
+    CCB
+    17L
+U710/ROM0U is:
+  Hitachi
+  HN482732AG-30
+  label:
+    CC
+    B17H

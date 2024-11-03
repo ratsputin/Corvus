@@ -1,0 +1,99 @@
+
+
+         From: Keith Ball
+         File: C2.SCHED.TEXT
+         Date: 17-February-1984
+
+         Re:  Constellation II.1 schedule
+
+         Based on discussions with Bob and Denise.  Work load derived
+         from Bob's status report.
+
+         Machines considered are the IBM PC with MSDOS 2.0 and the
+         p-system for our own applications and the Concept.
+
+         People pool :
+
+         1) Bruce K. MSDOS drivers
+         2) Denise   Const 2 utils
+         3) Dibinh   MSDOS drivers and user utils
+         4) Keith    Concept system
+         5) Tri      user utils
+         6) Bill K. - probably not available.  Most likely doing IBM
+                      rom changes, TI & 1.1 omnidrive and Mirror
+                      server.  He wants to do spooler driver on PC
+                      for MSDOS 2.0.
+         7) Pan - he works for Phil B. Since Phil needs new system
+                  software for UBI gateway on PC, maybe have him
+                  available.
+
+         Divide the work into 2 phases :
+
+         1) software developed with current system configuration
+         2) new system development
+
+         Do part 1 first.
+
+         a) Volume locking
+               - lock, unlock, Const 2 table changes
+               - 1 person 1 month
+         b) Spool drivers
+               - driver and utility
+               - 1 person 1 month
+         c) logoff program
+               - goodbye, close pipes, release locked volumes
+               - 1 person 1 month
+
+         Volume locking and spool drivers can be done concurrently if
+         two people work on it.  The logoff program is dependent on
+         them.  The first finished could do the logoff.
+
+         If this is started by March 5 it could be completed for
+         testing by the end of May.
+
+
+         Not enough personnel to allocate to task.  Maybe Bill on
+         spooler driver for PC.  He could do it between omnidrive
+         changes and Mirror server??? I could do Concept changes.
+         Volume locking requires Denise to make table changes.
+
+
+
+         Do part 2 second.
+
+         a) generic transporter driver
+               - driver
+               - 1 person 2 months, minimum per system
+
+         b) new disk driver - new timeout mechanism, different mount
+                              table
+               - driver, logon and system, user and diag utilities
+               - 1 person 2 months for driver and logon
+               - 1 person 1 month for all utilities
+
+         c) command line spooling with parameter file
+               - Tri is currently working on this
+               - Concept has command line but not parameter file
+
+         d) command line mount and unmount
+               - ??
+               - Tri ?
+         e) Speed up Const 2 utils under p-system and add batch files
+            to generate tables
+               - Denise says 2 weeks to setup development network
+                 plus 1 month to do work
+
+
+         The biggest change is the transporter driver and the new disk
+         driver/mount tables change.  The only reason why it is only 2
+         months because most of the design work is already done.  They
+         can be done concurrently.  The utility changes, except for
+         the diag writing the timeout status info, can be started but
+         not tried until after they are done.  Involves new CDsend and
+         CDrecv interface.  Maybe add a CDinit and keep timeout and
+         retry info in static vars.   Bruce and Dibinh do PC drivers
+         and I can make changes for Concept.  Concept does not (????)
+         require a new transporter driver.  Utilities changes can be
+         made by Denise.
+
+

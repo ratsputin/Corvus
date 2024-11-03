@@ -1,0 +1,16 @@
+
+Directory of UCSD disk image file 'ccos2.0_C_1985.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FCCOMP has 9 files,  0 to 6 (6), eov 1440, size 1017, free 9
+
+ 1: CC.KERNEL       Ux3f5 11-Jul-85    6-  54(  48), 24576+512= 25088 bytes
+ 2: C               Ux275 15-Apr-85   54- 188( 134), 68608+512= 69120 bytes
+ 3: CCTERRS.TEXT    Ux273 15-Apr-85  188- 202(  14),  7168+512=  7680 bytes
+ 4: CLIB.OBJ        Ux275 15-Apr-85  202- 242(  40), 20480+512= 20992 bytes
+ 5: STDIO.M.TEXT    Ux273 15-Apr-85  242- 250(   8),  4096+512=  4608 bytes
+ 6: H3.CODE         Ux275 15-Apr-85  250- 389( 139), 71168+512= 71680 bytes
+ 7: SYSTEM.UPDATE   Ux103 27-Aug-85  389- 393(   4),  2048+306=  2354 bytes
+ 8: SEE.TEXT        Ux183  4-Oct-84  393- 397(   4),  2048+512=  2560 bytes
+ 9: SEE             Ux655 19-Oct-85  397- 423(  26), 13312+512= 13824 bytes

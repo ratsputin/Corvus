@@ -1,0 +1,245 @@
+
+Reading volume table of drive 1
+
+Reading volume table of drive 2
+
+Reading volume table of drive 3
+
+Reading volume table of drive 4
+
+Reading volume table of drive 5
+
+Drive 5 volume CF17 contains 66 files.
+   B.MR.BACK.OBJ              3     19-Sep-81     694   Datafile    69
+   B.MR.BACK.TEXT             4     20-Apr-81      37   Textfile    29
+   B.MR.DISP.OBJ              2     19-Sep-81     688   Datafile   184
+   B.MR.DISP.TEXT             6     21-Aug-81     436   Textfile   149
+   B.MR.HEAD.OBJ              4     19-Sep-81     690   Datafile   221
+   B.MR.HEAD.TEXT             4     19-Sep-81     684   Textfile    89
+   B.MR.REST.OBJ              4     19-Sep-81     697   Datafile    74
+   B.MR.REST.TEXT             6      4-Aug-81     290   Textfile   243
+   B.MR.RTRY.OBJ              3     19-Sep-81     701   Datafile   229
+   B.MR.RTRY.TEXT             4     25-Apr-81      77   Textfile    99
+   B.MR.VARS.CODE             3     19-Sep-81     997   Codefile   129
+   B.MR.VARS.TEXT             4     23-Apr-81      53   Textfile   182
+   BLOCK1.CODE                3      9-Sep-81     994   Codefile   142
+   BLOCK1.TEXT                4     31-Aug-81     990   Textfile   119
+   BLOCK3.CODE                3      9-Sep-81     734   Codefile    71
+   BLOCK3.TEXT                4     31-Aug-81     986   Textfile   104
+   BOOT.CODE                  3     20-Nov-81    1736   Codefile   194
+   BOOT.TEXT                 18     20-Nov-81    1706   Textfile   130
+   CALLS.Q.TEXT               6     21-Aug-81     296   Textfile   147
+   CF15.1.DATA               60      7-May-81     230   Datafile   152
+   CF16.1.DATA               60     13-Aug-81     520   Datafile   228
+   CF16.3.DATA               60     31-Aug-81     881   Datafile   150
+   CF17.0.DATA               60     22-Oct-81    1188   Datafile    96
+   CF17.2B.DATA              60     20-Nov-81    1248   Datafile   174
+   DIAG.CODE                  3      9-Sep-81     731   Codefile   150
+   DIAG.DATA                  1     31-Aug-81      10   Datafile   247
+   DIAG.TEXT                 18     21-Aug-81     456   Textfile    28
+   DISP.CODE                  4     21-Oct-81     168   Codefile   215
+   DISP.TEXT                 42     21-Oct-81     805   Textfile    66
+   ERS.Q.TEXT                 8     28-Oct-80     322   Textfile   253
+   I8.MIC.Q.TEXT             20     17-Aug-81     350   Textfile    15
+   LOADALL.TEXT               4      9-Sep-81    1068   Textfile    60
+   LSI.RES.CODE               4     22-Oct-81     743   Codefile    99
+   LSI.RES.TEXT              36     22-Oct-81     129   Textfile   232
+   MAKEFIRM.CODE             12     25-Mar-81      25   Codefile    47
+   MBKSUB.TEXT                6     20-Apr-81      41   Textfile   181
+   MCMSUB.TEXT                8     21-Aug-81     418   Textfile   189
+   MIC.Q.TEXT                14     17-Aug-81     330   Textfile     9
+   MINIOS.CODE                4      9-Sep-81     801   Codefile    66
+   MINIOS.TEXT                8      9-Sep-81    1100   Textfile   191
+   MIRROR.Q.TEXT             14     26-May-81     107   Textfile    98
+   MLINK.TEXT                 4      8-Dec-80       6   Textfile   125
+   MR.BACK.TEXT              20     19-Sep-81     302   Textfile   133
+   MR.DISP.TEXT              16     21-Aug-81     402   Textfile   244
+   MR.HEAD.TEXT              26     19-Sep-81     775   Textfile    95
+   MR.REST.TEXT              20     23-Apr-81      57   Textfile   191
+   MR.RTRY.TEXT              26     24-Apr-81      81   Textfile   133
+   MR.SCAN.TEXT              14     21-Aug-81     442   Textfile   199
+   MR.VARS.TEXT               6     23-Apr-81      47   Textfile   199
+   MRDSUB.TEXT               10     21-Aug-81     426   Textfile   134
+   PLINK.TEXT                 4     13-Apr-81     226   Textfile    99
+   PSCLS.CODE                 3     20-Nov-81    1682   Codefile    11
+   PSCLS.OBJ                  2     20-Nov-81    1734   Datafile   183
+   PSCLS.TEXT                26     20-Nov-81    1656   Textfile   183
+   PSEQUATES.TEXT            10     19-Sep-81    1138   Textfile   229
+   PSMAIN.CODE                3     20-Nov-81    1724   Codefile   234
+   PSMAIN.OBJ                 2     20-Nov-81    1727   Datafile   146
+   PSMAIN.TEXT               30     20-Nov-81    1429   Textfile    47
+   PSOPEN.CODE                3     19-Sep-81     945   Codefile     9
+   PSOPEN.OBJ                 2     20-Nov-81    1732   Datafile    34
+   PSOPEN.TEXT               28     19-Sep-81    1072   Textfile    65
+   PSUTIL.CODE                4     19-Sep-81     941   Codefile   106
+   PSUTIL.OBJ                 3     20-Nov-81    1729   Datafile   103
+   PSUTIL.TEXT               24     19-Sep-81     660   Textfile   231
+   VECS.Q.TEXT                6     17-Aug-81     344   Textfile   221
+   ZLINK.CODE                14     28-Jan-81      11   Codefile    15
+
+Reading volume table of drive 1
+
+Reading volume table of drive 2
+
+Reading volume table of drive 3
+
+Reading volume table of drive 4
+
+Reading volume table of drive 5
+
+Drive 5 volume A3CODE contains 30 files.
+   APPLE2.BOOT                5     14-Sep-81     297   Datafile   181
+   CMGR.CODE                 40     10-Oct-81     165   Codefile   203
+   COMPARE.CODE               9      5-Nov-81     693   Codefile   141
+   COMPARE.TEXT               6      5-Nov-81     682   Textfile    11
+   CORIII1L.TEXT              4      5-Nov-81     660   Textfile   113
+   CORIII2L.TEXT              4      5-Nov-81     656   Textfile   104
+   CORIII2LA.TEXT             4      5-Nov-81     668   Textfile   111
+   CORIII3L.TEXT              4      5-Nov-81     664   Textfile    94
+   CORVUS.DRIVER              8     14-Oct-81     635   Datafile    64
+   DIAGNOSTIC.CODE           45     17-Sep-81     252   Codefile   172
+   DIRECTO.TEXT              10      5-Nov-81     672   Textfile   101
+   FAKEVMGR.CODE             49     14-Oct-81     871   Codefile    35
+   FORMAT.DRIVER             13     14-Oct-81     643   Datafile   103
+   HSDSTUFF.CODE              9      7-Jun-81     457   Codefile   163
+   LINKCHECK.CODE             3     30-Jun-81     454   Codefile    97
+   LOGON.CODE                14     17-Sep-81     318   Codefile   253
+   LOGON.DRIVER              12     14-Oct-81     859   Datafile    11
+   MAKEUSER.CODE             17     18-Sep-81     332   Codefile     0
+   MIRROR.CODE               47     13-Oct-81     812   Codefile   141
+   PRINTFILE.CODE            25      7-Jun-81     466   Codefile   209
+   PSYSGEN.CODE              16     17-Sep-81     302   Codefile     1
+   SHARE.CODE                21     10-Sep-81     118   Codefile    48
+   SOS.DRIVER                36     10-Aug-81      49   Datafile   162
+   SOS.INTERP                33     10-Aug-81      85   Datafile   235
+   SOS.KERNEL                43     10-Aug-81       6   Unknown     10
+   SPOOL.CODE                26     18-Sep-81     139   Codefile   104
+   VINIT.CODE                44     18-Sep-81     349   Codefile   117
+   VMGR.CODE                 49     13-Oct-81     570   Codefile   211
+   X                          8     13-Oct-81     619   Datafile    33
+   XX                         8     13-Oct-81     627   Datafile    33
+
+Reading volume table of drive 1
+
+Reading volume table of drive 2
+
+Reading volume table of drive 3
+
+Reading volume table of drive 4
+
+Reading volume table of drive 5
+
+Drive 5 volume A3DEV contains 55 files.
+   A3MOUNT.TEXT               8     30-Jun-81     655   Textfile    29
+   CMGR.TEXT                 34     20-Aug-81     234   Textfile     4
+   CORVUS.A.TEXT             32     14-Oct-81     879   Textfile    11
+   CORVUS.B.TEXT             46     12-Oct-81     975   Textfile    56
+   CORVUS.C.TEXT             18     13-Oct-81     951   Textfile   245
+   CORVUS.D.TEXT             20     10-Oct-81     663   Textfile   136
+   CORVUS.LIBRARY            60      9-Sep-81     427   Datafile   231
+   CORVUS.TEXT                4     14-Oct-81     709   Textfile   215
+   DATES.TEXT                12     10-Sep-81     403   Textfile   252
+   DIAG.DATA                  1     31-Aug-81     394   Datafile   247
+   DIAG0.TEXT                20      7-Apr-81     182   Textfile    14
+   DIAG1.TEXT                 4     17-Sep-81     202   Textfile    64
+   DIAG2.TEXT                14     17-Sep-81      48   Textfile    29
+   DIAG3.TEXT                14     14-Sep-81     601   Textfile   114
+   DIAGNOSTIC.TEXT           24     14-Sep-81      24   Textfile    77
+   DRIVEIO.TEXT              16     10-Sep-81      78   Textfile   126
+   DRIVESTUFF.TEXT           16     10-Sep-81      62   Textfile   109
+   DRVUTILS.TEXT             10     31-Aug-81     100   Textfile   223
+   HSDSTUFF.TEXT             14     30-Jun-81     755   Textfile    85
+   LINKCHECK.TEXT             4     30-Jun-81     747   Textfile   240
+   LOGON.CODE                 6     30-Jun-81     649   Codefile    14
+   LOGON.TEXT                12     30-Jun-81     911   Textfile   107
+   MAKETEST.CODE              2     14-Oct-81     772   Codefile    91
+   MAKETEST.TEXT              4     14-Oct-81     713   Textfile   115
+   MAKEUSER.TEXT              4     18-Sep-81     278   Textfile    65
+   MIRR0.TEXT                32     13-Oct-81     340   Textfile   207
+   MIRR1.TEXT                22      5-Jun-81     372   Textfile    28
+   MIRROR.TEXT               30     31-Jul-81     310   Textfile   228
+   PBUTIL.TEXT                6     22-Jan-81      94   Textfile   109
+   PIPES.TEXT                32     10-Sep-81     150   Textfile    58
+   PRINTFILE.TEXT            20      7-Jun-81     931   Textfile    41
+   PSYSGEN.TEXT              22     17-Sep-81     721   Textfile   133
+   RWMTAB.TEXT                8      9-Sep-81     395   Textfile    19
+   SEMA4.TEXT                20     20-Aug-81     110   Textfile    62
+   SETPOINT.CODE              3     14-Oct-81     769   Codefile    21
+   SETPOINT.TEXT              4     14-Oct-81     639   Textfile    83
+   SHARE.TEXT                10      6-Aug-81     268   Textfile    44
+   SMARTIO.TEXT              20      3-Aug-81     130   Textfile    13
+   SPOOL.TEXT                38     18-Sep-81     563   Textfile     5
+   TEMP.TEXT                  8     12-Oct-81       6   Textfile    85
+   TEST.CODE                  2      5-Nov-81     923   Codefile   100
+   TEST.TEXT                  4      5-Nov-81      14   Textfile    58
+   VINIT.TEXT                28     18-Sep-81     282   Textfile    72
+   VINIT1.TEXT               18     14-Sep-81     499   Textfile    15
+   VMGR.TEXT                 12     14-Oct-81     487   Textfile   237
+   XCORVUS.A.TEXT            32     29-Sep-81     847   Textfile    91
+   XCORVUS.B.TEXT            46     29-Sep-81     797   Textfile     8
+   XCORVUS.C.TEXT            18     23-Sep-81     779   Textfile    65
+   XCORVUS.TEXT               4     28-Jun-81     843   Textfile   204
+   XMGR0.TEXT                24     14-Sep-81     685   Textfile   178
+   XMGR1.TEXT                20     13-Oct-81     517   Textfile    71
+   XMGR2.TEXT                28     14-Oct-81     206   Textfile   248
+   XUSER.TEXT                12     14-Sep-81     415   Textfile   239
+   ZAP.CODE                  24     18-Sep-81     615   Codefile    19
+   ZAP.TEXT                  26     18-Sep-81     537   Textfile    43
+
+Reading volume table of drive 1
+
+Reading volume table of drive 2
+
+Reading volume table of drive 3
+
+Reading volume table of drive 4
+
+Reading volume table of drive 5
+
+Drive 5 volume A3SOS contains 18 files.
+   AIIFORMAT.CODE             9     10-Aug-81     204   Codefile   100
+   BAD.00599.BAD              1     10-Oct-81     599   Unknown    125
+   ERRORS.6502                7     10-Aug-81     408   Datafile    13
+   LIBMAP.CODE                9     10-Aug-81     195   Codefile    10
+   LIBRARY.CODE               9     10-Aug-81     186   Codefile   106
+   LOGON.TEXT                36     30-Jun-81       6   Textfile     6
+   OPCODES.6502               2     10-Aug-81     415   Datafile    58
+   SETUP.CODE                11     10-Aug-81     213   Codefile   145
+   SYSTEM.ASSMBLER           49     10-Aug-81     359   Codefile   136
+   SYSTEM.COMPILER           80     10-Aug-81     279   Codefile    55
+   SYSTEM.EDITOR             55     10-Aug-81     224   Codefile    70
+   SYSTEM.FILER              51     10-Aug-81     107   Codefile    90
+   SYSTEM.LIBRARY            28     10-Aug-81     158   Codefile   252
+   SYSTEM.LINKER             24     10-Aug-81     429   Codefile   209
+   SYSTEM.MISCINFO            1     10-Aug-81      42   Datafile   130
+   SYSTEM.PASCAL             64     10-Aug-81      43   Datafile   240
+   SYSTEM.SYNTAX             12     10-Aug-81     417   Textfile   143
+   UTIL.CODE                124     18-Sep-81     453   Codefile   172
+
+Reading volume table of drive 1
+
+Drive 1 volume CPMAP1 contains 15 files.
+   CPM.LIBRARY               61      9-Oct-81      76   Datafile   137
+   CPM.TYPE.TEXT              6     12-Oct-81      28   Textfile   250
+   CPMBOOT.CODE              28     10-Oct-81     360   Codefile    20
+   CPMBOOT.TEXT              12     12-Oct-81      34   Textfile   157
+   CPMLOAD.TEXT              22     12-Oct-81       6   Textfile   193
+   CPMUTIL.CODE              47     25-Oct-81     217   Codefile    28
+   CPMUTIL.TEXT              30     25-Oct-81      46   Textfile   194
+   CPMUTIL.U.TEXT            12     24-Oct-81     348   Textfile   203
+   CSTN.1.TEXT               38     16-Oct-81     310   Textfile   111
+   CSTN.2.TEXT               20     16-Oct-81     290   Textfile    35
+   CSTN.3.TEXT               42     26-Oct-81     388   Textfile   209
+   SYSTEM.APPLECPM           26     20-Oct-81     264   Datafile   197
+   VSICRT.TEXT               22      2-Oct-81     137   Textfile    94
+   VSIDRV.TEXT               34      6-Oct-81     159   Textfile    50
+   VSITXT.TEXT               24      9-Oct-81     193   Textfile   158
+
+
+
+
+
+
+
+
+

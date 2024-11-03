@@ -1,0 +1,11 @@
+{$S+}
+PROGRAM spooler;
+
+{$I d:spool.def}
+{$P}
+{$I d:spoolc.pas}
+{$P}
+{$I d:spool.pas}
+{$P}
+{$I d:spoolm.pas}
+

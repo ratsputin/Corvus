@@ -1,0 +1,197 @@
+
+file :  /kb/kbrdchrset.text
+date :  10-MAY-1982 kb
+
+This is a listing of the character code sequences generated for Keyboard
+version 00 keys.
+
+SINGLE CHARACTER SEQUENCE
+
+   HEX CODE  | CHAR  | KEYS PRESSED
+-------------+-------+---------------------------
+        00      NUL     CTRL-@
+        01      SOH     CTRL-A
+        02      STX     CTRL-B
+        03      ETX     CTRL-C
+        04      EOT     CTRL-D
+        05      ENQ     CTRL-E
+        06      ACK     CTRL-F
+        07      BEL     CTRL-G
+        08      BS      CTRL-H  and BACK SPACE
+        09      HT      CTRL-I  and TAB
+        0A      LF      CTRL-J
+        0B      VT      CTRL-K
+        0C      FF      CTRL-L
+        0D      CR      CTRL-M and RETURN
+        0E      SO      CTRL-N
+        0F      SI      CTRL-O
+        10      DLE     CTRL-P
+        11   not returned control - Q used as display control
+        12      DC2     CTRL-R
+        13   not returned control - S used as display control
+        14      DC4     CTRL-T
+        15      NAK     CTRL-U
+        16      SYN     CTRL-V
+        17      ETB     CTRL-W
+        18      CAN     CTRL-X
+        19      EM      CTRL-Y
+        1A      SUB     CTRL-Z
+        1B      ESC     CTRL-[ and ESC
+        1C      FS      CTRL-\
+        1D      GS      CTRL-]
+        1E      RS      CTRL-^
+        1F      US      CTRL-SHIFT-0
+----------------------------------------------------
+        20      SP      SPACE BAR
+        21      !       SHIFT-1
+        22      "       SHIFT-2
+        23      #       SHIFT-3
+        24      $       SHIFT-4
+        25      %       SHIFT-5
+        26      &       SHIFT-6
+        27      '       SHIFT-7
+        28      (       SHIFT-8
+        29      )       SHIFT-9
+        2A      *       SHIFT-:
+        2B      +       SHIFT-;
+        2C      ,       , standard and keypad
+        2D      -       SHIFT-= and keypad
+        2E      .       . standard and keypad
+        2F      /       /
+        30      0       0 standard and keypad
+        31      1       1 standard and keypad
+        32      2       2 standard and keypad
+        33      3       3 standard and keypad
+        34      4       4 standard and keypad
+        35      5       5 standard and keypad
+        36      6       6 standard and keypad
+        37      7       7 standard and keypad
+        38      8       8 standard and keypad
+        39      9       9 standard and keypad
+        3A      :       :
+        3B      ;       ;
+        3C      <       SHIFT-,
+        3D      =       =
+        3E      >       SHIFT-.
+        3F      ?       SHIFT-/
+        40      @       @
+        41      A       SHIFT-A
+        42      B       SHIFT-B
+        43      C       SHIFT-C
+        44      D       SHIFT-D
+        45      E       SHIFT-E
+        46      F       SHIFT-F
+        47      G       SHIFT-G
+        48      H       SHIFT-H
+        49      I       SHIFT-I
+        4A      J       SHIFT-J
+        4B      K       SHIFT-K
+        4C      L       SHIFT-L
+        4D      M       SHIFT-M
+        4E      N       SHIFT-N
+        4F      O       SHIFT-O
+        50      P       SHIFT-P
+        51      Q       SHIFT-Q
+        52      R       SHIFT-R
+        53      S       SHIFT-S
+        54      T       SHIFT-T
+        55      U       SHIFT-U
+        56      V       SHIFT-V
+        57      W       SHIFT-W
+        58      X       SHIFT-X
+        59      Y       SHIFT-Y
+        5A      Z       SHIFT-Z
+        5B      [       [
+        5C      \       \
+        5D      ]       ]
+        5E      ^       ^
+        5F      _       SHIFT-0
+        60      `       SHIFT-@
+        61      a       A
+        62      b       B
+        63      c       C
+        64      d       D
+        65      e       E
+        66      f       F
+        67      g       G
+        68      h       H
+        69      i       I
+        6A      j       J
+        6B      k       K
+        6C      l       L
+        6D      m       M
+        6E      n       N
+        6F      o       O
+        70      p       P
+        71      q       Q
+        72      r       R
+        73      s       S
+        74      t       T
+        75      u       U
+        76      v       V
+        77      w       W
+        78      x       X
+        79      y       Y
+        7A      z       Z
+        7B      {       SHIFT-[
+        7C      |       SHIFT-\
+        7D      }       SHIFT-]
+        7E      ~       SHIFT-^
+        7F      DEL     not produceable
+---------------------------------------------------------
+If the ALTERNATE key is depressed along with any one of the above
+key sequences, the corresponding ASCII character code is generated
+with Bit 8 set to 1 instead of 0.  The meaning of the alternate
+character set is currently undefined.
+---------------------------------------------------------
+
+
+
+                         SPECIAL KEYS
+         (these keys generate multiple-character sequences)
+
+     KEY    | CHARACTER SEQUENCE
+------------+-------------------
+cursor down |  $1B $42 (esc B)
+cursor right|  $1B $43 (esc C)
+clear line  |  $1B $4B (esc K)
+enter       |  $1B $64 (esc d)
+cursor left |  $1B $44 (esc D)
+cursor up   |  $1B $41 (esc A)
+back tab    |  $1B $69 (esc i)
+home up     |  $1B $48 (esc H)
+clear screen|  $1B $4A (esc J)
+------------+-------------------
+
+
+                     FUNCTION/COMMAND KEYS
+
+Each key has a 4 character sequence.  All begin with ESC #.  The second two
+characters are ASCII representations of hex digits.  Depending on whether the
+SHIFT key and/or the COMMAND key is concurrently depressed varies the two
+ASCII characters following the ESC # ASCII characters.
+
+|         |      | without|  with | with   | with  |
+|  FIRST  | 2ND  | COMMAND|  SHIFT| COMMAND|COMMAND|
+|  CHAR   | CHAR |  SHIFT |  only |  only  | SHIFT | KEY NAME
+|---------+------+--------+-------+--------+-------+----------------
+|   ESC   |  #   |   00   |   0A  |   14   |   1E  | Function key 1
+|   ESC   |  #   |   01   |   0B  |   15   |   1F  | Function key 2
+|   ESC   |  #   |   02   |   0C  |   16   |   20  | Function key 3
+|   ESC   |  #   |   03   |   0D  |   17   |   21  | Function key 4
+|   ESC   |  #   |   04   |   0E  |   18   |   22  | Function key 5
+|   ESC   |  #   |   FF   |   FF  |   FF   |   FF  | Left command (closure)
+|   ESC   |  #   |   05   |   0F  |   19   |   23  | Function key 6
+|   ESC   |  #   |   06   |   10  |   1A   |   24  | Function key 7
+|   ESC   |  #   |   07   |   11  |   1B   |   25  | Function key 8
+|   ESC   |  #   |   08   |   12  |   1C   |   26  | Function key 9
+|   ESC   |  #   |   09   |   13  |   1D   |   27  | Function key 10
+|   ESC   |  #   |   FE   |   FE  |   FE   |   FE  | Left command (release)
+|_________|______|________|_______|________|_______|________________
+
+
+
+
+
+
+

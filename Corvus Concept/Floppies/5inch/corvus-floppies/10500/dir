@@ -1,0 +1,38 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 655360, 1280 blocks of 512 bytes each
+
+Volume BACKUP2 has 31 files,  0 to 6 (6), eov 1280, size 0, free 31
+
+ 1: 2CC.LGICLC      Data 15-May-84    6-  48(  42), 21504+512= 22016 bytes
+ 2: KEYS.LCI.TEXT   Text  9-May-84   48-  62(  14),  7168+512=  7680 bytes
+ 3: PASCTERRS.TEXT  Ux7e93 10-Sep-85   62-  76(  14),  7168+512=  7680 bytes
+ 4: FTNRTERRS.TEXT  Ux7e93 10-Sep-85   76-  90(  14),  7168+512=  7680 bytes
+ 5: LIBRARY         Ux7df5 10-Sep-85   90- 117(  27), 13824+512= 14336 bytes
+ 6: FTNLIB.OBJ      Ux7e95 10-Sep-85  117- 292( 175), 89600+512= 90112 bytes
+ 7: FTNCTERRS.TEXT  Ux7e93 10-Sep-85  292- 322(  30), 15360+512= 15872 bytes
+ 8: ASM68K          Ux7df5 10-Sep-85  322- 385(  63), 32256+512= 32768 bytes
+ 9: PASLIB.OBJ      Ux7e95 10-Sep-85  385- 495( 110), 56320+512= 56832 bytes
+10: H3.CODE         Ux7e95 10-Sep-85  495- 637( 142), 72704+512= 73216 bytes
+11: LINKER          Ux7df5 10-Sep-85  637- 686(  49), 25088+512= 25600 bytes
+12: H.CODE          Ux1e5 14-Jan-85  686- 802( 116), 59392+512= 59904 bytes
+13: DBG             Ux7e95 10-Sep-85  802- 897(  95), 48640+512= 49152 bytes
+14: SGEN.TEXT       Ux7dc3 22-Nov-85  897- 901(   4),  2048+ 33=  2081 bytes
+15: CC.DISPAT       Ux7dc5 11-Nov-85  901- 926(  25), 12800+512= 13312 bytes
+16: CC.EXEC         Ux7dc5 11-Nov-85  926- 941(  15),  7680+512=  8192 bytes
+17: CC.HELP         Ux7df5 11-Nov-85  941- 951(  10),  5120+512=  5632 bytes
+18: CC.ISYS         Ux1e5 14-Jan-85  951- 986(  35), 17920+512= 18432 bytes
+19: CC.SYSMGR       Ux7dc5 11-Nov-85  986-1007(  21), 10752+512= 11264 bytes
+20: CC.WNDMGR       Ux7dc5 15-Apr-85 1007-1038(  31), 15872+512= 16384 bytes
+21: VSIPPP          Ux1b55  9-Mar-84 1038-1085(  47), 24064+512= 24576 bytes
+22: DRV.CDISK1      Ux7dc5 11-Nov-85 1085-1089(   4),  2048+512=  2560 bytes
+23: DRV.CDISK2      Ux7dc5 11-Nov-85 1089-1093(   4),  2048+512=  2560 bytes
+24: DRV.DISPHZ      Ux7dc5 11-Nov-85 1093-1104(  11),  5632+512=  6144 bytes
+25: DRV.FDISK2      Ux7dc5 11-Nov-85 1104-1110(   6),  3072+512=  3584 bytes
+26: DRV.KYBD        Ux7dc5 11-Nov-85 1110-1116(   6),  3072+512=  3584 bytes
+27: CC.C2MGR        Ux7df5 11-Nov-85 1116-1186(  70), 35840+512= 36352 bytes
+28: CCTERRS.TEXT    Ux5c3 26-Oct-83 1186-1200(  14),  7168+512=  7680 bytes
+29: CLIB.OBJ        Ux5c5 26-Oct-83 1200-1238(  38), 19456+512= 19968 bytes
+30: STDIO.M.TEXT    Ux5c3 26-Oct-83 1238-1246(   8),  4096+512=  4608 bytes
+31: 2CC.FILMGR      Ux5c5 11-Nov-85 1246-1280(  34), 17408+512= 17920 bytes

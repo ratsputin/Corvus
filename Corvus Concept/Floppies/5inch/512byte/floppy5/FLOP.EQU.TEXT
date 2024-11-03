@@ -1,0 +1,358 @@
+; file: flop.equ.text
+; date: 22-June-1983
+; Floppy driver equates for the new controller.
+
+; BIT NUMBER DEFINITIONS
+;
+BITD0       EQU        0                         ;BIT 0
+BITD1       EQU        1                         ;BIT 1
+BITD2       EQU        2                         ;BIT 2
+BITD3       EQU        3                         ;BIT 3
+BITD4       EQU        4                         ;BIT 4
+BITD5       EQU        5                         ;BIT 5
+BITD6       EQU        6                         ;BIT 6
+BITD7       EQU        7                         ;BIT 7
+
+; Command Codes for drivers
+;
+UNMCMD   EQU       6                   ;unmount command
+
+; Default device table values  - for unitinstall
+;
+D8Type   EQU       $FF                 ;Bits D0 and D1, single density & 1 side
+D8TrkSd  EQU        77                 ;8" standard = 77 tracks per side
+D8ScTrk  EQU       $1A                 ;8" standard = 26 sectors per track
+D8SctLen EQU       128                 ;default sector length for FM
+
+D5Type   EQU       $FC                 ;Bits D0 and D1, double density & 2 side
+D5TrkSd  EQU        80                 ;96 TPI 5 1/4 = 80 tracks per side
+D5ScTrk  EQU         9                 ;9 sectors per track
+D5SctLen EQU       512                 ;default sector length for 5 1/4 MFM
+
+; device table entry, drive type field(UTtyp) bit definitions
+;
+TYPdnsty EQU       BITD0               ;1=FM, 0=MFM
+TYPsides EQU       BITD1               ;1=only SIDE 0, 0=has a SIDE 1
+
+; sector sizes - stored in UTblk+2 (word)
+;
+SLfmLow  EQU       128                 ;minimum FM sector size
+SLmfmLow EQU       256                 ;minimum MFM sector size
+
+; step rate hi and low range values
+;
+StpRLow  EQU        1
+StpRtHi  EQU       16
+  page
+; I/O slot base address
+;
+IOSbase  EQU       $30001              ;as if a slot 0 existed
+IOSoffst EQU       $20                 ;offset to next slot
+DataBase EQU       $900                ;Slot static ram base page address (slot 1)
+DBPoffst EQU       $100                ;offset to next page of static ram
+
+; Floppy Disk Controller (FDC) register indices - includes FDC chip and card
+;
+FDCdata  EQU       0                   ;FDC data register - on FDC chip
+FDCstat  EQU       2                   ;FDC status register - on FDC chip
+FDCcntr  EQU       4                   ;Controller card buffer address counter
+FDCbffr  EQU       6                   ;Controller card buffer
+FDClocl  EQU       8                   ;Controller card local command(write) & status(read)
+
+; FDC status register bit definitions
+;
+Drv0BUSY EQU       BITD0               ;drive 0 busy
+Drv1BUSY EQU       BITD1               ;drive 1 busy
+Drv2BUSY EQU       BITD2               ;drive 2 busy
+Drv3BUSY EQU       BITD3               ;drive 3 busy
+FDCBUSY  EQU       BITD4               ;read or write cmd in progress
+NDMAmode EQU       BITD5               ;Non-DMA mode operation
+DataDir  EQU       BITD6               ;data direction, 1=read
+FDCready EQU       BITD7               ;ready to read/write data reg
+
+; Controller card local command register bit definitions
+;
+DevSel0  EQU       BITD0               ;device select bit 0
+DevSel1  EQU       BITD1               ;device select bit 1
+DvSenbl  EQU       BITD2               ;device select enable
+LCMtrOF  EQU       BITD3               ;motor off, for 5 1/4" floppies only
+IRQenbl  EQU       BITD5               ;IRQ enable, allows card to interrupt 68K
+DMARWdir EQU       BITD6               ;DMA direction, 1=controller read buffer
+ResetFDC EQU       BITD7               ;reset the FDC
+
+; masks for local command register
+;
+EnblDvS  EQU       $04                 ;enable device select
+DisblDS  EQU       $00                 ;disable device select
+MMtrON   EQU       EnblDvS             ;dev sel enbl, motor on(5 1/4"), not reset
+DMARead  EQU       $40                 ;set DMA for read all other bits clear
+DMAWrite EQU       $00                 ;set DMA for write all other bits clear
+MRstDvS  EQU       DMARead+DisblDS     ;disable device select, dma read
+MMtrOFF  EQU       DMARead+DisblDS+$08 ;motor off(5 1/4"), disable device select, dma read
+MRstFDC  EQU       $80+DisblDS         ;reset FDC, don't select device
+
+; Controller card local status register bit definitions
+;
+LSdskchg EQU       BITD0               ;1=disk has been changed since last dev deselect
+LSNirq   EQU       BITD1               ;0=irq has occured
+LSNdrRdy EQU       BITD6               ;0=FDD(drive) is ready
+LSeight  EQU       BITD7               ;1=8 inch disk drive
+  page
+; Internal data indices
+; each slot has own data area but all drives on a slot have same parameters
+;
+LgclTbl  EQU       0                   ;interleave,skew,start track and step rate table
+Intrleav EQU       LgclTbl             ;logical interleave {1..25}
+Skew     EQU       Intrleav+2          ;logical skew       {0..26}
+StartTrk EQU       Skew+2              ;starting track     {0..26}
+StepRate EQU       StartTrk+2          ;step rate in ms.   {1..16}
+LgclTLen EQU       StepRate+2          ;length of table
+;
+RdyTO    EQU       StepRate+2          ;longint wait for Ready timeout counter
+Flags    EQU       RdyTO+4             ;a word of flags
+CurTrack EQU       Flags+2             ;array of current track for each drive
+SectrLst EQU       CurTrack+4          ;byte array for interleave map calculation
+LtoPmap  EQU       SectrLst+42         ;interleave map - logical to physical sector map
+IDataLen EQU       LtoPmap+42          ;data area length
+
+; temporary data indices and lengths - allocated on stack
+;
+CmdRslt  EQU       0                   ;command/result array
+CmdRsltLen EQU     10                  ;max. # of bytes in command/result array
+
+;must be on even word boundary and must be in this order
+;
+Ptrack   EQU       CmdRslt+CmdRsltLen  ;physical track number
+Pside    EQU       Ptrack+1            ;side number
+
+StrtBfAdr EQU      Pside+1             ;saved starting user buffer address
+StrtBlk  EQU       StrtBfAdr+4         ;saved starting block
+LocalFrame EQU     StrtBlk+4           ;# of bytes in local stack frame
+                                       ;must be on even number
+; Internal Falg word bit definitions
+;
+FLGspt   EQU       BITD0               ;1=user setting spt, 0=calc spt (sectors/track)
+FLGtpi   EQU       BITD1               ;1=48 TPI, 0=96 TPI (tracks/inch)
+FLGsides EQU       BITD2               ;1=user setting sides, 0=calc sides
+  page
+;
+; FDC command definitions
+
+; masks common for many commands
+;
+Mside0   EQU       $00                 ;mask for side 0 select
+Mside1   EQU       $04                 ;mask for side 1 select
+Mmfmbit  EQU       $40                 ;mask for MFM in command byte
+Mfmbit   EQU       $00                 ;mask for FM in command byte
+
+; common result array indices
+;
+ST1      EQU       $01                 ;status register 1
+ST2      EQU       $02                 ;status register 2
+RSLTsctrl EQU      $06                 ;sector length code
+
+; common indices into command vector for read and write
+;
+RWcmdlen EQU       $09                 ;command array is 9 bytes
+RSLTrdwr EQU       $07                 ;result array length is 7 bytes
+
+; specify command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 3 bytes : byte 1 =  0  0  0  0  0  0  1  1  |  command byte
+;           byte 2 = <--SPT----> <---HUT--->  |  SPT=step rate, HUT=head unload time
+;           byte 3 = <-----HLT----------> ND  |  HLT=head load time, ND=Non-DMA mode
+;
+; NO result array
+;
+CMDspcfy EQU       $03                 ;specify command byte
+
+; command array codes for specify command
+HUTcode  EQU       $01                 ;head unload time code, = 16 ms.
+;must include head settle time in HLT parameter
+HLT5code EQU       $32                 ;head load time code, pre-shifted, = 50ms.
+HLT8code EQU       $02                 ;head load time code, pre-shifted, = 2ms.
+NDMAcode EQU       $00                 ;NOT DMA bit = run in DMA mode
+
+; sense interrupt status command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 1 byte  : byte 1 =  0  0  0  0  1  0  0  0  |  command byte
+;
+; result array
+; 2 bytes : byte 1 = <--------ST0---------->  |  ST0=status register 0
+;           byte 2 = <---------C----------->  |  C=current track(cylinder)
+;
+CMDsnsint EQU      $08                 ;sense interrupt status command byte
+
+RSLTsnsint EQU     $02                 ;number of bytes in result array
+  page
+; sense drive status command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 2 bytes : byte 1 =  0  0  0  0  0  1  0  0  |  command byte
+;           byte 2 =  0  0  0  0  0 HD DS1DS0 |  DS1=device select bit 1,DS0=dev select bit 0
+;                                                HD=head select
+; result array
+; 1 bytes : byte 1 = <--------ST3---------->  |  ST3=status register 3
+;
+CMDsnsdrv EQU      $04                 ;sense drive status command byte
+
+RSLTsnsdrv EQU     $01                 ;number of bytes in result array
+;
+; recalibrate command  (restore drive to track 0)
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 2 bytes : byte 1 =  0  0  0  0  0  1  1  1  |  command byte
+;           byte 2 =  0  0  0  0  0  0 DS1DS0 |  DS1=device select bit 1,DS0=dev select bit 0
+;
+; NO result array
+;
+CMDrclbrt EQU      $07                 ;recalibrate command byte
+
+RTRYrstr EQU       2                   ;number of retries allowed
+
+; seek command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 2 bytes : byte 1 =  0  0  0  0  1  1  1  1  |  command byte
+;           byte 2 =  0  0  0  0  0 HD DS1DS0 |  DS1 & DS0=device select bits, HD=head select
+;
+; NO result array
+;
+CMDseek  EQU       $0F                 ;seek command byte
+
+RTRYseek EQU         1                 ;number of retries allowed
+
+; read ID command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 2 bytes : byte 1 =  0MFM  0  0  1  0  1  0  |  command byte,MFM=MFM/FM flag
+;           byte 2 =  0  0  0  0  0 HD DS1DS0 |  DS1 & DS0=device select bits, HD=head select
+;
+; result array
+; 7 bytes : byte 1 = <--------ST0---------->  |  ST0=status register 0
+;           byte 2 = <--------ST1---------->  |  ST1=status register 1
+;           byte 3 = <--------ST2---------->  |  ST2=status register 2
+;           byte 4 = <---------C----------->  |  C=current track(cylinder)
+;           byte 5 = <---------H----------->  |  H=side
+;           byte 6 = <---------R----------->  |  R=sector number
+;           byte 7 = <---------N----------->  |  N=sector length code
+;
+CMDredID EQU       $0A                 ;read ID command byte
+
+RSLTredID EQU      $07                 ;number of bytes in result array
+  page
+; read sector command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 9 bytes : byte 1 = MTMFM  0  0  0  1  1  0  |  command byte,MT=multitrack,MFM=MFM/FM flag
+;           byte 2 =  0  0  0  0  0 HD DS1DS0 |  DS1 & DS0=device select bits, HD=head select
+;           byte 3 = <---------C----------->  |  C=current track(cylinder)
+;           byte 4 = <---------H----------->  |  H=side
+;           byte 5 = <---------R----------->  |  R=sector number
+;           byte 6 = <---------N----------->  |  N=sector length code
+;           byte 7 = <--------EOT---------->  |  EOT=last sector number on track
+;           byte 8 = <--------GPL---------->  |  GPL=gap 3 length
+;           byte 9 = <--------DTL---------->  |  DTL=special sector size
+;
+; result array -> SAME as read ID command
+;
+CMDread  EQU       $06                 ;read sector command byte
+
+RSLTread EQU       $07                 ;number of bytes in result array
+
+RTRYread EQU       $02                 ;do another read with other density
+                                       ;and again with same density (make sure of error
+; write sector command
+;                    D7 D6 D5 D4 D3 D2 D1 D0  |
+; 9 bytes : byte 1 = MTMFM  0  0  0  1  0  1  |  command byte,MT=multitrack,MFM=MFM/FM flag
+;           byte 2 =  0  0  0  0  0 HD DS1DS0 |  DS1 & DS0=device select bits, HD=head select
+;           byte 3 = <---------C----------->  |  C=current track(cylinder)
+;           byte 4 = <---------H----------->  |  H=side
+;           byte 5 = <---------R----------->  |  R=sector number
+;           byte 6 = <---------N----------->  |  N=sector length code
+;           byte 7 = <--------EOT---------->  |  EOT=last sector number on track
+;           byte 8 = <--------GPL---------->  |  GPL=gap 3 length
+;           byte 9 = <--------DTL---------->  |  DTL=special sector size
+;
+; result array -> SAME as read ID command
+;
+CMDwrite EQU       $05                 ;read sector command byte
+
+RSLTwrite EQU      $07                 ;number of bytes in result array
+
+RTRYwrite EQU      $02                 ;do another write with other density
+                                       ;and again with same density
+  page
+; FDC result byte definitions
+; values for ST0 - status register 0
+;
+ST0ds0   EQU       BITD0               ;device select bit 0
+ST0ds1   EQU       BITD1               ;device select bit 1
+ST0hda   EQU       BITD2               ;head address
+ST0nrdy  EQU       BITD3               ;not ready
+ST0equp  EQU       BITD4               ;equipment check
+ST0skend EQU       BITD5               ;seek end
+ST0ic0   EQU       BITD6               ;interrupt code bit 0
+ST0ic1   EQU       BITD7               ;interrupt code bit 1
+
+; Masks for ST0 bits
+;
+MIntCod  EQU       $C0                 ;mask for interupt codes only
+MABstp   EQU       $40                 ;mask for abnormal termination, cmd not finished
+MABrdy   EQU       $C0                 ;mask for abnormal termination, drive changed ready
+MInvCod  EQU       $80                 ;mask for invalid code
+MSkEnd   EQU       $20                 ;mask for good seek and restore end
+MRstEnd  EQU       MIntCod+MSkEnd      ;ST0 bits for Restore end
+
+; bit flag definitions for ST1 - status register 1
+;
+ST1nadrm EQU       BITD0               ;missing address mark (MA)
+ST1wrpro EQU       BITD1               ;write protect error (NW)
+ST1snfnd EQU       BITD2               ;sector not found (ND)
+; bit D3 not used always low (0)
+ST1ovrrn EQU       BITD4               ;overrun (OR)
+ST1dataer EQU      BITD5               ;data error bit - CRC (DE)
+; bit D6 not used always low (0)
+ST1endtr EQU       BITD7               ;End of track (EN)
+
+; bit flag definitions for ST1 - status register 1
+;
+ST2ndtam EQU       BITD0               ;missing data address mark
+ST2bdtrk EQU       BITD1               ;bad track - cylinder address = FF
+ST2Nscan EQU       BITD2               ;scan not satisfied
+ST2scnHt EQU       BITD3               ;scan hit, condition satisfied
+ST2wrngC EQU       BITD4               ;cylinder address error
+ST2dtaer EQU       BITD5               ;crc error in data field
+ST2ctlmk EQU       BITD6               ;control mark
+; bit D7 not used always low (0)
+
+; bit flag definitions for ST3 - status register 3
+;
+ST3ds0   EQU       BITD0               ;device select bit 0
+ST3ds1   EQU       BITD1               ;device select bit 1
+ST3hda   EQU       BITD2               ;head address
+ST32sid  EQU       BITD3               ;2 sided
+ST3trk0  EQU       BITD4               ;head at track 0
+ST3rdy   EQU       BITD5               ;drive ready
+ST3wrpr  EQU       BITD6               ;write protected
+ST3falt  EQU       BITD7               ;drive fault
+  page
+; timeout values   **** redo values ****
+;
+FDCTimeOut EQU     $10000              ;time out waiting for FDC chip to
+                                       ;accept send or rcv of data
+FDDTimeOut EQU     $10000              ;time out waiting for drive to come READY
+CMDTimeOut EQU     $100000             ;time out waiting for command to finish
+
+; Function codes for Unitstatus functions
+;
+FCDIntrl EQU       0                   ;Change Logical Interleave
+FCDSkew  EQU       1                   ;Change Logical Skew
+FCDStrTk EQU       2                   ;Change Starting track
+FCDStpRt EQU       3                   ;Change Step Rate
+FCDspt   EQU       4                   ;Change sectors per track
+FCDtps   EQU       5                   ;Change tracks per side
+FCDtimot EQU       6                   ;Change Ready wait timeout counter
+FCDtpi   EQU       7                   ;Change tracks per inch
+FCDsides EQU       8                   ;Change number of sides
+FCDdrvst EQU       9                   ;Get driver status
+
+; Miscellaneous value
+;
+FALSE    EQU       0                   ;pascal false boolean
+MAXdrive EQU       4                   ;maximum number of drives

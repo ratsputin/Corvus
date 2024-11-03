@@ -1,0 +1,756 @@
+{ ************************************************************* }
+{ Program:      MIRROR                                          }
+{ Authors:      BTE                                             }
+{ Date:         03/25/81                                        }
+{ Purpose:      impliments the features of the archival MIRROR  }
+{                                                               }
+{ Revision History:                                             }
+{       2.0:    First Shot as adapted from the original     BTE }
+{                                                               }
+{ Known problems:                                               }
+{    incapable of handling drives larger than 20MB or virtual   }
+{    drives larger than 16MB -- due to long integer problems    }
+{    (localized to the SetSize/ WhichDrive routines)            }
+{ ************************************************************* }
+{$S+}
+
+PROGRAM Mirror;
+
+(*$U a2dev1:corvus.library*)
+USES SMARTIO, DATES, Driveio, DrUtils;
+
+CONST  manual=false;
+       AltSlot=false;          { used during firmware testing }
+       RevNum = '2.1';
+       maxpass = 6;            { max # of retry attempts }
+       notSTART=128;
+       rewinding=16;
+       WTime=200;              { 1/10 second in a for i:=1 to WTime do; }
+       FF=1;
+       STOP=3; 
+       PLAY=0; 
+       REC=7;
+       noREC=6;
+       REW=2;                  { recorder commands } 
+       MirFast = 0; MirNormal = 1; MirCompatible = 2;  { modes }    {2.0}
+
+
+TYPE 
+     Vnametype= string[7];
+     
+     VTEntry= record
+           Vname: Vnametype;
+           Vstart,Vsize: integer;
+           end;
+     
+     VTArray= array [0..63] of VTEntry;
+     
+     ImageName = packed array[1..12] of CHAR;
+     
+     Image = record
+                Name: ImageName;
+                Dt  : date;
+                Len : INTEGER;
+              end;
+
+     Images = array [0..31] of Image;         { Images[0] is "volume" name }
+     
+     ImageID = record
+                  system :packed array [1..16] of char;
+                  dt     :packed array [1..16] of char;
+                  time   :packed array [1..16] of char;
+                  name   :packed array [1..16] of char;
+                  comment:packed array [1..80] of char;
+                  unused :packed array [1..368] of char;
+                 end;
+                 
+      ImageMode = Mirfast .. Mircompatible;        {2.0}
+      
+      DrvReality = (virtual,physical);
+      
+      ops = (aBackup,aRestore,aVerify,aRetry);
+     
+
+VAR  MaxDRIVE: INTEGER;  (* # of DRIVES *)
+     MaxSEC: array [1..8] of integer;          { drive sizes }
+     Drive,ImID : integer;
+     ch: char;
+     LastErr,BadBlocks,ErrCode : integer;
+     XCV     : longstr;
+     ToDay   : date;
+     AString : STRING;
+     Direc   : Images;
+     Header  : ImageID;
+     ThisSystem:string;
+     Debug,
+     NoDir,                     { for compatability with old tapes }
+     drvtblOK,voltblOK,direcOK,newdate : BOOLEAN;
+
+     NumDrives: integer;        { used by drive unit }
+     VirDrives: VDrArray;
+     PhysDrives: PDrArray;
+     
+
+
+{   include either  MirrP,  MirrB,  MirrBP    }
+{$I MIRRP.TEXT}         { operating system dependent junk }
+
+{$I MIRR0.TEXT }        { low level procedures }
+{$I MIRR1.TEXT }        { tape positioning }
+{$I MIRR2.TEXT }        { major user interface procedures }
+
+
+{$P*************************************************************}
+{                                                               }
+{               Main/ Dispatch                                  }
+{                                                               }
+{***************************************************************}
+
+
+  {procedure dispatch;}
+  begin
+    gotoxy(0,0); crt(eraseol);
+    if manual then
+      write('Mirror: I(dent B(ckup R(store V(rify Q ? [',RevNum,']:')
+     else
+      write('Mirror: I(dent B(ckup R(store V(rify L(st reW(nd',
+            ' P(rge F(rmat Q ? [',RevNum,']:');
+    
+    ch:=getbyte;
+    crt(eraseall);
+    writeln;
+    case ch of
+      '?': HELP;
+      'D': begin                {debug command}
+           write('Set Debug Mode? N',chr(8));
+           Debug:=(getbyte='Y');
+           writeln;
+           write('Find present tape position? N',chr(8));
+           if getbyte='Y' then
+             begin
+             WhrAmI(Stop);
+             writeln('tape at ID-',XCV.int[2],' record-type: ',XCV.int[4],
+                   ' record number-',XCV.int[5]+XCV.int[6]*256,
+                   ' of image length-',XCV.int[8]+XCV.int[9]*256);
+             end;
+           end;
+      'W': begin
+           direcOK:=false;
+           push(REW);
+           end;
+      'F': if not manual then format;
+      'L': if not manual then list;
+      'P': if not manual then purge;
+      'B': backup;
+      'R': restore;
+      'I': identify;
+      'V': verify;
+      'M': writeln(memavail);
+     end;
+     
+  end;
+  
+
+begin   {MIRROR}
+ioinit;
+driveio_init;
+drutilsinit;
+DrUtilAltSlot:=AltSlot;
+FilerDate(Today);
+NoDir:=false; direcOK:=false;
+drvtblOK:=false;
+voltblOK:=false;
+Debug:=false;
+push(REW);
+ImID:=1;                { default for manual mode }
+initflags;
+
+repeat dispatch until ch in ['Q','!'];
+
+end.
+
+O^X¢¥{ ************************************************************* }
+{ Program:      MBACKUP                                         }
+{ Authors:      BTE                                             }
+{ Date:         8-Aug-81                                        }
+{ Purpose:      wake up to do nitely backups on the MIRROR      }
+{                                                               }
+{ Revision History:                                             }
+{       1.0:    First Shot as adapted from the original     BTE }
+{       1.1:    modified to handle 7 drives                 DP  }
+{                                                               }
+{ Known problems:                                               }
+{    incapable of handling drives larger than 20MB or virtual   }
+{    drives larger than 16MB -- due to long integer problems    }
+{    (localized to the init  procedure)                  }
+{ ************************************************************* }
+{$S+}
+
+PROGRAM MBackup;
+
+USES 
+{$U corvus.library }
+    SMARTIO, DATES, DriveIO, DrUtils, Pipes;
+
+
+CONST  AltSlot=false;          { used during firmware testing }
+       notSTART=128;
+       rewinding=16;
+       FF=1;
+       STOP=3; 
+       PLAY=0; 
+       REC=7;
+       REW=2;                  { recorder commands }
+       ThisSyst = 'XXAP  (PASCAL)  ';
+       MirFast = 0; MirNormal = 1; MirCompatible = 2;  { modes }    {2.0}
+       RevNum = '1.1';
+
+  var  Today: date;
+       XCV: longstr;
+       outf: text;
+       WTime: integer;
+       Lengths: array [1..DrMax] of integer;
+       NumDrives: integer;        { used by drive unit }
+  
+ procedure init;
+
+const  sizeof20 = -27076;
+       apWTime=159;              { 1/10 second in a for i:=1 to WTime do; }
+       sbWTime=243;
+       alWTime=315;            { 159 on the apple }
+                               { 243 on the superbrain }
+                               { 315 on the altos }
+
+var    NumDr,d: integer;        { used by drive unit }
+       VirDrives: VDrArray;
+       PhysDrives: PDrArray;
+
+begin
+writeln('Mirror remote backup: Rev [',RevNum,']');
+ioinit;
+DriveIO_init;
+DrUtilsInit;
+PIPEUNITINIT;
+DrUtilAltSlot:=AltSlot;
+writeln; write('Erase this tape? N',chr(8));
+if getbyte<>'Y' then exit(program);
+wtime:=apWTime;
+{
+writeln;write('Host Computer: A(ppleII aL(tos S(uperbrain: ');
+case getbyte of
+  'L': Wtime:=alWTime;
+  'S': Wtime:=sbWTime;
+ end;
+}
+FilerDate(Today);
+CheckDrives(NumDr,VirDrives,PhysDrives);
+writeln; write('Backup by L(ogical P(hysical Drive? L',chr(8));
+if getbyte='P' then
+  begin
+  NumDrives:=0;
+  for d:=1 to NumDr do
+    if PhysDrives[d].PhysDr then
+      begin
+      NumDrives:=NumDrives+1;
+      with PhysDrives[d] do
+        if capacity>MaxInt then Lengths[NumDrives]:=sizeof20 
+         else Lengths[NumDrives]:=trunc(capacity);
+      end
+  end
+ else
+  begin
+  NumDrives:=NumDr;
+  for d:=1 to NumDrives do Lengths[d]:=trunc(VirDrives[d].capacity);
+  end;
+end;
+
+
+ procedure dispatch;
+
+TYPE 
+     ImageName = packed array[1..12] of CHAR;
+     
+     Image = record
+                Name: ImageName;
+                Dt  : date;
+                Len : INTEGER;
+              end;
+
+     Images = array [0..31] of Image;         { Images[0] is "volume" name }
+     
+     ImageID = record
+                  system :packed array [1..16] of char;
+                  dt     :packed array [1..16] of char;
+                  time   :packed array [1..16] of char;
+                  name   :packed array [1..16] of char;
+                  comment:packed array [1..80] of char;
+                  unused :packed array [1..368] of char;
+                 end;
+                 
+      ImageMode = Mirfast .. Mircompatible;        {2.0}
+      
+     
+
+                 
+  var i,d,j : integer;
+      WStr: string;
+     ch: char;
+     ErrCode : integer;
+     AString : STRING;
+     Direc   : Images;
+     Header  : ImageID;
+
+     Archive: boolean;
+
+
+{$P*******************************************************}
+
+{       assorted numeric routines                       }
+
+{*******************************************************}
+  
+{ a royal kludge }
+
+function lsb(x:integer): integer;
+var y:integer;
+begin
+y:=x mod 256;
+if x<0 then y:=256-y;
+if y=256 then y:=0;
+lsb:=y;
+end;
+
+function msb(x:integer): integer;
+var y:integer;
+begin
+y:=x div 256;
+if x<0 then if lsb(x)=0 then y:=256+y else y:=255+y;
+msb:=y;
+end;
+
+
+{$P***********************************************************}
+
+{     linkages to assembly routines to talk to drive    }
+
+{*******************************************************}
+
+procedure wait(TenthSec: INTEGER);
+var i,j:INTEGER;
+begin
+for i:=1 to TenthSec do for j:=1 to WTime do;
+end;
+
+PROCEDURE SEND( var ST:LONGSTR ); 
+begin 
+if AltSlot then FSEND(ST) else CDSEND(ST); 
+end;
+
+PROCEDURE RECV( var ST:LONGSTR ); 
+begin 
+if AltSlot then FRECV(ST) else CDRECV(ST); 
+end;
+
+{$P}
+{***********************************************************************}
+
+{       fatal error checks                                              }
+
+{***********************************************************************}
+
+procedure MirCHK;
+begin
+if XCV.int[1]>127 then
+  begin
+  writeln;
+  writeln(beep,'Mirror ERROR: ',XCV.int[1],', ',XCV.int[2]);
+  writeln(outf,'Mirror ERROR: ',XCV.int[1],', ',XCV.int[2]);
+  end;
+end;
+
+
+{$P**************************************************************}
+
+{       Mirror Positioning commands:
+                
+ ***************************************************************}
+  
+  
+  procedure push( button:integer );
+  begin
+  
+  { mirror command =   10, 4, Operation, 0 }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=4; XCV.int[3]:=button; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  MirCHK;
+  end;
+  
+
+  function status(state:integer):boolean;
+  begin
+  
+  { mirror command =   10, 5, 0, 0 }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=5; XCV.int[3]:=0; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  status:=(((XCV.int[1] mod (state*2)) div state) mod 2=1);   { logical AND }
+  end;
+  
+  procedure ToStart;
+  begin
+  push(REW);                                    { rewind tape }
+  repeat wait(10) until not (status(REWINDING)); { wait til tape rewound }
+  end;
+  
+  {$P}
+  {****************************************************************}
+  
+  {             backup/ write out the tape directory                     }
+  
+  {**********************************************************************}
+
+  procedure writedir(ID:integer; longtail:boolean);
+  begin
+
+  {   ID normally 0 except for the tape test  }
+  { mirror format command is equivalent to a backup command with file ID=0 }
+  {    = 8, 1, 0, 0, 0, 0, 0, longtail, header [512]                       }
+  {                             header = image directory    }
+  {                       if longtail=1 then a longer tail is recorded     }
+
+  ToStart;
+  XCV.len:=520;
+  XCV.int[1]:=8; XCV.int[2]:=1; XCV.int[3]:=ID; XCV.int[4]:=0;
+  XCV.int[5]:=0; XCV.int[6]:=0; XCV.int[7]:=0;
+  if longtail then XCV.int[8]:=1 else XCV.int[8]:=0;
+  moveleft(Direc,XCV.int[9],512);
+  wait(40);
+  Send(XCV);
+  Recv(XCV);
+  MirCHK;
+  end;
+
+
+{$P}{*********************************************************************}
+{                                                                     }
+{       format -- record an empty image directory onto a tape         }
+{                                                                     }
+{*********************************************************************}
+
+  procedure format;
+  var  time,i : INTEGER;
+  begin
+  push(REW);
+    
+  for i:=NumDrives+1 to 31 do
+    begin
+    Direc[i].name:='            ';
+    Direc[i].len:=0;
+    Direc[i].dt:=Today;
+    end;
+  
+  writeln;
+  write('Record an Archive Directory? Y',chr(8));
+  Archive:=(getbyte<>'N');
+    
+  Direc[0].name:='DRIVE Backup';
+  i:=120;
+  if Archive then 
+    begin
+    write('Tape length (in minutes): ');
+    if getnum(i)<>normal then exit(program );
+    end;
+  Direc[0].len:=i*120;                  { length of tape is divided by 10 }
+  Direc[0].dt:=Today;
+  time:=0;
+  writeln; write('Wake up in how many hours: ');
+  if getnum(time)<>normal then exit(program );
+  crt(startbeat);
+  for i:=1 to 10*time do begin crt(heartbeat); wait(3600); end;
+  
+  if Archive then 
+    begin
+    writeln; writeln(' writing tape directory');
+    writeln(outf); writeln(outf,' writing tape directory');
+    writedir(0,TRUE);
+    end;
+  end;
+
+  
+  {$P}{*************************************************************}
+  {                                                             }
+  {     findEOF is used for all image searchs:                  }
+  {             after using the mirror fast-forward/ rewind     }
+  {             commands the findEOF command places the tape    }
+  {             at the trailer of the specified file ID         }
+  {                                                             }
+  {*************************************************************}
+  
+  procedure findEOF;
+  var i,offset,distance:integer;
+  
+  begin
+  ToStart;
+    
+      { mirror goto to next EOF command }
+      {   10,  10,  0,  0               }
+      {  returns:  retcd, fileID        }
+      
+  wait(40);
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=10; XCV.int[3]:=0; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  MirCHK;
+  end;
+  
+
+
+{$P}{*********************************************************************}
+{                                                                     }
+{      BACKUP  -- copy a portion of the disk to an image on tape      }
+{                                                                     }
+{*********************************************************************}
+
+  procedure backup(Drive,ImStrt,ImSize: integer);
+  var  i : INTEGER;
+       WStr : STRING;
+  begin
+  wait(40);                     { allow mechanism to settle }
+  
+  { mirror backup command                                                  }
+  {    = 8, drive, ID, length(LSB), length(MSB), source(LSB), sourc(MSB)   }
+  {       format (0= dual, 1= quad record), header[512 bytes]   }
+  {                                     header = image comments            }
+  XCV.len:=520;
+  XCV.int[1]:=8; XCV.int[2]:=Drive; XCV.int[3]:=Drive; 
+  XCV.int[4]:=lsb(ImSize); XCV.int[5]:=msb(ImSize);
+  XCV.int[6]:=0; XCV.int[7]:=0;
+  XCV.int[8]:=MirNormal;                                       {2.0}
+  
+  moveleft(Header,XCV.int[9],512);
+  Send(XCV);
+  write('Backup of drive ',drive);
+  write(outf,'Backup of drive ',drive);
+  Recv(XCV);
+  MirCHK;
+  writeln(' --',XCV.int[2]:3,' disk errors');
+  writeln(outf,' --',XCV.int[2]:3,' disk errors');
+  end;
+
+{$P}
+  {***************************************************************}
+  
+  {             read  the tape directory                                 }
+  
+  {**********************************************************************}
+  
+  procedure ReadID;
+  begin
+  
+  { mirror identify command               }
+  {    = 10, 0, ID, 0                     }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=0; XCV.int[3]:=0; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  MirCHK;
+  end;
+  
+{$P*************************************************************}
+
+{               Tape-test  checks for correct setup             }
+
+{***************************************************************}
+
+    procedure tapetest;
+    begin
+    writeln;
+    writeln('Checking setup:');
+    writeln('  Record a short image');
+    writedir(99,false);
+    writeln('  Repositioning tape to start');
+    ToStart;
+    writeln('  Identify test image');
+    ReadID;
+    if XCV.int[2]<>99 then
+      begin
+      writeln('*** Test Image not Found ***');
+      exit(program);
+      end;
+    end;
+
+{$P}{*********************************************************************}
+
+{       VERIFY -- check an image on tape for errors                   }
+
+{*********************************************************************}
+
+  procedure verify(ImID: integer);
+  
+  begin
+  { mirror verify command                 }
+  {    = 10, 1, ID, 0                     }
+  
+  wait(40);
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=1; XCV.int[3]:=ImID; XCV.int[4]:=0;
+  Send(XCV);
+  write('Verify image ',ImID,' -- ');
+  write(outf,'Verify image ',ImID,' -- ');
+  Recv(XCV);
+  MirCHK;
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=2; XCV.int[3]:=0; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  writeln(outf,' errors: soft=',XCV.int[2]*256+XCV.int[1]:3,
+                                 'hard=',XCV.int[5]:3);
+  writeln(' errors: soft=',XCV.int[2]*256+XCV.int[1]:3,
+                ' hard=',XCV.int[5]:3);
+  end;
+
+{$P*************************************************************}
+{                                                               }
+{               Dispatch                                        }
+{                                                               }
+{***************************************************************}
+      
+  begin
+  tapetest;
+  push(REW);
+  rewrite(outf,'MRESULTS.TEXT');
+  writeln; writeln('Image identification information:');
+  with Header do
+    begin
+    System:=ThisSyst;
+    write('     Date: ');
+    if getdate(Today)<>normal then exit(program );
+    Dt2Str(Today,WStr);
+    for i:=1 to 16 do 
+      if i>length(WStr) then dt[i]:=' ' else dt[i]:=WStr[i];
+    write('     Time: ');
+    if getstring(WStr)<>normal then exit(program );
+    time:='                ';
+    for i:=1 to length(WStr) do if i<17 then time[i]:=WStr[i];
+    write('     Name: ');
+    if getstring(WStr)<>normal then exit(program );
+    name:='                ';
+    for i:=1 to length(WStr) do if i<17 then name[i]:=WStr[i];
+    write('  Comment: ');
+    if getstring(WStr)<>normal then exit(program );
+    for i:=1 to 80 do 
+      if i>length(WStr) then comment[i]:=' ' else comment[i]:=WStr[i];
+    end;
+  for d:=1 to NumDrives do 
+    with Direc[d] do
+      begin
+      for i:=1 to 12 do Name[i]:=Header.name[i];
+      i:=11;
+      repeat i:=i-1; until (i=1) or (name[i]<>' ');
+      name[i+1]:='-';
+      name[i+2]:=chr(d+48);
+      Dt:=Today;
+      Len:=Lengths[d];
+      end;
+  Dt2Str(Today,WStr);
+  writeln(outf,'Backup for ',WStr); writeln(OUTF);
+  format;
+  for d:=1 to NumDrives do backup(d,0,Direc[d].len);
+  if Archive then findEOF else ToStart;
+  for d:=1 to NumDrives do verify(d);
+  close(outf,lock);
+  push(REW);
+  end;
+  
+
+  
+{$P ********************************************************************* }
+
+                { spool results to the printer }
+                
+{ ********************************************************************* }
+        
+
+PROCEDURE spoolit;
+VAR
+  pnum,k,ln,i: INTEGER;
+  buf: packed array [0..511] of char;
+  f1:file;
+  fname: string;
+
+
+PROCEDURE errr(enum: INTEGER);
+BEGIN
+  writeln(beep, 'PIPE ERROR ',enum);
+END;
+  
+    { ****************************************************************** }
+    { putpipe writes the data to the pipe until end of file is reached.  }
+    { This procedure could be used by any program which sends files to pipes..}
+    { ****************************************************************** }
+    PROCEDURE putpipe(strt, pno: INTEGER);
+    var j,fblox: integer;
+    BEGIN
+    repeat 
+      fblox := BLOCKREAD(f1, buf, 1);
+      j := pipewrite(pno, BlockLen, buf);
+      CRT(HeartBeat);
+      IF j<0 THEN
+        BEGIN
+        errr(j);
+        EXIT(spoolit);
+        END;
+     until EOF(f1);
+    END; {putpipe}
+{$P}
+
+
+BEGIN {spoolit -  see comments on previous page}
+reset(f1, 'MRESULTS.TEXT');
+Dt2Str(Today,Fname);
+fname:=concat('Backup Results ',fname);
+buf[0] := CHR(1); {UCSDPascal Operating System number}
+ln := LENGTH(fname);
+buf[1] := CHR(ln);
+FOR i := 1 TO ln DO buf[i+1] := fname[i];
+buf[82] := CHR(ln);
+FOR i := 1 TO ln DO buf[i+82] := fname[i];
+pnum := pipeopwr('PRINTER');
+IF pnum < 0 THEN 
+  BEGIN
+  errr(pnum);
+  EXIT(spoolit);
+  END;
+write('Spooling results to PRINTER');
+k := pipewrite(pnum, BlockLen, buf);
+IF k < 0 THEN
+  BEGIN
+  errr(k);
+  EXIT(spoolit);
+  END;
+CRT(Startbeat);
+putpipe(2, pnum); {put the file into the pipe starting with block 2}
+k := pipeclwr(pnum);
+close(f1,purge);
+END; {spoolit}
+
+{*******************************************************************}
+
+{                       MAIN                                        }
+
+{*******************************************************************}
+begin   {MBACKUP}
+init;
+dispatch;
+spoolit;
+end.
+
+

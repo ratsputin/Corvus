@@ -1,0 +1,434 @@
+File: CCOS.1.2.TEXT
+Date: 20-Sep-83
+
+
+
+Corvus CONCEPT Distributed Software Modification Log
+
+
+
+System version 1.1b -- June 20, 1983 (interim release)
+System version 1.2  -- September 20, 1983
+
+Notes: * indicates possible documentation changes.
+
+
+
+5" floppy distribution:
+
+   Operating System ---------------------------------------------
+      FBOOT   (FBOOT & FSYSGEN)
+      FPSYS   (FPSYS & FEDWORD)
+      FCCSYS1 (FCCSYS1 & FCCSYS2)
+      FCCSYS2 (FCCSYS3 & FCCSYS4)
+
+   ISYS ---------------------------------------------------------
+      FISYS1  (FISYS1 & FISYS2)
+      FGRAPH
+      FLGICLC
+
+   Fortran ------------------------------------------------------
+      FFORTRN (FFORTRN & FCCLIB)
+
+   Graphics -----------------------------------------------------
+      FGRAPH
+
+   LogiCalc -----------------------------------------------------
+      FLGICLC
+
+   Pascal -------------------------------------------------------
+      FPASCAL (FPASCAL & FCCLIB)
+
+.pg
+8" floppy distribution:
+
+   Operating System ---------------------------------------------
+      FBOOT
+      FSYSGEN
+      FEDWORD
+      FPSYS
+      FCCSYS1
+      FCCSYS2
+      FCCSYS3
+      FCCSYS4
+
+   ISYS ---------------------------------------------------------
+      FISYS1
+      FISYS2
+      FGRAPH
+      FLGICLC
+
+   Fortran ------------------------------------------------------
+      FFORTRN
+      FCCLIB
+
+   Graphics -----------------------------------------------------
+      FGRAPH
+
+   LogiCalc -----------------------------------------------------
+      FLGICLC
+
+   Pascal -------------------------------------------------------
+      FPASCAL
+      FCCLIB
+
+.pg
+Distribution floppy /FBOOT
+
+
+CC.KERNEL       1.2  - Omninet disk driver modifications
+                     - large disk drive support (over 65k blocks)
+                     - DSDD floppy support
+                     - display screen dump and restore
+
+CC.SETUP        2.5  - modifications for UCSD type system volume
+                     - multiple disk server support
+
+CC.DISPAT       1.5  - modifications for UCSD type system volume
+              *      - UserKeys processing additions
+
+CC.EXEC         1.4  - new version
+
+CC.FILMGR       1.4  - new version
+
+CC.SYSMGR       1.5  - modifications for UCSD type system volume
+
+CC.WNDMGR       1.5  - boot processing modifications
+
+DRV.DISPHZ      ---  - line insert problem fixed
+                     - BOLD set during window create problem fixed
+
+DRV.DISPVT      ---  - line insert problem fixed
+                     - BOLD set during window create problem fixed
+
+DRV.DTACOM      5.5  - new version
+
+DRV.EPRNT       1.2  - new version
+
+DRV.KYBD        ---  - new version
+
+DRV.OMNINET     1.0a - Omninet transporter driver
+
+DRV.SYSTRM      1.4  - new version
+
+DRV.TIMER       ---  - new version
+
+DRV.ADISK       n.n  - ....
+
+DRV.CDISK1      2.0c - new disk driver (256k systems)
+
+DRV.CDISK2      2.0c - new disk driver (512k systems)
+
+DRV.FDISK       ***  - .... obsolete ....
+
+DRV.FDISK1      ---  - old SSSD floppy disk driver
+
+DRV.FDISK2      1.0a - new DSDD floppy disk driver
+
+.pg
+CSD.DEFAULT     ---  - revised display character set
+
+CSK.DEFAULT     n.n  - ....
+
+ASSIGN          1.5  - maximum driver size increased to 32,000 bytes
+                     - boot processing modifications
+
+DDIAG           3.1c - new version
+
+DIAG.DATA       n.n  - ....
+
+CF18.4AP.DATA   n.n  - ....
+
+
+
+
+Distribution floppy /FSYSGEN
+
+
+DEBUG           n.n  - ....
+
+SYSGEN          2.4  - new version
+
+BOOT.CONCEPT    3.6  - new version
+
+VOLUTIL       * 1.1d - BckupVol: unique file names
+              *      - system status modifications
+
+TERMINAL        1.1c - new version
+
+OTEST           1.3a - new version
+
+BLDACT          1.0c - new version
+
+BLDALT          1.2b - new version
+
+CSD.06.10       ---  - revised display character set
+
+CSD.06.10.ALT   ---  - revised display character set
+
+CSD.07.11       ---  - revised display character set
+
+CSD.07.11.ALT   ---  - revised display character set
+
+CSD.08.13.ALT   ---  - revised display character set
+
+CSD.09.14.ALT   ---  - revised display character set
+
+CSD.IBM         ---  - new display character set
+
+CSK.REV3        ***  - .... obsolete ....
+
+CSK.REV4        ***  - .... obsolete ....
+
+.pg
+PAT.CITOH       n.n  - ....
+
+PAT.DIABLO630   n.n  - ....
+
+PAT.EPSONMX     ---  - printer action table for Epson MX-100
+
+PAT.NEC         ---  - printer action table for NEC
+
+PAT.OKIDATA     ---  - printer action table for Okidata
+
+PAT.TOSHIBA     ---  - printer action table for Toshiba
+
+PAT.NOENHANCE   n.n  - ....
+
+CITOH.TEXT      n.n  - ....
+
+DIABLO.TEXT     n.n  - ....
+
+CCOS.1.2.TEXT   ---  - this file
+
+
+.pg
+Distribution floppy /FPSYS
+
+
+CC.PSYSTEM      n.n  - ....
+
+SYSTEM.INTERP   n.n  - ....
+
+SYSTEM.PASCAL   n.n  - ....
+
+SYSTEM.MISCINFO n.n  - ....
+
+SYSTEM.LIBRARY  n.n  - ....
+
+CPLIB           n.n  - ....
+
+RTLIB2.CODE     n.n  - ....
+
+RTLIB4.CODE     n.n  - ....
+
+BLIB.2.CODE     n.n  - ....
+
+BLIB.4.CODE     n.n  - ....
+
+SPOOL.CODE      4.0b - new program
+
+DESPOOL.CODE    4.0b - new program
+
+
+
+Distribution floppy /FEDWORD
+
+
+ED              2.2a - new version
+
+SYSMSG          ---  - EdWord message text file
+
+KEYS.ED.TEXT    ---  - EdWord function key label text file
+
+EDINIT.TEXT     ---  - ....
+
+.pg
+Distribution floppy /FCCSYS1
+
+
+CC.C2MGR        2.3  - new version
+
+C2.MISC.TEXT    ---  - new file
+
+ACCMGR          2.2d - new version
+
+BOOTMGR         2.3  - new version
+
+DRIVEMGR        2.3  - new version
+
+
+
+Distribution floppy /FCCSYS2
+
+
+PARMGR          2.2a - ....
+
+USERMGR         2.4  - new version
+
+MIRROR          2.2b - ....
+
+MBACKUP         2.2  - ....
+
+.pg
+Distribution floppy /FCCSYS3
+
+
+ASM68K          1.1b - new version
+
+LINKER          1.3  - new version
+
+LIBRARY         1.1b - new version
+
+LOADER.IMAGE    n.n  - ....
+
+CC.EDCHAR       ---  - new version
+
+CC.HELP         n.n  - ....
+
+CC.SETDCP       2.1  - new version
+
+CC.SETPRT       ***  - .... obsolete ....
+
+CS.CONVERT      ***  - .... obsolete ....
+
+HELP.TEXT       ---  - new version
+
+FDIAG           ***  - .... obsolete ....
+
+FFRMT           n.n  - ....
+
+FUTIL           2.0  - new DSDD floppy utility program
+
+PRTWND          ---  - calls WNDUTIL (to match documentation)
+
+WRITEBOOT       n.n  - ....
+
+BOOT.FLOPPY   * ---  - new file name (was FLPY.BOOT)
+
+USERKEYS.TEXT   ---  - new version
+
+
+
+Distribution floppy /FCCSYS4
+
+
+CC.MNTMGR       2.3a - new version
+
+DESPOOL       * 4.0b - new program
+
+SPOOL         * 4.0b - new user interface
+
+WNDUTIL         1.0  - new program
+
+.pg
+Distribution floppy /FISYS1
+
+
+CC.ISYS         1.0  - ISYS dispatcher
+
+CC.CALC         1.0  - desk tools - calculator
+
+CC.CALEN        1.0  - desk tools - calendar
+
+CC.CLOCK        1.0  - desk tools - clock
+
+CC.DCOMM        1.0  - DataComm program
+
+CC.LOOKUP       1.0  - lookup program
+
+CC.SORT         1.0  - IPC file sort program
+
+CC.GR.IPC.TEXT  ---  - Graphics template summary (sample IPC file)
+
+
+
+Distribution floppy /FISYS2
+
+
+CC.WP           1.0k - ISYS word processing program
+
+KEYS.ISYS       ---  - ISYS support file
+
+SYSMSG          ---  - ISYS support file
+
+
+
+Distribution floppy /FGRAPH
+
+
+CC.GRAPH        1.0  - Graphics program
+
+CC.GR.FONTS     ---  - Graphics support file
+
+CC.GR.TMPLTS    ---  - Graphics support file
+
+CC.GR.LST.TEXT  ---  - Graphics template summary
+
+.pg
+Distribution floppy /FLGICLC
+
+
+CC.LGICLC       3.0  - new version
+
+KEYS.LC.TEXT    ---  - LogiCalc function key label text file
+
+KEYS.LCI.TEXT   ---  - LogiCalc function key label text file
+
+HELP.LC.TEXT    ---  - ....
+
+
+
+Distribution floppy /FPASCAL
+
+
+PASCAL          1.1b - new version
+
+PASCTERRS.TEXT  ---  - new version
+
+
+
+Distribution floppy /FFORTRN
+
+
+FORTRAN         1.1b - new version
+
+FTNLIB.OBJ      ---  - new version
+
+FTNCTERRS.TEXT  ---  - new version
+
+FTNRTERRS.TEXT  ---  - new version
+
+CFLIB.OBJ       n.n  - ....
+
+.pg
+Distribution floppy /FCCLIB
+
+
+CODE            1.1b - new version
+
+PASLIB.OBJ      ---  - new version
+
+CCLIB.OBJ       ---  - KeyPress: stack problem fixed
+                     - ccGRFio:  add screen dump/restore functions
+                     - ccOTCio:  new Omninet transporter unit
+                     - ccWNDio:  fixed WinCreate attribute bytes
+
+C2LIB.OBJ       ---  - recompiled version (Feb '83 not correct)
+
+
+
+Unsupported software
+
+
+FIXIT           2.2  - new version
+
+MOVE            1.5  - multiple disk server support
+
+UNCAT           1.0  - new program
+
+ZAP             1.5  - multiple disk server support
+
+
+
+

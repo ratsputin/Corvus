@@ -1,0 +1,97 @@
+
+
+         To:   Distribution
+         From: Keith Ball
+         file: c2meet2.text
+         date: 6-January-1984
+
+         Re:   Second Constellation II meeting
+
+         The second Constellation II meeting was on January 5,
+         1984 at 3:00 to 5:00 pm.  Present were : Phil Belanger,
+         Sean Finley, Bruce Kendall, Denise Pitsch, Steve
+         Schwartz, Robin Yonash, and Keith Ball.
+
+         Denise presented her boot procedure document.  Three
+         unresolved problems were specified. One, the lookup
+         protocol must have generic as well as specific device
+         types for all devices.  Two, what is an adequate timeout
+         lengths for waiting for response from disk servers after
+         broadcasting a message.  Denise assumed 5 seconds.  The
+         Concept uses approx. 14 seconds.  Three, we need a new
+         version of the H-drive firmware to be implemented with
+Phil     all the new drive commands.  After Phil resolves the
+Denise   first two problems Denise will be able to finish the
+         document.
+
+         Steve informed us that a bug exists in the MSDOS 2.0
+         logon program for the IBM PC which prevents the user
+         from logoning onto a UCSD user name.  This bug must be
+         fixed when we next work on the PC.
+
+         I discussed the physical transporter driver and its
+         relationship to the rest of our system software.  For
+         this development project we will only build the physical
+         transporter driver, with buffer management, and not the
+         socket management portion of NIS.  The physical
+         transporter driver will hide the existence of the
+Keith    buffer.  My main action item is to complete the physical
+         transporter driver specification.  Robin was concerned
+         on the impact of this change to the SNA gateway and
+         other software developers.  We must have information
+         available to them as early as possible.
+
+         We agreed that when the physical transporter driver is
+         loaded into the PC then the transporter rom will not be
+         used.  All communications with the transporter will be
+         through the physical transporter driver.  However, the
+         rom will be used for booting.
+
+         Bob W. gave me a new proposal for volume locking similar
+         to the method Denise has used on the Product Development
+         net to lock shared volumes.  We agreed this was the
+         simplest and best method of the three documented.  I
+Keith    will write-up the document and send it around.
+
+         Denise implemented a version of the spool driver on the
+         Concept.  We determined that the default server to spool
+         to is the "home server".  Steve was concerned about the
+         OmniDrive losing the pipes on reset.  Phil said he would
+Denise   check into it.  Denise volunteered to specify the
+         program to close the pipe and set the driver options.
+
+         For the interrupt IBM transporter, Steve was concerned
+         that the full 4K of eprom on the card is not fully
+         decoded.  I will check into it with Bruce E.  In order
+         to release a new version of the tranporter rom to fix
+Bruce    bugs and add some minor enhancements, Bruce K. will
+Steve    write-up the changes needed and Steve will implement
+         them.  Steve said most of the changes have been
+         completed for the Companion.
+
+         Additional action items are :
+
+         Denise will specify and schedule, as much as possible,
+         the changes necessary to the system and user utilities
+         and the boot process;
+
+         Bruce K. will determine if the work can be performed on
+         the SONY system;
+
+         Bruce and I will specify and schedule the driver work,
+         disk, physical transporter, and spooler.
+
+         Distribution
+
+         Phil Belanger
+         Sean Finley
+         Bruce Kendall
+         Denise Pitsch
+         Steve Schwartz
+         Robin Yonash
+         Bob Wohnoutka
+
+
+
+
+

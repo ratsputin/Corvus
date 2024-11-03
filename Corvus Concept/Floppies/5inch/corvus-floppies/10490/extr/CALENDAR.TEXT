@@ -1,0 +1,208 @@
+
+{$S desk}
+procedure Calendar;
+
+Const
+  CursorOff= '\1Bb';           { Code to turn cursor off }
+  CursorOn = '\1Bc';           { Code to turn cursor on  }
+  VideoNorm= '\1BG0';          { Set normal video }
+  VideoInv = '\1BG4';          { Set inverse video }
+  VideoInvUnd = '\1BG<';       { Set inverse & underline video }
+
+Type                           { Co-ordinate system for clock face tics }
+  S9 = String[9];               { Used for literal months and days }
+
+  pClkDateRcd = ^ClkDateRcd;
+  ClkDateRcd  = packed record
+                year:  0..100;
+                day:   0..31;
+                month: 0..12;
+                end;
+
+  ClkPB    = record
+             DayofWeek,Month,Day:            integer; { set by driver }
+             Hour,Mins,Secs,Tenths,LeapYear: integer; { set by driver }
+             Year:                           integer; { set by unit   }
+             end;
+
+
+Var
+  ClkInfo : ClkPB;
+  Dum     : boolean;
+  Done,
+  Initial : Boolean;            { Set to TRUE for initial time displays }
+  NewSet  : Boolean;            { TRUE if we have to load the default charset }
+  CCH,                          { Character cell HEIGHT in pixels }
+  CCW,                          { Character cell WIDTH in pixels  }
+  XOff,                         { # of chars ShowMonth starts from left window }
+  YOff,                         { # of chars ShowMonth starts from bottom window }
+  X,
+  XMax,                         { Max x co-ordinate of current window }
+  YMax,                         { Max y co-ordinate of current window }
+  CMonth,                       { THIS month }
+  CDay,                         { THIS day }
+  CYear,                        { THIS year }
+  CurMonth,
+  CurYear : Integer;
+  FirstDay: Integer;
+  Key     : Char;
+
+{--------------------------- Global Routines --------------------------------}
+
+procedure ClkRead(var CPB: ClkPB);
+
+Var
+  timer: integer;
+  psysdate: pClkDateRcd;
+
+begin
+  timer := OStimDv;
+  unitread (timer,CPB,$0E);
+  psysdate := pointer(pOSdate);
+
+  with CPB do begin
+    With pSysDate^ Do Begin
+      CYear := Year;
+      CMonth := Month;
+      CDay := Day
+      End;
+    year := pSysdate^.year;
+    LeapYear := Year mod 4
+    end
+end;
+
+{------------------------ End of global routines ------------------------------}
+
+Procedure ShowMonth(XOff,YOff,Month,Year : Integer);
+
+        { Draw a ShowMonth for the given month and year }
+
+Var
+  X, Y, XMax, YMax, HomeX, HomeY, CurrX, CurrY, LX, LY   : Integer;
+  Days     : String[21];
+  D1       : Integer;
+  MS       : S9;
+  B: array[1..30] of byte;
+
+  function StartDay (Month,Year: Integer): integer;
+
+  Const
+    Day = 1;
+
+  Var
+    T1, T2 : Double;
+
+  begin
+    T1 := Trunc(-(1/(Month+1)+0.7));
+    Year := Year + Trunc(T1);
+    T2   := (Month+1)-12*T1;
+    T2   := T2 * 30.6001;
+    StartDay := ((Trunc(Year * 365.25) + Trunc(T2) + Day) + 5) MOD 7
+  end;
+
+
+  Function NumOfDays(Month,Year : Integer) : Integer;
+
+  Begin
+    Case Month Of
+       1,3,5,7,8,10,12 : NumOfDays := 31;
+       4,6,9,11        : NumOfDays := 30;
+       2               : If (Year Mod 4) = 0
+                         Then NumOfDays := 29
+                         Else NumOfDays := 28
+    End
+  End;
+
+
+  Procedure LitMonth(M : Integer; Var Month : S9);
+
+  Var
+    P: pStrTyp;
+
+  Begin
+    p := Msg(1,M);
+    Month := p^;
+  End;
+
+
+  Procedure LabelDays;        { Label day columns }
+
+  Var
+    Dy      : pStrTyp;
+    Counter : Integer;
+
+  Begin
+    Dy := Msg(1,20);
+    For Counter := 0 To 6 Do Begin
+       GotoXY(Counter*4+XOff,YMax-(13+YOff));
+       Write( VideoInvUnd ,Copy(Dy^,Counter*3+1,3),VideoInv)
+       End
+  End;
+
+  Begin                                         { ShowMonth }
+    XMax := ScrWid;                             { Width of window, in chars     }
+    YMax := WinRws+2;
+    GotoXY(0,YMax);
+    SetOrigin(0,0,3);                           { Set graphics origin           }
+    D1 := StartDay(Month,Year);
+    write( VideoInv );
+    fillchar( B, 30, ' ' );
+    for x := 0 to 16 do begin
+      gotoxy( Xoff-1, YMax - (16+YOff) + x );
+      unitwrite( 1, B, 29 )
+      end;
+    For X := 1 to NumOfDays(Month,Year) Do Begin   { Display the day numbers    }
+      GotoXY((D1 Mod 7)*4+XOff,(YMax - (11+YOff))+((D1 Div 7)*2));
+      If ((CurMonth = CMonth) And (CurYear = CYear) And (X = CDay)) Then Begin
+        Write( VideoInv );
+        Write( X:3 );
+        Write(Chr(7));
+        Write( VideoNorm )
+        End
+      Else
+        Write(X:3);
+      D1 := D1+1
+      End;
+    LitMonth(Month,MS);                         { Get the month name            }
+    GotoXY(XOff,YMax - (15+YOff));
+    Write( MS,', ',Year:4 );
+    LabelDays;
+    write( VideoNorm )
+  End;
+
+Begin
+   LoadLabels( CalenFrame );
+   ClkRead(ClkInfo);
+   XOff := ScrWid - 30;
+   YOff := 5;
+   CurMonth := ClkInfo.Month;
+   CurYear := ClkInfo.Year + 1900;
+   Done := False;
+   CsrWid := 0;
+   write( CursorOff );
+   while not Done do begin
+      ShowMonth( XOff, YOff, CurMonth, CurYear );
+      NextCmd;
+      case Cmd of
+         KF1: Dum := PmtInt( Msg(1,13), CurMonth );
+         KF2: Dum := PmtInt( Msg(1,14), CurYear );
+         KF4: CurMonth := CurMonth - 1;
+         KF5: CurMonth := CurMonth + 1;
+         KF6: CurYear := CurYear - 1;
+         KF7: CurYear := CurYear + 1;
+         otherwise: Done := true
+         end;
+      if CurMonth < 1 then begin
+         CurMonth := 12;
+         CurYear := CurYear - 1
+         end;
+      if CurMonth > 12 then begin
+         CurMonth := 1;
+         CurYear := CurYear + 1
+         end;
+      CurYear := abs( CurYear )
+      end;
+   CsrWid := 1;
+   ReDraw( WinTop );
+   write( CursorOn )
+End;

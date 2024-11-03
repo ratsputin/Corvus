@@ -1,0 +1,18 @@
+
+Directory of UCSD disk image file 'mikeUtils.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 10 files,  0 to 6 (6), eov 500, size 137, free 10
+
+ 1: C2LIB.OBJ       Data  3-Nov-82    6-  60(  54), 27648+512= 28160 bytes
+ 2: CCLIB.OBJ       Data 18-Nov-82   60- 202( 142), 72704+512= 73216 bytes
+ 3: CFLIB.OBJ       Data  3-Nov-82  202- 248(  46), 23552+512= 24064 bytes
+ 4: CLOCK           Data  7-Nov-82  248- 271(  23), 11776+512= 12288 bytes
+ 5: PIC             Data 19-Oct-82  271- 281(  10),  5120+512=  5632 bytes
+ 6: PRTWND          Data 20-Nov-82  281- 289(   8),  4096+512=  4608 bytes
+ 7: ZAP             Data  2-Sep-82  289- 329(  40), 20480+512= 20992 bytes
+ 8: USERKEYS.TEXT   Text 22-Nov-82  329- 335(   6),  3072+512=  3584 bytes
+ 9: WINDOW.TEXT     Text 15-Dec-82  335- 359(  24), 12288+512= 12800 bytes
+10: GETSTAG.TEXT    Text 11-Dec-82  359- 363(   4),  2048+512=  2560 bytes

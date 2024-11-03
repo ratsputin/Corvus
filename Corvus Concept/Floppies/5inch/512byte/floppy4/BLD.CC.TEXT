@@ -1,0 +1,15 @@
+clrwnd
+;
+; BLD.CC -- Build Corvus Concept Boot PROM
+;
+delfil -q cc.prom.text cc.prom.obj cc.prom
+crunch -q /icsys
+vsippp prom cc -a
+asm68k cc.prom
+crunch -q /icsys
+linker cc.prom
+delfil -q cc.prom.obj
+crunch -q /icsys
+;
+; Finished ....
+;

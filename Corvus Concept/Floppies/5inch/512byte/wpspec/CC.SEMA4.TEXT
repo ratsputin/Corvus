@@ -1,0 +1,162 @@
+{ SEMA4.TEXT ----------------------------------------------------------}
+{
+{       SEMA4 -- Corvus Disk Sema4s Unit
+{
+{       Copyright 1982 by Corvus Systems, Inc.
+{                         San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  01-08-82  LEF  Original unit (taken from SEMA4 by PHB)
+{       v 1.1  06-15-82  DP   Const II mods, clean-up
+{       v 1.2  06-13-84  jdr  Special segment for spelling checker
+{----------------------------------------------------------------------}
+
+UNIT CCSEMA4;
+{$S FileTask}
+INTERFACE
+
+USES
+{!CC} {$U /CCUTIL/CCLIB} CCdefn,
+{!CC} {$U /wpspec/cc.drvio} CCdrvIO;
+
+CONST
+   Sema4Rev   = '1.1';
+
+   { Return codes for the semaphore unit.                               }
+   {    negative function return values indicate error conditions       }
+   {    0 return means no error (and not set prior to operation)        }
+   {    $80 (128) return means key set prior to operation               }
+
+   SemWasSet  = 128;  { the prior state of this semaphore was locked    }
+   SemNotSet  = 0;    { prior state was unlocked                        }
+   SemFull    = -253; { semaphore table is full (32 active semaphores)  }
+   SemDskErr  = -255; { disk error during write thru                    }
+
+TYPE
+   SemStr     = STRING[8];
+   SemKeys    = PACKED ARRAY [1..8] OF CHAR;
+   SemKeyList = RECORD CASE integer OF
+                   1: (skey:        ARRAY [1..32]  OF SemKeys);
+{!CC}              2: (sbyt:        ARRAY [1..256] OF byte);
+                   END;
+
+VAR
+   Sema4debug:  BOOLEAN;
+
+{$P}
+FUNCTION SemLock   (key: SemStr): INTEGER;
+FUNCTION SemUnlock (key: SemStr): INTEGER;
+FUNCTION SemClear: INTEGER;
+FUNCTION SemStatus (VAR kbuf: SemKeyList): INTEGER;
+PROCEDURE CCSema4Init(Netloc: CDaddr);
+
+
+IMPLEMENTATION
+
+VAR
+   xcv: SndRcvstr;
+   SemNetloc: CDaddr;
+
+{$P}
+{ *************************************************************** }
+{ SemClear sends a command which inititalizes the semaphore table }
+{ to blanks...                                                    }
+{ *************************************************************** }
+FUNCTION SemClear;
+    BEGIN
+    WITH xcv DO BEGIN
+        sln  := 5; xcv.rln := 2;
+        b[1] := 26; {5 byte commands are now 1A}{vs. A in rev A drives}
+        b[2] := 16;
+        b[3] := 0;  {don't care about the rest of the bytes...}
+        b[4] := 0;
+        b[5] := 0;
+        END;
+    CDsend(SemNetLoc,xcv); CDrecv(SemNetLoc,xcv);
+    IF sema4debug THEN writeln('sem clear:  ',xcv.b[1],',',xcv.b[2]);
+    IF ORD(xcv.c[1]) > 127
+        THEN SemClear := -ORD(xcv.c[1])
+        ELSE SemClear := 0;
+    END; { SemClear }
+
+{$P}
+FUNCTION ComKey (key: SemStr): INTEGER;
+    VAR i: INTEGER;
+    BEGIN
+    WITH xcv DO BEGIN
+        sln  := 10;  xcv.rln := 12;
+        b[1] := 11;
+        FOR i := 1 TO 8 DO
+            IF i <= LENGTH(key)
+                THEN c[i+2] := key[i]
+                ELSE c[i+2] := ' ';
+        END;
+    CDsend(SemNetLoc,xcv); CDrecv(SemNetLoc,xcv);
+    IF Sema4debug THEN WRITELN('comkey results:  ',xcv.b[1],',',xcv.b[2]);
+    IF ORD(xcv.c[1]) > 127
+        THEN ComKey := -ORD(xcv.c[1])
+        ELSE IF ORD(xcv.c[2]) > 127
+                 THEN ComKey := -ORD(xcv.c[2])
+                 ELSE ComKey :=  ORD(xcv.c[2]);
+
+    END;
+
+
+{ ********************************************************** }
+{ FUNCTION SemLock (key: SemStr): INTEGER;                   }
+{ KEY is an eight character string which is written into the }
+{ semaphore table IF it was not there already...             }
+{ ********************************************************** }
+FUNCTION SemLock;
+   BEGIN
+   xcv.b[2] := 1;
+   SemLock := ComKey (key);
+   END;
+
+
+{ ********************************************************** }
+{ FUNCTION SemUnlock (key: SemStr): INTEGER;                 }
+{ delete a key from the sem table and indicate whether or not}
+{ it was there before.... return codes are described above.  }
+{ ********************************************************** }
+FUNCTION SemUnlock;
+   BEGIN
+   xcv.b[2] := 17;
+   SemUnlock := ComKey (key);
+   END;
+
+{$P}
+{************************************************************}
+{ FUNCTION SemStatus (kbuf: SemKeyList): INTEGER;            }
+{ returns the actual semaphore table                         }
+{************************************************************}
+FUNCTION SemStatus;
+   BEGIN
+   xcv.sln  := 5;  xcv.rln := 257;
+   xcv.b[1] := 26;
+   xcv.b[2] := 65;
+   xcv.b[3] := 3;
+   xcv.b[4] := 0;
+   xcv.b[5] := 0;
+   CDsend(SemNetLoc,xcv); CDrecv(SemNetLoc,xcv);
+   IF sema4debug then writeln('sem status:  ',xcv.b[1],',',xcv.b[2]);
+   IF ORD(xcv.c[1]) > 127 THEN
+      BEGIN
+      SemStatus := -ORD(xcv.c[1]);
+      EXIT (SemStatus);
+      END;
+   MOVELEFT (xcv.b[2],kbuf.sbyt[1],256);
+   SemStatus := 0;
+   END;
+
+
+PROCEDURE CCSema4Init {(Netloc: CDaddr)};
+   BEGIN
+   Sema4debug := FALSE;
+   SemNetloc := Netloc;
+   END;
+
+END.
+
+

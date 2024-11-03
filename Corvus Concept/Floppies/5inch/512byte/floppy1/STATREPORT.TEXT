@@ -1,0 +1,107 @@
+
+
+Status Report for eAKeith Ball
+April 25 thru April 29
+
+
+eHTasks in processe@
+
+
+       1) I have completed the first milestone defined in my schedule.
+          The unitread and unitwrite sections of the CCOS driver are
+          complete.  I have tested the driver with the default 1,0,0
+          and 2,6,1 logical interleave/skew/track.  The 2,6,1 is 5
+          times faster.  We can format the disk with this structure
+          and use a 1,0,0 logical structure.
+
+          Lynn has said he will have the prom source ready for me by
+          Monday.  The I will begin on my conversion of the driver.
+
+          Ken said the new boards will be available next week.  I have
+          1 and will get 2 more boards with the 32 byte proms.
+
+       2) I attended the Companion drive project meeting.  Brett has
+          all the details.  We must define the interface to the
+          system for the next meeting.
+
+       3) I attended a Printer server meeting on April 29.  Phil's
+          group now has complete control of the project.  Steve Wang
+          will implement the software.
+
+          The main priority for the group is supporting the Concept.
+          It will do character enhancements among other text
+          processing.  Work now done in the Spooler will be done in
+          the server.
+
+          Phil's group will come out with a complete spec on the
+          server and it's interface.  This means a definition of the
+          preamble block and the text structure.  I assume Denise will
+          develop a spec for the spoolers.
+
+          I brought up the need for a command or program interface for
+          all the servers as well as the currently required terminal
+          emulator interface.  Phil has it under consideration.
+
+eHTasks plannede@
+
+       1) Plan to begin the development of the Omninet and Local disk
+          driver and the Network Manager (specified by Phil B) after
+          completion of the Floppy release.  Both of these pieces of
+          system software use the Transporter driver which was
+          developed last year.  Phil says he needs these additions to
+          the system to develop Virtual Circuits(VCS).  I will begin
+          to spend some time on reworking the Transporter driver in
+          mid-May when Phil returns from vacation.
+
+          This work is the first step in my specifying what needs to
+          be done to integrate the Concept and the Network.  I will
+          work with Phil on VCS and the internet protocols.  Phil has
+          already given me Xerox publications on the internet protocol
+          and remote procedure calls.  Remote procedure calls allow
+          other nodes to execute procedures in remote nodes.  Problems
+          may occur with the implementation of VCS, internet
+          protocols, and the network manager integration depending on
+          the degree of multi-tasking available on our next system.
+
+          Phil says he really needs multi-tasking to implement
+          his network software.
+
+       2) The Bank.  I must get involved with Bank development.  The
+          debug procedure entails building a local card for the
+          Concept.  Therefore, should we have a local bank?  Bob is
+          very much in favor of the idea.  Should we boot from the
+          damn thing??
+
+
+eHProblems/needse@
+
+       1) Since the Floppy disk controller has a the step rate bug, we
+          cannot run the drive with a 3 millisecond step rate.
+          Without this capability we cannot keep the Shugart drive
+          quiet.
+
+          Ken and I tried the Shugart at 4 ms. step rate at it is
+          noisy.  It seems to run reasonably well at 3 ms. but needs
+          further testing.  I will develop some level of test
+          software to examine it's reliability when the FDC is
+          configured for 3 ms.
+
+          We could have a driver default as 4 ms. and have a startup
+          file to reconfigure the driver to 3 ms. for Concepts with
+          the Shugart drives.  I feel this would cause the user and us
+          more management problems then being able to use the Shugart
+          would solve.
+
+       2) The current Omninet disk driver does not work correctly
+          with multiple disk servers.  I will investigate with Phil
+          why after I finish the floppy.  Unfortunately, the boot
+          proms do not work correctly either.  Should we release when
+          our system doesn't work with our network correctly?
+
+       3) How do we wish to interface to the Utility server.  I think
+          it should have a terminal interface AND a eAprogram interfacee@.
+          The program interface would include functions like add user
+          xxxx or delete volume yyyy.  We could then write a special
+          Concept human interface to the Constellation II software
+          running on the Utility server instead of using the simpler
+          less elegant interface provided by the Utility server.

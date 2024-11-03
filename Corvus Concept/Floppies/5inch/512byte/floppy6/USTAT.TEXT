@@ -1,0 +1,52 @@
+program ustat;
+type stpb = record
+             intrlv,
+             skew,
+             StartTrack,
+             StepRate,
+             spt,
+             tps,
+             SectorSize : integer;
+             TimeOut : longint;
+             Diskette,             {true if diskette in drive}
+             OneSided,             {true if 1 side only}
+             SnglDensity,          {true if single density}
+             UserSPT : boolean;    {true if user set spt}
+           end;
+
+var a: char;
+    un,fc,i,ior: integer;
+    l: longint;
+    spb: stpb;
+
+  procedure Ucase(var a: char);
+  begin
+  if (a>='a') and (a<='z') then a := chr(ord(a) - $20);
+  end;
+
+begin
+write('Enter unit number: '); readln(un);
+repeat
+   write('Enter function code: '); readln(fc);
+   write('Select parameter type : [ L)ong, I)nteger, S)tatus ] ');
+   read(a); writeln; Ucase(a);
+   case a of
+      'L': begin
+           write('Enter parameter: '); readln(l);
+           unitstatus(un,l,fc);
+           ior := ioresult;
+           end;
+      'I': begin
+           write('Enter parameter: '); readln(i);
+           unitstatus(un,i,fc);
+           ior := ioresult;
+           end;
+      'S': begin
+           unitstatus(un,spb,fc);
+           ior := ioresult;
+           end;
+      end;
+   writeln('IOresult = ',ior:1);
+   write('Done? '); readln(a); Ucase(a);
+   until (a='Y');
+end.

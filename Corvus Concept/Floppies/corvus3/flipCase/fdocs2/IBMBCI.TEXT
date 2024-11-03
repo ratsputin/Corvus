@@ -1,0 +1,188 @@
+
+6-June-83
+D. Pitsch
+
+This diskette contains files showing how to talk directly to the
+Corvus drive from IBM MSDOS.  A brief description of the major
+files is given.
+
+DRIVEIO1.ASM - assembly language for talking to Corvus drive
+       over flat cable.
+
+ODRVIO.ASM - assembly language for talking to Corvus drive over
+       Omninet.
+
+These two files implement the CDSEND/CDRECV protocol for MSDOS.
+You need only use the one appropriate to your interface card
+type.  For detailed information on what various commands do,
+consult the Corvus Disk System Technical Reference Manual (P/N
+7100-03289).
+
+Both of these files are written to interface to MSDOS Pascal.
+Other language interfaces may require modification of the
+parameter passing mechanism.
+
+The following two files give examples of how to interface to the
+CDSEND/CDRECV routines from MSDOS Pascal.
+
+DRUTILS.PAS - a Pascal unit which provides an interface to
+       either of the assembly language routines described above.
+
+SEMA4.PAS - a Pascal unit which uses DRUTILS.PAS to send
+       semaphore commands to the drive.
+
+
+Using semaphores, or any other drive command, from a high-level
+language requires 2 steps:
+
+1)  Recoding the parameter passing portion of DRIVEIO1.ASM
+    or ODRVIO.ASM to conform to the host language requirements.
+
+2)  Calling the CDSEND/CDRECV routines with the appropriate
+    command string.
+
+Note that INITIO must be called once, before any calls to CDSEND
+or CDRECV.  Calls to CDSEND/CDRECV always occur in pairs;  i.e.,
+every CDSEND call should be followed immediately by a CDRECV
+call.
+
+Below is the first few lines of the interface driver,
+describing how to call the routines from MSDOS Pascal.
+
+;
+; --- CORVUS/IBM DRIVE INTERFACE UNIT FOR PASCAL ---
+;
+;               VERSION 1.2  BY  BRK
+;          (MICROSOFT ASSEMBLER VERSION )
+;
+;       THIS UNIT IMPLEMENTS  5  PROCEDURES:
+;
+;       INITIO    --- A PASCAL FUNCTION
+;
+;       CDRECV = DRVRECV
+;       CDSEND = DRVSEND
+;
+;       THE CALLING PROCEDURE IN PASCAL IS :
+;
+;               CDSEND (VAR st : longstring )
+;
+;       THE FIRST TWO BYTES OF THE STRING ARE THE LENGTH
+;       OF THE STRING TO BE SENT OR THE LENGTH OF THE
+;       STRING RECEIVED.
+;
+;               function INITIO : INTEGER
+;
+;       THE FUNCTION RETURNS A VALUE TO INDICATE THE STATUS OF
+;       THE INITIALIZATION OPERATION.  A VALUE OF ZERO INDICATES
+;       THAT THE INITIALIZATION WAS SUCCESSFUL.  A NON-ZERO VALUE
+;       INDICATES THE I/O WAS NOT SETUP AND THE CALLING PROGRAM
+;       SHOULD NOT ATTEMPT TO USE THE CORVUS DRIVERS.
+;
+
+
+.PG
+
+                                                       04-Mar-83
+                                                       D. Pitsch
+
+Description of the IBM cold boot:
+
+The ROM on the IBM interface card is responsible for loading
+in the boot code necessary to boot the IBM.  The ROM uses
+uses the 'boot' command to load in the boot code; the 'boot'
+command is described on the next page.
+
+The boot code is loaded starting at location 7C00h.  After the
+first boot command is completed, the ROM examines locations
+7C00h and 7C01h (the first two bytes of the boot code).  These
+locations are assumed to contain the length (in bytes) of the
+total boot code.  The ROM then issues the appropriate number of
+additional boot commands, until all of the boot code has been
+read.  (Each boot command reads 512 bytes of code).  The ROM
+then jumps to location 7C02h (the third byte of the boot code),
+passing control to the code just read.
+
+In the case of Constellation II, the disk has been setup up by
+the system generation program to contain all the data used by
+the boot command.  For Constellation I, this is not the case; to
+support Constellation I, a program must be written which does
+the necessary setup.  This setup consists of the following
+steps:
+
+  1)  Put the address of the volume which will contain the boot
+      code at bytes 36-39 of block 8 on drive 1.
+
+  2)  Write the boot code to a file in the volume used in step
+      1.  Ensure that block 6 of the volume is unused.
+
+  3)  Put the relative address of the boot code file into bytes
+      18-19 of block 6 of the volume used in step 1.  (The
+      computer number assigned to the IBM is 9).
+
+As an example, suppose our boot code is 8 blocks long, and will
+reside in the first volume on the Corvus drive.
+
+  1)  Write the values 00, 00, 00, 08 into bytes 36-39 of block
+      8 on drive 1 (assuming that the first volume starts at
+      block 8, which it must for Constellation I systems).
+
+  2)  Copy the boot file to the first volume.  Let's assume that
+      the file is located at block 20 within the volume.  Ensure
+      that block 6 of the volume is unused.  Create a dummy file
+      at block 6 which is one block long; call the file
+      SYSTEM.BOOT (its name under Constellation II).
+
+  3)  Write the values 01, 04 into bytes 18-19 of the file
+      SYSTEM.BOOT.
+
+
+.PG
+Description of the boot command
+
+NOTE:  This boot command is implemented in all version of Corvus
+firmware numbered 18.3 and above.  It is NOT implemented in
+previous versions.
+
+Command format
+
+68 (decimal)   send 3 bytes            receive 513 bytes
+44 (hex)       1 - 44h                 1 - disk result
+               2 - 0..FFh (computer #) 2   boot data/error code
+               3 - 0..FFh (block #)    thru
+                                       513
+
+
+The boot command sends a computer number and a block number to
+indicate which block of boot code to read.  The computer number
+is assigned by Corvus; contact Corvus for the computer number
+for a particular computer.  The block number is a relative block
+number, with 0 being the first block.  Thus, to read in 8 blocks
+of boot code, you would issue 8 boot commands, varying the block
+number between 0 and 7.
+
+The boot command uses bytes 36-39 of block 8 of drive 1 to
+locate a boot volume.  The command then looks at the sixth block
+of that volume.  It multiplies the computer number by 2, using
+the result as an index into this block.  The two bytes found at
+index and index+1 are interpreted as a two-byte block address.
+The block address is added to the block number specified in the
+boot command; this total is added to the volume address,
+resulting in an absolute disk address.  512 bytes of data are
+then read from the absolute disk address.  These bytes, along
+with the disk result, are the 513 bytes returned by the boot
+command.  The first byte is the standard disk result (i.e., if
+disk result > 127, an error occured and the boot data is not
+there;  if disk result <= 127, the command worked, and the boot
+data is there).
+
+As you can see, the boot command is heavily tied into the
+Constellation II definition.  Block 8 of the drive is referred
+to as the DRIVE.INFO block; the address at bytes 36-39 points to
+the Corvus volume.  The Corvus volume has a 1 block file called
+SYSTEM.BOOT allocated at block 6; it also has several boot files
+allocated within the Corvus volume.  The boot manager program is
+responsible to copying new boot files into the Corvus volume,
+and updating appropriate entries in the SYSTEM.BOOT file.
+
+
+

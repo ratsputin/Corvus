@@ -1,0 +1,1192 @@
+{$I-}
+procedure BeginPrint;     { eASete@ eAupe@ eAande@ eAinitializee@ eAstuffe@ eAfore@ eAthee@ eAprinte@ }
+
+begin
+  EndPrint := false;      { eAContinuee@ eAprintinge@ }
+  EmitStr := '';
+  NdxPagPfx := '';
+  PageTLen := 65;
+  TopMar := 3;
+  BotMar := 3;
+  LPP := ScrPagLen + TopMar + BotMar;
+  LinSpc := 1;
+  fillchar( PageEHd, sizeof(PageEHd), ' ' );
+  fillchar( PageOHd, sizeof(PageOHd), ' ' );
+  fillchar( PageEFt, sizeof(PageEFt), ' ' );
+  fillchar( PageOFt, sizeof(PageOFt), ' ' );
+  PrtHdrFtr := false;
+  PageNo := FstPag;
+  PagLen := 0;
+  EPageOff := 0;
+  OPageOff := 0;
+  PageOff := 0;
+  VrtOff := 0;
+
+  CtrOpt := false;
+  JstfOpt := false;
+  JstfRMar := RhtMar;
+  JstfLMar := LftMar;
+  JstfPt := 65;
+
+  FillLMar := 1;
+  FillRMar := 65;
+  FB1Avail := 1;
+  FB1Mty := true;
+  FillInd := 0;
+  FillOpt := false;
+  FB1 := BlkStr;
+  FB2 := FB1;
+  StrToBA( FB2, 1, '.SK 0' );
+  JB1 := FB2;
+end;
+
+{$S filetask}
+function GetNum( var B: BA; var I: integer ): integer;
+var Val, Sign: integer;
+begin
+  Val := 0;
+  Sign := 1;
+  I := SpanNE( B, I, ' ' );
+
+  if I<MaxLinLen then begin
+    if chr(B[I]) in PlsMns then begin
+      if B[I] = ord('-') then Sign := -1;
+      I := I + 1;
+    end;
+    while (I<MaxLinLen) and (chr(B[I]) in Digit) do begin
+      Val := Val * 10 + B[I] - ord('0');
+      I := I + 1;
+    end;
+  end;
+
+  GetNum := Val * Sign;
+end;
+
+
+procedure RepSubStr(var B:BA; DstPos,DstLen:integer;Src:StrTyp);
+begin
+  BADelByt( B, DstPos, DstLen );
+  BAInsByt( B, DstPos, length(Src), BlkStr[1] );
+  StrToBA( B, DstPos, Src );
+end;
+
+
+function IsCmd( var Buf: BA; Cmd: StrTyp ): boolean;
+var I: integer;
+begin
+  If Buf[1]=FmtCmd then begin
+    IsCmd := true;
+    for I := 1 to length( Cmd ) do
+      if UpperCase(Chr(Buf[I+1]))<>Cmd[I] then IsCmd := false;
+  end else
+    IsCmd := false;
+end;
+
+
+procedure SetParm(var Buf:BA;var Num:integer;Dflt,Lo,Hi:integer);
+
+var I, Val: integer;
+begin
+  I := SpanNE( Buf, SpanEQ( Buf, 1, ' ' ), ' ' );
+
+  if I>=MaxLinLen then
+    Val := Dflt
+  else if chr(Buf[I]) in PlsMns then
+    Val := Num + GetNum( Buf, I )
+  else
+    Val := GetNum( Buf, I );
+
+  Num := min( Hi, max( Lo, Val ) );
+end;
+
+
+procedure NxtLayOutPag;
+var i, Top, Bot, Rht, Lft: integer;
+begin
+  gotoxy( ColLayOut, RowLayOut );
+  Top := 140;
+  Bot := 8;
+  Lft := 0;
+  Rht := 80;
+  DrawLine( Lft, Top,   Rht, Top,   -1 );
+  Drawline( Rht, Top-1, Rht, Bot+1, -1 );
+  DrawLine( Rht, Bot,   Lft, Bot,   -1 );
+  DrawLine( Lft, Bot+1, Lft, Top-1, -1 );
+  write( PageNo:1 );
+
+  ColLayOut := ColLayOut + 14;
+  if ColLayOut+14>Cols6x10 then begin
+    ColLayOut := 0;
+    RowLayOut := RowLayOut + 15;
+  end;
+  if RowLayOut+15>Rows6x10 then begin
+    RowLayOut := 0;
+    ColLayOut := 0;
+  end;
+  write(C_CsrOff);
+  If Not EndPrint Then for i := 0 to 14 do begin
+    gotoxy( ColLayOut, RowLayOut+i );
+    if i=14 then write( C_SetGrfOrg,'\0\0\0\0\3' );
+    write( ' ':14 );
+  end;
+  XLayOut := 5;
+  YLayOut := 138;
+end;
+
+
+procedure PrntProc( var Buf: BA );   { eAPrintse@ eAonee@ eAlinee@ }
+
+var FF, CR: Byte;
+    Dum: boolean;
+    XCounter,
+    EStart,
+    EEnd,
+    Counter : Integer;
+    Siz: integer;
+    Tmp1,
+    Out: BA;
+    S: record case integer of
+         0:( L: array [1..2] of byte);
+         1:( Str: string[MaxLinlen] );
+       end;
+    L,A,B,I: integer;
+
+
+  Function NoDisplChars(Var Out : BA): Boolean;
+
+  Var
+    Counter : Integer;
+
+  Begin
+    NoDisplChars := True;
+    For Counter := 1 To MaxLinLen Do Begin
+
+      If (Out[Counter] = 27) and (Counter < (MaxLinLen-1)) Then Begin { eAEsce@ eAsequencee@ }
+        If Out[Counter+1] = ord('e') Then Counter := Counter + 3
+          else if Chr(Out[Counter+1]) in ['O','P'] Then Counter := Counter + 2
+        End;
+
+    If Out[Counter] > 32 Then Begin
+      Counter := MaxLinLen;
+      NoDisplChars := False
+      End
+    End
+  End;
+
+
+begin                              { eAPrntProce@ }
+  if IsCmd( Buf, 'END' ) then begin
+    EndPrint := true;
+    If PrtDest = LayOut Then NxtLayOutPag;
+    exit( PrntProc )
+    end
+  else if IsCmd( Buf, 'PO' ) then begin
+    SetParm( Buf, PageOff, 0, 0, 100 );
+    EPageOff := PageOff;
+    OPageOff := PageOff;
+    exit( PrntProc )
+    end
+  else if IsCmd( Buf, 'OPO' ) then begin
+    SetParm( Buf, OPageOff, 0, 0, 100 );
+    exit( PrntProc )
+    end
+  else if IsCmd( Buf, 'EPO' ) then begin
+    SetParm( Buf, EPageOff, 0, 0, 100 );
+    exit( PrntProc )
+    end
+  else if IsCmd( Buf, 'EMIT' ) Then Begin
+    EStart := SpanEQ( Buf, 1, '"' );
+    If EStart < MaxLinLen Then Begin
+      EEnd := SpanEQ(Buf, EStart+1, '"');
+      If EEnd < MaxLinLen Then Begin
+        For Counter := EStart+1 To EEnd-1 Do EmitStr[Counter-EStart] := Chr(Buf[Counter]);
+        EmitStr[0] := Chr(EEnd-EStart-1)
+        End
+      End
+    Else EmitStr := '';          { .EMIT with no parameters }
+    Exit(PrntProc)
+    End;
+
+  if GenNdx then exit( PrntProc );
+
+  if IsCmd( Buf, 'PG' ) then begin
+    if PrtDest = LayOut then begin
+      NxtLayOutPag;
+      exit( PrntProc )
+      end
+    else if PrtDest <> Spooler then begin
+      fillchar( Out[1], MaxLinLen, ' ' );
+      i := min(100,RhtMar);
+      fillchar( Out[1], i, '/' );
+      StrToBA( Out, (max( 10, i div 2)-6), ' END OF PAGE ' );
+      moveleft( Buf[1], Out[1], 4 );                     { eAMovee@ eA".PGe@ eA"e@ }
+      end
+    else begin                                  { eASpoolere@ }
+      FillChar(Out[1],MaxLinLen,' ');
+      Out[1] := 12;                             { eAForme@ eAfeede@ }
+      End
+    end
+  else begin
+    if PageNo mod 2=0 then PageOff := EPageOff
+      else PageOff := OPageOff;
+    fillchar( Out, PageOff, ' ' );
+    moveleft( Buf[1], Out[1+PageOff], MaxLinLen-PageOff )
+    end;
+
+  if (StartPage<=PageNo) and (PageNo<=StopPage) then begin
+    L := BkSpanNE(Out,MaxLinLen,' ');        { eAGete@ eAlengthe@ eAofe@ eABAe@ }
+
+{ eAFoure@ eApossiblee@ eAdestinationse@ eAfore@ eAthee@ eAlinee@ eAbeinge@ eAprocessede@ eAexiste@ eAate@ eAthise@ eApoint:e@ }
+
+   {   eA1.e@ eAAe@ eAlocale@ eAprinter,e@ eAine@ eAwhiche@ eAcasee@ eAite@ eAwille@ eAgoe@ eAtoe@ eAthee@ eAPRINTe@ eAworkpad;e@ }
+   {   eA2.e@ eAThee@ eALAYOUTe@ eAdisplay;e@ }
+   {   eA3.e@ eAAe@ eAtexte@ eAfile;e@ }
+   {   eA4.e@ eAAe@ eApipee@ eA(outpute@ eAise@ eAbeinge@ eAspooled...)e@ }
+
+
+            {eA----------------e@ eALayOute@ eAdisplaye@ eA-----------------e@}
+
+    if PrtDest = LayOut then begin
+      if L>0 then begin
+        A := FirstNB(Out);
+        B := LastNB(Out);
+
+ (*     If Not (SpanNE( Out, 1, ' ' )>MaxLinLen) Then Begin  *)
+        If Not NoDisplChars(Out) Then Begin
+          DrawLine( XLayOut+A, YLayOut, XLayOut+B, YLayOut,-1 );
+          A := SpanEQ( Out, A, ' ' );
+          while A<=B do begin
+            PlotPoint( XLayOut+A, YLayOut, -1 ); {show blanks}
+            A := SpanEQ( Out, A+1, ' ' )
+            end
+          end
+
+        End;
+      YLayOut := YLayOut - 2;
+      end { if LayOut }
+
+            {---------------- eAText file or pipee@ --------------}
+
+    else if (PrtDest in [PFile,Spooler]) then begin
+
+      BkSlash(Out,Tmp1,L);                      { eABackslashe@ eAprocessinge@ }
+      Out := Tmp1;
+      SpecBAToStr(Out,L,Flin);                  { Convert to string for strip. }
+      If NoEnhance Then StripEnhance(FLin)      { Don't print enhancements }
+       Else If PrtDest = Spooler Then Begin     { Skip spool proc. if no enhancements }
+         FillChar(Out,MaxLinLen,' ');           { Fill BA with blanks }
+         FillChar(SpecOut,MaxLinLen,' ');
+
+ (*      If Flin[1] <> '.' Then                 { eAIfe@ eAnote@ eAae@ eAdote@ eAcommande@ eAthene@ eAappende@...}
+           FLin := Concat(FLin,EndLine);        { eAEnhancementse@ eAoffe@ eAsequencee@ }  *)
+
+         LongStrToBA(Out,1,FLin);               { Convert string to BA }
+         L := BkSpanNE(Out,MaxLinLen,' ');      { Get length of BA, and ... }
+         If Out[1] = Ord('.') Then Begin        { eADon'te@ eAprocesse@ eAdote@ eAcommandse@ }
+           SpecOut := Out
+           End
+         else UnitWrite(6,Out,L);               { Get data from BUF.EPRNT }
+         L := BkSpanNE(SpecOut,MaxLinLen, ' '); { Determine length of processed line }
+         SpecBAToStr(SpecOut,L,Flin)            { Byte array to string }
+         End;                                   { eAIf SpoolFlg e@}
+      FLin := Concat(EmitStr,FLin);
+      TXTWrite(FBlk,FFID1,FLin);                { Write to file or pipe }
+      if FBlk.Status<>0 then begin              { File I/O error }
+        Bell( BelWrn );
+        TellUsr( Msg(MGCCOS,11) );              { eA"Noe@ eAmoree@ eAroome@ eAine@ eAvol"e@ }
+        EndPrint := true
+        end
+      end
+
+            {----------------- eALocal printere@ -----------------}
+
+    else begin                                 { Put line in PRINT workpad }
+      L := BkSpanNE(Out,MaxLinLen,' ');        { Get length of BA, and ... }
+      SpecBAToStr(Out,L,Flin);                 { Convert to string for strip. }
+      If NoEnhance Then StripEnhance(FLin);    { Don't print enhancements }
+      FLin := Concat(EmitStr,FLin);
+      LongStrToBa(Out,1,Flin);                 { eABacke@ eAtoe@ eAae@ eABAe@ }
+      Dum := FilNumBlks( PrtFid, Siz );
+
+      L := BkSpanNE(Out, MaxLinLen,' ');
+
+{ eAIt'se@ eApossiblee@ eAfore@ eAthee@ eAPRINTe@ eAworkpade@ eAtoe@ eAfille@ eAupe@ eAprintinge@ eAforme@ eAletterse@ eAore@ e@}
+{ eAsomethinge@ eAofe@ eAthee@ eAlike.e@ eAWhene@ eAthise@ eAhappens,e@ eAwee@ eAsete@ eASlowFlg,e@ eAwarne@ eAthee@ eAusere@ }
+{ eA(ande@ eAalsoe@ eAgivee@ eAhime@ eAthee@ eAoptione@ eAtoe@ eAabort),e@ eAae@ eAjuste@ eAsite@ eAande@ eAwaite@ eAfore@ eAthee@ eAPRINTe@ }
+{ eAworkpade@ eAlevele@ eAtoe@ eAdrope@ eAlowe@ eAenoughe@ eAtoe@ eAgete@ eAonee@ eAlinee@ eAin...e@ }
+
+      if not RecQ( PrtFid, L, Out[1] ) then Begin   { eARecorde@ eAwouldn'te@ eAfite@ }
+        Dum := FilNumBlks(PrtFid, Siz);             { eAChecke@ eAworkpade@ eAsizee@ }
+        If (Siz > 220) and Not(SlowFlg) Then Begin  { eAPROBABLYe@ eAfull...e@ }
+          Bell(BelWrn);                             { eAWarne@ eAuser...e@ }
+          TellUsr(Msg(MGPrnt,68));                  { eA"PRINTe@ eAworkpade@ eAfull..."e@ }
+          SlowFlg := True;
+          Repeat
+            Dum := RecQ(PrtFid,L,Out[1]);           { eAWaite@ eAfore@ eAroome@ }
+          Until Dum Or BrkPress;                    { eAUntile@ eAwee@ eAmakee@ eAite@ eAore@ eAthee@ }
+          If BrkPress Then Begin                    { eAusere@ eAgivese@ eAup...e@ }
+            Bell(BelAck);                           { eAHee@ eAgavee@ eAup!e@ }
+            If Confirm(Msg(MGPrnt,72),True) Then Dum := FilClear(PrtFID);
+            EndPrint := True;
+            Exit(PrntProc)
+            End  { eAIfe@ eABrkPresse@ }
+          End    { eAIfe@ eASize@ eA>e@ eA220e@ }
+        End      { eAIfe@ eANote@ eARecQe@ }
+      else PrntWkSpErr { eASomething'se@ eAreallye@ eAmessede@ eAup-e@ eAfulle@ eAworkspace?e@ }
+      end
+    end; { If StartPage <= PageNo }
+end; { PrintProc }
+
+
+{ eAProceduree@ eAPageProce@ eA---------------------------------e@}
+procedure PageProc( var PB1: BA );
+var Buf: BA;
+    I: INTEGER;
+
+{ eAPageProc.BAPute@ eA-------------------------------------e@}
+  procedure BAPut( var A: BA; Ndx, Len: integer; var Src: byte );
+  begin
+    if (0<Len) and (Len<=MaxLinLen) and
+       (0<Ndx) and (Ndx<=MaxLinLen) then begin
+      Len := min( Len, MaxLinLen-Ndx+1 );
+      moveleft( Src, A[Ndx], Len );
+    end;
+  end;
+
+{ eAPageProc.GenHdFte@ eA------------------------------------e@}
+  procedure GenHdFt( A: BA );
+  var Src, Len, Nxt: integer;
+      p: pStrTyp;
+      B: BA;
+      PNStr: StrTyp;
+      I: integer;
+
+{ eAPageProc.GenHdFt.GetArge@ eA------------------------------e@}
+    function GetArg( var A: BA; var Src, Ndx, Len: integer ): boolean;
+    begin
+      Src := Nxt+1;
+      Nxt := SpanEQ( A, Src, '|' );
+      Len := Nxt - Src;
+      GetArg := Nxt<=MaxLinLen;
+    end;
+
+  begin
+    p := AsStr( PageNo, 10 );
+    PNStr := p^;
+    i := SpanEQ( A, 1, '%' );
+    if i<MaxLinLen then RepSubStr( A, i, 1, PNStr );
+    fillchar( B, MaxLinLen, ' ' );
+
+    Nxt := SpanEQ( A, 1, '''' );
+
+    if GetArg( A, Src, Nxt, Len ) then
+      BAPut( B, 1, Len, A[Src] );
+
+    if GetArg( A, Src, Nxt, Len ) then
+      BAPut( B, ((PageTLen-Len) div 2)+1, Len, A[Src] );
+
+    if GetArg( A, Src, Nxt, Len ) then
+      BAPut( B, PageTLen-Len+1, Len, A[Src] );
+
+    PrntProc( B );
+  end;
+
+{e@ eAPageProc.PrtFtre@ eA--------------------------------------e@}
+  procedure PrtFtr;
+  var i: integer;
+      Buf:BA;
+  begin
+     if (PagLen<LPP) and PrtHdrFtr then begin
+        fillchar( Buf, MaxLinLen, ' ' );
+        while PagLen<LPP-3 do begin
+           PrntProc( Buf );
+           PagLen := PagLen + 1;
+        end;
+        for i := 3 downto 1 do begin
+           if PageNo mod 2 = 0 then begin
+              GenHdFt( PageEFt[i] )
+           end else begin
+              GenHdFt( PageOFt[i] );
+           end;
+           PagLen := PagLen + 1;
+        end;
+     end;
+  end;
+
+{eAPageProc.PrtHdre@ eA---------------------------------------e@}
+  procedure PrtHdr;
+  var i: integer;
+      Buf:BA;
+  begin
+     if TopMar>0 then begin
+        fillchar( Buf, MaxLinLen, ' ' );
+        for i := 1 to 3 do begin
+           if PrtHdrFtr then begin
+              if PageNo mod 2 = 0 then
+                GenHdFt( PageEHd[i] )
+              else
+                GenHdFt( PageOHd[i] );
+           end else begin
+              PrntProc( Buf );
+           end;
+           PagLen := PagLen + 1;
+        end;
+        for i := 4 to TopMar do begin
+           PrntProc( Buf );
+           PagLen := PagLen + 1;
+        end;
+     end;
+  end;
+
+{ eAPageProc.NewPagee@ eA-------------------------------------e@}
+  procedure NewPage( NewPagNum: integer );
+  var S: StrTyp;
+      i: integer;
+  begin
+     PrtFtr;
+     fillchar( Buf, MaxLinLen, ' ' );
+     StrToBA( Buf, 1, '.PG' );
+     PrntProc( Buf );
+     for i := 1 to VrtOff do PrntProc( BlkStr );
+     PagLen := 0;
+     TellUsr( Subst(AsStr(PageNo,10),Msg(MGPRNT,55)) ); { eA"Printede@ eApagee@ eAX"e@ }
+     PageNo := NewPagNum;
+  end;
+
+ { eAPageProc.PutLinee@ eA------------------------------------e@}
+  procedure PutLine;
+  var Dum: boolean;
+  begin
+     if PagLen=0 then PrtHdr;
+     PrntProc( PB1 );
+     PagLen := PagLen + 1;
+     if PagLen>=LPP-BotMar then
+        NewPage( PageNo+1 );
+  end;
+
+{ eAPageProc.PutNdxe@ eA--------------------------------------e@}
+  procedure PutNdx( var B1: BA; PageNo: integer );
+  var i, C1, C2: integer;
+      Dum: boolean;
+      p: pStrTyp;
+      S1: StrTyp;
+      B2: BA;
+  begin
+    i := SpanNE( B1, SpanEQ( B1, 1, ' ' ), ' ' );
+    i := SpanNE( B1, SpanEQ( B1, i, ' ' ), ' ' );
+    BADelByt( B1, 1, i-1 );
+    p := AsStr( PageNo, 10 );
+    S1 := p^;
+    S1 := concat( ', ', NdxPagPfx, S1 );
+    i := LastNB(B1);
+    if (0<i) and (i<MaxLinLen-15) then begin
+       StrToBA( B1, i+1, S1 );
+       C1 := SpanEQ( B1, 1, ',' );   { first comma }
+       C2 := i+1;                    { last comma }
+       if C1<C2 then begin  { alternate index item }
+          B2 := B1;
+          moveleft( B1[1], B2[C2-C1+1], C1-1 );
+          B2[C2-C1] := ord(' ');
+          moveleft( B1[C1+1], B2[1], C2-C1-1 );
+          while B2[1]=ord(' ') do BADelByt( B2, 1, 1 );
+          B2[1] := ord(UpperCase(chr(B2[1])));
+          Dum := RecQ( NdxFid, LastNB( B2 ), B2[1] );
+       end;
+       B1[1] := ord(UpperCase( Chr(B1[1]) ));
+       Dum := RecQ( NdxFid, i+length(S1), B1[1] );
+    end;
+  end;
+
+{ eAPageProc.DoCmde@ eA---------------------------------------e@}
+  procedure DoCmd;        { eAMoste@ eAdote@ eAcommande@ eAprocessinge@ }
+
+  var
+    i,
+    Need,
+    Skip,
+    NewPageNo : integer;
+
+  begin
+    if IsCmd( PB1, 'NE' ) then begin                   { eAConditionale@ eApagee@ eAskipe@ }
+      Need := 1;
+      SetParm( PB1, Need, 1, 0, LPP );
+      if Need+PagLen>LPP-BotMar then NewPage( PageNo+1 )
+      end
+
+    else if IsCmd( PB1, 'PG' ) then begin              { eANexte@ eApagee@ }
+      if (PagLen>0) or (LastNB(PB1)>3) then begin {skip blank pages}
+         SetParm( PB1, NewPageNo, PageNo+1, -32767, 32767 );
+         NewPage( NewPageNo )
+         end;
+      end
+
+    else if IsCmd( PB1, 'VO' ) then begin              { eAVerticale@ eAoffsete@ }
+      SetParm( PB1, VrtOff, 0, 0, 1000 );
+      if PagLen=0 then for i := 1 to VrtOff do PrntProc( BlkStr );
+      end
+
+    else if IsCmd( PB1, 'TM' ) then begin              { eATope@ eAmargine@ eAsete@ }
+      SetParm( PB1, TopMar, 3, 0, LPP );
+      end
+
+    else if IsCmd( PB1, 'BM' ) then begin              { eABottome@ eAmargine@ eAsete@ }
+      SetParm( PB1, BotMar, 3, 0, LPP );
+      end
+
+    else if IsCmd( PB1, 'HD2' ) then begin             { eAHeadere@ eAlinee@ eAtwo...e@ }
+      PrtHdrFtr := true;
+      if UpperCase(Chr(PB1[5])) <> 'E' then            { eAfore@ eAevene@ eApages...e@ }
+        moveleft( PB1, PageOHd[2], MaxLinLen );
+      if UpperCase(Chr(PB1[5])) <> 'O' then
+        moveleft( PB1, PageEHd[2], MaxLinLen );        { eAande@ eAodde@ eApages.e@ }
+      end
+
+    else if IsCmd( PB1, 'FT2' ) then begin             { eAFootere@ eAlinee@ eAtwo...e@ }
+      PrtHdrFtr := true;
+      if UpperCase(Chr(PB1[5])) <> 'E' then            { eAfore@ eAevene@ eApages...e@ }
+        moveleft( PB1, PageOFt[2], MaxLinLen );
+      if UpperCase(Chr(PB1[5])) <> 'O' then            { eAande@ eAodde@ eApages.e@ }
+        moveleft( PB1, PageEFt[2], MaxLinLen );
+      end
+
+    else if IsCmd( PB1, 'HD3' ) then begin             { eAHeadere@ eAlinese@ eAthree...e@ }
+      PrtHdrFtr := true;
+      if UpperCase(Chr(PB1[5])) <> 'E' then
+        moveleft( PB1, PageOHd[3], MaxLinLen );
+      if UpperCase(Chr(PB1[5])) <> 'O' then
+        moveleft( PB1, PageEHd[3], MaxLinLen );
+      end
+
+    else if IsCmd( PB1, 'FT3' ) then begin             { eAFootere@ eAlinee@ eAthree...e@ }
+      PrtHdrFtr := true;
+      if UpperCase(Chr(PB1[5])) <> 'E' then
+        moveleft( PB1, PageOFt[3], MaxLinLen );
+      if UpperCase(Chr(PB1[5])) <> 'O' then
+        moveleft( PB1, PageEFt[3], MaxLinLen );
+      end
+
+    else if IsCmd( PB1, 'HD' ) then begin              { eAHeadere@ eAlinee@ eAonee@ }
+      PrtHdrFtr := true;
+      if UpperCase(Chr(PB1[4])) <> 'E' then
+        moveleft( PB1, PageOHd[1], MaxLinLen );
+      if UpperCase(Chr(PB1[4])) <> 'O' then
+        moveleft( PB1, PageEHd[1], MaxLinLen );
+      end
+
+    else if IsCmd( PB1, 'FT' ) then begin              { eAFootere@ eAlinee@ eAonee@ }
+      PrtHdrFtr := true;
+      if UpperCase(Chr(PB1[4])) <> 'E' then
+        moveleft( PB1, PageOFt[1], MaxLinLen );
+      if UpperCase(Chr(PB1[4])) <> 'O' then
+        moveleft( PB1, PageEFt[1], MaxLinLen );
+      end
+
+    else if IsCmd( PB1, 'IXP' ) then begin             { eAIndex...e@ }
+      BAToStr( PB1, SpanNE( PB1, 5, ' ' ), NdxPagPfx );
+      end
+
+    else if IsCmd( PB1, 'IX' ) then begin              { eADittoe@ }
+      if GenNdx then PutNdx( PB1, PageNo );
+      end
+
+    else if IsCmd( PB1, 'PL' ) then begin              { eASete@ eApagee@ eAlengthe@ }
+      SetParm( PB1, LPP, 62, 1, 30000 );
+      end
+
+    else if IsCmd( PB1, 'LS' ) then begin              { eASete@ eAlinee@ eAspacinge@ }
+      SetParm( PB1, LinSpc, 1, 1, LPP );
+      end
+
+    else if IsCmd( PB1, 'SK' ) then begin              { eASkipe@ eANe@ eAlinese@ }
+      Skip := LinSpc;
+      SetParm( PB1, Skip, 1, 0, LPP );
+      fillchar( PB1, MaxLinLen, ' ' );
+      while (Skip>0) do begin
+        Skip := Skip - 1;
+        PutLine
+        end;
+      end
+
+    else if IsCmd( PB1, 'TL' ) then begin
+      SetParm( PB1, PageTLen, 65, 1, MaxLinLen );
+      end
+
+    else if IsCmd( PB1, 'END' ) then begin
+      NewPage( PageNo+1 );
+      PrntProc( PB1 );
+      end
+
+    else begin
+      PrntProc( PB1 );
+      end;
+  end;
+
+begin     { eAPageProce@ }
+  if IsCmd( PB1, '' ) then
+    DoCmd
+  else begin
+    PutLine;
+    if LinSpc>1 then
+      if BkSpanNE( PB1, MaxLinLen, ' ' )>0 then begin
+        fillchar( PB1, MaxLinLen, ' ' );
+        for i := 2 to LinSpc do PutLine
+        end
+    end
+end;
+
+
+procedure JstfProc( var JB2: BA );
+
+var
+  LMar: integer;
+
+   procedure Justify( var Buf: BA; LMar: integer );
+
+   var
+     RMar    : integer;
+     JstfCod : array[1..4] of byte;
+     Pad     : byte;
+
+   begin
+     RMar := LastNB( Buf );
+     If Not(Blankline(CurLin+1)) then begin
+     (*
+     If RMar >= ((JstfRMar DIV 10) * 7) then begin { eALinee@ eAmuste@ eAbee@ eAate@ eAleaste@ eA70%e@ eAfulle@ }
+     *)
+       JstfCod[3] := RMar - LMar + 1;
+       JstfCod[4] := 0;
+       if MicJus then Pad := CnvIB( $A0 ) else Pad := ord(' ');
+
+       while RMar<JstfRMar do begin
+         JstfPt := SpanNE( Buf, SpanEQ( Buf, JstfPt+1, ' ' ), ' ' );
+         if JstfPt>MaxLinLen then begin
+           JstfPt := BAColToNdx( LMar, Buf );
+           JstfPt := SpanEQ( Buf, JstfPt, ' ' );
+           JstfPt := SpanNE( Buf, JstfPt, ' ' )
+           end;
+         if JstfPt>MaxLinLen then        (* impossible to justify line *)
+           exit( Justify );
+         BAInsByt( Buf, JstfPt, 1, Pad );
+         RMar := RMar + 1;
+         JstfCod[4] := JstfCod[4] + 1
+         end;
+
+       JstfCod[1] := 27; {ESC}
+       JstfCod[2] := ord('P');
+       if MicJus and (JstfCod[4]>0) then
+         BAInsByt( Buf, BAColToNdx(LMar,Buf), 4, JstfCod[1] )
+       End
+   end;
+
+
+   procedure DoCmd;
+   begin
+     if          IsCmd( JB1, 'RM' ) then begin
+       SetParm( JB1, JstfRMar, 65, 1, MaxLinLen );
+     end else if IsCmd( JB1, 'LM' ) then begin
+       SetParm( JB1, JstfLMar, 1, 1, MaxLinLen );
+     end else if IsCmd( JB1, 'JT' ) then begin
+       JstfOpt := true;
+     end else if IsCmd( JB1, 'MJ' ) then begin
+       MicJus := true;
+     end else if IsCmd( JB1, 'NJ' ) then begin
+       MicJus := false;
+       JstfOpt := false;
+     end else if IsCmd( JB1, 'CE' ) then begin
+       CtrOpt := true;
+     end else if IsCmd( JB1, 'EC' ) then begin
+       CtrOpt := false;
+     end else begin
+       PageProc( JB1 );
+     end;
+   end;
+
+
+   procedure CntrBA( var B: BA );
+   var NewCol, OldCol, CtrCol, Len: integer;
+   begin
+     OldCol := FirstNB( B );
+     CtrCol := (JstfRMar+JstfLMar+1) div 2;
+     Len := LastNB( B ) - OldCol + 1;
+     NewCol := CtrCol-(Len div 2 );
+     if NewCol<OldCol then
+       BADelByt( B, 1, OldCol-NewCol )
+     else
+       BAInsByt( B, 1, NewCol-OldCol, BlkStr[1] );
+   end;
+
+begin   { eAJstFProce@ }
+  if IsCmd( JB1, '' ) then begin
+    DoCmd
+  end else begin
+    if CtrOpt then
+      CntrBA( JB1 )
+    else if JstfOpt and not IsCmd(JB2, '' ) then
+      Justify( JB1, max(FirstNB(JB1), FirstNB(JB2)) );
+    PageProc( JB1 );
+  end;
+
+  moveleft( JB2, JB1, MaxLinLen );
+end;
+
+
+
+procedure FillProc( var FB3: BA );
+
+var
+  I3,
+  Split1,
+  Split2,
+  BufLft,
+  BufRht: integer;
+
+
+  procedure FlshFB1;
+  begin
+    if not FB1Mty then begin
+      FB1Mty := true;
+      JstfProc( FB1 );
+      fillchar( FB1[1], MaxLinLen, ' ' );
+    end;
+
+    If FillOpt then begin
+      FB1Avail := FillLMar + FillInd;
+      if FB1Avail>FillRMar then
+        FB1Avail := FillLMar;
+    end else
+      FB1Avail := 1;
+  end;
+
+
+  procedure StuffFB1( Fst, Lst: integer );
+  var
+      E: EnhSetTyp;
+      Enh: array[1..3] of byte;
+  begin
+    if FB1Avail>3 then begin
+      if (FB1[FB1Avail-2]=ord('-')) and (FB1[FB1Avail-3]<>ord('-')) then
+        FB1Avail := FB1Avail - 2;
+    end;
+    moveleft( FB2[Fst], FB1[FB1Avail], Lst-Fst+1 );
+    FB1Avail := BkSpanNE( FB1, MaxLinLen, ' ' ) + 2;
+    if chr(FB1[FB1Avail-2]) in SentEnd then
+      FB1Avail := FB1Avail + 1;
+    FB1Mty := false;
+    if LastNB(FB1)>FillRMar then FlshFB1;
+    EnhAtCol( FB2, BANdxToCol(Lst,FB2), E );
+    fillchar( FB2[1], Lst, ' ' );
+    BufLft := FirstNB( FB2 );
+    if (E<>[]) and (FB2[BufLft]<>ord(' ')) then begin
+      CnvEnhByt( E, Enh[3] );
+      Enh[1] := 27;
+      Enh[2] := ord('e');
+      BAInsByt( FB2, BufLft, 3, Enh[1] );
+    end;
+  end;
+
+
+  procedure DoCmd;
+  var PassCmd: boolean;
+  begin
+    PassCmd := true;
+
+    if          IsCmd( FB2, 'NF' ) then begin
+      FillOpt := false;
+      PassCmd := false;
+    end else if IsCmd( FB2, 'FI' ) then begin
+      FillOpt := true;
+      PassCmd := false;
+    end else if IsCmd( FB2, 'RM' ) then begin
+      SetParm( FB2, FillRMar, 65, FillLMar+5, MaxLinLen );
+    end else if IsCmd( FB2, 'LM' ) then begin
+      SetParm( FB2, FillLMar, 1, 1, FillRMar-5 );
+    end;
+
+    FlshFB1;
+    if PassCmd then JstfProc( FB2 );
+    if debug then pexit;
+  end;
+
+
+  procedure FillText;
+
+ { eAFille@ eAeache@ eAlinee@ eAwithe@ eAase@ eAmanye@ eAwordse@ eAase@ eAit'lle@ eAholde@ eAwithoute@ eAbreakinge@ }
+
+  var
+    Need: integer;
+
+  begin
+    If SpanEQ(FB1,1,' ') > MaxLinLen Then Exit(FillText);
+    if not FillOpt then begin
+      FlshFB1;
+      FB1Avail := FillLMar;
+      StuffFB1( 1, MaxLinLen-FillLMar+1 );
+      end
+    else begin
+      BufLft := FirstNB( FB2 );
+      BufRht := BkSpanNE( FB2, MaxLinLen, ' ' );
+      while BufLft<=BufRht do begin
+        Need := FillRMar - BANdxToCol(FB1Avail,FB1) + 1;
+        Split1 := BAColToNdx( Need+BufLft-1, FB2 );
+        Split2 := BkSpanEQ( FB2, Split1, ' ' );
+        if Split2<BufLft then begin             { eANoe@ eAbreake@ eApointe@ eAine@ eAthise@ eAlinee@ }
+          if FB1Mty then                        { eACute@ eAlinee@ eAate@ eAthee@ eArighte@ eAmargine@ }
+            StuffFB1( BufLft, Split1 );
+          FlshFB1;
+          end
+        else begin                              { eAFounde@ eAae@ eAbreake@ eApointe@ }
+          StuffFB1( BufLft, Split2 );
+          if not BAMatch( FB2, FirstNB(FB2), ' ' ) then FlshFB1;
+          end;
+        BufRht := BkSpanNE( FB2, MaxLinLen, ' ' );
+        end;
+      end;
+  end;
+
+begin                                  { eAFillProce@ }
+  if not IsCmd( FB3, '' ) then
+    FillInd := (SpanNE( FB3, 1, ' ' ) - 1) mod MaxLinLen;
+
+  if IsCmd( FB2, '' ) then
+    DoCmd
+  else
+    FillText;
+
+  moveleft( FB3, FB2, MaxLinLen );
+end;
+
+procedure PrintLn( Img: BA );
+
+var Buf: BA;
+    RecNum, I: integer;
+    WkpdID, DirID: FilId;
+    WkpdNam: StrTyp;
+
+begin
+  fillchar( Buf[1], MaxLinLen, ' ' );
+
+  moveleft( Img[1], Buf[1], MaxLinLen );
+  if SpanNE( Buf, 1, ' ' )>MaxLinLen then
+    StrToBA( Buf, 1, '.SK' );
+
+  if IsCmd( Buf, '.' ) then exit( PrintLn ); { eACommente@ eAine@ eAtexte@ }
+  if IsCmd( Buf, 'CC' ) then begin
+    I := SpanNE( Buf, 4, ' ' );
+    if I>MaxLinLen then
+      FmtCmd := ord('.')
+    else
+      FmtCmd := Buf[I];
+  end;
+
+  if IsCmd( Buf, 'IN' ) then begin
+     BAToStr( Buf, 5, WkpdNam );
+     if GetFid( WkpdNam, DirID, WkpdID, i ) then begin
+        Buf := BlkStr;
+        RecNum := 1;
+        while RecGet( WkpdID, RecNum, i, Buf[1] ) do begin
+           PrintLn( Buf );
+           RecNum := RecNum + 1;
+           Buf := BlkStr
+           end
+        end
+      else begin
+        FillProc( Buf );
+        end;
+   end else begin
+     FillProc( Buf );
+     end;
+
+  if IsCmd( Buf, 'END' ) then begin
+    EndPrint := false;
+    while not EndPrint do FillProc( Buf )    { eAFlushe@ eAoute@ eAdatae@ eAine@ eAbufferse@ }
+    end;
+  UpdtGauge( CurLin, LstLin );
+  DoIdle := false;
+end;
+
+
+procedure PrintText( Lin, Last:  integer );
+
+var
+  OCurLin: integer;
+  LinImg:  BA;
+  L:  integer;
+
+begin
+  TellUsr(Msg(MGPRNT,42));       { eA"Formattinge@ eAtext..."e@ }
+  OCurLin := CurLin;
+  while (Lin<=Last) and not EndPrint do begin
+    GetLine( LinImg, Lin );
+    If Not(NoEnhance) Then Begin
+      L := BkSpanNE(LinImg,MaxLinLen,' ');
+      LinImg[L+1] := 27;
+      LinImg[L+2] := Ord('e');
+      LinImg[L+3] := $40         { eAAppende@ eAenhancementse@ eAoffe@ eAsequencee@ }
+      End;
+    PrintLn( LinImg );
+    BackGround;
+    if BrkPress then begin
+      Lin := Last;
+      unitstatus( 6, l, 22 );
+      if FilClear( PrtFid ) then begin end;
+      TellUsr(Msg(MGPRNT,71));   { eA"Printe@ eAoperatione@ eAaborted"e@ }
+      Wait100ms(30);
+      PrtAbort := True
+      end;
+    Lin := Lin + 1
+    end;
+  fillchar( LinImg, MaxLinLen, ' ' );
+  StrToBA( LinImg, 1, '.END' );
+  PrintLn( LinImg );
+  SetUpNewTxt( OCurLin );
+  TellUsr( Msg(MGGENL,10) )      { eA"Done."e@ }
+end;
+
+
+procedure PrintTask( Top, Bot: integer;
+                     procedure PrintText( T, B: integer ) );
+var
+  Done,
+  BndPrt : boolean;
+  LinImg : BA;
+
+   procedure SglSheet;
+   begin
+     SglShtOpt := Confirm( Msg(MGPRNT,37), SglShtOpt );
+     if SglShtOpt then
+       TellUsr( Msg(MGPRNT,38) )
+     else
+       TellUsr( Msg(MGPRNT,39) );
+   end;
+
+
+   procedure PageRange;
+   var Dum: boolean;
+   begin
+     if PmtInt( Msg(MGPRNT,40), StartPage ) then
+       Dum := PmtInt( Msg(MGPRNT,41), StopPage);
+   end;
+
+
+   procedure PrintInit;
+
+   begin
+     TxtInit;
+     SlowFlg := False;
+     NoEnhance := False;          { eADefaulte@ eAtoe@ eAprinte@ eAenhancementse@ }
+     PrtAbort := False;
+     FlushNewTxt;
+     if PrtFid.Loc=TxtFid.Loc then begin
+       Bell( BelWrn );
+       TellUsr( Msg(MGPRNT,44) );
+       Cmd := KTASK;
+       Key := chr(TIDEdit);
+       exit( PrintTask );
+     end;
+     LoadLabels( PrntFrame );
+     TellUsr( Msg(MGPRNT,67) );
+     GenNdx := false;
+     StartPage := 1;
+     StopPage := 32767;
+     MicJus := false;
+   end;
+
+
+   procedure PrtIndex;
+   var Dir: FilId;
+       Dum: boolean;
+       DENum, L: integer;
+       Term: KeyTyp;
+   begin
+     if PmtStr( Msg(MGINDX,2), NamNdxPad ) then begin
+       if GetFid( NamNdxPad, Dir, NdxFid, DENum ) then begin
+         GenNdx := true;
+         if Confirm( Msg(MGINDX,3), false ) then
+           Dum := FilClear( NdxFid );
+         BeginPrint;
+         PrtDest := PFile;
+         PrintText( Top, Bot );
+
+    (*
+         TellUsr( Msg(MGSORT,5) );
+         if FilNumRecs( NdxFid, L ) then
+           Sort( NdxFid, 1, L, 1, 250, true, 500 );
+    *)
+
+         View( NamNdxPad );
+         GenNdx := false;
+       end else begin
+         TellUsr( Subst(@NamNdxPad,Msg(MGWKSP,60)));
+       end;
+     end;
+   end;
+
+
+   procedure PrtFile;
+
+   Var
+     TXTPFNam : TXTString;
+
+   begin
+     BeginPrint;
+     PFNam := '';
+     if PmtStr( Msg(MGPRNT,43), PFNam ) then begin      { Ask for file name }
+        TXTSetCB(FBlk,Unknown,TRUE);
+        TXTPFNam := Concat(PFNam,'.TEXT');
+        TXTWrOpen(FBlk,FFID1, TXTPFNam);{ Add appropriate suffix }
+        if FBlk.Status<>0 then
+          TellUsr( Subst( @PFNam, Msg(MGCCOS,10)))      { Couldn't open file }
+        else begin
+          PrtDest := PFile;
+          PrintText( Top, Bot );
+          If Not(PrtAbort) Then FBlk.Mode := TXTOutPut
+            else FBlk.Mode := TXTPurge;
+          TXTClose(FBlk,FFID1)
+        end
+     end
+   end;
+
+
+   procedure PrtSpooler;
+
+   var Term  : KeyTyp;
+       QNam  : StrTyp;            { Pipe name }
+       SplMsg: StrTyp;            { Pipe message }
+       TXTQNam,
+       TXTFF : TXTString;
+
+   begin
+     BeginPrint;
+     if (not PrintEnable) and (not NoEnhance) then begin { Must have printer driver! }
+       Bell(BelErr);
+       TellUsr( Msg(MGPRNT,70) );
+       exit(PrtSpooler)
+       End;
+     SplMsg := '';
+     QNam := 'PRINTER';
+     if PmtStr( Msg(MGPRNT,52), QNam ) then begin       { Ask for pipe name }
+       if PmtStr( Msg(MGPRNT,53), SplMsg ) then begin   { Ask for pipe message }
+         TXTTTl1 := SplMsg;
+         TXTSetCB(FBlk,Unknown,True);
+         TXTQNam := Concat('/SPOOL/',QNam);
+         TXTWrOpen(FBLK,FFID1,TXTQNam);                 { Open pipe }
+         If FBlk.Status <> 0 Then Begin                    { Error opening pipe }
+           Bell(BelErr);
+           TellUsr(Msg(MGPRNT,69))
+           End
+         else begin
+          PrtDest := Spooler;
+          PB := @SpecOut;                               { Pointer to buffer }
+          UnitStatus(6,PB,$87);                         { Output to buffer }
+          PrintText( Top, Bot );
+          FBLK.Mode := TXTSpool;
+          FBlk.opnflg := True;                          { Hack to fix bug in CS.VSIUTXT }
+          TXTClose(FBlk,FFID1);
+          PB := NIL;
+          UnitStatus(6,PB,$87)                          { eAOutpute@ eAtoe@ eAdevicee@ }
+          End
+       End
+     End
+   End;
+
+
+   procedure PrtDisplay;
+   begin
+      BeginPrint;
+      PrtDest := Display;
+      PrtPause := true;
+      LinImg := BlkStr;
+
+      if SglShtOpt then
+         StrToBA( LinImg, 1, '.SF  ' )
+      else
+         StrToBA( LinImg, 1, '.CF  ' );
+
+      PrintLn( LinImg );
+      PrintText( Top, Bot );
+      If Not(PrtAbort) Then Begin
+        View( 'ROOT:PRINT' );
+        SetUpNewTxt(1);
+        TellUsr(Msg(MGPRNT,66))            { eA"Presse@ eA[Document]-[ViewPad]..."e@ }
+        end;
+      PrtPause := False
+   end;
+
+
+   procedure PrtPrinter;
+   begin
+     BeginPrint;
+     if not PrintEnable then begin
+       Bell(BelErr);
+       TellUsr( Msg(MGPRNT,36) );          { eA"Noe@ eAlocale@ eAprinter."e@ }
+     end else begin
+       PrtDest := Local;
+       LinImg := BlkStr;
+
+       if SglShtOpt then
+         StrToBA( LinImg, 1, '.SF  ' )
+       else
+         StrToBA( LinImg, 1, '.CF  ' );
+
+       PrintLn( LinImg );
+       PrintText( Top, Bot );
+
+     end;
+   end;
+
+
+   procedure PrtLayOut;
+   var CurChrSet: pCharSet;
+       iost, hx, hy, x, y: integer;
+   begin
+     CurChrSet := CurWin.CharPt;
+     CurWin.CharPt := CmdWin.CharPt;  {switch to 6x10}
+     iost := WinStatus( hx, hy, Cols6x10, Rows6x10, x, y );
+     BeginPrint;
+     PrtDest := Layout;
+     PushWindow( GaugeWin );
+     write( C_Home,C_ClrEOL,'\D',C_Home);  (* '\1BH\1BK\D\1BK' );  *)
+     PopWindow;
+     write( C_ClrHome,C_SetGrfOrg,'\0\0\0\E\3',C_CsrOff);
+          (*  '\1BJ\1B\o\0\0\0\E\3\1Bb' );  *)
+     RowLayOut := 0;
+     ColLayOut := 0;
+     XLayOut := 5;
+     YLayOut := 138;
+     PrintText( Top, Bot );
+     CurWin.CharPt := CurChrSet; {restore charset}
+     while UserIdle do begin end;
+     write( C_CsrOn );
+     Refresh;
+   end;
+
+{
+procedure PrintTask *MAIN*
+}
+begin
+  PrintInit;
+  Done := false;
+  while not Done do begin
+    NextCmd;
+    case Cmd of
+      KF1:  begin PrtPause := true; TellUsr( Msg(MGPRNT,48) ); end;
+      KF2:  begin PrtPause := false; TellUsr( Msg(MGPRNT,45) ); end;
+      KF3:  NoEnhance := not Confirm( Msg(MGPRNT,63), not NoEnhance );
+      KF4:  SglSheet;
+      KF5:  PageRange;
+      KF6:  PrtDisplay;
+      KF7:  PrtPrinter;
+      KF8:  PrtFile;
+      KF9:  PrtLayOut;
+      KF10: Done := true;
+      KF15: PrtIndex;
+      KF16: PrtSpooler;
+      KF19: Begin
+              If FilClear(PrtFID) then Begin End;
+              TellUsr(Msg(MGPRNT,71));  { eA"Printe@ eAoperatione@ eAaborted."e@ }
+              Bell(BelAck)
+              End;
+      otherwise: Done := not LocalEdit;
+    end;
+  end;
+end;

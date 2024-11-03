@@ -1,0 +1,340 @@
+File:  /DENISE/CPMSTUFF.TEXT                   10-May-83
+
+To use CP/M with your Corvus drive, you must run the CLINK2 program.
+(CLINK2 stands for Corvus LINK for version 2.x of CP/M.) This program
+installs the Corvus disk driver code into the currently running version
+of CP/M.  Since CLINK2 does a memory-only patch, it must be run each
+time you bring a new copy of CP/M into memory (i.e., each time you do a
+cold boot).  Because it must be run each time you do a cold boot, the
+CLINK2 program is an ideal candidate for use with the program auto load
+feature built into the CCP of CP/M 2.x.
+
+You must configure the CLINK2 program to fit your individual needs. To
+aid in this configuration, you should imagine the Corvus drive as a
+linear space which can store a fixed amount of information.  This space
+is divided into multiple pieces called volumes, each of which looks to
+you as if it were a floppy.  (For example, if you divide the drive into
+3 volumes, you can reference the first volume as C:, the second as D:,
+and the third as E:.) You must decide where you want each volume to
+start, and how long you want it to be.  The Corvus disk drivers require
+information about where and how your data is stored on the Corvus
+drive.  This information is stored in various tables within the CLINK2
+program.  The Corvus disk itself stores no information regarding disk
+layout.
+
+Before you can run the CLINK2 program, you must configure the various
+tables used by the program.  You must answer 4 questions:
+
+        1)  What is the size of your version of CP/M (i.e., 48K, 63K, 56K,
+        or some other number), and can you put the Corvus link "above" CP/M?
+        
+        2)  What is the size of your Corvus drive (i.e., 5MB, 10MB, or
+        20MB)?
+        
+        3)  How many volumes do you want to divide the Corvus drive into
+        (1 to 7)?
+        
+        4)  Are you going to use pipes or spooling?
+        
+When you have decided on your answers to the 4 questions listed above,
+you must edit the file CLINK2.ASM, which is the source file for the
+CLINK2 program.  Your answers determine the values for the variables
+FREE, ABOVE, FIVEMB, TENMB, TWNTYMB, NPSUDO, PIPES, and BLKSZ.  You
+must fill in the values for these variables, and then assemble the
+CLINK2 file.
+
+The program DRIVEL.COM will assist you in tthe configuration process.
+This program asks you the 4 questions mentioned above, and then prints
+out a table containing the values for the variables you must modify.
+It also prints out a map of your disk, which you should refer to when
+running other utilities such as MIRROR.COM and PUTGET.COM.
+ 
+Let's examine each question in more detail.
+  
+Determining CP/M size
+---------------------
+
+The Corvus disk drivers require about 1K of memory to run.  This 1K is
+taken away from the running CP/M, meaning that the Transient Program
+Area will be 1K smaller.  The best method for obtaining this 1K of
+memory is to reconfigure your version of CP/M, using MOVCPM or the
+equivalent, to be 1K smaller that your current version.  For example,
+if you are currently using a 48K version of CP/M, you must use MOVCPM
+to create a 47K version of CP/M.  We refer to this method as locating
+the link "above" CP/M.
+
+                                                          "ABOVE"=0
+         Unmodified CP/M          "ABOVE"=1                ("BELOW")
+  high  +---------------+       +---------------+       +---------------+
+ memory |               | FREE->| CLINK         |       |               |
+        | FDOS (BDOS+   |       +---------------+       | FDOS (BDOS+   |
+        |       BIOS)   |       |               |       |       BIOS)   |
+        |               |       | FDOS (BDOS+   |       |               |
+        +---------------+       |       BIOS)   |       +---------------+
+        |    CCP        |       |               |       |     CCP       |
+        |               |       +---------------+       |               |
+        |               |       |               |       |               |
+        +---------------+       |     CCP       |       +---------------+
+        |    TPA        |       |               |       | CLINK         |
+        |               |       +---------------+       +---------------+
+        |               |       |     TPA       |       |     TPA       |
+        |               |       |               |       |               |
+        |               |       |               |       |               |
+        |               |       |               |       |               |
+        +---------------+       +---------------+       +---------------+
+        | system        |       | system        |       | system        |
+  BOOT: | parameters    |       | parameters    |       | parameters    |
+        +---------------+       +---------------+       +---------------+
+
+Unfortunately, it is not always possible to put CLINK above CP/M.  This
+is the case for the Superbrain and some S100 systems.  In such cases,
+you will have to locate the Corvus driver "below" CP/M. Putting the
+link below CP/M has two disadvantages: 1) it requires more memory,
+shrinking the Transient Program Area even more, and 2) some programs
+may not work properly.  In particular, the auto density select feature
+may not work with the link installed below CP/M.  For more information,
+see the section titled, Modifying the Default Configuration.
+
+The answer to question (1) determines the values for FREE and ABOVE.
+
+Determining the size of your Corvus drive
+-----------------------------------------
+
+Corvus drives come in 3 sizes:  5 megabytes, 10 megabytes, and 20 megabytes.
+You must use 1 as the value for the variable which matches your drive size,
+and 0 for the other two.  For example, if you have a 5 megabyte drive,
+you would modify CLINK2 to look like:
+
+        FIVEMB  EQU     1
+        TENMB   EQU     0
+        TWNTYMB EQU     0
+        
+The answer to question (2) determines the values for FIVEMB, TENMB, and
+TWENTYMB.
+
+Determining how to divide your drive
+------------------------------------
+
+In dividing your drive into volumes, you should review the following 
+table.  It shows the various configurations that are possible.
+
+
+                                                            Max allowed
+                                                            by CP/M
+Drive size            5MB     10MB      20MB    8" floppy   (8 MB)     
+                                                                   
+Total size           44880    84880    153840    2002        65536
+(in sectors)
+
+Number of volumes:
+        1            42624    82624    37896
+        
+        2            21312    41312     75792
+        
+        3            14208    27540     50528
+        
+        4            10656    20656     37896
+        
+        5             8524    16524     30316
+        
+        6             7104    13768     25264
+        
+        7             6088    11800     21652
+        
+If pipes are not used, each volume will be slightly larger. Set the value
+for the variable NPSUDO to the number of volumes you wish to configure
+on the Corvus drive.
+
+Determining Pipes Requirements
+------------------------------
+
+If you wish to use pipes, you must reserve a pipes area on the Corvus
+drive.  The CLINK2 program will reserve a 400 block area if you set the 
+variable PIPES to 1.  This size is sufficient for most applications.
+
+Even if you are not going to use pipes right away, if you are planning
+on using them in the future, you should reserve the space now.  If you
+don't reserve the space now, you will have to reconfigure your system
+when you do start using pipes, and the reconfiguration process can be
+lengthy and complicated.
+
+Modifying defaults
+------------------
+
+You only need to read this section if you wish to do one or more of the
+following:
+
+        1) Configure a multi-drive system.
+        
+        2) Configure a drive with volumes that do not all have the same
+        disk block parameters (e.g., one
+        volume with 20000 sectors and one volume with 60000 sectors).
+        
+        3) Update an existing system to use pipes.
+        
+There are five types of tables which are used by the CLINK2 program. 
+Each of these types is identified by a label in the source code.  The
+labels are: 1) the pseudo drive (volume) labels, 2) the disk parameter
+header labels, 3) the disk parameter block labels, 4) the checksum
+vector labels, and 5) the allocation vector labels.  These labels
+(excepting the first) correspond to the disk parameter tables of CP/M,
+which are discussed in detail in chapter 10 of the CP/M 2.0 Alteration
+Guide, available from Digital Research (usually supplied with your CP/M
+system).
+
+In the CLINK2 program, you will find one pseudo drive label (PDRVn) for
+each volume defined.  Each of these labels denotes the start of a 4
+byte entry.  The first two bytes are a word value containing the lower
+16 bits of the sector address.  The third byte contains the upper 4
+bits of the sector address. The last byte contains the Corvus drive
+number.  
+
+In the CLINK2 program, you will find one disk parameter header label
+(DPEn) for each volume on the Corvus drive (that is, there is one DPE
+for each PDRV).  Each of these labels denotes the start of an entry
+which contains the label of a disk parameter block (DPBCx) and an
+allocation vector (ALVn). Several entries can share the same DPBCx
+label; however, each must have unique CSVn and ALVn labels.  The other
+values in this entry should not be changed.
+
+You will also find a disk parameter block label.  If you want to define
+more than one set of volume parameters, you will have to create a DPBCx
+for each configuration.  For example, if you want to define a layout
+with 4 volumes total, 2 of which are each 10000 sectors in length, and
+2 of which are 20000 sectors in length, you will need to define 2 disk
+parameter blocks.  DPBCA contains the disk parameters for the 10000
+sector volumes, and DPBCB contains the disk parameters for the 20000
+sector volumes.  The disk parameter block contains 10 values (15
+bytes): 
+
+     SPT is sectors per track.  Sectors per track should be 64 for a
+     5 or 20MB drive, and should be 60 for a 10MB drive.  This number
+     is somewhat arbitrary, since the Corvus drive is always accessed
+     by absolute sector number (not a track/sector pair).
+     SPT must be a multiple of 4, and
+     the assumption is made by other utilities that it is less than
+     255.
+
+     BSH is the block shift factor and BLM is the block mask. 
+     Values for both of these are determined directly by the block
+     size you choose (see table 2 below).
+
+     EXM is the extent mask.  Its value is determined by the block
+     size and directory size you choose (see table x.2 below).
+
+     DSM defines the size of the disk, in units of block size (see
+     table 2 below).
+
+     DRM specifies the number of directory entries.  You decide its
+     value.  Corvus recommends a value of 255 or 511.
+
+     AL0 and AL1 are the directory allocation vectors, and values
+     are determined by DRM and block size.
+
+     CKS is the size of the directory check vector.  The size of the
+     check vector is normally set to 0, which disables directory
+     checking.  Directory checking is normally used only on floppies
+     to determine when a new floppy has been inserted into a drive.
+     If CKS is not 0, its value is determined by DRM.
+
+     OFF is the number of reserved tracks at the beginning of the
+     (logical) disk, and is always 1.
+
+To use table 2, you should first determine how big you want your
+volume to be (i.e., how many CP/M sectors).  Then decide on your block
+size. Table 1 serves as a guide for choosing block size.  Note that
+no value is given for volumes > 50000 sectors.  This is because the
+configuration required by volumes of this size is usually too
+inefficient in disc utilization.
+
+
+             volume size (sectors)   recommended block size
+                 0 - 10000                    4k
+             10000 - 50000                    8k
+        
+                                Table 1
+                         Recommended block sizes
+
+
+In fact, the only limiting factor in choosing block size is memory
+space.  The CLINK2 program allows approximately 600 bytes for table space. 
+To compute the number of bytes required by your configuration, you can
+use the following formula:
+
+       table space required =  number of volumes * 20 + 
+                               number of DPBCs   * 15 +
+                               size of each ALVn      +
+                               size of each CSVn
+                               
+                               
+The first line of the equation comes from the fact that, together, each
+PDRV entry and DPE entry require 20 bytes.  The second line comes from
+the fact that each DPBC entry is 15 bytes in length.
+
+$P
+                                   Table 2
+                          Typical values for the DPBC
+  
+              block
+  volume      size                                      size of     size of
+  size        (bytes/                                   allocation  checksum
+  (sectors)   sectors)    DSM BSH BLM EXM DRM AL0,AL1   table       table 
+-----------------------------------------------------------------------------
+  4096        4k / 32     127   5  31   3 255 D0H,00H    16         64
+  8192        4k / 32     255   5  31   1 255 D0H,00H    32         64
+  65536       8k / 64    1023   6  63   3 255 80H,00H   128         64
+
+       DSM = (volume size * 128) / block size
+       
+       Values for BSH, BLM, and EXM are based on block size, and are given in
+       the CP/M manual.  They are repeated here:
+                                              
+                                              EXM
+            BLS         BSH     BLM     DSM<256 DSM>255
+            ---         ---     ---     ------- -------
+            2k           4       15        1       0
+            4k           5       31        3       1
+            8k           6       63        7       3
+            16k          7      127       15       7
+       
+       
+       DRM = number of directory entries - 1
+       
+       Values for AL0 and AL1 are computed based on DRM and block size,  
+       and are given in the CP/M manual.
+       
+       Size of allocation table = (DSM+1)/8 rounded up to the nearest whole
+       number.
+
+       Size of checksum table = DRM+1/4 rounded up to the nearest whole
+       number.
+       
+To completely configure CLINK2, you must follow the steps listed here:
+
+     1)  Make a map of your disk(s), showing where each volume starts,
+     and how many sectors long each volume is.  Also decide on the block
+     size and number of directory entries for each volume.  Remember that
+     you need to define a DPBC for each difference in the volume length,
+     block size, or DRM.
+                              
+                              PDRVx                    DPBC
+                        ------------------     --------------------------
+                        starting    Corvus     
+            volume      sector      drive               block
+            number      address     number     length   size   DSM   DRM
+          ---------------------------------------------------------------
+            1           564         1          5328      8k    42    255
+            2           5892        1          5328      8k    42    255
+            ...
+            
+            
+     2)  Create a DPBC entry for each volume size.
+     
+     3)  Create a PDRV entry for each volume.
+     
+     4)  Create a DPE entry for each volume.
+     
+     5)  Create a CSV entry for each volume.
+     
+     6)  Create an ALV entry for each volume.
+    

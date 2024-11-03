@@ -1,0 +1,39 @@
+
+    file   : xtraprom.text
+    date   : 15-March-1983
+    author : Keith Ball
+
+    Using the user proms
+
+    A second set of proms, besides the Concept boot proms, can be
+    installed on the Concept processor board.  These user proms, two
+    2732 eproms, reside in the $20000 to $21FFF address space.
+    Normally, they contain MacsBug, however, they can be used for any
+    other user definable purpose.
+
+    The boot proms will initialize and, under user control, execute
+    the code in these proms.  For the boot proms to do so, the user
+    proms must maintain the required interface.  The interface
+    requires that the first 4 bytes of the address space ($20000 to
+    $20003) have all zeros (0) in them.  The next 4 bytes ($20004 to
+    $20007) must have the entry point address of the initialization
+    code.  The initialization code must begin at address $2000C.  The
+    next 4 bytes ($20008 to $2000B) must be the entry point address of
+    the main code. This entry point can be at any even address within
+    the user prom address space ($20000 to $21FFF, inclusive).
+
+    The boot prom calls the user prom's intialization code during
+    system cold starts.  The call occurs after the boot proms do the
+    self-test and clear the static and dynamic RAM but, before it
+    initializes the interrupt vectors and the boot prom's keyboard and
+    display drivers, determines what peripherals are in the I/O slots
+    and prints the boot message.  The main entry point is called only
+    when the user has the boot switches set for the boot device prompt
+    and then selects the "D" option.
+
+
+    Note :
+
+       Both proms are required.  One prom contains all the odd address
+       bytes.  This is called the LOW prom.  The other prom contains
+       all the even address bytes.  This is called the HIGH prom.

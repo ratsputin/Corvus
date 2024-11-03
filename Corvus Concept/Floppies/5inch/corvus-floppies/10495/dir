@@ -1,0 +1,38 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY7 has 31 files,  0 to 6 (6), eov 1440, size 661, free 31
+
+ 1: ASMLIST.TEXT    Text 14-Feb-84    6-  10(   4),  2048+512=  2560 bytes
+ 2: CMDFL.TEXT      Text 19-Jan-83   10-  14(   4),  2048+512=  2560 bytes
+ 3: CSK.FAST        Data 16-May-83   14-  16(   2),  1024+512=  1536 bytes
+ 4: CSK.FAST.TEXT   Text 21-Jun-83   16-  40(  24), 12288+512= 12800 bytes
+ 5: DONTPANIC       Data  9-Feb-83   40-  52(  12),  6144+512=  6656 bytes
+ 6: DRV.KYBD        Data 10-Jan-83   52-  57(   5),  2560+512=  3072 bytes
+ 7: DRV.KYBD.TEXT   Text 10-Jan-83   57- 171( 114), 58368+512= 58880 bytes
+ 8: DRV.KYBDTM.TEXT Text 23-Aug-82  171- 183(  12),  6144+512=  6656 bytes
+ 9: DRV.OMNI.TEXT   Text  1-Feb-84  183- 283( 100), 51200+512= 51712 bytes
+10: DRV.OMNINET     Data  1-Feb-84  283- 286(   3),  1536+512=  2048 bytes
+11: DRV.SYSTRM      Data 31-Mar-83  286- 293(   7),  3584+512=  4096 bytes
+12: DRV.SYSTRM.TEXT Text 31-Mar-83  293- 401( 108), 55296+512= 55808 bytes
+13: DRV.TIMER       Data  5-Jan-83  401- 405(   4),  2048+512=  2560 bytes
+14: DRVLD.TEXT      Text 31-Mar-83  405- 409(   4),  2048+512=  2560 bytes
+15: KBRD.TBLS       Data 13-Apr-82  409- 411(   2),  1024+512=  1536 bytes
+16: KBRD.TBLS.TEXT  Text 13-Apr-82  411- 425(  14),  7168+512=  7680 bytes
+17: KBRD.VR3.TEXT   Text  6-Apr-82  425- 529( 104), 53248+512= 53760 bytes
+18: KBRDCHRRV0.TEXT Text 10-May-82  529- 543(  14),  7168+512=  7680 bytes
+19: LINKT.TEXT      Text 20-Jan-82  543- 547(   4),  2048+512=  2560 bytes
+20: PRNT.DRV        Data  7-Jul-82  547- 550(   3),  1536+512=  2048 bytes
+21: PRNT.DRV.TEXT   Text  7-Jul-82  550- 626(  76), 38912+512= 39424 bytes
+22: SETKBRD.TEXT    Text 14-Apr-82  626- 630(   4),  2048+512=  2560 bytes
+23: SETSR           Data 19-Jan-82  630- 635(   5),  2560+512=  3072 bytes
+24: SPC2000.TEXT    Text 14-Jul-83  635- 639(   4),  2048+512=  2560 bytes
+25: STARTUP.TEXT    Text 14-Feb-84  639- 643(   4),  2048+512=  2560 bytes
+26: TIMER.CLK.TEXT  Text  5-Jan-83  643- 691(  48), 24576+512= 25088 bytes
+27: TIMER.DRV.TEXT  Text  5-Jan-83  691- 747(  56), 28672+512= 29184 bytes
+28: TURNOFF.TEXT    Text 24-Feb-83  747- 757(  10),  5120+512=  5632 bytes
+29: USERKEYS.TEXT   Text 17-Aug-83  757- 763(   6),  3072+512=  3584 bytes
+30: VRS3KBRD        Ux2005 13-Apr-82  763- 765(   2),  1024+512=  1536 bytes
+31: VRS3KBRD.TEXT   Text 13-Apr-82  765- 779(  14),  7168+512=  7680 bytes

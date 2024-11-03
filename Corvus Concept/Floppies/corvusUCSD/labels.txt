@@ -1,0 +1,14 @@
+softech microsystems
+corvus
+pascal : 6390-32
+
+softech microsystems
+corvus system
+6588-36
+
+concept pascal diskette
+fpascal
+copyright (c) 1983 corvus systems
+release date: 23-sep-83
+8100-10382 rev:A
+

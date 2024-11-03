@@ -1,0 +1,2556 @@
+   
+   {$l-,c+,t-,d+}
+   {&l80,i2,n+,|+,m+}
+program PascalFormat;
+
+{
+             *********************************************
+             ******                                *******
+             ******  a pascal formatting program   *******
+             ******                                *******
+             *********************************************
+     
+
+             Author:  Glen Adamson
+             
+             Date:    November 1983.
+
+             Address: Adamson & Associates,
+                      14 Milton Pde.,
+                      Malvern,
+                      Victoria,
+                      Australia  4133.
+                      
+             Phone:   (03) 209 7838
+
+             Copyright 1983 by Adamson & Associates.
+
+
+     implemented for pascal version :-
+        - Corvus Concept SVS pascal.
+        - SoftTech P.System pascal.
+        - Apple pascal.
+        - refer to const "version" for implementation type.
+     objectives :-
+        - output a block indented format with "begins" and "ends"
+          at the end of lines.  the indentation indicates
+          the scope of a statement.
+        - indentation marking in the form of '|'.
+        - line numbering.
+        - output a map of program structure.
+        - output lowercase pascal reserved words.
+        - subroutines may be processed as separate input units.
+        - provide a memo of unusual program operation.
+     options :-
+        - output line length.
+        - indentation increment size.
+        - line numbering.
+        - indentation marks.
+        - structure map.
+        - the above options are controlled by a pseudo
+          comment at the start of the input file.
+        - debug aid.  this may be placed to bracket the offending input.
+        - the control comment format is:-
+              : first char := '&'.
+              : next char in [l,i,n,|,m,d].
+              : [l,i] followed by integer.
+              : [n,|,m,d] followed by [+,-].
+              : arguments separated by ','.
+              : no ' ' or eol  allowed.
+            where:-
+              'l'   controls   line length     default 80.
+              'i'      "       indent increment   "    2.
+              'n'      "       line numbering     "    true.
+              '|'      "       indent marking     "    true.
+              'm'      "       structure map      "    true.
+              'd'      "       debug aid          "    false.
+     assumptions :-
+        - input file is text of valid UCSD, SVS or Apple pascal syntax.
+        - ASCII character set.
+     notes :-
+        - in some cases line overflow will occur.
+        - comments following "end" are inept for this format
+          and will be dropped.
+        - comments inbedded within program text lines are mostly
+          inelegant and will be dropped.
+        - above actions will produce a memo.
+     outstanding improvements :-
+        - i/o error handling.
+        - expected syntax token checking with error output.
+        - block i/o.
+        - command line arguments to replace pseudo comment commands
+        - string overflow is not elegant.
+     bugs :-
+        - long comment lines and long momment blocks may be poorly
+          reproduced. data for comment processing is based on the
+          contents of the input buffer at the time of start of
+          comment output.
+        - labels preceeding "begin" and "end" produce non-
+          standard output.
+        - declared labels <= 4 characters long (see const
+          labelsize).
+        - the number of declared labels <= 20 (see const labelnumber).
+        - CR placed at start of file.
+   }
+const
+  version = 'CCOS 1.2  15-Jul-84';
+     {default system file names}
+  consolename = '/console/';
+  mapname = 'MAP.TEXT';
+  memoname = 'MEMO.TEXT';
+     {default option values}
+  dlinelength = 80;    {line = 1..xxx of char}
+  ddelta = 2;          {indentation increment  xxx >= 1}
+  dnumberlines = true; {flag for line numbering}
+  dindentmark = true;  {flag for indentation mark '|'}
+  doutmap = true;      {flag for structure map}
+  ddebug = false;      {flag for debug aid}
+     {the following are program constants which may be changed}
+  labelsize = 4;      {the number of char in a declared label <= xxx}
+  labelnumber = 20;   {the number of declared labels <= xxx}
+  buffersize = 4096;  {xxx >= (3 * "maxinline") see below}
+  maxinline = 512;    {xxx > maximum input line length}
+  listsize = 512;     {xxx = the max number of token discriptors}
+  maxlevel = 20;      {xxx = maximum level depth}
+  maxidsize = 24;     {xxx = max number of char in procedure,function name}
+     {the following const should not be changed}
+  rwmaxsize = 9;      {xxx = number of char in largest reserved word}
+  rwmaxp1 = 10;       {xxx = rwmaxsize + 1}
+  numrw = 44;         {xxx = number of reserved words}
+  errorrange = 31;    {xxx = max number of error messages}
+type
+  inindex = 1..buffersize;
+  listindex = 1..listsize;
+  labelindex = 1..labelnumber;
+  breakindex = 0..6;
+  tokensy = (andsy,arraysy,beginsy,casesy,constsy,divsy,dosy,downtosy,
+             elsesy,endsy,externsy,filesy,forsy,forwardsy,funcsy,gotosy,
+             ifsy,insy,labelsy,modsy,notsy,ofsy,orsy,packedsy,procsy,
+             progsy,recordsy,repeatsy,setsy,thensy,tosy,typesy,untilsy,
+             varsy,whilesy,withsy,assignsy,relop,addop,mulop,lbracket,
+             rbracket,arrow,colon,semicolon,comma,period,ident,leadcom,
+             includcom,tailcom,linecom,comstart,more,moreln,comend,
+             subrange,eolsy,dead,endtailcom,endblockcom,
+             unitsy,codesy,datasy,usessy,segsy,intersy,intrinsy,processsy,
+             specialcom,implemsy);
+  tokenrecord = record 
+                  tokens: tokensy;
+                  start: inindex;
+                  size,
+                  lead: integer end;
+  labelrecord = record 
+                  labelname: array[1..labelsize] of char;
+                  labellevel: integer end;
+  rwnametype = string[rwmaxsize];
+  nametype = array[1..maxidsize] of char;
+  errortype = 0..errorrange;
+  setoftokensy = set of tokensy;
+  setofchar = set of char;
+var 
+     {system type parameters}
+  infile: text;
+  outfile: text;
+  infilename: string[24];
+  outfilename: string[24];
+  outtofile: boolean;
+     {token list parameters}
+  list: array[1..listsize] of tokenrecord;
+  liststart,listfree: listindex;
+  token,tokenpast: tokensy;
+  listempty,stoplist: boolean;
+     {input buffer parameters}
+  instream: array[1..buffersize] of char;
+  instart,infree: inindex;
+  startlist,startin: integer;
+  stopin: boolean;
+     {declared label parameters}
+  labellist: array[1..labelnumber] of labelrecord;
+  labelfree: labelindex;
+     {input line discriptors}
+  inlinenum,leadcount,leadmin,shift: integer;
+  newinline,morecomment,eofile,eol: boolean;
+  input1,input2,input3: tokensy;
+  ch: char;
+     {output line discriptors}
+  linenumber,location,lineavail,lineleft,position,indent: integer;
+  linelength,delta: integer;
+  numberlines,saveflag,indentmark,outmap,debug,statistics: boolean;
+     {structure map parameters}
+  map: text;
+  saveid: array[1..maxlevel] of nametype;
+  lastline,lastlevel: integer;
+     {program parameters}
+  memo: text;
+  i,level: integer;
+  delta2: integer;
+  errorcount: integer;
+  highlevel: boolean;
+  flaglinecom,flagswapcom: boolean;
+  comments: setoftokensy;
+  blockswap: boolean;
+  stopswap: tokensy;
+  symbols: setofchar;
+  separators: setofchar;
+  prespacesy: setoftokensy;
+  postspacesy: setoftokensy;
+  unitsymbols: setoftokensy;
+  rw: array[1..numrw] of rwnametype;   {reserved words}
+  rwsy: array[1..numrw] of tokensy;    {reserved word tokens}
+  blankrw: rwnametype;                 {blank reserved word}
+  mayberw: rwnametype;                 {local copy of rw used in intoken}
+  frw: array[1..rwmaxp1] of integer;   {rw indices indexed by rw size}
+  break: array[0..6] of setoftokensy;  {beak poimts used to split
+                                        expressions}
+
+function BrkPress: boolean; external;                       {ref 12-10}
+
+procedure filllist; forward;
+
+procedure nextch; forward;
+
+function stepin(inpointl: inindex): inindex; forward;
+
+{$S init}
+procedure initialise;
+
+procedure inittables;
+var 
+  i: integer;
+begin
+  blankrw := '         ';
+  rw[1] := 'do       ';  rwsy[1] := dosy;
+  rw[2] := 'if       ';  rwsy[2] := ifsy;
+  rw[3] := 'in       ';  rwsy[3] := insy;
+  rw[4] := 'of       ';  rwsy[4] := ofsy;
+  rw[5] := 'or       ';  rwsy[5] := orsy;
+  rw[6] := 'to       ';  rwsy[6] := tosy;
+  rw[7] := 'and      ';  rwsy[7] := andsy;
+  rw[8] := 'div      ';  rwsy[8] := divsy;
+  rw[9] := 'end      ';  rwsy[9] := endsy;
+  rw[10] := 'for      ';  rwsy[10] := forsy;
+  rw[11] := 'mod      ';  rwsy[11] := modsy;
+  rw[12] := 'not      ';  rwsy[12] := notsy;
+  rw[13] := 'set      ';  rwsy[13] := setsy;
+  rw[14] := 'var      ';  rwsy[14] := varsy;
+  rw[15] := 'case     ';  rwsy[15] := casesy;
+  rw[16] := 'else     ';  rwsy[16] := elsesy;
+  rw[17] := 'file     ';  rwsy[17] := filesy;
+  rw[18] := 'goto     ';  rwsy[18] := gotosy;
+  rw[19] := 'then     ';  rwsy[19] := thensy;
+  rw[20] := 'type     ';  rwsy[20] := typesy;
+  rw[21] := 'with     ';  rwsy[21] := withsy;
+  rw[22] := 'unit     ';  rwsy[22] := unitsy;
+  rw[23] := 'code     ';  rwsy[23] := codesy;
+  rw[24] := 'data     ';  rwsy[24] := datasy;
+  rw[25] := 'uses     ';  rwsy[25] := usessy;
+  rw[26] := 'array    ';  rwsy[26] := arraysy;
+  rw[27] := 'begin    ';  rwsy[27] := beginsy;
+  rw[28] := 'const    ';  rwsy[28] := constsy;
+  rw[29] := 'label    ';  rwsy[29] := labelsy;
+  rw[30] := 'until    ';  rwsy[30] := untilsy;
+  rw[31] := 'while    ';  rwsy[31] := whilesy;
+  rw[32] := 'downto   ';  rwsy[32] := downtosy;
+  rw[33] := 'packed   ';  rwsy[33] := packedsy;
+  rw[34] := 'record   ';  rwsy[34] := recordsy;
+  rw[35] := 'repeat   ';  rwsy[35] := repeatsy;
+  rw[36] := 'forward  ';  rwsy[36] := forwardsy;
+  rw[37] := 'program  ';  rwsy[37] := progsy;
+  rw[38] := 'segment  ';  rwsy[38] := segsy;
+  rw[39] := 'process  ';  rwsy[39] := processsy;
+  rw[40] := 'external ';  rwsy[40] := externsy;
+  rw[41] := 'function ';  rwsy[41] := funcsy;
+  rw[42] := 'procedure';  rwsy[42] := procsy;
+  rw[43] := 'interface';  rwsy[43] := intersy;
+  rw[44] := 'intrinsic';  rwsy[44] := intrinsy;  {44 = const 'numrw'}
+  frw[1] := 1;   {first index into rw with size [x]}
+  frw[2] := 1;
+  frw[3] := 7;
+  frw[4] := 15;
+  frw[5] := 26;
+  frw[6] := 32;
+  frw[7] := 36;
+  frw[8] := 40;
+  frw[9] := 42;   {9= const 'rwmaxsize'}
+  frw[10] := 45;
+  for i := 1 to listsize do 
+    with list[i] do begin
+      tokens := dead;
+      size := 0 end;
+  labellist[1].labellevel :=  - 1;
+  break[0] := [ident];  {dummy value}
+  break[1] := [comma];
+  break[2] := [orsy];
+  break[3] := [andsy];
+  break[4] := [insy,relop,notsy];
+  break[5] := [addop,mulop,modsy,divsy];
+  break[6] := [comma]
+end; {inittables}
+
+procedure initscalors;
+begin
+  linelength := dlinelength;
+  delta := ddelta;
+  numberlines := dnumberlines;
+  indentmark := dindentmark;
+  outmap := doutmap;
+  debug := ddebug;
+  input1 := eolsy;
+  input2 := eolsy;
+  input3 := eolsy;
+  delta2 := 3*delta div 2;
+  infree := 1;
+  instart := 1;
+  listfree := 1;
+  liststart := 1;
+  labelfree := 1;
+  lastlevel := 0;
+  indent := 0;
+  position :=  - 1;
+  leadcount :=  - 1;
+  inlinenum := 1;
+  linenumber := 0;
+  errorcount := 0;
+  eofile := true;
+  eol := true;
+  if not eof(infile) then begin
+    eofile := false;
+    read(infile,ch);
+    if not eoln(infile) then eol := false end;
+  newinline := true;
+  flaglinecom := false;
+  flagswapcom := false;
+  morecomment := false;
+  blockswap := false;
+  statistics := false;
+     {calc startlist}
+  startlist := listsize div 2;
+     {calc startin}
+  startin := buffersize div 2;
+  if startin <= maxinline then startin := maxinline + 2;
+  stopin := false;
+  stoplist := false;
+  listempty := false
+end; {initscalors}
+
+procedure initsets;
+begin
+  comments := 
+      [leadcom,includcom,tailcom,endtailcom,endblockcom,linecom,comstart,
+      more,moreln,comend];
+  separators := 
+      [',',' ','''','(',')','*','+','-','.','/',':',';','<','=','>','[',
+      ']','^','{','}'];
+  symbols := separators + ['$','|','!','&','"','#','%','?','~'];
+  prespacesy := 
+      [andsy,divsy,dosy,downtosy,endsy,externsy,insy,forwardsy,modsy,
+      ofsy,orsy,thensy,tosy,relop,assignsy,addop];
+  postspacesy := 
+      [andsy,casesy,divsy,dosy,downtosy,elsesy,forsy,funcsy,gotosy,ifsy,
+      insy,labelsy,modsy,notsy,ofsy,orsy,packedsy,procsy,progsy,recordsy,
+      thensy,tosy,untilsy,varsy,whilesy,withsy,relop,colon,assignsy,
+      processsy,unitsy,codesy,datasy,intrinsy,segsy,addop,beginsy,implemsy];
+  unitsymbols := [unitsy,codesy,datasy,usessy,segsy,intersy,intrinsy,
+                  implemsy];
+end; {initsets}
+
+begin {initialise}
+     { get INPUT file data }
+  writeln;
+  writeln('Adamson Pascal Formatter:   [ ',version,' ].');
+  writeln;
+  writeln('".text" will be added.  <cr> = Abort.');
+  write  ('INPUT   ------>  Format which Pascal text file ? ');
+  readln(infilename);
+  if length(infilename) = 0 then exit(PascalFormat);
+  infilename := concat(infilename,'.text');
+  reset(infile,infilename,buffered);
+     { check that input file is ok }
+  if eof(infile) then  begin
+    writeln('####### input file is empty #######');
+    halt end;
+     { get OUTPUT file data }
+  writeln;
+  writeln('".text" will be added.  <cr> = Console.');
+  write  ('OUTPUT  ------>  Output to which Volume: File ?');
+  readln(outfilename);
+  outfilename := concat(outfilename,'.text');
+     { check for console and open file }
+  if length(outfilename) = 5 then begin
+    outfilename := consolename;
+    outtofile := false;
+    rewrite(outfile,outfilename,buffered) end
+  else begin
+    outtofile := true;
+    rewrite(outfile,outfilename,buffered) end;
+     { set up MAP file }
+  rewrite(map,mapname,buffered);
+     { set up MEMO file }
+  rewrite(memo,memoname,buffered);
+  writeln(memo);
+  writeln(memo,'######  the following should be noted  ######');
+  inittables;
+  initscalors;
+  initsets;
+  filllist;
+  token := list[liststart].tokens;
+  tokenpast := dead;
+end; {initialise}
+
+{$S endprog}
+procedure endprogram;
+begin
+     { shrink the MAP file }
+  close(map,crunch);
+  reset(map,mapname,buffered);
+     { shrink the MEMO file }
+  close(memo,crunch);
+  reset(memo,memoname,buffered);
+     { dump map to output }
+  writeln(outfile);
+  if outmap then begin
+    page(outfile);
+    writeln(outfile);
+    while not eof(map) do begin
+      while not eoln(map) do begin
+        read(map,ch);
+        write(outfile,ch) end;
+      readln(map);
+      writeln(outfile) end end;
+     { dump memo to output }
+  if errorcount <> 0 then begin
+    page(outfile);
+    writeln(outfile);
+    writeln(outfile,'{');
+    while not eof(memo) do begin
+      while not eoln(memo) do begin
+        read(memo,ch);
+        write(outfile,ch) end;
+      readln(memo);
+      writeln(outfile) end;
+    writeln(outfile,'}');
+     { clean up MEMO file }
+    writeln;
+    if errorcount = 1 then writeln('There is one memo note on this run.')
+    else writeln('There are ',errorcount:1,' memo notes on this run.');
+    write('Do you wish to save the  MEMO.TEXT file. ? y/n ');
+    read(ch);
+    if ch in ['Y','y'] then close(memo,lock)
+    else close(memo,purge) end
+  else close(memo,purge);
+     { clean up MAP file }
+  if outmap then begin
+    writeln;
+    write('Do you wish to save the  MAP.TEXT file. ? y/n ');
+    read(ch);
+    if ch in ['Y','y'] then close(map,lock)
+    else close(map,purge) end
+  else close(map,purge);
+     { clean up the other files }
+  writeln(outfile);
+  close(outfile,lock);
+  close(infile,lock);
+end; {endprogram}
+
+{$S checkt}
+procedure checkt(indexl: listindex);
+   {a debug routine used to write tokenrecord}
+var
+  inpointl: inindex;
+  i: integer;
+begin
+  with list[indexl] do begin
+    writeln;
+    write('index =',indexl: 3,', lead =',lead: 3,', start =',start: 4);
+    write(', size =',size: 4,', token = ');
+    case ord(tokens) of
+      0: writeln('and');
+      1: writeln('array');
+      2: writeln('begin');
+      3: writeln('case');
+      4: writeln('const');
+      5: writeln('div');
+      6: writeln('do');
+      7: writeln('downto');
+      8: writeln('else');
+      9: writeln('end');
+      10: writeln('extern');
+      11: writeln('file');
+      12: writeln('for');
+      13: writeln('forward');
+      14: writeln('function');
+      15: writeln('goto');
+      16: writeln('if');
+      17: writeln('in');
+      18: writeln('label');
+      19: writeln('mod');
+      20: writeln('not');
+      21: writeln('of');
+      22: writeln('or');
+      23: writeln('packed');
+      24: writeln('procedure');
+      25: writeln('program');
+      26: writeln('record');
+      27: writeln('repeat');
+      28: writeln('set');
+      29: writeln('then');
+      30: writeln('to');
+      31: writeln('type');
+      32: writeln('until');
+      33: writeln('var');
+      34: writeln('while');
+      35: writeln('with');
+      36: writeln('assign');
+      37: writeln('relop');
+      38: writeln('addop');
+      39: writeln('mulop');
+      40: writeln('lbracket');
+      41: writeln('rbracket');
+      42: writeln('arrow');
+      43: writeln('colon');
+      44: writeln('semicolon');
+      45: writeln('comma');
+      46: writeln('period');
+      47: writeln('ident');
+      48: writeln('leadcom');
+      49: writeln('includecom');
+      50: writeln('tailcom');
+      51: writeln('linecom');
+      52: writeln('comstart');
+      53: writeln('more');
+      54: writeln('moreln');
+      55: writeln('comend');
+      56: writeln('subrange');
+      57: writeln('eol');
+      58: writeln('dead');
+      59: writeln('endtailcom');
+      60: writeln('endblockcom');
+      61: writeln('unit');
+      62: writeln('code');
+      63: writeln('data');
+      64: writeln('uses');
+      65: writeln('segment');
+      66: writeln('interface');
+      67: writeln('intrinsic');
+      68: writeln('process');
+      69: writeln('specialcom');
+      70: writeln('implementation') end;
+    inpointl := start;
+    i := 1;
+    write('input buffer = "');
+    while i <= size do begin
+      write(instream[inpointl]);
+      inpointl := stepin(inpointl);
+      i := i + 1 end;
+    writeln('"') end
+end; {checkt}
+
+{$S error}
+procedure error(errornumber: errortype);
+begin
+  if not (errornumber in [6,24,27,28,29]) then begin
+    writeln;
+    writeln end;
+  case errornumber of
+    1: writeln('instream overflow.');
+    2: writeln('found eol in the middle of "option comment".');
+    3: writeln(
+      'the char "curly rbracket", "&", "$", found out of sequence.' );
+    4: writeln('illegal char.');
+    5: writeln('size in outstream <= 0.');
+    6: writeln(memo,'output line overflow at line ',linenumber: 1);
+    7: writeln('call to cant does not use "<" or ">".');
+    8: writeln('only [orsy,comma] allowed as argument to split.');
+    9: writeln('declared label has too many characters.');
+    10: writeln('too many declared labels, refer : const labelnumber.');
+    11: writeln('indentation <> 0 at start of procedure or function.');
+    12: writeln('block did not conclude with ";".');
+    13: writeln('"end" not found following compound statement.');
+    14: writeln('wrong token at start of statement.');
+    15: writeln('indentation error at start of block.');
+    16: writeln('"begin" not found at start of body.');
+    17: writeln('"end" not found at end of body.');
+    18: writeln('indentation error at end of block.');
+    19: writeln('token <> comment in procedure putcomment.');
+    20: writeln('tokencount < 0 in procedure split.');
+    21: writeln('"option comment" has non digit char for length.');
+    22: writeln('"option comment" does not use "+" or "-" value.');
+    23: writeln('"option comment" should not use " ".');
+    24:
+      writeln(memo,'could not split comment at output line # ',
+              linenumber: 1);
+    25: writeln('instart has court infree and it is not eofile.');
+    26: writeln('eol size > 0 in procedure filter.');
+    27: writeln(memo,'long comment prevented desired action.');
+    28:
+      writeln(memo,'dropped included  comment from input line # ',
+              inlinenum: 1);
+    29:
+      writeln(memo,'dropped "end" comment near input line # ',
+              inlinenum: 1);
+    30: writeln('includcom or endtailcom not expected.');
+    31: writeln('no valid pascal found. execution stopped.') end;
+  if not (errornumber in [6,24,27,28,29]) then begin
+    checkt(liststart);
+    close(infile,lock);     {save input file}
+    close(outfile,crunch);  {save as mush of output as possible}
+    close(memo,crunch);     {save as much of memo as possible}
+    close(map,crunch);      {save as much of map as possible}
+    halt end;
+  errorcount := errorcount + 1
+end; {error}
+
+function stepin;   { (inpointl: inindex): inindex; forward; }
+begin
+  if inpointl = buffersize then stepin := 1
+  else stepin := inpointl + 1
+end;
+
+function priorin(inpointl: inindex): inindex;
+begin
+  if inpointl = 1 then priorin := buffersize
+  else priorin := inpointl - 1
+end;
+
+function steplist(indexl: listindex): listindex;
+begin
+  if indexl = listsize then steplist := 1
+  else steplist := indexl + 1
+end;
+
+function priorlist(indexl: listindex): listindex;
+begin
+  if indexl = 1 then priorlist := listsize
+  else priorlist := indexl - 1
+end;
+
+procedure nextch;
+begin
+  if eof(infile) then begin
+    eofile := true;
+    eol := true end
+  else if eoln(infile) then begin
+    eol := true;
+    readln(infile);
+    inlinenum := inlinenum + 1;
+    leadcount :=  - 1 end
+  else begin
+    eol := false;
+    read(infile,ch);
+    if ord(ch) = 9 then begin
+         {ch is a tab}
+      leadcount := leadcount + 8 - leadcount mod 8;
+      ch := ' ' end
+    else leadcount := leadcount + 1 end
+end; {nextch}
+
+procedure filllist;
+var
+  index: listindex;
+  listunused,bufferunused: integer;
+
+procedure place(charr: char);
+begin
+  instream[infree] := charr;
+  infree := stepin(infree);
+     {test for buffer approaching full}
+  bufferunused := instart - infree;
+  if bufferunused < 0 then bufferunused := bufferunused + buffersize;
+  if bufferunused <= maxinline then stopin := true;
+     {test for buffer about to overflow}
+  if infree = instart then error(1)
+end; {place}
+
+procedure incomment;
+var
+  test: boolean;
+begin
+  with list[index] do begin
+    if morecomment then begin
+         {this input line is 'more' comment or 'endcom'}
+      start := infree;
+      size := 0;
+         {skip leading blanks but save lead}
+      while not eol and (ch = ' ') do nextch;
+      lead := leadcount end;
+       {input the comment and test for end of comment}
+    test := false;
+    while not (eol or test) do begin
+      place(ch);
+      size := size + 1;
+      if ch = '}' then test := true
+      else
+        while not (eol or test) and (ch = '*') do begin
+          nextch;
+          if not eol then begin
+            if ch = '}' then begin
+              test := true;
+              place(ch);
+              size := size + 1 end
+            else if ch = ')' then begin
+              test := true;
+              if size = 1 then lead := lead + 1;
+              instream[priorin(infree)] := '}' end
+            else begin
+              place(ch);
+              size := size + 1 end end end;
+      if not eol then nextch end;
+       {skip hidden blanks preceeding eol}
+    while not eol and (ch = ' ') do nextch;
+       {define comment type}
+    if morecomment then
+      if test then begin
+        tokens := comend;
+        morecomment := false end
+      else begin
+           {eol is true}
+        if size > 0 then tokens := more
+        else tokens := moreln;
+        nextch end
+    else begin
+      if test then
+        if input1 = eolsy then
+          if eol then tokens := linecom
+          else tokens := leadcom
+        else if eol or (ch = ';') then
+          if (input1 = endsy) and (input2 = eolsy) then
+            if ch = ';' then begin
+              tokens := endblockcom;
+              flagswapcom := true end
+            else tokens := endtailcom
+          else if (input1 in [period,semicolon])
+             and (input2 = endsy) and (input3 = eolsy) then
+            tokens := endblockcom
+          else tokens := tailcom
+        else tokens := includcom
+      else begin
+           {eol is true}
+        tokens := comstart;
+        morecomment := true;
+        nextch end;
+      if instream[start + 1] in ['&', '$'] then
+        tokens := specialcom end end;
+end; {incomment}
+
+procedure intoken;
+var
+  inpointl: inindex;
+  charr: char;
+  test: boolean;
+  j,i,ilimit: integer;
+  lbuffer: string[14];
+
+procedure options;
+var
+  opcode: char;
+  int: integer;
+begin
+  with list[index] do begin
+    place(ch);  {&}
+    size := size + 1;
+    nextch;
+    while not eol
+          and (ch in ['N','n','|','M','m','L','l','I','i','D','d']) do begin
+         {reset indicated option}
+      opcode := ch;
+      place(ch);  {n d m l or i}
+      size := size + 1;
+      nextch;
+      if not eol and (opcode in ['N','n','|','M','m','D','d']) then begin
+        if not (ch in ['+','-']) then error(22);
+        if opcode in ['N','n'] then numberlines := ch = '+'
+        else if opcode in ['M','m'] then outmap := ch = '+'
+        else if opcode in ['D','d'] then debug := ch = '+'
+        else if opcode = '|' then indentmark := ch = '+';
+        place(ch);  {+ or -}
+        size := size + 1;
+        nextch end
+      else if not eol then begin
+        int := ord(ch) - 48;  {ASCII(48) = 0}
+        place(ch);  {digit}
+        size := size + 1;
+        if not (ch in ['0'..'9']) then error(21)
+        else begin
+             {initialise integer value}
+          nextch;
+          while not eol and (ch in ['0'..'9']) do begin
+            int := 10*int + ord(ch) - 48;
+            place(ch);  {digit}
+            size := size + 1;
+            nextch end;
+          if not eol then
+            if opcode in ['L','l'] then linelength := int
+            else delta := int end end;
+      if not eol and (ch = ',') then begin
+        place(ch);  {,}
+        size := size + 1;
+        nextch end;
+      if not eol and (ch = ' ') then error(23) end end;
+  if eol then error(2)
+end; {options}
+
+begin {intoken}
+  with list[index] do begin
+    start := infree;
+    size := 0;
+       {skip leading blanks and '|' but save lead}
+    while not eol and (ch in [' ','|']) do nextch;
+    lead := leadcount;
+    if eol then begin
+         {define eol token and exit}
+      tokens := eolsy;
+      nextch end
+    else begin
+         {read input until token completed}
+      repeat
+        if not eol then begin
+          place(ch);
+          size := size + 1;
+          test := ch in separators;
+          nextch end
+      until eol or test or (ch in separators);
+      if size = 1 then begin
+           {token = symbol or one char ident}
+        charr := instream[start];
+        if charr in symbols then begin
+          case charr of
+            '{': begin
+              if not eol and (ch = '&') then options;
+              incomment end;
+            '(': begin
+              if not eol and (ch = '*') then begin
+                instream[start] := '{';
+                lead := lead + 1;
+                nextch;  {drop '*'}
+                if not eol and (ch = '&') then options;
+                incomment end
+              else tokens := lbracket end;
+            '''': begin
+              tokens := ident; {string treated as ident}
+              test := false;
+              while not (eol or test) do
+                if ch = '''' then begin
+                  place('''');
+                  size := size + 1;
+                  nextch;
+                  if not eol and (ch = '''') then begin
+                    place('''');
+                    size := size + 1;
+                    nextch end
+                  else test := true end
+                else begin
+                  place(ch);
+                  size := size + 1;
+                  nextch end end;
+            ':': begin
+              tokens := colon;
+              if not eol and (ch = '=') then begin
+                tokens := assignsy; {:=}
+                place('=');
+                size := 2;
+                nextch end end;
+            '.': begin
+              tokens := period;
+              if not eol and (ch = '.') then begin
+                tokens := subrange;
+                place('.');
+                size := 2;
+                nextch end end;
+            '=': tokens := relop;
+            '<': begin
+              tokens := relop;
+              if not eol and (ch in ['>','=']) then begin
+                place(ch);
+                size := 2;
+                nextch end end;
+            '>': begin
+              tokens := relop;
+              if not eol and (ch = '=') then begin
+                place('=');
+                size := 2;
+                nextch end end;
+            ',': tokens := comma;
+            ';': tokens := semicolon;
+            '[': tokens := lbracket;
+            '^': tokens := arrow;
+            ')',']': tokens := rbracket;
+            '+','-': tokens := addop;
+            '*','/': begin
+              tokens := mulop;
+              while not eol and (ch = '*') do begin
+                tokens := ident;
+                place('*');
+                size := size + 1;
+                nextch end end;
+            '}','$','&','|': begin
+              tokens := ident;
+              error(3) end;
+            '!','"','#','%','?','~': begin
+              tokens := ident;
+              error(4) end end end
+        else tokens := ident end
+      else if size <= rwmaxsize then begin
+           {test for possible reserved word. load mayberw}
+        inpointl := start;
+        test := instream[start] in ['A'..'Z'];
+           {if test then convert to lowre case}
+        mayberw := blankrw;
+        for i := 1 to rwmaxsize do
+          if i <= size then begin
+            if test then mayberw[i] := chr(ord(instream[inpointl]) + 32)
+            else mayberw[i] := instream[inpointl];
+            inpointl := stepin(inpointl);
+            test := instream[inpointl] in ['A'..'Z'] end;
+           {test for mayberw = reserved word}
+        i := frw[size];
+        ilimit := frw[(size + 1)];
+        repeat
+          test := mayberw = rw[i];
+          i := i + 1
+        until test or (i >= ilimit);
+        if test then begin
+          tokens := rwsy[(i - 1)];
+          if tokens in unitsymbols then begin
+               { output upper case UNIT symbols }
+            inpointl := start;
+            for i := 1 to size do begin
+              instream[inpointl] := chr(ord(mayberw[i]) - 32);
+              inpointl := stepin(inpointl) end end
+          else begin
+               {change instream to lower case. copy mayberw}
+            inpointl := start;
+            for i := 1 to size do begin
+              instream[inpointl] := mayberw[i];
+              inpointl := stepin(inpointl) end end end
+        else tokens := ident end
+      else if size = 14 then begin
+           {14 = ch count in "IMPLEMENTATION"}
+           {note - this is the exception on reserved word handling
+                   due to its length of 14 char.}
+           {copy instream to local buffer}
+        lbuffer := '              ';
+        for i := 1 to 14 do begin
+          lbuffer[i] := instream[start + i - 1];
+             {convert to UPPER case}
+          if lbuffer[i] in ['a'..'z'] then
+            lbuffer[i] := chr(ord(lbuffer[i]) - 32) end;
+           {test = "IMPLEMENTATION"}
+        if lbuffer = 'IMPLEMENTATION' then begin
+             {copy buffer to instream}
+          for i := 1 to 14 do instream[start + i - 1] := lbuffer[i];
+          tokens := implemsy end
+        else tokens := ident end
+      else tokens := ident end end;
+  if debug then checkt(index);
+end; {intoken}
+
+procedure filter(recursive: boolean);
+var
+  change,test: boolean;
+  thisindex,priorindex,indexl,spotin,spotout,
+  savefree: listindex;
+  thistoken,priortoken: tokensy;
+  temptoken: tokenrecord;
+  inpointl: inindex;
+  i: integer;
+begin
+   {warning !!!! operation of the program is very sensitive to this
+                 routine and changes to it may cause unexpected
+                 side effects.
+
+    join :-        prior = [ident,arrow]
+                   this  = [period,arrow,subrange,ident]
+
+    kill this :-   prior = [eol,else,then,end]
+                   this  = [eol,endblockcom]
+              :-   this  = [includcom,endtailcom]
+
+    kill prior :-  prior = [semicolon]
+                   this  = [end,else,until]
+               :-  prior = [eol]
+                   this  = [begin,end,then,do,if,until]
+
+    rename this :- prior = [begin,then,do,else,repeat,var,
+    as linecom              type,const,label]
+                   this  = [tailcom]
+
+    swap :-        prior = [comments]
+                   this  = [end,then,do,semicolon,comma]
+         :-        prior(prior) = [ not(semicolon,dead) ]
+                   prior = [comments]
+                   this  = [begin]
+
+    blockswap :-   prior(prior) = [else]
+                   prior = [comments]
+                   this  = [if]
+   }
+  repeat
+       {this code fill only make one change per pass}
+    change := false;
+    thisindex := priorlist(listfree);
+    thistoken := list[thisindex].tokens;
+    priorindex := priorlist(thisindex);
+    priortoken := list[priorindex].tokens;
+       {test for a join condition}
+    if (thistoken in [period,arrow,subrange,ident])
+       and (priortoken in [ident,arrow]) then begin
+         {join the two tokens}
+      list[priorindex].size :=
+          list[priorindex].size + list[thisindex].size;
+      list[priorindex].tokens := ident;
+      list[thisindex].tokens := dead;
+      list[thisindex].size := 0;
+      listfree := thisindex;
+      change := true end
+       {test for kill of thistoken}
+    else if (((thistoken = eolsy)
+       or ((thistoken = endblockcom) and not flagswapcom))
+       and (priortoken in [eolsy,elsesy,thensy,endsy]))
+       or (thistoken in [includcom,endtailcom]) then begin
+         {kill thistoken}
+      with list[thisindex] do begin
+        if thistoken = includcom then error(28)
+        else if thistoken in [endblockcom,endtailcom] then error(29);
+        tokens := dead;
+        if size > 0 then begin
+          if thistoken = eolsy then error(26);
+          inpointl := start;
+          for i := 1 to size do begin
+            instream[inpointl] := '}';
+            inpointl := stepin(inpointl) end;
+          size := 0 end end;
+      listfree := thisindex;
+      change := true end
+       {test for kill of priortoken}
+    else if ((thistoken in [endsy,elsesy,untilsy])
+       and (priortoken = semicolon))
+       or ((thistoken in [beginsy,endsy,thensy,dosy,ifsy,untilsy])
+       and (priortoken = eolsy)) then begin
+         {kill priortoken}
+      with list[priorindex] do
+        if size > 0 then begin
+          if priortoken = eolsy then error(26);
+          inpointl := start;
+          for i := 1 to size do begin
+            instream[inpointl] := '}';
+            inpointl := stepin(inpointl) end end;
+      list[priorindex] := list[thisindex];
+      listfree := thisindex;
+      list[listfree].tokens := dead;
+      list[listfree].size := 0;
+      change := true end
+       {test for rename of tokens}
+    else if (thistoken = tailcom)
+       and (priortoken in
+       [beginsy,thensy,dosy,elsesy,repeatsy,varsy,typesy,constsy,
+       labelsy]) then begin
+         {rename token}
+      list[thisindex].tokens := linecom;
+      change := true end
+    else begin
+         {test for swaps}
+      test := false;
+      if not blockswap then
+        if priortoken in comments then begin
+          if (thistoken in [endsy,thensy,dosy,semicolon,comma])
+             or ((thistoken = beginsy)
+             and (not (list[priorlist(priorindex)].tokens in
+             [semicolon,dead]))) then test := true
+          else if not recursive then
+            if thistoken = ifsy then begin
+              indexl := priorindex;
+              while (list[indexl].tokens in comments)
+                    and (indexl <> liststart) do
+                indexl := priorlist(indexl);
+              blockswap := list[indexl].tokens = elsesy;
+              stopswap := thensy end;
+          if (test
+             or (not recursive and blockswap))
+             and (priortoken = comend) then begin
+               {check to see if comstart is in buffer}
+            indexl := priorindex;
+            while (list[indexl].tokens in [more,moreln,comend])
+                  and (indexl <> liststart) do
+              indexl := priorlist(indexl);
+            test := list[indexl].tokens = comstart;
+            if not test then begin
+              error(27);
+              blockswap := false end end end;
+      if test or (not recursive and blockswap) then begin
+        if blockswap then blockswap := thistoken <> stopswap;
+        flagswapcom := false;
+        temptoken := list[thisindex];
+        spotin := thisindex;
+        spotout := priorindex;
+        while priortoken in comments do begin
+          list[spotin] := list[spotout];
+          spotin := spotout;
+          spotout := priorlist(spotout);
+          priortoken := list[spotout].tokens end;
+        list[spotin] := temptoken;
+        savefree := listfree;
+        listfree := steplist(spotin);
+        filter(true);
+        if listfree <> savefree then
+             {redefine listfree}
+          repeat
+               {find first dead token}
+            while (list[listfree].tokens <> dead)
+                  and (listfree <> savefree) do
+              listfree := steplist(listfree);
+            if listfree <> savefree then begin
+                 {find first live token}
+              spotout := steplist(listfree);
+              while (list[spotout].tokens = dead)
+                    and (spotout <> savefree) do
+                spotout := steplist(spotout);
+                 {update listfree and kill spotout}
+              list[listfree] := list[spotout];
+              list[spotout] := list[savefree] end
+            else spotout := savefree
+          until spotout = savefree;
+        change := test end end
+  until not change
+end; {filter}
+
+procedure padblanks;
+var
+  outpointl,inpointl: inindex;
+  i: integer;
+begin
+  with list[index] do begin
+    if tokens in prespacesy then begin
+      outpointl := infree;
+      infree := stepin(infree);
+      for i := size downto 1 do begin
+        inpointl := outpointl;
+        outpointl := priorin(outpointl);
+        instream[inpointl] := instream[outpointl] end;
+      instream[start] := ' ';
+      size := size + 1 end;
+    if tokens in postspacesy then begin
+      place(' ');
+      size := size + 1 end end
+end; {padblanks}
+
+begin {filllist}
+  if stopin then begin
+       {check for reset of stopin}
+    bufferunused := instart - infree;
+    if bufferunused < 0 then bufferunused := bufferunused + buffersize;
+    if bufferunused > startin then stopin := false end;
+  if stoplist then begin
+       {check for reset of stoplist}
+    listunused := liststart - listfree;
+    if listunused < 0 then listunused := listunused + listsize;
+    if listunused > startlist then stoplist := false end;
+  while not (stopin or stoplist or eofile) do begin
+       {get new token record}
+    index := listfree;
+    listfree := steplist(listfree);
+       {check for list approaching full}
+    listunused := liststart - listfree;
+    if listunused < 0 then listunused := listunused + listsize;
+    if listunused <= 2 then stoplist := true;
+    if not stoplist then begin
+         {get the next input token}
+      if morecomment then incomment
+      else intoken;
+      input3 := input2;
+      input2 := input1;
+      input1 := list[index].tokens;
+      padblanks;
+      filter(false) end end;
+end; {filllist}
+
+procedure puttoken; forward;
+
+procedure newline;
+var
+  mark,fill,posl,indentl: integer;
+begin {newline}
+  linenumber := linenumber + 1;
+  writeln(outfile);
+  if numberlines then begin
+    write(outfile,linenumber: 5,'  ');
+    lineavail := linelength - 7 end
+  else lineavail := linelength;
+  if outtofile then begin
+    if (linenumber mod 50) = 1 then begin
+      writeln;
+      write('line ',linenumber:4,'  ') end;
+    write('.') end;
+  location := 0;
+  posl := position;
+  indentl := indent;
+  if not indentmark then begin
+    indentl := 0;
+    if posl < 0 then posl := indent end;
+  if posl >= 0 then
+       {posl overrides indenl}
+    if posl < indent then begin
+      mark := posl;
+      fill := 0 end
+    else begin
+      mark := indentl;
+      fill := posl end
+  else begin
+    mark := indentl;
+    fill := 0 end;
+  if mark >= delta then
+    if fill < mark then begin
+      fill := mark;
+      mark := mark - delta end
+    else mark := mark - delta;
+  while location < mark do begin
+    if (location mod delta) = 0 then write(outfile,'|')
+    else write(outfile,' ');
+    location := location + 1 end;
+  while location < fill do begin
+    write(outfile,' ');
+    location := location + 1 end;
+  lineleft := lineavail - location
+end; {newline}
+
+procedure puttoken;
+
+procedure outstream(startl: inindex; sizel: integer);
+var
+  i: integer;
+begin
+  if sizel < 1 then error(5);
+  for i := 1 to sizel do begin
+    write(outfile,instream[startl]);
+    instream[startl] := '}';
+    startl := stepin(startl) end;
+  lineleft := lineleft - sizel;
+  if lineleft < 0 then error(6);
+  location := location + sizel
+end; {outstream}
+
+procedure putcomment;
+var
+  savepos: integer;
+
+procedure splitcom(startl: inindex; sizel: integer);
+var
+  endpoint,count: integer;
+begin
+  while sizel > lineleft do begin
+       {define start of split search}
+    endpoint := startl + lineleft - 1;
+    if endpoint > buffersize then endpoint := endpoint - buffersize;
+    count := lineleft;
+       {step backwards past significant char}
+    while (instream[endpoint] <> ' ') and (count > 1) do begin
+      endpoint := priorin(endpoint);
+      count := count - 1 end;
+    if lineleft >= 1 then begin
+      if count <= 1 then begin
+        endpoint := startl + lineleft - 1;
+        if endpoint > buffersize then endpoint := endpoint - buffersize;
+        count := lineleft;
+        outstream(startl,count);
+        error(24) end
+      else outstream(startl,count);
+      startl := stepin(endpoint);
+      sizel := sizel - count end;
+    if token in [leadcom,linecom] then begin
+      position := position + 1;
+      newline;
+      position := position - 1 end
+    else if token = tailcom then
+      if (position + 1 + sizel) <= lineavail then begin
+        position := position + 1;
+        newline;
+        position := position - 1 end
+      else if (lineavail - sizel) > (indent + delta2) then begin
+        position := lineavail - sizel;
+        newline end
+      else begin
+        position := indent;
+        newline end
+    else begin
+      position := lineavail - sizel;
+      if position < indent then position := indent;
+      newline end end;
+  if sizel >= 1 then outstream(startl,sizel)
+end; {splitcom}
+
+procedure putleadcom;
+begin
+  with list[liststart] do begin
+    position := 0;
+    newline;
+    if size <= lineleft then outstream(start,size)
+    else splitcom(start,size) end
+end; {putleadcom}
+
+procedure puttailcom;
+begin
+  with list[liststart] do begin
+    if (tokenpast in [beginsy,semicolon]) and (indent = 0) then
+      position := location + 1
+    else if lead > location then
+      if (lead + size) <= lineavail then position := lead
+      else if (lineavail - size - 1) > location then
+        position := lineavail - size
+      else if (lineavail - size) > location then
+        position := lineavail - size
+      else position := lead
+    else if (location + 1 + size) <= lineavail then
+      position := location + 1
+    else if (location + size) <= lineavail then position := location
+    else position := lead;
+    while location < position do begin
+      write(outfile,' ');
+      lineleft := lineleft - 1;
+      location := location + 1 end;
+    if size <= lineleft then outstream(start,size)
+    else splitcom(start,size) end
+end; {puttailcom}
+
+procedure putendblockcom;
+var
+  i: integer;
+  startl: inindex;
+begin
+  if indent <= 0 then puttailcom
+  else
+    with list[liststart] do begin
+      startl := start;
+      for i := 1 to size do begin
+        instream[startl] := '}';
+        startl := stepin(startl) end end
+end; {putendblockcom}
+
+procedure putlinecom;
+begin
+  if flaglinecom and (token = linecom) then begin
+    flaglinecom := false;
+    puttailcom end
+  else if token = specialcom then begin
+    with list[liststart] do begin
+      position := indent;
+      newline;
+      if size <= lineleft then outstream(start,size)
+      else splitcom(start,size) end end
+  else begin
+    with list[liststart] do begin
+      position := indent + delta2;
+      if tokenpast in [thensy,dosy] then position := position + delta;
+      newline;
+      if size <= lineleft then outstream(start,size)
+      else splitcom(start,size) end end
+end; {putlinecom}
+
+procedure multicom;
+var
+  saveindent: integer;
+
+procedure getstats;
+var
+  indexl: listindex;
+  linemax,thisline,gap: integer;
+  test: boolean;
+begin
+  indexl := liststart;
+  leadmin := 200;
+  linemax := 0;
+  repeat
+       {define leadmin and linemax}
+    with list[indexl] do begin
+      if not (tokens in [dead,eolsy,moreln]) then begin
+        if lead < leadmin then leadmin := lead;
+        thisline := lead + size;
+        if thisline > linemax then linemax := thisline end;
+      test := tokens = comend end;
+    indexl := steplist(indexl);
+    test := test or (indexl = listfree)
+  until test;
+  linemax := linemax - leadmin;
+  with list[liststart] do begin
+    shift := linemax - lineavail + indent;  {-ve = move left}
+    if (indent - shift) < 0 then shift := indent;
+    if shift <= 0 then begin
+      gap :=  - shift;
+      shift := delta2;
+      if gap < shift then shift := gap end
+    else shift :=  - shift;
+    statistics := true end
+end; {getstats}
+
+begin {multicom}
+   {
+    |--------------- position --------------->|
+    |--- indent --->                          |
+                    |--- shift --->           |
+              |<----- leadmin -----
+              |------------- lead ----------->|
+   }
+  if not statistics then getstats;  {specify shift and leadmin}
+  with list[liststart] do begin
+    saveindent := indent;
+    position := indent + shift + lead - leadmin;
+    if shift < 0 then indent := indent + shift;
+    if token = moreln then newline
+    else begin
+      if tokens = comstart then
+        if (position >= location)
+           and ((position + size) <= lineavail) then begin
+          while location < position do begin
+            write(outfile,' ');
+            lineleft := lineleft - 1;
+            location := location + 1 end;
+          outstream(start,size) end
+        else tokens := more;
+      if tokens in [more,comend] then begin
+        if tokens = comend then statistics := false;
+        newline;
+        if size <= lineleft then outstream(start,size)
+        else splitcom(start,size) end end;
+    indent := saveindent end
+end; {multicom}
+
+begin {putcomment}
+  savepos := position;
+  if token = leadcom then putleadcom
+  else if token in [specialcom,linecom] then putlinecom
+  else if token = tailcom then puttailcom
+  else if token = endblockcom then putendblockcom
+  else if token in [comstart,more,moreln,comend] then multicom
+  else if token in [includcom,endtailcom] then error(30)
+  else error(19);
+  position := savepos
+end; {putcomment}
+
+begin {puttoken}
+  repeat
+    if BrkPress then begin                {abort on "BREAK"}
+      endprogram;
+      exit(PascalFormat) end;
+    with list[liststart] do begin
+      if tokens in (comments + [specialcom]) then putcomment
+      else if not (tokens in (comments + [specialcom,eolsy,dead])) then
+        outstream(start,size);
+         {update past history}
+      if tokens = eolsy then newinline := true
+      else newinline := false;
+      if not (tokens in (comments + [specialcom,eolsy,dead])) then
+        tokenpast := tokens;
+         {kill token}
+      size := 0;
+      tokens := dead end;
+       {update list start index}
+    liststart := steplist(liststart);
+       {check for list empty}
+    listempty := liststart = listfree;
+       {update input buffer start index}
+    while (instart <> infree) and (instream[instart] = '}') do
+      instart := stepin(instart);
+    if (instart = infree) and not (eofile or listempty) then error(25);
+       {keep input buffer full}
+    filllist;
+       {define the token at start of list}
+    token := list[liststart].tokens
+  until listempty or not (token in (comments + [specialcom,eolsy,dead]))
+end; {puttoken}
+
+
+function cant(limit: setoftokensy; condition: char): boolean;
+var
+  include: boolean;
+
+procedure outflow(limitl: setoftokensy);
+var
+  test: boolean;
+begin
+  if include then puttoken;
+  repeat
+    if include then test := tokenpast in limitl
+    else test := token in limitl;
+    if not test then puttoken
+  until test
+end; {outflow}
+
+function length(limitl: setoftokensy): integer;
+var
+  indexl: listindex;
+  lengthl: integer;
+  test: boolean;
+  tokenl: tokensy;
+begin
+   {  length is a summation to the limit plus the following
+      included tokens.
+      (liststart)     (limit)      (inclusion)
+      |----------> (<)           +
+      |--------------------> (>) + [  ;
+                                      ,
+                                    tailcom
+                                    begin
+                                    end ].
+   }
+  lengthl := 0;
+  indexl := liststart;
+     {sum to the limit token}
+  if include then
+    repeat
+      with list[indexl] do begin
+        lengthl := lengthl + size;
+        test := tokens in limitl;
+        indexl := steplist(indexl) end
+    until test or (lengthl > lineleft)
+  else begin
+    tokenl := token;
+    while (not (tokenl in limitl)) and (lengthl <= lineleft) do begin
+      lengthl := lengthl + list[indexl].size;
+      indexl := steplist(indexl);
+      tokenl := list[indexl].tokens end end;
+  tokenl := list[indexl].tokens;
+     {add in the included tokens}
+  while (tokenl in [semicolon,comma,tailcom,beginsy,endsy])
+        and (lengthl <= lineleft) do begin
+    lengthl := lengthl + list[indexl].size;
+    indexl := steplist(indexl);
+    tokenl := list[indexl].tokens end;
+  length := lengthl
+end; {length}
+
+begin {cant}
+  if condition = '<' then include := false
+  else if condition = '>' then include := true
+  else error(7);
+  if length(limit) <= lineleft then begin
+    outflow(limit);
+    cant := false end
+  else cant := true
+end; {cant}
+
+procedure split(endstream: setoftokensy; breakpoint: tokensy);
+var
+  bindex,bindexstart,bindexend: breakindex;
+  endsplit,test: boolean;
+  i,sizecount,tokencount,savecount: integer;
+  indexl,saveindex: listindex;
+  savetoken,tokenl: tokensy;
+begin
+  if breakpoint = comma then begin
+    bindexstart := 0;
+    bindexend := 5 end
+  else if breakpoint = orsy then begin
+    bindexstart := 1;
+    bindexend := 6 end
+  else error(8);
+  endsplit := false;
+  repeat
+    sizecount := 0;
+    tokencount := 0;
+    indexl := liststart;
+    tokenl := token;
+    while not (tokenl in endstream) and (sizecount <= lineleft) do begin
+         {step forward}
+      sizecount := sizecount + list[indexl].size;
+      if not (tokenl in (comments + [specialcom,eolsy,dead])) then
+        tokencount := tokencount + 1;
+      indexl := steplist(indexl);
+      tokenl := list[indexl].tokens end;
+    if tokenl in endstream then begin
+         {check for inclusion of endstream token}
+      if not (tokenl in
+         [endsy,semicolon,elsesy,untilsy,rbracket]) then begin
+           {token is not a program control token}
+        sizecount := sizecount + list[indexl].size;
+        tokencount := tokencount + 1 end;
+         {define token following endstream token}
+      indexl := steplist(indexl);
+      tokenl := list[indexl].tokens;
+         {check for inclusion of size of this token}
+      saveindex := indexl;
+      while tokenl in [beginsy,endsy] do begin
+        sizecount := sizecount + list[indexl].size;
+        indexl := steplist(indexl);
+        tokenl := list[indexl].tokens end;
+      indexl := saveindex end;
+    if sizecount > lineleft then begin
+         {we have line overflow. step backward}
+      indexl := priorlist(indexl);
+      repeat
+        sizecount := sizecount - list[indexl].size;
+        if not
+            (list[indexl].tokens in (comments + [specialcom,eolsy,dead])) then
+          tokencount := tokencount - 1;
+        indexl := priorlist(indexl)
+      until (sizecount <= lineleft) or (tokencount = 0) end
+    else endsplit := true;
+    if tokencount <= 0 then begin
+      if tokencount < 0 then error(20);
+      if location > position then newline;
+      if token in [endsy,semicolon] then endsplit := true
+      else begin
+        if token in endstream then endsplit := true;
+        puttoken end end
+    else begin
+      if not endsplit then begin
+           {find a suitable place to break line}
+        tokenl := list[indexl].tokens;
+           {define search point start}
+        saveindex := indexl;
+        savecount := tokencount;
+        savetoken := tokenl;
+        bindex := bindexstart;
+        repeat
+             {cycle through break point array}
+          bindex := bindex + 1;
+          while not (tokenl in break[bindex])
+                and (tokencount > 1) do begin
+               {step backward}
+            if not (tokenl in (comments + [specialcom,eolsy,dead])) then
+              tokencount := tokencount - 1;
+            indexl := priorlist(indexl);
+            tokenl := list[indexl].tokens end;
+          if tokencount <= 1 then begin
+               {try the next break point array. reset search point start}
+            test := false;
+            indexl := saveindex;
+            tokencount := savecount;
+            tokenl := savetoken end
+          else begin
+            test := true;
+            if tokenl in [andsy,orsy] then begin
+                 {put 'and', 'or' at start of next line}
+              tokencount := tokencount - 1;
+              if tokenl in prespacesy then
+                with list[indexl] do begin
+                  instream[start] := '}';
+                  start := stepin(start);
+                  size := size - 1 end end end
+        until test or (bindex = bindexend) end;
+      for i := 1 to tokencount do puttoken end;
+    if not endsplit then newline
+  until endsplit
+end; {split}
+
+procedure mapdata(declaration: boolean);
+var
+  i,j: integer;
+
+procedure savename;
+var
+  thisname: nametype;
+  i: integer;
+  inpointl: inindex;
+begin
+  with list[liststart] do begin
+    inpointl := start;
+    for i := 1 to maxidsize do
+      if i <= size then begin
+        thisname[i] := instream[inpointl];
+        inpointl := stepin(inpointl) end
+      else thisname[i] := '!';
+    saveid[level] := thisname end
+end; {savename}
+
+procedure writename;
+var
+  thisname: nametype;
+  i: integer;
+  charr: char;
+begin
+  thisname := saveid[level];
+  i := 1;
+  charr := thisname[i];
+  while (charr <> '!') and (i <= maxidsize) do begin
+    write(map,charr);
+    i := i + 1;
+    charr := thisname[i] end
+end; {writename}
+
+begin {mapdata}
+  if lastlevel = 0 then begin
+       {initial call to mapdata}
+    write(map,'{');
+    for i := 1 to ((linelength - 1) div 4) do write(map,' map');
+    writeln(map);
+    writeln(map);
+    savename;
+    writename;
+    lastlevel := level;
+    lastline := linenumber end
+  else if level = 1 then begin
+       {last call to mapdata}
+    writeln(map,':- ',lastline: 1);
+    writeln(map,'   |');
+    write(map,'[ ');
+    writename;
+    write(map,' ]');
+    writeln(map,':- ',linenumber: 1);
+    writeln(map);
+    for i := 1 to ((linelength - 1) div 4) do write(map,'map ');
+    writeln(map,'}') end
+  else if declaration then begin
+    writeln(map,':- ',lastline: 1);
+    for j := 1 to 2 do begin
+      write(map,'   |');
+      i := 1;
+      while i < (level - 1) do begin
+        write(map,'        |');
+        i := i + 1 end;
+      if j = 1 then writeln(map) end;
+    write(map,'---> ');
+    savename;
+    writename;
+    lastlevel := level;
+    lastline := linenumber end
+  else if level < lastlevel then begin
+    writeln(map,':- ',lastline: 1);
+    for j := 1 to 2 do begin
+      write(map,'   |');
+      i := 1;
+      while i < (level - 1) do begin
+        write(map,'        |');
+        i := i + 1 end;
+      if j = 1 then writeln(map,'        |') end;
+    write(map,'    [ ');
+    writename;
+    write(map,' ]');
+    lastlevel := level;
+    lastline := linenumber end
+end; {mapdata}
+
+procedure tipe;
+var
+  tipepos: integer;
+
+procedure fieldlist;
+var
+  pos1,pos2: integer;
+begin
+  if token in [ident,casesy] then begin
+    pos1 := position;
+    while token = ident do begin
+      repeat
+        puttoken;  {ident}
+        if token = comma then begin
+          puttoken;  {,}
+          newline end
+      until token = colon;
+      puttoken;  {:}
+      position := pos1 + delta;
+      tipe;
+      position := pos1;
+      if token = semicolon then begin
+        puttoken;  {;}
+        newline end end;
+    if token = casesy then begin
+      puttoken;  {case}
+      if cant([ofsy],'>') then begin
+        repeat
+          puttoken;
+          newline
+        until token = ofsy;
+        puttoken end;  {of}
+      position := pos1 + delta;
+      pos2 := position;
+      while token = ident do begin
+        newline;
+        repeat
+          puttoken;  {ident}
+          if token = comma then begin
+            puttoken;  {,}
+            newline end
+        until token = colon;
+        position := location + 4;
+        puttoken;  {:}
+        puttoken;  {(}
+        fieldlist;
+        position := pos2;
+        puttoken;  {)}
+        if token = semicolon then puttoken end end;
+    position := pos1 end
+end; {fieldlist}
+
+begin {tipe}
+  if not (token in
+          [lbracket,arrow,packedsy,arraysy,filesy,setsy,recordsy]) then begin
+    if token = addop then puttoken;
+    puttoken;   {put ident which includes subrange form x..y ,
+                 unit symbols used as idents and pointer types}
+    if token = lbracket then begin
+      puttoken;   {[}
+      while token <> rbracket do puttoken;   {constant format}
+      puttoken end end   {]}
+  else if token = lbracket then begin
+    if cant([semicolon],'<') then begin
+      position := position + 1;
+      split([semicolon],comma);
+      position :=  - 1 end end
+  else begin
+    if token = filesy then puttoken;   {file}
+    if token <> semicolon then begin
+      tipepos := position;
+      if cant([ofsy,recordsy],'>') then begin
+        if token = packedsy then begin
+          puttoken;   {packed}
+          if cant([arraysy,recordsy],'>') then begin
+            newline;
+            puttoken end end;   {array or record}
+        if token in [filesy,setsy] then puttoken;   {file or set}
+        if token = ofsy then puttoken;   {of}
+        if tokenpast = arraysy then
+          if cant([ofsy],'>') then begin
+            puttoken;  {[}
+            newline;
+            split([ofsy],comma) end end;
+      position := tipepos + delta;
+      if tokenpast = ofsy then begin
+        if token in [packedsy,arraysy,filesy,setsy,recordsy] then newline;
+        tipe end
+      else begin
+           {must be record}
+        newline;
+        fieldlist;
+        puttoken end;  {end}
+      position := tipepos end end
+end; {tipe}
+
+procedure routineheading(funcflag: boolean);
+var
+  pos1: integer;
+
+procedure paramlist;
+begin
+  if token = lbracket then begin
+    puttoken;  {(}
+    position := location;
+    while tokenpast <> rbracket do begin
+      if tokenpast = semicolon then
+        if lineleft >= 1 then begin
+          write(outfile,' ');
+          location := location + 1;
+          lineleft := lineleft - 1 end;
+      if token in [procsy,processsy] then begin
+        puttoken;  {procedure or process}
+        if cant([semicolon,rbracket],'<') then
+          while token = ident do begin
+            if cant([ident],'>') then newline;
+            puttoken;  {ident}
+            if token = comma then puttoken end end
+      else if token in [ident,funcsy,varsy] then begin
+        if token <> ident then puttoken;  {function,var}
+        if cant([semicolon,rbracket],'<') then begin
+          while token = ident do begin
+            if cant([ident],'>') then newline;
+            puttoken;  {ident}
+            if token = comma then puttoken end;
+          if cant([semicolon,rbracket],'<') then begin
+            if cant([colon],'>') then begin
+              newline;
+              puttoken end;  {colon}
+            if cant([ident],'>') then begin
+              newline;
+              puttoken end end end end;   {ident}
+      puttoken end;  {';' or ')' }
+    position :=  - 1 end
+end; {paramlist}
+
+begin   {routineheading}
+  if highlevel then newline;
+  newline;
+  if token = segsy then puttoken;   {segment}
+  puttoken;  {procedure,function}
+  if highlevel then if outmap then mapdata(true);
+  if highlevel then if indent <> 0 then error(11);
+  puttoken;  {ident}
+  pos1 := location;
+  paramlist;
+  if funcflag then begin
+    if cant([semicolon],'>') then begin
+      position := pos1;
+      newline;
+      puttoken;  {:}
+      puttoken;  {ident}
+      puttoken;  {;}
+      position :=  - 1 end end
+  else puttoken;  {;}
+end;   {routineheading}
+
+procedure labeldec;
+
+procedure savelabel;
+var
+  inpointl: inindex;
+  i: integer;
+begin
+  with list[liststart],labellist[labelfree] do begin
+    if size > labelsize then error(9);
+    labellevel := level;
+    inpointl := start;
+    for i := 1 to labelsize do
+      if i <= size then begin
+        labelname[i] := instream[inpointl];
+        inpointl := stepin(inpointl) end
+      else labelname[i] := ' ' end;
+  labelfree := labelfree + 1;
+  if labelfree = (labelnumber + 1) then error(10)
+end; {savelabel}
+
+begin {labeldec}
+  newline;
+  indent := indent + delta;
+  puttoken;  {label}
+  while token = ident do begin
+    savelabel;
+    newline;
+    puttoken;  {ident}
+    puttoken end;  {, or ;}
+  indent := indent - delta
+end; {labeldec}
+
+procedure constdec;
+var
+  tabgap: integer;
+begin
+  newline;
+  indent := indent + delta;
+  puttoken;  {const}
+  newinline := true;
+  while token = ident do begin
+    if newinline then newline
+    else begin
+      tabgap := 8 - location mod 8;
+      if lineleft > tabgap then begin
+        write(outfile,' ': tabgap);
+        location := location + tabgap;
+        lineleft := lineleft - tabgap end end;
+    if cant([semicolon],'>') then begin
+      if not newinline then newline;
+      if cant([semicolon],'>') then begin
+        puttoken;  {ident}
+        puttoken;  {:=}
+        position := indent + delta;
+        newline;
+        while token <> semicolon do puttoken;  {constant}
+        puttoken;  {;}
+        position :=  - 1 end end end;
+  indent := indent - delta;
+end; {constdec}
+
+procedure typedec;
+begin
+  newline;
+  indent := indent + delta;
+  puttoken;  {type}
+  while token = ident do begin
+    newline;
+    puttoken;  {ident}
+    position := location + 3;
+    puttoken;  {=}
+    tipe;
+    position :=  - 1;
+    puttoken end;  {;}
+  indent := indent - delta;
+end; {typedec}
+
+procedure vardec;
+var
+  tokenl: tokensy;
+  indexl: listindex;
+  test: boolean;
+begin
+  newline;
+  indent := indent + delta;
+  puttoken;  {var}
+  while token in
+       [ident,codesy,intrinsy,datasy,usessy,unitsy,intersy] do begin
+    newline;
+    puttoken;  {ident}
+    if token = comma then begin
+         {test for var type = simple type}
+      tokenl := token;
+      indexl := liststart;
+      while (tokenl <> colon) and (indexl <> listfree) do begin
+        indexl := steplist(indexl);
+        tokenl := list[indexl].tokens end;
+      if tokenl = colon then begin
+        indexl := steplist(indexl);
+        tokenl := list[indexl].tokens;
+        test := tokenl = ident end
+      else test := false;
+      if test then
+           {var is of simple type, pack output}
+        repeat
+          puttoken;  {,}
+          if newinline then newline;
+          if cant([ident],'>') then
+            if not newinline then begin
+              newline;
+              puttoken end  {ident}
+        until token = colon
+      else
+         {var is not simple dont pack output}
+        repeat
+          puttoken;  {,}
+          newline;
+          puttoken  {ident}
+        until token = colon end;
+    position := location + 2;
+    puttoken;  {:}
+    tipe;
+    position :=  - 1;
+    puttoken end;  {;}
+  indent := indent - delta;
+end; {vardec}
+
+procedure block(allblock: boolean);
+var
+  index1,index2: listindex;
+  savelist: tokenrecord;
+  test: boolean;
+
+procedure procfuncdec(funcflag: boolean);
+begin {procfuncdec}
+  level := level + 1;
+  routineheading(funcflag);
+  if token in [forwardsy,externsy] then begin
+    level := level - 1;
+    if outmap then
+      if token = forwardsy then write(map,'; forward')
+      else write(map,'; extern');
+    if cant([semicolon],'<') then begin
+      position := lineavail - list[liststart].size - 2;
+      newline;
+      puttoken;  {extern or forward}
+      position :=  - 1 end end
+  else block(true);
+  if token = semicolon then puttoken
+  else if token <> period then error(12);
+  if token = beginsy then newline
+end; {procfuncdec}
+
+procedure statement;
+var
+  tokenl: tokensy;
+  indexl: listindex;
+  test: boolean;
+
+procedure assignment;
+begin
+  if cant([semicolon,endsy,elsesy,untilsy],'<') then begin
+    if not newinline then newline;
+    if cant([semicolon,endsy,elsesy,untilsy],'<') then begin
+      position := indent + delta;
+      split([assignsy],comma);
+      if cant([semicolon,endsy,elsesy,untilsy],'<') then begin
+        position := position + delta;
+        newline;
+        split([semicolon,endsy,elsesy,untilsy],orsy) end;
+      position :=  - 1 end end
+end; {assignment}
+
+procedure proccall;
+begin
+  if cant([semicolon,endsy,elsesy,untilsy],'<') then begin
+    if not newinline then newline;
+    if cant([semicolon,endsy,elsesy,untilsy],'<') then begin
+      puttoken;  {ident}
+      if token = lbracket then begin
+        puttoken;  { ( }
+        if cant([semicolon,endsy,elsesy,untilsy],'<') then begin
+          position := location;
+          split([semicolon,endsy,elsesy,untilsy],comma);
+          position :=  - 1 end end end end
+end; {proccall}
+
+procedure compound;
+begin
+  indent := indent + delta;
+  puttoken;  {begin}
+  newinline := true;  {force newline on first statement}
+  statement;
+  while token = semicolon do begin
+    puttoken;  {;}
+    statement end;
+  if token <> endsy then error(13);
+  indent := indent - delta;
+  puttoken  {end}
+end; {compound}
+
+procedure ifstatement;
+var
+  indented: boolean;
+begin
+  if tokenpast = elsesy then puttoken  {if}
+  else newline;
+  if cant([thensy],'>') then begin
+    position := indent + 3;
+    split([thensy],orsy);
+    position :=  - 1 end;
+  if token = beginsy then indented := false
+  else begin
+    indent := indent + delta;
+    indented := true end;
+  statement;
+  if indented then indent := indent - delta;
+  if token = elsesy then begin
+    newline;
+    puttoken;  {else}
+    if token in [beginsy,ifsy] then indented := false
+    else begin
+      indent := indent + delta;
+      indented := true end;
+    statement;
+    if indented then indent := indent - delta end
+end; {ifstatement}
+
+procedure casestatement;
+var
+  indented: boolean;
+begin
+  newline;
+  puttoken;  {case}
+  indent := indent + delta;
+  if cant([ofsy],'>') then begin
+    position := indent - delta + 5; {done this way to accomodate linecom}
+    split([ofsy],orsy);
+    position :=  - 1 end;
+  while token <> endsy do begin
+    newline;
+    if cant([colon],'>') then split([colon],comma);
+    if token = beginsy then indented := false
+    else begin
+      indent := indent + delta;
+      indented := true end;
+    statement;
+    if token = semicolon then puttoken;
+    if indented then indent := indent - delta end;
+  puttoken;  {end}
+  indent := indent - delta
+end; {casestatement}
+
+procedure whilestatement;
+var
+  indented: boolean;
+begin
+  newline;
+  puttoken;  {while}
+  if cant([dosy],'>') then begin
+    position := indent + 6;
+    split([dosy],orsy);
+    position :=  - 1 end;
+  if token = beginsy then indented := false
+  else begin
+    indent := indent + delta;
+    indented := true end;
+  statement;
+  if indented then indent := indent - delta
+end; {whilestatement}
+
+procedure repeatstatement;
+begin
+  newline;
+  indent := indent + delta;
+  puttoken;  {repeat}
+  newinline := true;  {force newline on first statement}
+  while token <> untilsy do begin
+    statement;
+    if token = semicolon then puttoken end;
+  indent := indent - delta;
+  newline;
+  puttoken;  {until}
+  if cant([semicolon,endsy,elsesy],'<') then begin
+    position := indent + 6;
+    split([semicolon,endsy,elsesy],orsy);
+    position :=  - 1 end
+end; {repeatstatement}
+
+procedure forstatement;
+var
+  indented: boolean;
+begin
+  newline;
+  puttoken;  {for}
+  if cant([dosy],'>') then begin
+    position := indent + 4;
+    if cant([tosy,downtosy],'>') then split([tosy,downtosy],comma);
+    if cant([dosy],'>') then begin
+      newline;
+      split([dosy],orsy) end;
+    position :=  - 1 end;
+  if token = beginsy then indented := false
+  else begin
+    indent := indent + delta;
+    indented := true end;
+  statement;
+  if indented then indent := indent - delta
+end; {forstatement}
+
+procedure withstatement;
+var
+  indented: boolean;
+begin
+  newline;
+  puttoken;  {with}
+  if cant([dosy],'>') then begin
+    position := indent + 5;
+    split([dosy],comma);
+    position :=  - 1 end;
+  if token = beginsy then indented := false
+  else begin
+    indent := indent + delta;
+    indented := true end;
+  statement;
+  if indented then indent := indent - delta
+end; {withstatement}
+
+procedure gotostatement;
+begin
+  if newinline then newline;
+  if cant([ident],'>') then begin
+    if not newinline then newline;
+    if cant([ident],'>') then begin
+      puttoken;  {goto}
+      position := indent + 2;
+      newline;
+      puttoken;  {label}
+      position :=  - 1 end end
+end; {gotostatement}
+
+function labeltoken: boolean;
+var
+  tokennext: tokensy;
+  thislabel: labelindex;
+  inpointl: inindex;
+  test: boolean;
+  i: integer;
+begin
+  labeltoken := false;
+     {define next token}
+  tokennext := list[steplist(liststart)].tokens;
+  if (token = ident) and (tokennext = colon)
+     and (labelfree > 1) then begin
+       {there is a chance that this may be a declared label}
+    thislabel := labelfree;
+    with list[liststart] do
+      if size <= labelsize then begin
+        test := false;
+        while not test and (thislabel > 1) do begin
+          thislabel := thislabel - 1;
+          with labellist[thislabel] do
+            if level = labellevel then begin
+              inpointl := start;
+              i := 1;
+              repeat
+                if i <= size then
+                  test := labelname[i] = instream[inpointl]
+                else test := labelname[i] = ' ';
+                inpointl := stepin(inpointl);
+                i := i + 1
+              until not test or (i > labelsize);
+              if test then begin
+                labeltoken := true;
+                labellevel :=  - 1 end end end;
+        test := labelfree > 1;
+        while test do begin
+          if (labellist[(labelfree - 1)].labellevel =  - 1) then begin
+            labelfree := labelfree - 1;
+            test := labelfree > 1 end
+          else test := false end end end
+end; {labeltoken}
+
+begin {statement}
+  if token in unitsymbols then begin
+    list[liststart].tokens := ident;
+    token := ident end;
+  if token = ident then
+    if labeltoken then begin
+         {place label at start of new line}
+      position := 0;
+      newline;
+      position :=  - 1;
+      puttoken;  {label}
+      puttoken;  { : }
+      newinline := true end;  {force newline on first statement}
+  if token in [ident,gotosy] then begin
+    if newinline then newline
+    else if tokenpast = semicolon then
+      if lineleft >= 2 then begin
+        write(outfile,'  ');
+        location := location + 2;
+        lineleft := lineleft - 2 end end;
+  if token = ident then begin
+       {statement must be assignment or procedure call}
+       {test for assignment statement}
+    tokenl := token;
+    indexl := liststart;
+    test := false;
+    while not ((tokenl in [semicolon,endsy,elsesy,untilsy]) or test
+          or (indexl = listfree)) do
+      if tokenl = assignsy then test := true
+      else begin
+        indexl := steplist(indexl);
+        tokenl := list[indexl].tokens end;
+    if test then assignment
+    else proccall end
+  else if token = ifsy then ifstatement
+  else if token = beginsy then compound
+  else if token = withsy then withstatement
+  else if token = forsy then forstatement
+  else if token = whilesy then whilestatement
+  else if token = repeatsy then repeatstatement
+  else if token = casesy then casestatement
+  else if token = gotosy then gotostatement
+  else if not (token in [semicolon,endsy,elsesy]) then error(14)
+end; {statement}
+
+procedure body;
+begin
+     {this is the body of a block}
+  newline;
+  flaglinecom := true;
+  puttoken;  {begin}
+  flaglinecom := false;
+  if outmap then mapdata(false);
+  indent := indent + delta;
+  newinline := true;  {force newline on entry to first statement}
+  statement;
+  while token = semicolon do begin
+    puttoken;  {;}
+    statement end;
+  if token <> endsy then error(17);
+     {get rid of leading blank from start of token}
+  with list[liststart] do begin
+    instream[start] := '}';
+    start := stepin(start);
+    size := size - 1 end;
+  repeat
+        {check for misplaced swap comment}
+    index1 := steplist(liststart);  {should point to ';' or '.'}
+    index2 := steplist(index1);     {may point at comment}
+    test := false;
+    if list[index2].tokens in [tailcom,linecom] then begin
+      test := true;
+      savelist := list[liststart];
+      list[liststart] := list[index2];
+      list[index2] := list[index1];
+      list[index1] := savelist;
+      token := list[liststart].tokens;
+      puttoken end  {comment}
+  until not test;
+  indent := indent - delta;
+  if indent <> 0 then error(18);
+end;   {body}
+
+begin {block}
+  if allblock then begin
+       {declaration part of block}
+    saveflag := indentmark;
+    indentmark := false;
+    if indent <> 0 then error(15);
+    if token = labelsy then labeldec;
+    if token = constsy then constdec;
+    if token = typesy then typedec;
+    if token = varsy then vardec;
+    indentmark := saveflag;
+       {routine part of block}
+    while token in [procsy,processsy,funcsy,segsy] do begin
+         {declaration part of routine}
+      if token = funcsy then procfuncdec(true)
+      else procfuncdec(false) end;
+       {body or main part of routine}
+    if highlevel and (token = beginsy) then begin
+      body;
+      newline;
+      puttoken end  {end}
+    else if highlevel then error(16);
+    level := level - 1 end
+  else body;
+end; {block}
+
+procedure douses;
+begin
+  newline;
+  newline;
+  indent := indent + delta;
+  puttoken;   {USES}
+  while token = ident do begin
+    newline;
+    puttoken;   {ident}
+    if token = lbracket then begin
+      puttoken;   {(}
+      if cant([rbracket],'>') then begin
+        while token <> rbracket do begin
+          newline;
+          puttoken end;
+        puttoken end end;   {)}
+    if token = comma then puttoken end;   {,}
+  if token = semicolon then puttoken   {;}
+  else error(12);
+  indent := indent - delta;
+  newline;
+end;   {douses}
+
+procedure doinitcode;
+var
+  i: integer;
+begin
+  newline;
+  newline;
+     {output upper case BEGIN}
+  with list[liststart] do
+    for i := 1 to size do
+      if instream[start + i - 1] in ['a'..'z'] then
+        instream[start + i - 1] := chr(ord(instream[start + i -1]) - 32);
+  block(false);
+end;   {doinitcode}
+
+procedure dointerface;
+begin
+  newline;
+  newline;
+  saveflag := indentmark;
+  indentmark := false;
+  puttoken;   {INTERFACE}
+  if token = usessy then douses;
+  if token = labelsy then labeldec;
+  if token = constsy then constdec;
+  if token = typesy then typedec;
+  if token = varsy then vardec;
+  indent := indent + delta;
+  if token in [procsy,processsy,funcsy,segsy] then newline;
+  while token in [procsy,processsy,funcsy,segsy] do begin
+    if token = funcsy then routineheading(true)
+    else routineheading(false) end;
+  indent := indent - delta;
+  indentmark := saveflag;
+end;   {dointerface}
+
+procedure doimplementation;
+begin
+  newline;
+  newline;
+  saveflag := indentmark;
+  indentmark := false;
+  puttoken;   {IMPLEMENTATION}
+  if token = usessy then douses;
+  if token = labelsy then labeldec;
+  if token = constsy then constdec;
+  if token = typesy then typedec;
+  if token = varsy then vardec;
+  indentmark := saveflag;
+  highlevel := true;
+  while token in [procsy,funcsy,segsy,processsy] do begin
+    level := level + 1;
+    if token = funcsy then routineheading(true)
+    else routineheading(false);
+    block(true);
+    if token = semicolon then puttoken end;   {;}
+  if token = endsy then begin
+       {arrived at end of implementation and there is no init code BEGIN
+        therefore filter killed ';' before END. replace ';'}
+    write(outfile,';');
+    lineleft := lineleft - 1;
+    if lineleft < 0 then error(6);
+    location := location + 1 end;
+  highlevel := false;
+end;   {doimplementation}
+
+procedure dounit;
+var
+  i: integer;
+begin
+  level := level + 1;
+  newline;
+  puttoken;  {UNIT}
+  if outmap then mapdata(true);
+  puttoken;  {ident}
+  puttoken;  {;}
+     {handle "apple pascal"}
+  if token in [intrinsy,codesy,datasy] then begin
+    if token = intrinsy then puttoken;   {INTRINSIC}
+    if token = codesy then begin
+      puttoken;      {CODE}
+      puttoken end;  {integer}
+    if token = datasy then begin
+      puttoken;      {DATA}
+      puttoken end;   {integer}
+    puttoken end;  {;}
+     {check for INTERFACE code}
+  if token = intersy then dointerface;
+     {check for IMPLEMENTATION code}
+  if token = implemsy then doimplementation;
+     {check for unit INITIALISATION code}
+  if token = beginsy then begin
+    doinitcode;
+    newline end
+  else begin
+    newline;
+    newline;
+    if outmap then mapdata(false) end;
+  if token = endsy then begin
+       {do END of unit code}
+    with list[liststart] do begin
+      if size = 4 then begin
+           {get rid of leading blank from start of 'end'}
+        instream[start] := '}';
+        start := stepin(start);
+        size := size - 1 end;
+      for i := 1 to size do
+           {output upper case END}
+        if instream[start + i - 1] in ['a'..'z'] then
+          instream[start + i - 1] := chr(ord(instream[start + i -1]) - 32) end;
+    puttoken end;  {END}
+end; {dounit}
+
+procedure programme;
+begin
+  level := level + 1;
+  newline;
+  puttoken;  {program}
+  if outmap then mapdata(true);
+  if cant([semicolon],'<') then begin
+    puttoken;  {ident}
+    if token = lbracket then begin
+      puttoken;  {(}
+      position := location;
+      split([semicolon],comma);
+      position :=  - 1 end end;
+  puttoken;  {;}
+  while token = unitsy do begin
+    dounit;
+    if token = semicolon then puttoken end;  {;}
+  if token = usessy then douses;
+  repeat
+    block(true)
+  until token = period;
+end; {programme}
+
+begin {PasFormat}
+  initialise;
+  while not (token in [unitsy,progsy,procsy,processsy,funcsy,segsy]) do begin
+    if token in (comments +[specialcom,eolsy]) then puttoken
+    else error(31) end;
+  while token in [unitsy,progsy,procsy,processsy,funcsy,segsy] do
+    if token = progsy then begin
+      level := 0;
+      highlevel := true;
+      programme;
+      puttoken end      {.}
+    else if token = unitsy then begin
+      while token = unitsy do begin
+        level := 0;
+        highlevel := false;
+        dounit;
+        if token = semicolon then puttoken end;   {;}
+      puttoken end      {.}
+    else begin
+         {allows for formatting of procedures and functions}
+      level := 1;
+      outmap := false;
+      highlevel := true;
+      if token = funcsy then routineheading(true)
+      else routineheading(false);
+      block(true);
+      if token = semicolon then puttoken end;   {;}
+  while not eofile do puttoken;
+  endprogram;
+end.  {PasFormat}
+

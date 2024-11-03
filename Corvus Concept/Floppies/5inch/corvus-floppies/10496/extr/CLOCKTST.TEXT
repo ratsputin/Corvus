@@ -1,0 +1,114 @@
+;
+; file : clocktst.text
+; date : 22-October-1982  kb
+;
+; Test of read of calendar clock problem.  Is it a settling problem.
+;
+; EQUATES FOR THE CLOCK ROUTINES
+; CLOCK REGISTERS
+;
+RV4ADDR     EQU        $30F81                    ;SELECT/ADDRESS LATCH   **new board address
+RV3ADDR     EQU        $30FE1                    ;SELECT/ADDRESS LATCH  **old board address
+RWREG       EQU        $30D01                    ;READ/WRITE CLOCK REGISTERS
+INTREG      EQU        15                        ;CLOCK INTERRUPT REG ADDR
+STRTSTOP    EQU        14                        ;START/STOP REGISTER
+LYREG       EQU        13                        ;LEAP YEAR REGISTER
+unitmins    equ         3                        ;unit of minutes reg
+TENTHSC     EQU         1                        ;TENTH OF SECONDS REGISTER {change 6/7}
+;
+RDERR       EQU        $0F                       ;REGISTER VALUE WHEN READ WHEN UPDATE
+DSELCT      EQU        $10                       ;DESELECT CHIP
+;
+; if read 4 bytes with movep.l instruction on several clock registers
+; get first byte read = $0F when return from READCR about 1/2 to 2/3 of the
+; time. that means high order byte in register = $0F.  This is not a condition
+; of the chip updating itself because next read will get correct byte values =
+; to previous for all the registers except the tenth of seconds, it is faster then
+; the code sometimes.  This means having settling problem, according to Michael.
+
+Start
+            BSR.S      LDADDR                    ;GET CLOCK ADDRESSES
+;
+; READ 1 REGISTER UNTIL THE 4 BYTES IN REGISTER D2 DON'T =
+;
+            CLR.L      D6                      ;count of correct reads
+            MOVEQ      #unitmins,D0              ;read the tenth sec reg
+               trap    #15
+               data    0
+
+MainLoop    BSR.S      READCR
+
+; make sure none of bytes in D2 not BCD, if is retry (clock ticked)
+;
+            MOVEQ      #2, D3                  ;ignore hi byte
+            MOVE.L     D2, D4
+TickChk
+            CMP.B      #RDERR, D4              ; if byte = F then
+            BEQ.S      MainLoop                ; Reread, clock ticked
+            LSR.L      #8,D4                   ;shift down to next byte
+            DBF        D3, TickChk
+
+; make sure all the bytes are equal
+;
+            MOVEQ      #1, D3                  ; don't compare hi order byte
+            MOVE.L     D2, D4
+            MOVE.B     D4, D5                  ; compare bytes
+SameChk
+            LSR.L      #8,D4                   ;shift down to next byte
+            CMP.B      D5, D4                  ; if byte[0] <> byte[i] then
+            BNE.S      NotSame                 ; trap not same - read error
+            DBF        D3, SameChk
+
+; compared ok - try again
+;
+            ADDQ.L     #1,D6                   ; add one to count
+            BRA.S      MainLoop
+
+; Not the same stop
+;
+NotSame
+            TRAP       #15
+            DATA.W     0
+            CLR.L      D6                      ; reset count
+            BRA.S      MainLoop                ; start again
+
+            RTS
+;
+; LDADDR - GET LATCH ADDRESS IN A0 AND R/W CLOCK ADDRESS IN A1
+;
+LDADDR      LEA        RV4ADDR.L,A0              ;GET SELECT/ADDRESS LATCH
+            LEA        RWREG.L,A1                ;read/write register data
+            RTS
+;
+; READCR - READ CLOCK REGISTER
+;       ENTRY : (A0) = LATCH ADDRESS
+;               (A1) = R/W CLOCK ADDRESS
+;               (D0) = REGISTER ADDRESS
+;       EXIT  : (D2) = REGISTER VALUE READ
+;
+READCR      BSR.S      SELREG                    ;DESELECT THEN SELECT ADDRESS
+            MOVEP.L    0(A1),D2                  ;READ REGISTER several times
+            MOVE.B     #DSELCT,(A0)              ;DESELECT CHIP
+            ANDI.L     #$0F0F0F0F,D2             ;CLEAR HI NIBBLE
+            RTS
+;
+; SELREG - DESELECT THEN SELECT CHIP REGISTER
+;           ENTRY : (D0) = CLOCK REGISTER ADDRESS
+;                   (A0) = LATCH ADDRESS
+;
+SELREG      MOVEQ      #DSELCT,D1
+            OR.B       D0,D1
+            MOVE.B     D1,(A0)                   ;DESELECT CHIP BY SETTING D4
+            MOVE.B     D0,(A0)                   ;SELECT ADDRESS
+            RTS
+;
+;  WRITECR - WRITE A CLOCK REGISTER
+;           ENTRY : (D0) = REGISTER ADDRESS
+;                   (D2) = DATA
+;
+WRITECR     BSR.s      SELREG                    ;DESELECT THEN SELECT REG.
+            MOVE.B     D2,(A1)                   ;WRITE DATA
+            MOVE.B     #DSELCT,(A0)              ;DESELECT CHIP
+            RTS
+
+            end        Start

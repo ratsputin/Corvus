@@ -1,0 +1,11 @@
+
+Directory of UCSD disk image file 'ccsys_5of6.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCSYS5 has 3 files,  0 to 6 (6), eov 500, size 0, free 3
+
+ 1: 5FORTRAN        Data  4-Feb-83    6- 137( 131), 67072+512= 67584 bytes
+ 2: ED              Data  4-Feb-83  137- 452( 315), 161280+512= 161792 bytes
+ 3: 5W              Data 14-Jul-89  452- 500(  48), 24576+512= 25088 bytes

@@ -1,0 +1,482 @@
+{ P.ZAP.TEXT ------------------------------------------------------------------
+{
+{       ZAP -- General Purpose Disk/Memory Dump/Patch Utility
+{
+{       (c) Copyright 1981 by Corvus Systems, Inc.
+{                             San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  12-01-81  LEF  Original program (taken from ZAP by BTE)
+{       v 1.1  03-24-82  LEF  Add OMNINET support
+{       v 1.1  03-24-82  LEF  Add OMNINET support
+{       v 1.2  05-17-82  LEF  Modified for Constellation II
+{       v 1.2a 07-20-83  DP   Added IV stuff; fixed Compare/replace bug in
+{                             file open (F -> Rf)
+{
+{------------------------------------------------------------------------------
+}
+
+PROGRAM zap;
+
+USES
+
+{!IV} {$U IVSRC1:IV.LIB} UCdefn,
+{!IV}                    UCcrtIO,
+{!IV}                    UCdrvIO;
+
+CONST
+    version = '1.2';
+
+TYPE
+{!UC}    aBUF    = PACKED ARRAY [0..511] OF byte;
+    dtype   = (hex,ascii);
+
+VAR
+    CurNetAddr: CDaddr;   {current network address             }
+    DrNumDrvs:  INTEGER;  {current slot number of drives online}
+    DrPhyDrv:   PDrArray; {current slot physical drive info    }
+    b,n:        INTEGER;
+    unt,drive:  INTEGER;
+    dumptyp,ch: CHAR;
+    outf:       interactive;
+    F:          FILE;
+    Fname:      String80;
+    rplcmode:   boolean;
+    buf:        aBUF;
+    hexchar:    packed array [1..16] of char;
+
+PROCEDURE printhex (fval: INTEGER; len: INTEGER);
+    VAR Signed: BOOLEAN; digits: ARRAY [1..4] OF CHAR; i: INTEGER;
+    BEGIN
+    Signed := fval < 0;
+{!UC}    IF Signed THEN fval := -(fval + 1);
+    IF len > 4 THEN len := 4;
+    FOR i := 1 TO 4 DO BEGIN
+        IF (i = 4) AND Signed THEN fval := fval + 8;
+        digits[i] := hexchar[fval mod 16 + 1];
+        fval := fval div 16;
+        END;
+    FOR i := len DOWNTO 1 DO WRITE (outf,digits[i]);
+    END;
+
+FUNCTION DskRead (VAR buf: aBUF; len,drv,sec: INTEGER): INTEGER;
+    VAR XCV: SndRcvStr;
+{!UC}   by: PACKED ARRAY [0..1] OF byte;
+    BEGIN
+    sec := sec DIV 2;
+    XCV.sln := 4;
+    XCV.rln := 513;
+    XCV.b[1] := 50; XCV.b[2] := drv; 
+    MOVELEFT (sec,by,2);
+    XCV.b[3] := by[1]; XCV.b[4] := by[0];
+    cdSend (CurNetAddr,XCV); cdRecv (CurNetAddr,XCV);
+    DskRead := XCV.b[1];
+    MOVELEFT (XCV.b[2],buf[0],512);
+    END;
+
+FUNCTION DskWrite (VAR buf: aBUF; len,drv,sec: INTEGER): INTEGER;
+    VAR XCV: SndRcvStr;
+{!UC}   by: PACKED ARRAY [0..1] OF byte;
+    BEGIN
+    sec := sec DIV 2;
+    XCV.sln := 516;
+    XCV.rln := 1;
+    XCV.b[1] := 51; XCV.b[2] := drv; 
+    MOVELEFT (sec,by,2);
+    XCV.b[3] := by[1]; XCV.b[4] := by[0];
+    MOVELEFT (buf[0],XCV.b[5],512);
+    cdSend (CurNetAddr,XCV); cdRecv (CurNetAddr,XCV);
+    DskWrite := XCV.b[1];
+    END;
+
+PROCEDURE blkwr;
+    VAR i,n: INTEGER;
+    BEGIN
+    n := 1;
+    CASE dumptyp OF
+        'F': n := BLOCKWRITE (F,buf,1,B);
+        'V': UNITWRITE (unt,buf,512,b);
+        'D': IF DskWrite (buf,512,drive,b*2) < 0 THEN n := 0;
+        END;
+    IF n = 0 THEN WRITELN (beep,'*** Error writing block ***');
+    END;
+
+PROCEDURE blkrd;
+    VAR i,n: INTEGER;
+    BEGIN
+    n := 1;
+    IF b < 0 THEN EXIT (blkrd);
+    CASE dumptyp OF
+        'F': n := BLOCKREAD(F,buf,1,B);
+        'V': UNITREAD(unt,buf,512,b);
+        'D': IF DskRead (buf,512,drive,b*2) < 0 THEN n := 0;
+        END;
+    IF n = 0 THEN b := -1;    { error indication }
+    END;
+
+PROCEDURE asci (i: INTEGER);
+    VAR j: INTEGER;
+    BEGIN
+    IF i > 15 THEN BEGIN
+        WRITE (outf,'  |');
+        FOR j := i-16 TO i-1 DO
+            IF CHR(buf[j]) IN [' '..'~'] THEN WRITE (outf,CHR(buf[j]):1)
+                                         ELSE WRITE (outf,'.');
+        WRITELN (outf,'|');
+        END;
+    END;
+
+PROCEDURE gettype;
+    VAR status: INTEGER;
+    BEGIN
+    dumptyp := getbyte;
+    WRITELN; WRITELN;
+    CASE dumptyp OF
+        '!': EXIT (zap);
+        'F': BEGIN
+             REPEAT
+                 WRITE ('Enter file name: ');
+                 IF getstring(Fname) <> Normal THEN EXIT (zap);
+                 {$I-} RESET (F,Fname); {$I+}
+                 status := ioresult;
+                 IF status <> 0 THEN BEGIN
+                     WRITELN (CHR(7),'*** File not found'); Fname := ''; END;
+                 UNTIL status = 0;
+             END;
+        'V': BEGIN
+             WRITE ('Which unit? '); unt := 9;
+             IF getnum(unt) <> Normal THEN EXIT (zap);
+             END;
+        'D': BEGIN
+             writeln; writeln;
+             Initslot(CurNetAddr);
+             DrvInit (CurNetAddr,DrNumDrvs,DrPhyDrv);
+             writeln; writeln;
+             WRITE ('Which drive? '); drive := 1;
+             IF getnum(drive) <> Normal THEN EXIT (zap);
+             END;
+        END;
+    END;
+
+PROCEDURE compare;
+    VAR rplctyp: CHAR; rbuf: aBUF; RF: file;
+        Rb,Rdrive,Runt: INTEGER;
+   
+    PROCEDURE Cblkrd;
+        VAR i,n: INTEGER;
+        BEGIN
+        n := 1;
+        IF Rb < 0 THEN EXIT (cblkrd);
+        CASE rplctyp OF
+            'F': n := BLOCKREAD (RF,rbuf,1,Rb);
+            'V': UNITREAD (Runt,rbuf,512,Rb);
+            'D': IF DskRead (rbuf,512,Rdrive,Rb*2) < 0 THEN n := 0;
+            END;
+        IF n = 0 THEN Rb := -1;    { error indication }
+        END;
+  
+    PROCEDURE Cgettype;
+        VAR status: INTEGER;
+        BEGIN
+        rplctyp := getbyte;
+        WRITELN; WRITELN;
+        CASE rplctyp OF
+            '!': EXIT (compare);
+            'F': BEGIN
+                 REPEAT
+                     WRITE ('Enter file name: ');
+                     IF getstring(Fname) <> Normal THEN EXIT (compare);
+                     {$I-} RESET (Rf,Fname); {$I+}
+                     status := ioresult;
+                     IF status <> 0 THEN BEGIN
+                         WRITELN (CHR(7),'*** File not found');
+                         Fname := ''; END;
+                     UNTIL status = 0;
+                 END;
+            'V': BEGIN
+                 WRITE ('Which unit? '); Runt := 9;
+                 IF getnum(Runt) <> Normal THEN EXIT (compare);
+                 END;
+            'D': BEGIN
+                 WRITE ('Which drive? '); Rdrive := 1;
+                 IF getnum(Rdrive) <> Normal THEN EXIT (compare);
+                 END;
+            END;
+        END;
+   
+    PROCEDURE draw;
+        VAR x,y,n,val: INTEGER;
+        BEGIN
+        GoToXY (0,5); CrtAction (ErasEOS);
+        WRITELN ('Difference of 2 blocks');
+        WRITELN ('Block number: ',b:1); WRITELN;
+        printhex (0,3); WRITE (outf,': ');
+        FOR n := 0 TO 511 DO BEGIN
+            IF n > 0 THEN 
+                IF n MOD 4 = 0 THEN BEGIN
+                    WRITE (outf,' ');
+                    IF n MOD 32 = 0 THEN BEGIN
+                        WRITELN (outf);
+                        IF n MOD 128 = 0 THEN WRITELN (outf);
+                        IF n < 511 THEN BEGIN
+                            printhex (n,3); WRITE (outf,': '); END;
+                        END;
+                    END;
+        val := (ORD(buf[n])-ORD(rbuf[n])) MOD 256;
+        printhex (val,2)
+        END;
+    END;
+
+    BEGIN
+    WRITE ('Compare with a block from: F(ile V(olume D(rive M(emory: ');
+    Cgettype;
+    Rb := b;
+    WRITELN; WRITE ('Compare with which block: ');
+    IF getnum(Rb) <> Normal THEN EXIT (compare);
+    cblkrd;
+    draw;
+    END;
+
+PROCEDURE replace;
+    VAR rplctyp: CHAR; RF: file;
+        Rb,Rdrive,Runt: INTEGER;
+    
+    PROCEDURE Rblkrd;
+        VAR i,n: INTEGER;
+        BEGIN
+        n := 1;
+        IF Rb < 0 THEN EXIT (Rblkrd);
+        CASE rplctyp OF
+            'F': n := BLOCKREAD (RF,buf,1,Rb);
+            'V': UNITREAD (Runt,buf,512,Rb);
+            'D': IF DskRead (buf,512,Rdrive,Rb*2) < 0 THEN n := 0;
+            END;
+        IF n = 0 THEN Rb := -1;    { error indication }
+        END;
+      
+    PROCEDURE Rgettype;
+        VAR status: INTEGER;
+        BEGIN
+        rplctyp := getbyte;
+        WRITELN; WRITELN;
+        CASE rplctyp OF
+            '!': EXIT (replace);
+            'F': BEGIN
+                 REPEAT
+                     WRITE ('Enter file name: ');
+                     IF getstring(Fname) <> Normal THEN EXIT (replace);
+                     {$I-} RESET (RF,Fname); {$I+}
+                     status := ioresult;
+                     IF status <> 0 THEN BEGIN
+                         WRITELN (CHR(7),'*** File not found');
+                         Fname := ''; END;
+                     UNTIL status = 0;
+                 END;
+            'V': BEGIN
+                 WRITE ('Which unit? '); Runt := 9;
+                 IF getnum(Runt) <> Normal THEN EXIT (replace);
+                 END;
+            'D': BEGIN
+                 WRITE ('Which drive? '); Rdrive := 1;
+                 IF getnum(Rdrive) <> Normal THEN EXIT (replace);
+                 END;
+            END;
+        END;
+
+    BEGIN
+    WRITE ('Replace with a block from: F(ile V(olume D(rive: ');
+    Rgettype;
+    Rb := b;
+    WRITELN; WRITE ('Replace with which block: ');
+    IF getnum(Rb) <> Normal THEN EXIT (replace);
+    Rblkrd;
+    WRITELN; WRITE ('OK to replace? [Y/N]: N',CHR(08));
+    IF getbyte = 'Y' THEN blkwr;
+    END;
+
+PROCEDURE dump;
+    VAR val,x,y,n: INTEGER;
+        ch: CHAR;
+    BEGIN
+    WRITELN (outf,'Block: ',b:1);
+    FOR n := 0 TO 511 DO BEGIN
+        IF n MOD 4 = 0 THEN BEGIN
+            WRITE (outf,' ');
+            IF n MOD 16 = 0 THEN BEGIN
+                asci (n);
+                IF n MOD 128 = 0 THEN WRITELN (outf);
+                END;
+            END;
+        printhex (ORD(buf[n]),2);
+        WRITE (outf,' ');
+        END;
+    WRITE (outf,' '); asci (512); WRITELN (outf); WRITELN (outf);
+{!UC}    CrtPause(ch);
+{!UC}    CrtAction(EraseAll);
+    END;
+
+PROCEDURE edit;
+    VAR i,j,k,n,val,x,y: INTEGER; uch: packed array [1..4] of char;
+    
+    PROCEDURE up;
+        BEGIN
+        IF j > 0 THEN BEGIN
+            j := j-1; k := k-64;IF j>0 THEN IF j MOD 5=4 THEN j := j-1; END;
+        END;
+    
+    PROCEDURE down;
+        BEGIN
+        IF j < 18 THEN BEGIN
+            j := j+1; k := k+64; IF j MOD 5=4 THEN j := j+1; END;
+        END;
+    
+    PROCEDURE left;
+        BEGIN
+        IF i > 0 THEN BEGIN
+            i := i-1; k := k-1; IF i MOD 9=8 THEN i := i-1; END;
+        END;
+    
+    PROCEDURE right;
+        BEGIN
+        IF i < 70 THEN BEGIN
+            i := i+1; k := k+1; IF i MOD 9=8 THEN i := i+1; END;
+        END;
+     
+    PROCEDURE draw (pic: dtype);
+        VAR n: INTEGER;
+        BEGIN
+        GoToXY (0,0); WRITE ('Block number: ',b:1);
+        GoToXY (0,1); WRITE ('Edit: <arrows> W(rite V(erify T(ext P(os Q');
+        GoToXY (0,5); CrtAction (ErasEOS);
+        printhex (0,3); WRITE (outf,': ');
+        FOR n := 0 TO 511 DO BEGIN
+            IF n > 0 THEN 
+                IF n MOD 4 = 0 THEN BEGIN
+                    WRITE (' ');
+                    IF n MOD 32 = 0 THEN BEGIN
+                        WRITELN;
+                        IF n MOD 128 = 0 THEN WRITELN;
+                        IF n < 511 THEN BEGIN
+                            printhex (n,3); WRITE (outf,': '); END;
+                        END;
+                    END;
+            IF pic = hex THEN printhex (ORD(buf[n]),2)
+            ELSE BEGIN
+                WRITE (outf,'.');
+                IF buf[n] IN [32..127] THEN WRITE (outf,CHR(buf[n]):1)
+                                       ELSE WRITE (outf,'.');
+                END;
+            END;
+        END;
+
+    BEGIN
+    draw (hex); WRITELN;
+    i := 0; j := 0; k := 0; GoToXY (i+5,j+5);
+    REPEAT
+        unitread (2,uch,1); ch := uch[1];
+        if ch = CHR(27) then begin
+             unitread (2,uch,1); ch := uch[1];
+             if ch = '#' then unitread (2,uch,2);
+             if ch = 'A' then ch := 'I';
+             if ch = 'B' then ch := 'M';
+             if ch = 'C' then ch := 'K';
+             if ch = 'D' then ch := 'J';
+             end;
+        if ch = CHR(11) then ch := 'I';
+        if ch = CHR(08) then ch := 'J';
+        if ch = CHR(12) then ch := 'K';
+        if ch = CHR(10) then ch := 'M';
+        ch := uppercase (ch);
+        CASE ch OF
+            'I': up;
+            'J': left;
+            'K': right;
+            'M': down;
+            'P': BEGIN
+                 GoToXY (0,26); CrtAction (ErasEOL);
+                 WRITE ('i=',i:1,' j=',j:1,' k=',k:1,
+                        ' buf[k/2]=',buf[k DIV 2]:1);
+                 END;
+            'V': draw(hex);
+            'T': draw(ascii);
+            'W': BEGIN
+                 GoToXY (0,1); WRITE ('OK to WRITE block? [Y/N]: N',CHR(8));
+                 IF getbyte = 'Y' THEN BEGIN
+                     blkwr;
+                     GoToXY (0,1); WRITE ('Block ',b:1,' written');
+                     CrtAction (ErasEOL);
+                     END;
+                 END;
+            END;
+        IF ch IN ['0'..'9','A'..'F'] THEN BEGIN
+            GoToXY (i+5,j+5); WRITE (ch);
+            x := ORD(buf[k DIV 2]); IF x < 0 THEN x := x+256;
+            IF k MOD 2 = 1 THEN BEGIN y := 1;  x := (x DIV 16)*16; END
+                           ELSE BEGIN y := 16; x := x MOD 16; END;
+            IF ch IN ['0'..'9'] THEN y := y*(ORD(ch)-48)
+                                ELSE y := y*(ORD(ch)-55);
+            {$R-} buf[k DIV 2] := x+y; {$R+}
+            right;
+            END;
+        GoToXY (i+5,j+5);
+        UNTIL ch IN ['!','Q','W'];
+    ch := ' ';
+    END;
+
+PROCEDURE dispatch;
+    var n: integer;
+    BEGIN
+    GoToXY (0,3); CrtAction (ErasEOL);
+    WRITE ('Select ZAP option [ D(ump E(dit R(eplace C(ompare Q ]: ');
+    ch := getbyte;
+    GoToXY (0,5);
+    IF ch IN ['C','E','R','D'] THEN BEGIN
+        IF ch = 'R' THEN WRITE ('Replace') ELSE WRITE ('Which');
+        WRITE (' block number: ');
+        b := b+1; IF getnum(b) <> Normal THEN EXIT (dispatch);
+        blkrd;
+        IF b < 0 THEN BEGIN
+            WRITELN (beep); WRITELN ('*** Invalid block number ***');
+            EXIT (dispatch);
+            END;
+        END;
+    CASE ch OF
+        'D': dump;
+        'E': edit;
+        'R': replace;
+        'C': compare;
+        END;
+    END;
+
+BEGIN
+CCdrvIOinit; CCcrtIOinit;
+CrtAction (DefStrOn);
+CrtAction (EchoOn);
+hexchar := '0123456789ABCDEF';
+CrtTpgm := 'ZAP'; CrtTvrs := version;
+CrtTitle ('General Purpose Disk/Memory Dump/Patch Utility');
+InitSlot (CurNetAddr);
+DrvInit (CurNetAddr,DrNumDrvs,DrPhyDrv);
+b := -1; FName := '';
+
+WRITE ('Zap a: F(ile V(olume D(rive: '); gettype;
+      
+{
+{ Dibinh --- start here!
+{
+}
+unitclear (6);
+if ioresult = 0
+    then begin
+        WRITELN; WRITE ('Output to P(rinter C(onsole: C',CHR(8));
+{!UC}   IF getbyte = 'P' THEN rewrite (outf,'PRINTER:')
+{!UC}                    ELSE rewrite (outf,'CONSOLE:');
+        end
+{!UC} else rewrite (outf,'CONSOLE:');
+
+GoToXY (0,3); CrtAction (ErasEOS);
+REPEAT dispatch UNTIL ch IN ['!','Q'];
+CrtAction (EraseALL);
+END.
+

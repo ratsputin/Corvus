@@ -1,0 +1,49 @@
+
+
+file : /dsgn/kbrdstat.text
+date : 05-January-1983
+
+Unitstatus functions of the Keyboard driver.
+
+
+1) Function code :  0      Name :  Send Raw
+
+   Parameter Block :
+
+          a) 1 word      Type = INPUT
+
+   This procedure sets or clears the Send Raw flag in the driver.  If the
+   parameter is 0 then the flag is cleared.  If it is 1 then the flag is
+   set.
+
+   The Send Raw flag, if set, forces the Keyboard to send all characters
+   to the user, including Control-Q and Control-S.  Normally, when the
+   flag is clear, Control-Q and Control-S are not sent out but used to
+   control the display.
+
+
+2) Function code :  1      Name :  Test and Clear Break flag
+
+   Parameter Block :
+
+          a) 1 word      Type = OUTPUT
+
+   This function returns the value of the Break flag then clears it.  If
+   the parameter is 0 then the flag was cleared.  If it is 1 then the
+   flag was set.
+
+   The Break flag represents the state of the Break key.  If it is clear
+   then the Break has not been pressed.  If it is set then since the last
+   call to this function the Break key has been pressed.  The flag is
+   cleared when this function is called or when the driver is
+   initialized.
+
+
+3) Function code :  2      Name :  Number of Characters Available
+
+   Parameter Block :
+
+          a) 1 word      Type = OUTPUT
+
+   This function returns the number of characters available in the
+   keyboard buffer.

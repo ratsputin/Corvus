@@ -1,0 +1,214 @@
+PROGRAM wordproc;
+{$D-}
+USES
+
+{$U /ccutil/cclib  } ccdefn, cclblio, ccWndio, ccGrfIO,
+{$U userio         } userio,
+{$U util           } Util,
+{$U wksp           } WkSp,
+{$U /ccutil/c2lib  } ccDRVio, ccSEMA4,
+{$U /wpspec/cs.vsiutxt} VSIuTXT,
+{$U CC.VSIXDBM} vsiuDBM,
+{$U kernel         } Kernel;
+
+function pOscurwnd: pwndrcd; external;        { Get current window record }
+function OSTimDV: integer; external;
+function pOSDate: longint; external;
+function pOSCurVol: pStrTyp; external;
+function OSvrtCrt:  boolean; external;
+Function BrkPress: Boolean; External;
+
+{$I LOCALEDIT }
+
+{$I MOVETEXT }
+
+{$I EDIT }
+
+{$I ADJUST }
+
+{$I dms }
+
+{$I CALC }
+
+{$I CALENDAR }
+
+{$I CALL }
+
+{$I CLOCK }
+
+{$I DIAG }
+
+{$I SORT }
+
+{$I ENHANCE }
+
+{$I FILE }
+
+{$I FORMAT }
+
+{$I PRINT }
+
+{$I FORMS }
+
+{$I INIT }
+
+{$I SEARCH }
+
+{$I BOUND }
+
+{$I SETTASK }
+
+{$I ExTask }
+
+{ I USER }
+
+
+
+{$S WRAPUP}
+{
+.PG
+}
+procedure WrapUp;
+
+var iost: integer;
+    p   : pStrTyp;
+
+begin
+  note( 8, 1 );
+  note( 1, 1 );
+  FlushNewTxt;
+  TellUsr( Msg( MGWKSP, 87) );
+  if not WkSpClose then PrntWkSpErr;
+  TellUsr( Msg( MGWKSP, 88) );
+  PushWindow( CmdWin );
+  p := Msg( MGEDWD,5 );
+  write( '\1BJ\1BG4 ', p^, ' \1BG0     ' );
+  ms50 := ms50 div 1200;
+  p := Msg( MGTIME, 33 );
+  write( ms50 div 60:1, ' ', p^,'  ', ms50 mod 60:1 );
+  p := Msg( MGTIME, 32 );
+  write( ' ', p^ );
+  ReleaseMsgs;
+  PopWindow;
+  UserIOTerm;
+  gotoxy( 0, BotRow );
+end;
+
+{$S MAIN}
+{
+.PG
+}
+function TaskOf( Cmd: KeyTyp; PrvTsk: integer ): integer;
+
+begin
+   TaskOf := TIDEdit;
+   case Cmd of
+      KTASK: TaskOf := ord(Key);
+      KF10: TaskOf := PrvTsk;
+      otherwise: Bell(BelErr)
+   end;
+end;
+
+
+procedure Doit2;
+
+var NxtTsk: integer;
+    Done: boolean;
+
+BEGIN
+  Done := false;
+  while not Done do begin
+    case CurTsk of
+      TIDSearch:  SearchTask( 1, LstLin, 1, MaxLinLen,False );
+      TIDStorage: FileTask;
+      TIDEnhance: EnhanceTask;
+      TIDFormat:  FormatTask;
+      TIDBound:   BoundTask;
+      TIDCopy:    CopyTask;
+      TIDNewWksp: Done := True;
+      TIDExit:    Done:=true;
+      TIDPrint:   PrintTask( 1, LstLin, PrintText );
+      TIDGoto:    GotoTask;
+      TIDSettings:SetTask;
+      TIDForms:   FormsTask;
+      TIDEdit:    EditTask;
+      TIDSelfTest:VerifyTask;
+      TIDClock:   Clock;
+      TIDCalen:   Calendar;
+      TIDCalc:    Calculator;
+      TIDCall:    Done := true;
+      TIDAdjust:  AdjustTask;
+      TIDSpell:   SpellTask(CurLin,LstLin);
+      TIDEX:      EXTask;
+      TIDMakList: CreateList;
+      otherwise:  begin TellUsr( Msg(MGGENL,9) ); Cmd := KF35; end;
+    end;
+    if not Done then begin
+       while Cmd=KMENU do begin
+          LoadLabels( ord(Key) );
+          NextCmd
+          end;
+       NxtTsk := TaskOf( Cmd, PrvTsk );
+       if NxtTsk<>CurTsk then PrvTsk := CurTsk;
+       CurTsk := NxtTsk
+       end;
+  end;
+end;
+
+
+procedure Doit1;
+
+var NxtTsk: integer;
+    ReallyDone,
+    Done: boolean;
+
+begin
+  Repeat
+    Initialize;
+    Refresh;
+    ReallyDone := False;
+    Done := false;
+    while not Done do begin
+       LockKernel( Doit2 );
+       case CurTsk of
+          TIDCall:    CallTask;
+          TIDNewWksp: begin
+                        ArgC := 0;
+                        Done := True
+                      End;
+          TIDExit:    Begin
+                        Done := True;
+                        ReallyDone := true
+                      End
+       end;
+       NxtTsk := TaskOf( Cmd, PrvTsk );
+       if NxtTsk<>CurTsk then PrvTsk := CurTsk;
+       CurTsk := NxtTsk;
+    end;
+
+    WrapUp
+  Until ReallyDone
+end;
+
+
+{
+.PG
+}
+procedure CallDoit;
+begin
+   LockWksp(Doit1);
+end;
+
+
+{.IX main program}
+begin
+   write( '\1BG0\1BJ' );
+   pinit;
+   debug := argc=3;
+   if debug then begin
+      breakproc(0);
+      LockDebug(CallDoit);
+   end else begin
+      CallDoit;
+   end;
+end.

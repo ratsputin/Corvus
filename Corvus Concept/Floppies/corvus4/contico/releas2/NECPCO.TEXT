@@ -1,0 +1,108 @@
+
+CP/M Utilities                                   1 March 1982
+
+This PCO covers CP/M Utilities for the NEC.
+
+                6/10/20 NC (5 1/4" soft-sectored media - 104/1D)
+
+This release was tested with the standard 56k version 2.2 of CP/M
+supplied by NEC Japan.
+
+This is a new release.  It includes support for pipes and spooling.
+
+This release includes firmware version 17.3.
+
+CLINK2.ASM is set up as follows:
+
+   - link below
+   - Z80B
+   - 10 MB drive
+   - 2 pseudo drives
+   - pipes area starting at block 64
+   - block size of 8k
+   - memory size of 56k
+
+
+$P
+The floppy labels are listed below.
+
+5 1/4" floppies                   5 1/4" floppies
+---------------                   ----------------
+  NC Utilities-vol 1 of 2         NC Source Utilities-vol 1 of 1
+  for CP/M 2.2                    for CP/M 2.2
+  Release date:   1-Mar-82        Release date:    17-Feb-82
+  CP#: 8100-02069
+
+  NC Utilities-vol 2 of 2
+  for CP/M 2.2
+  Release date:   1-Mar-82
+  CP#: 8100-02070
+
+To copy floppies:
+----------------
+
+  NEC floppies are copied on the NEC PC8000 using the dual floppy
+  drives.
+
+  Boot from the NEC boot disk.
+
+  Use FORMAT to format new floppies.
+
+  Use COPY DATA/V to copy floppies.
+
+$P
+Files on each floppy are shown below:
+
+NC Utilities - Vol 1         Version             CRC
+  INDEX   .DOC               2/15/82             E2 6E
+  CERROR  .DOC               -   -               34 81
+  PUTGET  .COM               1.4NC               C8 CF
+  CLINK2FV.COM               -   -               AE 8E
+  CLINK2TN.COM               -   -               AC D3
+  CLINK2TW.COM               -   -               36 6B
+  CLINK7FV.COM               -   -               87 E2
+  CLINK7TN.COM               -   -               20 F8
+  CLINK7TW.COM               -   -               25 8E
+  CDIAGNOS.COM               2.3NC               BC 22
+  CDIAGNOS.DOC               -   -               6C BE
+  CORVB173.CLR               17.3                A1 21
+  MIRROR  .COM               1.32NC              A7 E0
+  SEMA4   .COM               1.3NC               67 30
+  PMGR    .COM               1.1                 E0 87
+  SPOOL   .COM               2.0                 F6 AD
+  DRIVEL  .COM               1.0                 22 D7
+
+                                             sum=13 0E
+
+
+
+NC Utilities - Vol 2
+  CLINK2  .ASM               1.09NC              A7 06
+  SEMA4   .ASM               1.3NC               31 B2
+  SPOOLGEN.SUB               -   -               4A FF
+  SPOOL   .SRC               -   -               74 75
+  SPOOL   .DEF               -   -               40 8E
+  SPOOLC  .PAS               -   -               D6 44
+  SPOOL   .PAS               -   -               17 01
+  SPOOLM  .PAS               -   -               17 51
+
+  PIPEGEN .SUB               -   -               39 9F
+  PIPES   .SRC               -   -               81 14
+  PIPED   .PAS               -   -               FD 0D
+  PIPEC   .PAS               -   -               C8 C0
+  PIPES   .PAS               -   -               00 73
+
+  CPMIO   .MAC               -   -               D2 0F
+  CLOADR  .ASM               1.4NC               1B DF
+  CBOOT   .ASM               1.3NC               71 DA
+ !BIOSC   .ASM               1.22                50 20
+
+                                             sum=0E 2B
+
+NC Sources - vol 1
+  MIRROR  .ASM               1.32NEC             EF 7A
+  CDIAGNOS.ASM               2.3NEC              1A 62
+  PUTGET  .ASM               1.4NEC              3E AF
+
+                                             sum=48 8B
+

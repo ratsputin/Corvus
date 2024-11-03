@@ -1,0 +1,1746 @@
+{ FMA.TEXT --------------------------------------------------------------------}
+{
+{    FMA 3.2      File Management Aid for the Corvus Concept
+{    Mar. 85      (compatible with CCOS v 1.2a with ISYS)
+{   (3-25-85)
+{                 Program developed by Neil Everhart
+{                 36631 Bridgepointe Dr., Newark, Ca.
+{
+{------------------------------------------------------------------------------}
+
+program NEW_FMA;
+
+uses {$U /CCUTIL/CCLIB} CCdefn, CCcrtIO, CCgrfIO, CCwndIO, CCdirIO,
+                        CCclkIO, CClblIO, TurtleGraphics;
+
+  const   Command     = 1;         OpComplete  = 1;
+          Main        = 2;         IOerror     = 2;
+          Special     = 3;         On          = True;
+          Root        = 4;         Off         = false;
+          Ver         = '3.2';     Header2     = ' filename ';
+          SelectFiles = 1;         Header      = 'blks   ';
+          SelectVols  = 2;         Calc        = 1;
+          CopyTarget  = 3;         Calen       = 2;
+          PrintOptions= 4;         Clock       = 3;
+
+  type    msg         = string[80];
+          str32       = string[32];
+          pstr32      = ^str32;
+          str64       = string[64];
+          pstr64      = ^str64;
+          strtbl      = array [1..100] of pstr64;
+          pstrtbl     = ^strtbl;
+
+
+  var     Finished, FirstTime, BlkFlg, BlkFlg1, ValFlg1, ValFlg,
+          P, VolDir, Recover, RetToFirst, upDateTime, Alphabetize,
+          Form, Box, GFNerror, Qmark, Asteric, Period, Match,
+          EnHance, PgBrk, UndLnTxt, CutSheet  : boolean;
+
+          X, Y, DevNbr1, CurUnit, Pulse, NoFiles, S4, F, Z,
+          DevNbr, LastFile, GetVol, PrevLastFile, Hr1, Min1,
+          IOst, Result, Repeet, Pass, NoBlks, MaxX, MaxY, Xsmin,
+          Xsmax, Xlmin, Xlmax, Ysmin, Ysmax, Ylmin, Ylmax,
+          countD, TotFiles, LnsPg, BlnkLns
+                                          : integer;
+
+          Sp, Mn                          : WndRcd;
+          Space                           : array [0..1,4..29] of integer;
+          VolFlg                          : array [4..29] of boolean;
+          VolId                           : array [4..29] of string[8];
+          Access                          : array [4..29] of string[2];
+          d, d1                           : directory;
+          VolName                         : VID;
+          InText,OutText,KeyboardIO       : TEXT;
+          Ch,Q,Q1                         : CHAR;
+          TypeTable                       : array [1..77] of boolean;
+          BlockTable                      : array [1..77] of integer;
+          FileTable                       : array [1..77] of string[15];
+          FileName                        : array [1..1771] of string[15];
+          VolTable                        : array [1..1771] of integer;
+          Table                           : array [0..77] of CHAR;
+          T                               : STRING[4];
+          New_File, New_Fl                : STRING[20];
+          Vol_File                        : STRING[26];
+          LcurVol                         : pstr32;
+{------------------------------------------------------------------------------}
+function OSvrtCrt: boolean;                                   external;
+function pOScurVol: pstr32;                                   external;
+function pOSdevNam (UntNbr: integer): pstr32;                 external;
+function BrkPress: boolean;                                   external;
+function EscPress: boolean;
+begin
+  EscPress := Off;
+  if unitbusy(2) then
+   begin Ch := getbyte; if Ch = '!' then EscPress := On end
+end;
+{------------------------------------------------------------------------------}
+procedure SegLock;                                             external;
+procedure SELECT (Which_One : integer);                        forward;
+procedure SETWND (Which_One : integer);                        forward;
+procedure CLEAR  (Which_One : integer);                        forward;
+procedure SWITCH_CONTROL (From : integer);                     forward;
+procedure TIME_DISPLAY (Xp, Yp, Where : integer);              forward;
+procedure HELP;                                                forward;
+{------------------------------------------------------------------------------}
+procedure AT (Col, Row : integer; Message : msg);
+begin GoToXY(Col,Row); write(Message) end;
+{------------------------------------------------------------------------------}
+procedure CURSOR (Action : boolean);
+begin if Action then CrtAction(CursorOn) else CrtAction(CursorOff) end;
+{------------------------------------------------------------------------------}
+procedure WAIT (WaitType : integer);
+  var                                  Wt, Wwt: integer;
+begin
+  case WaitType of
+                OpComplete   : IOst := BellTone(31,3,142);
+                IOerror      : begin
+                                 IOst := BellTone(25,4,150);
+                                 IOst := BellTone(10,5,095);
+                               end;
+  end; {case}
+  for Wt := 1 to 5000 do  for Wwt := 1 to 50 do
+end;
+{------------------------------------------------------------------------------}
+procedure ERROR_MESSAGE (Message_no, From: integer);
+begin
+  CLEAR(Command);
+    case Message_no of
+                     01  : AT(1,1,'Parity or CRC Error       ');
+                     02  : AT(1,1,'Invalid Device number     ');
+                     03  : AT(1,1,'Invalid IO Request        ');
+                     04  : AT(1,1,'Nebulous Hardware Error   ');
+                     05  : AT(1,1,'Volume Went Off Line      ');
+                     06  : AT(1,1,'File Lost In Directory    ');
+                     07  : AT(1,1,'Bad File Name             ');
+                     08  : AT(1,1,'No Room On Volume         ');
+                     09  : AT(1,1,'Volume Not Found          ');
+                     10  : AT(1,1,'File Not Found            ');
+                     11  : AT(1,1,'Duplicate Directory Entry ');
+                     12  : AT(1,1,'File Already Open         ');
+                     13  : AT(1,1,'File Not Open             ');
+                     14  : AT(1,1,'Bad Input Information     ');
+                     15  : AT(1,1,'Ring Buffer Overflow      ');
+                     16  : AT(1,1,'Write Protected Volume    ');
+                     17  : AT(1,1,'Error Of Unknown Origin   ');
+                     18  : AT(1,1,'Error Setting Labels      ');
+                     19  : AT(1,1,'Window system Error       ');
+                     20  : begin
+                             AT(1,0,'Error: ');
+                             write(Vol_File,' file not TEXT')
+                           end;
+                     21  : AT(1,1,'Error Printer Port Not Set');
+    end; {case}
+  if Message_no > 21 then  AT(1,1,'Error undefined by SYSTEM ');
+  write('  ..Source Ref. ',From:0);
+  WAIT(IOerror);
+  SETWND(Main)
+end;
+{------------------------------------------------------------------------------}
+procedure TEST_IO (Status, From : integer);
+begin if Status <> 0 then ERROR_MESSAGE(Status, From) end;
+{------------------------------------------------------------------------------}
+procedure BOX_WND;
+    var                                   q1, q2 : str64;
+                                          p1, p2 : pstr64;
+                                               p : pstrtbl;
+begin
+  (*
+  p :=@p1; p1 := @q1; q1 := 'BoxWnd';
+  Result := call ('!CC.WndMgr',input,output,p^,1);
+  TEST_IO(Result,5);
+  *)
+end;
+{------------------------------------------------------------------------------}
+procedure ExitFMA;
+begin CURSOR(ON); SETWND(Root); BOX_WND; exit(NEW_FMA) end;
+{------------------------------------------------------------------------------}
+procedure SELECT {Which_One : integer};
+  var                                R,  R1 : integer;
+begin
+  R1 := 0; R  := 0;
+  case Which_one of
+            Command   :  R := WinSystem(WsysCmd);
+            Main      :  begin
+                           R := WinCreate(Mn,0,0,MaxX,MaxY,10);
+                           R1 := WinSelect(Mn);
+                         end;
+             Special  :  begin
+                           R  := WinCreate(Sp,1,3,69,5,64);
+                           R1 := WinSelect(Sp);
+                           CrtAction(InvrtScreen)
+                         end;
+  end;  {case}
+  if (R + R1) <> 0 then ERROR_MESSAGE(19,30);
+end;
+{------------------------------------------------------------------------------}
+procedure SETWND {Which_One : integer};
+  var                                      R : integer;
+begin
+  case Which_one of
+                 Command   :  R := WinSystem(WsysCmd);
+                 Main      :  R := WinSelect(Mn);
+                 Special   :  R := WinSelect(Sp);
+                 Root      :  R := WinSystem(WsysRoot);
+  end;  {case}
+  if R <> 0 then ERROR_MESSAGE(19,31);
+end;
+{------------------------------------------------------------------------------}
+procedure CLEAR {Which_One : integer};
+  var                                      R : integer;
+begin
+  case Which_one of
+                 Command   :  R := WinSystem(WsysCmd);
+                 Main      :  R := WinSelect(Mn);
+                 Special   :  R := WinSelect(Sp);
+                 Root      :  R := WinSystem(WsysRoot);
+  end;  {case}
+  if R <> 0 then ERROR_MESSAGE(19,32);
+  CrtAction(EraseAll)
+end;
+{------------------------------------------------------------------------------}
+procedure SET_LABELS (Which_Ones : integer);
+  var                                      R : array[0..24] of integer;
+                                           i : integer;
+begin
+  CClblIOinit;
+  for i := 0 to 24 do R[i] := 0;
+  R[01] := LblSET(09,'  EXIT','1Q');
+  case Which_Ones of
+            SelectFiles :  begin
+                             R[02] := LblSET(19,'  Help  ','1H');
+                             R[03] := LblSET(00,'SetFLAG ','1T');
+                             R[04] := LblSET(01,'UndoFLAG','1U');
+                             R[05] := LblSET(02,'ViewFile','1V');
+                             R[06] := LblSET(08,'Run Pgms','1E');
+                             if VolID[6] = 'PRINTER' then
+                               R[07] := LblSET(15,'LocPRINT','1P');
+                             R[08] := LblSET(07,'CopyFile','1C');
+                             R[09] := LblSET(03,'Set Vol ','1S');
+                             R[10] := LblSET(10,'Vol Dir ','1N');
+                             R[11] := LblSET(05,'UndLnTxT','1X');
+                             R[12] := LblSET(18,'FindFile','1Y');
+                             R[13] := LblSET(06,' Clock  ','1Z');
+                             R[14] := LblSET(14,' Spool  ','1O');
+                             R[20] := LblSET(11,'ConcFile','1c');
+                             if Alphabetize then
+                               R[15] := LblSET(12,'Norm Dir','1W') else
+                               R[15] := LblSET(12,'AlphaDir','1W');
+                             if Result <> 16 then
+                             begin
+                                R[16] := LblSET(16,' RENAME ','1R');
+                                R[17] := LblSET(17,' DELETE ','1D');
+                                R[18] := LblSET(13,'Del-Temp','1i');
+                                R[19] := LblSET(04,' Crunch ','1K');
+                             end;
+                           end;
+             SelectVols :  begin
+                             R[02] := LblSET(19,'  Help  ','1H');
+                             R[03] := LblSET(12,' (List) ','1L');
+                             R[04] := LblSET(02,'New  Vol','1L');
+                             R[05] := LblSET(13,' (Reset)','1N');
+                             R[06] := LblSET(03,'Vol Dir ','1N');
+                             R[07] := LblSET(16,'RenamVol','1R');
+                           end;
+             CopyTarget :  R[03] := LblSET(2,' TARGET ','1L');
+           PrintOptions :  begin
+                             R[02] := LblSET(10,'[START] ','1a');
+                             R[03] := LblSET(00,' PRINT  ','1a');
+                             if CutSheet then
+                             begin
+                               R[11] := LblSet(12,'[Contin]','1b');
+                               R[04] := LblSET(02,'  Form  ','1b')
+                             end  else
+                             begin
+                               R[11] := LblSet(12,'[Single]','1c');
+                               R[04] := LblSET(02,' Sheet  ','1c');
+                             end;
+                             R[05] := LblSET(19,'  Help  ','1H');
+                             if Form then
+                               R[06] := LblSET(03,'8.5 Form','1d')  else
+                               R[06] := LblSET(03,'11" Form','1e');
+                             if Enhance then
+                               R[07] := LblSET(04,'EnhanOff','1f')  else
+                               R[07] := LblSET(04,'Enhan On','1g');
+                             R[13] := LblSet(15,'[MaxLns]','1h');
+                             R[08] := LblSET(05,'per Page','1h');
+                             R[12] := LblSet(16,'[Strip] ','1i');
+                             R[09] := LblSET(06,'BlankLns','1i');
+                             if PgBrk then
+                               R[10] := LblSET(07,'.PG Off ','1j')  else
+                               R[10] := LblSET(07,'.PG On  ','1k');
+                           end;
+  end; {case}
+  for i := 1 to 24 do R[0] := R[0] + R[i];
+  if R[0] <> 0 then ERROR_MESSAGE(18,33);
+  LblsOn
+end;
+{------------------------------------------------------------------------------}
+{-----------------------PROGRAM INITIALIZATION---------------------------------}
+procedure INITIALIZE;
+  var                               Last, I, J : integer;
+                                         Prime : boolean;
+                                        VolMtg : pstr32;
+  procedure NAME;
+  begin
+    SELECT(Special); CLEAR(Special);
+    AT(10,1,'FMA -- File Management Aid for the Corvus Concept');
+    AT(10,2,'             CCOS ver 1.2a. supported             ');
+    AT(10,3,'       N. Everhart,                     March 1985');
+    AT(10,4,'       Newark, California')
+  end;
+
+  procedure GET_PUT_Dir;
+     var     ii, Startcount, count  : integer;
+  begin
+    write(I:1,' ');
+    GetVolDir (VolID[I],d1,BlkFlg1,DevNbr1,ValFlg1);
+    PutVolDir (d1,DevNbr1); Result := IOresult;
+    if (Result <> 0) and (Result <> 16) and (Result <> 5) then TEST_IO(Result,1);
+    if (Result <> 5) and (d1[0].dnumfiles >0) then
+    begin
+      Startcount := TotFiles+1; count := 0;
+      TotFiles := TotFiles + d1[0].dnumfiles;
+      for ii := Startcount to TotFiles do
+      begin
+        count := count +1; FileName[ii] := d1[count].dtid;
+        VolTable[ii] := I;
+      end;
+    end;
+  end;
+
+  procedure GET_VOL_NM;
+  begin VolMtg := pOSdevNam(I); VolId[I] := VolMtg^ end;
+
+begin   { INITIALIZE }
+  CCcrtIOinit; CCgrfIOinit; CClblIOinit; CCwndIOinit; CCclkIOinit;
+  SETWND(Root); TotFiles := 0;
+  EnHance := On; PgBrk := On;  CutSheet := Off;
+  if Q1 <> 'N' then BOX_WND; Test_IO(Result,3);
+  InitTurtle; Alphabetize := Off; UndLnTxt := Off;
+  MaxX := TurtleX * 2; MaxY := TurtleY * 2; countD := 0;
+  SELECT(Main);
+  IOst := WinLoadCH('/CCUTIL/CSD.07.11.ALT');
+  if IOst <> 0 then ERROR_MESSAGE(19,34);
+  LcurVol := pOScurVol;   CLEAR(Main);  NAME;
+  CLEAR(Command);  upDateTime := Off;  Box := Off;
+  Finished  := Off; FirstTime := On; VolDir := Off; Form := On;
+  for I := 4 to 29 do VolFlg[I] := Off;
+  for I := 1 to 77 do TABLE[I] := 'U';
+  reset(KeyboardIO,'/systerm');
+  AT(1,1,'READING UNIT: ');
+  for I := 4 to 29 do GET_VOL_NM;
+  for I := 29 downto 4 do if (I = 4) or (I = 5 ) or (I > 8) then
+  begin
+    Access[I] := ' '; Space[0,I] := 0; Space[1,I] := 0; Prime := On;
+    for J := 4 to 29 do
+     if ((J = 4) or (J = 5) or (J > 8)) and (J < I) then
+      if (VolId[I] = Volid[J]) and (VolId[I] <> '') then Prime := Off;
+    if Prime and (VolID[I] <> '') then GET_PUT_Dir;
+    if (Prime and (VolID[I] = '') and ((I =9) or (I =10))) or
+      (Result = 5) then
+     begin
+       if VolID[I] <> 'FLOPPY' then
+        begin VolID[I] := 'FLOPPY'; GET_Put_Dir end;
+       GET_VOL_NM;
+       if Volid[I] <> '' then  GET_PUT_Dir
+     end;
+    if Prime then  {set array cells}
+     begin
+       if VolID[I] = '' then Access[I] := '' else
+       if Result = 16 then
+        begin Access[I] := 'RO'; Space[1,I] := d1[0].dnumfiles end else
+        begin
+          Last := d1[0].dnumfiles; Space[1,I] := Last;
+          Space[0,I] := (d1[0].deovblock - d1[Last].nextblock);
+          Access[I] := 'RW'
+        end;
+     end;
+  end;
+end;
+{$S seg1}
+{------------------------------------------------------------------------------}
+procedure WILDCARD(FilNmToCk : msg);
+   var              Nf, Cf, i1, i2, i : integer;
+          Done, SkipIf, PassThru, Prd : boolean;
+
+      procedure ExitWC;
+      begin Match := Off; exit(WILDCARD) end;
+
+begin
+  Nf := length(New_File);  Cf := length(FilNmToCk);
+  Prd := Off; Match := On; Done := Off; i1 := 0; i2 := 0;
+  if not Asteric and (Nf <> Cf) then ExitWC;
+  if Period then for i := 1 to Cf do if FilNmToCk[i] = '.' then Prd := On;
+  if Period and not Prd then ExitWC;
+  repeat
+    if i1 = 0 then i1 := 1; i2 := i2 +1; PassThru := Off; SkipIf := Off;
+    if  New_File[i1] = FilNmToCk[i2]  then PassThru := On else
+    if  New_File[i1] = '*'            then PassThru := On else
+    if (New_File[i1] = '?') and (FilNmToCk[i2] = '.') then ExitWC else
+    if (New_File[i1] = '?') and (i2 <= CF) then PassThru := On;
+    if PassThru then
+    begin
+      if Period and Prd and Asteric and (i2 < Cf) then
+      begin
+        if (New_File[i1] = '*') and (FilNmToCk[i2+1] = '.') and (i1 < Nf) then
+          begin  Prd := Off; SkipIf := On; i1 := i1 +1; end;
+      end;
+      if (i1 < Nf) and (New_File[i1] <> '*') and not SkipIf then i1 := i1 + 1;
+    end;
+    if Done and (i2 <> Cf) then ExitWC;
+    if (i1 = Nf) and (New_File[i1] <> '*') then Done := On;
+    if not PassThru then ExitWC;
+  until i2 = Cf;
+end;
+{------------------------------------------------------------------------------}
+{-------------------- BUILD SCREEN PROCEDURE ----------------------------------}
+procedure BUILD_SCREEN(Unitno : integer);
+  var                     k  : integer;
+
+   procedure TITLE;
+   begin
+     CURSOR(Off);
+     CrtTpgm := 'FMA ';CrtTvrs := Ver;
+     CrtTcpy := 'N. Everhart,    March  1985';
+     CrtTitle (' File Management Aid. ');
+   end;
+
+   procedure GET_VERT_VOL_DIR;
+     var         I, UnNo, Count, OffSetX, OffSetY : integer;
+                                            Prime : boolean;
+   begin
+     CURSOR(Off); Count := 0;
+     AT(30,41,'Volume Directory');
+     AT(6,42,'unit   volume      blks  files    unit   volume      blks  files');
+     for I := 42 to 55 do AT(37,I,'|');
+     for UnNo := 4 to 29 do if (UnNo = 4) or (UnNo = 5) or (UnNo > 8) then
+       begin
+         if UnNo < 19 then OffSetY := 44 else OffSetY := 32;
+         if UnNo < 19 then OffSetX := 6 else OffSetX := 40;
+         AT(OffSetX,OffSetY + Count,'');write(UnNo:1);
+         AT(OffSetX + 6,OffSetY + Count,VolId[UnNo]);
+         AT(OffSetX + 16,OffSetY + Count,Access[UnNo]);
+         if Access[UnNo] = 'RW' then write(' ',Space[0,UnNo]:0);
+         AT(OffSetX + 26,OffSetY + Count,'');
+         if (Access[UnNo] = 'RW') or (Access[UnNo] = 'RO') then
+         begin
+           write(Space[1,UnNo]:0);
+           if VolFlg[UnNo] then
+           begin
+             CrtAction(VdoInv); AT(OffSetX + 6,OffSetY + Count,VolId[UnNo]);
+             CrtAction(VdoNor);
+           end;
+         end;
+         Count := Count + 1
+       end;
+   end;
+
+   procedure GET_HORZ_VOL_DIR;
+     var                        I, J, UnNo, Count : integer;
+                                            Prime : boolean;
+   begin
+     CURSOR(Off); Count := 0;
+     AT(75,4,'Volume Directory');
+     AT(70,6,'unit   volume      blks  files');
+     for UnNo := 4 to 29 do if (UnNo = 4) or (UnNo = 5) or (UnNo > 8) then
+       begin
+         AT(71,8 + Count,'');write(UnNo:1);
+         AT(77,8 + Count,VolId[UnNo]);
+         AT(87,8 + Count,Access[UnNo]);
+         if Access[UnNo] = 'RW' then write(' ',Space[0,UnNo]:0);
+         AT(96,8 + Count,'');
+         if (Access[UnNo] = 'RW') or (Access[UnNo] = 'RO') then
+         begin
+           write(Space[1,UnNo]:0);
+           if VolFlg[UnNo] then
+           begin
+             CrtAction(VdoInv); AT(77,8 + Count,VolId[UnNo]); CrtAction(VdoNor);
+           end;
+         end;
+         Count := Count + 1
+       end;
+   end;
+
+   procedure GET_FILE_DIR(Unitno :integer);
+     var                                     Last : integer;
+                                           VolMtg : pstr32;
+      procedure GetVolNm;
+        var                                  i, Z : integer;
+                                             Name : string[16];
+      begin
+        CURSOR(Off); Name := LcurVol^;
+        Z := length(Name);
+        if copy(Name,1,1) = '/' then Name := copy(Name,2,Z-1);
+        for i := 4 to 29 do if Name = Volid[i] then CurUnit := i;
+        VolName := Name;
+      end;
+
+   begin;
+     CURSOR(Off); CCdirIOinit;
+     if FirstTime then GetVolNm else VolName := VolId[Unitno];
+     GetVolDir (VolName,d,BlkFlg,DevNbr,ValFlg);
+     PutVolDir (d,DevNbr);
+     Result := IOresult;
+     if (Result <> 0) and (Result <> 16) then
+      begin
+        TEST_IO(Result,4);
+        if (Unitno = 9) or (Unitno = 10) then
+         begin
+           VolMtg := pOSdevNam(Unitno); Volid[Unitno] := VolMtg^;
+           if Volid[Unitno] = '' then
+            begin
+              Space[0,Unitno] := 0; Space[1,UnitNo] := 0;
+              Access[Unitno] := ' '; GetVolNm;
+            end else VolName := Volid[Unitno];
+           GET_FILE_DIR(CurUnit);
+         end;
+        exit(GET_FILE_DIR);
+      end;
+     if Result = 16 then
+      begin
+        AT(13,7,'                  Access: READ ONLY ');
+        if not FirstTime  then
+         begin
+           Space[0,Unitno] := 0; Space[1,Unitno] := d[0].dnumfiles;
+           Access[Unitno] := 'RO'
+         end;
+      end else
+      begin
+        if not FirstTime then
+         begin
+           Last := d[0].dnumfiles;
+           Space[0,Unitno]  := d[0].deovblock - d[Last].nextblock;
+           Access[Unitno] := 'RW'; Space[1,UnitNo] := Last
+         end;
+        AT(13,7,'                  Access: READ/WRITE ');
+      end;
+     FirstTime := Off;
+   end;
+
+   procedure PRINTFILENAMES;
+     var                        count,j,i, X, Y   : integer;
+
+         procedure QUICKSORT(l,r : integer);
+              var   holdX, holdS : string[15];
+                    i, j,  holdI : integer;
+                           holdB : boolean;
+              begin
+                CURSOR(Off);
+                i := l; j := r; holdX := FileTable[(l+r) div 2];
+                repeat
+                  while FileTable[i] < holdX do i := i + 1;
+                  while holdX < FileTable[j] do j := j - 1;
+                  if i <= j then
+                   begin
+                     holdB := TypeTable[i]; holdS := FileTable[i];
+                     holdI := BlockTable[i];
+                     TypeTable[i] := TypeTable[j]; TypeTable[j] := holdB;
+                     FileTable[i]  := FileTable[j]; FileTable[j] := holdS;
+                     BlockTable[i] := BlockTable[j]; BlockTable[j] := holdI;
+                     i := i + 1; j := j - 1;
+                   end;
+                until i > j;
+                if l < j then QUICKSORT(l,j);
+                if i < r then QUICKSORT(i,r)
+               end;
+
+   begin
+     CURSOR(Off);
+     for i := 1 to d[0].dnumfiles do
+       begin
+         FileTable[i] := d[i].dtid;
+         BlockTable[i] := d[i].nextblock-d[i].firstblock;
+         if d[i].daccess.year = 100 then BlockTable[i] := 9999;
+         if d[i].fkind = TextFile then TypeTable[i] := On else
+          TypeTable[i] := Off;
+       end;
+     if Alphabetize and (d[0].dnumfiles > 0) then
+         QUICKSORT(1,d[0].dnumfiles);  {filenames}
+     for i := 1 to d[0].dnumfiles do
+     begin
+       if i < 27 then X := 2; Y := 9;
+       if (i < 53) and (i > 26) then begin X := 24; Y := -17; end;
+       if (i < 79) and (i > 52) then begin X := 47; Y := -43; end;
+       AT(X,Y+i,'');
+       write (BlockTable[i]:3,'   ');
+       if Qmark or Asteric then WILDCARD(FileTable[i]);
+       if (New_Fl = FileTable[i]) or Match then
+       begin              { write filename in inverse if from findfile}
+         CrtAction(VdoInv); write(FileTable[i]); CrtAction(VdoNor);
+       end else
+       if UndLnTxt and TypeTable[i] then
+       begin
+         CrtAction(VdoNorUnd); write(FileTable[i]); CrtAction(VdoNor);
+       end else             write(FileTable[i]);
+       if BlockTable[i] = 9999 then
+       begin
+         AT(X,Y+i,'');CrtAction(VdoInv);
+         write('temp'); CrtAction(VdoNor);
+       end;
+     end;
+     AT(1,37,'Number of Blocks Flagged:        Number of Files Flagged:');
+   end;
+
+   procedure DIR_HEADER;
+   begin
+     CURSOR(Off); LastFile := d[0].dnumfiles;
+     AT(13,3,'File Directory of Volume: '); write(d[0].dtid,'  Unit # ',CurUnit:0);
+     AT(13,4,'');
+     if LastFile = 0 then  write(' no files ')
+       else write('         Number of files: ',LastFile:0);
+     AT(13,5,'Number of blks in volume: ');
+     write(d[0].deovblock-d[0].firstblock:0);
+     AT(13,6,'     Number of open blks: ');
+     write(d[0].deovblock-d[LastFile].nextblock:0,' at end of vol.');
+     CrtAction(VdoInv);
+     AT(1,9,HEADER); AT(8,9,HEADER2);
+     if LastFile > 26 then begin AT(23,9,HEADER);AT(30,9,HEADER2);end;
+     if LastFile > 52 then begin AT(46,9,HEADER);AT(53,9,HEADER2);end;
+     CrtAction(VdoNor);
+   end;
+
+   procedure RESTORE_TAGS;
+     var                                        i : integer;
+   begin
+     CURSOR(Off);
+     for i := 1 to d[0].dnumfiles do
+     begin
+       if i < 27 then X := 6; Y := 9;
+       if (i < 53) and (i > 26) then begin X := 28; Y := -17; end;
+       if (i < 79) and (i > 52) then begin X := 51; Y := -43; end;
+       if Table[i] = 'T' then AT(X,Y+i,'>');
+     end;
+   end;
+
+   procedure WINDOW_FRAME;
+
+      procedure DrawBox(Lx,Rx,By,Ty : integer);
+        begin
+          CURSOR(Off);
+          DrawLine(Lx,By,Rx,By,1); DrawLine(Lx,By,Lx,Ty,1);
+          DrawLine(Lx,Ty,Rx,Ty,1); DrawLine(Rx,Ty,Rx,By,1);
+        end;
+
+   begin
+     CURSOR(Off);
+     if OSvrtCrt then
+       begin
+         DrawBox(25,MaxX-53,15,203); DrawBox(5,MaxX-60,220,MaxY-30);
+       end else
+       begin
+         DrawBox(MaxX-221,MaxX-2,130,MaxY-40); DrawBox(5,MaxX-225,59,MaxY-30);
+       end;
+   end;
+
+begin { BUILD SCREEN}
+   SegLock;
+   CLEAR(Main); CURSOR(Off);
+   if Box then BOX_WND; Box := Off;
+   TITLE; WINDOW_FRAME;
+   GET_FILE_DIR(Unitno); DIR_HEADER; PRINTFILENAMES;
+   if OSvrtCrt then GET_VERT_VOL_DIR else GET_HORZ_VOL_DIR;
+   RESTORE_TAGS;
+   SET_LABELS(SelectFiles);
+   CLEAR(Command);
+   AT(1,10,'Select Function   (use function or arrow keys)');
+   SETWND(Main);
+   Hr1 := 0; Min1 := 0; for k := 4 to 29 do VolFlg[k] := Off;
+end;
+{------------------------------------------------------------------------------}
+{-------------------- GENERAL UTILITIES ---------------------------------------}
+procedure GET_FILE_NAME ( Mark : integer);
+   var            j, j1, j3, j4          : integer;
+                             j2          : string[1];
+begin
+  j3 := 0; GFNerror := Off; Qmark := Off; Asteric := Off; Period := Off;
+  AT(1,1,'    Enter  filename: [_______________] ');
+  AT(23,1,''); readln(NEW_FILE);
+  if BrkPress or EscPress then
+    begin GFNerror := On; exit(GET_FILE_NAME) end;
+  if (LENGTH(NEW_FILE) > 15) or (LENGTH(NEW_FILE) < 1) then
+  begin
+    AT(1,3,''); write('    filename [',NEW_FILE,'] is too long/short');
+    WAIT(IOerror); GFNerror := On; exit(GET_FILE_NAME);
+  end;
+  for j := 1 to length(NEW_FILE) do NEW_FILE[j] := UpperCase(NEW_FILE[j]);
+  for j1 := 1 to length(NEW_FILE) do
+  begin
+    j2 := copy(NEW_FILE,j1,1);
+    if j2 < 'A' then
+    begin
+      if (j2 = '*') and (Mark = 78) then Asteric := On;
+      if (j2 < '-') and (j2 <> '*') then j3 := 1;
+      if (j2 > '.') and (j2 < '0') then j3 := 1;
+      if (j2 > '9') and (j2 <> '?') then j3 := 1;
+      if (j2 = '?') and (Mark = 78) then Qmark := On;
+      if (j2 = '.') and (Mark = 78) then Period := On;
+    end;
+    if (j2 > 'Z') and (j2 <> '_') then j3 := 1;
+  end;
+  if (Mark > 0) and (Mark < 78) then for j4 := 1 to d[0].dnumfiles do
+  begin
+    if (j4 <> Mark) and (NEW_FILE = FileTable[j4]) then
+    begin
+      AT(1,3,'Invalid...    filename already present in volume');
+      WAIT(IOerror); GFNerror := On; exit(GET_FILE_NAME);
+    end;
+  end;
+  if j3 = 1 then
+  begin
+    AT(1,4,'Invalid characters in filename');
+    WAIT(IOerror); GFNerror := On; exit(GET_FILE_NAME);
+  end;
+  if Mark <> 78 then begin Match := Off; New_Fl := '!'; end;
+end;
+{------------------------------------------------------------------------------}
+procedure FindFile (From : integer);
+  var             Vol, k, countFiles  : integer;
+begin
+  CLEAR(Special); LblsOff; countFiles := 0;
+  AT(1,0,'  Find File Utility .....                    ');
+  GET_FILE_NAME(78); if GFNerror then exit(FindFile);
+  for k := 1 to TotFiles do
+  begin
+    if Qmark or Asteric then {if wild card input do}
+    begin
+      WILDCARD(FileName[k]);
+      if Match then
+      begin
+        countFiles := countFiles + 1; Vol := VolTable[k]; VolFlg[Vol] := On;
+      end
+    end else
+    if (New_File = FileName[k]) then  {non widlcard compare}
+    begin
+      countFiles := countFiles + 1; Vol := VolTable[k]; VolFlg[Vol] := On;
+    end;
+  end;
+  if countFiles = 0 then { if no files found to match }
+  begin
+    CLEAR(Special);
+    AT(1,2,''); write(New_File,' is not present in any directory');
+    AT(1,4,'Press <space> to continue'); WAIT(IOerror); CrtPause(ch);
+  end
+  else
+  begin { if matching files then set volume & clear tags }
+    for k := 1 to 77 do Table[k] := 'A'; New_Fl := New_File;
+    CurUnit := Vol; RetToFirst := On; IOst := BellTone(31,3,142);
+   end;
+end;
+{------------------------------------------------------------------------------}
+procedure RENAME (Position : integer);
+   var                      i, MarkFile, c3   :  integer;
+                               None, Toggle   :  boolean;
+begin
+  MarkFile := Position;  LblsOff; None := On;
+  Toggle := Off; RetToFirst := On;
+  for c3 := 1 to d[0].dnumfiles do
+  begin
+    if TABLE[c3] = 'T' then
+    begin
+      CLEAR(Special);
+      AT(1,0,''); write('             Rename: ',FileTable[c3]);
+      GET_FILE_NAME(MarkFile);
+      if GFNerror then exit(RENAME);
+      for i := 1 to d[0].dnumfiles do if d[i].dtid = FileTable[c3] then
+        d[i].dtid := NEW_FILE;
+      PutVolDir(d,DevNbr); Result := IOresult;
+      TEST_IO(Result,6); None := Off;
+      if BrkPress or EscPress then exit(RENAME);
+    end;
+  end;
+  if None then
+  begin
+    Table[MarkFile] := 'T'; Toggle := On; RENAME(MarkFile)
+  end;
+  if Toggle then Table[MarkFile] := 'U';
+  if Alphabetize then for i := 1 to d[0].dnumfiles do Table[i] := 'A';
+end;
+{------------------------------------------------------------------------------}
+procedure RUNPGM (Which_One : integer);
+   var                            MarkFile, c  :  integer;
+                                 None, Toggle  :  boolean;
+                                            p  :  pstr64;
+begin
+   LblsOff; MarkFile := Which_one; RetToFirst := On;
+   None := On; Toggle := Off;
+   CLEAR(Command); CLEAR(Main);  CLEAR(Root);
+   for c := 1 to d[0].dnumfiles do
+   begin
+     if TABLE[c] = 'T' then
+      begin
+        p := NIL;
+        Result := call(CONCAT('/',VolName,'/',FileTable[c]),input,output,p^,0);
+        TEST_IO(Result,7); Result := 0;
+        if BrkPress or EscPress then exit(RUNPGM);
+        None := Off;
+      end;
+   end;
+   if None then
+   begin
+     Table[MarkFile] := 'T'; Toggle := On; RUNPGM(MarkFile)
+   end;
+   if Toggle then Table[MarkFile] := 'U';
+end;
+{------------------------------------------------------------------------------}
+procedure PRINTERUTILITY (Position : integer);
+   const              esc = 27;      US = 31;
+                      SOH = 1;      STX = 2;
+                       Sp = 32;      FF = 12;
+                   Period = 46;   UndLn = 95;
+   var                                      Po, Cha, Ft  :  char;
+                                                 FrmLen  :  string[80];
+       ThirdCh, SecndCh, CurrCh, MarkFile, BlankLns, c4,
+       F_Lns, CHA_OUT, SkpLn, SW, CntLn, DevNbr, FIRSTCH,
+       CC, i                                             :  integer;
+                      StartPrint, Toggle, None, EnhanOn  :  boolean;
+                                                InT, Out : text;
+  procedure STRIP_BlnkLns;
+  begin
+    while EOLN(InT) and (BlankLns <= BlnkLns) do
+    begin
+      readln(InT);
+      if EOF(InT) then exit(PRINTERUTILITY);
+      BlankLns := BlankLns + 1;
+    end;
+    BlankLns := 0;
+  end;
+
+  procedure READ_DECODE_PRINT;
+     var          i : integer;
+  begin
+    while not EOLN(InT) do
+    begin
+      read(InT,CHA);
+      if EscPress or BrkPress then exit(PRINTERUTILITY);
+      ThirdCh := SecndCh; SecndCh := CurrCh; CurrCh := ORD(CHA);
+      CC := CC + 1;
+      if (ThirdCh = esc) and (SecndCh = 101) then
+        case CurrCh of
+               64 : SW := 0;
+               65 : SW := 1;
+               72 : SW := 2;
+               73 : SW := 3;
+              192 : SW := 2;
+              193 : SW := 3;
+        end; {case}
+      if EnhanOn then
+        case SW of
+                0 : write(Out,CHR(esc),'S');
+                1 : write(Out,CHR(esc),CHR(US),CHR(STX));
+                2 : write(Out,CHR(esc),CHR(US),CHR(SOH));
+                3 : write(Out,CHR(esc),CHR(US),CHR(STX));
+        end; {case}
+      CHA_OUT := 1;
+      if (ThirdCh = esc) or (SecndCh = esc) or (CurrCh = esc) then CHA_OUT := 0;
+      if (CurrCh = Period) and (CC = 1) then CHA_OUT := 0;
+      if (SecndCh = Period) and (CC = 2) then CHA_OUT := 0;
+      if (ThirdCh = Period) and (CC = 3) then CHA_OUT := 0;
+      if CHA_OUT <> 0 then  write(Out,CHA);
+      if (ThirdCh = Period) and (SecndCh = 80) and (CurrCh = 71) and
+       (FIRSTCH = 1) then SkpLn := 1;
+      if (CC = 3) and (FIRSTCH = 1) then FIRSTCH := 0;
+      if EnhanOn then
+      begin
+        if (ThirdCh <> esc) and (SecndCh <> esc) and (CurrCh <> esc) then
+         case SW of
+          1: write(Out,CHR(esc),CHR(US),CHR(SOH),CHA,CHR(esc),CHR(US),CHR(FF),
+              CHR(Sp),CHR(esc),'S');
+          2: write(Out,CHR(esc),CHR(US),CHR(SOH),CHR(UndLn),CHR(esc),'S',CHR(Sp));
+          3: write(Out,CHR(esc),CHR(US),CHR(SOH),CHA,CHR(UndLn),CHR(esc),CHR(US),
+              CHR(FF),CHR(Sp),CHR(esc),'S');
+         end; {case}
+      end;
+      if  SkpLn = 1 then
+      begin
+        if PgBrk then {do .PG}
+        begin
+          for i := CntLn to F_Lns -1 do writeln(Out);
+          CntLn := 0; SkpLn := 0; readln(InT);
+          if EOF(InT) then exit(READ_DECODE_PRINT);
+          if FT ='2' then
+          begin
+            AT(10,12,'CHANGE PAPER AT PRINTER PAUSE...');
+            CrtPause(Ch);
+            AT(10,12,'                                 ');
+          end;
+          STRIP_BlnkLns;
+        end else if not PgBrk then begin SkpLn := 0; readln(InT) end;
+      end;
+    end;
+  end;
+
+  procedure DisplayOptions;
+  begin
+    if Form then
+      FrmLen := '11 inches, max 66 lines  '  else
+    begin
+      FrmLen := '8.5 inches, max 51 lines';
+      if LnsPg > 51 then LnsPg := 43;
+    end;
+    AT(15,20,'OUTPUT SETTINGS:'); LblsOff;
+    AT(15,22,'   Form Type      = ');
+        if CutSheet then write('Single Sheet, pause between pages') else
+                         write('Continous Form Feed              ');
+    AT(15,23,'   Form Length    = ');write(FrmLen);
+    AT(15,24,'   Lines per Page = ');write(LnsPg:1);
+    At(15,25,'   Blank Lines    = ');
+             write(BlnkLns:1,' stripped from top of page');
+    At(15,26,'   Enhancements   = ');
+             if EnHance then write('On ') else write('Off');
+    At(15,27,'   Do Page Breaks = ');
+             if PgBrk   then write('On ') else write('Off');
+    Set_Labels(PrintOptions); LblsOn;
+  end;
+
+  procedure SelectOptions;
+  var      delay : integer;
+  begin                        { Po = Print Options }
+    repeat
+      read(KeyboardIO,Po);
+      if Po = '1' then
+      begin
+        read(KeyboardIO,Po);
+        case Po of
+                'a' :  StartPrint := On;
+                'b' :  begin CutSheet := Off; Ft := '1' end;
+                'c' :  begin CutSheet := On;  Ft := '2' end;
+                'd' :  Form := Off;
+                'e' :  Form := On;
+                'f' :  begin Enhance := Off; EnhanOn := Off end;
+                'g' :  begin Enhance := On;  EnhanOn := On  end;
+                'h' :  begin
+                         Clear(Command);  At(5,0,'');
+                         if Form then write('Maximum lines per page = 66') else
+                                      write('Maximum lines per page = 51');
+                         At(5,1,'Enter number of lines per page to print ');
+                         read(LnsPg);
+                         if (LnsPg > 66) and Form then LnsPg := 58;
+                         if (LnsPg > 51) and not Form then LnsPg := 43;
+                         Clear(Command);
+                         write('PRINT file: ',VOL_FILE,'          ');
+                         SetWnd(Main);
+                       end;
+                'i' :  begin
+                         Clear(Command);
+                         At(5,0,'Any number of blank lines may be stripped from');
+                         At(5,1,'the top of each page.   Enter number of lines ');
+                         read(BlnkLns); Clear(Command);
+                         write('PRINT file: ',VOL_FILE,'          ');
+                         SetWnd(Main);
+                       end;
+                'j' :  PgBrk := Off;
+                'k' :  PgBrk := On;
+                'Q' :  exit(PrinterUtility);
+                'H' :  begin HELP; exit(PrinterUtility) end;
+        end; { case }
+        DisplayOptions;
+      end;
+    until StartPrint;       LblsOff;
+  end;
+
+begin {PRINTERUTILITY}
+  EnhanOn := On; MarkFile := Position; None := On; Toggle := Off; LblsOff;
+  BlnkLns := 4; StartPrint := Off; Ft := '1';
+  if Form then LnsPg := 58 else LnsPg := 43;
+  for c4 := 1 to d[0].dnumfiles do
+  begin
+    if TABLE[c4] = 'T' then
+    begin
+      VOL_FILE := CONCAT('/',VolName,'/',FileTable[c4]);
+      CLEAR(Command);
+      write('PRINT file: ',VOL_FILE,'          ');
+      if not TypeTable[c4] then   {not text}
+        begin ERROR_MESSAGE(20,35); exit(PRINTERUTILITY) end;
+      CLEAR(Main);
+      AT( 5, 5,'PRINTER UTILITY...for EDWORD enhanced .TEXT files');
+      AT(10, 6,'Support for DIABLO SYSTEMS type printers.');
+      AT(10, 7,'Printer Action Tables not recommended with this utility');
+      AT(10,10,'TURN-ON LOCAL PRINTER....AND LOAD PAPER');
+      AT(10,13,'SET PAPER TO "TOP OF FORM"');
+      DisplayOptions;
+      SelectOptions;
+      if Form then F_Lns := 66 else F_Lns := 51;
+      SkpLn := 0; CC := 0; BlankLns := 0; CntLn := 0;
+      ThirdCh := 1; SecndCh := 1; CurrCh := 1;  CLEAR(Main);
+      AT(10,10,'PROCESSING  TEXT FILE TO PRINTER');
+      reset(InT,VOL_FILE); rewrite(Out,'/PRINTER');
+      while not EOF(InT) do
+      begin
+        if (CntLn = 0) then STRIP_BlnkLns;
+        FIRSTCH := 1; CC := 0;
+        READ_DECODE_PRINT;  {one line}
+        CntLn := CntLn + 1; ThirdCh := 1; SecndCh := 1; CurrCh := 1;
+        if (CntLn = LnsPg) and (FT ='1') then
+          begin for i := CntLn + 1 to F_Lns do writeln(Out); CntLn := 0 end;
+        if (CntLn = LnsPg) and (FT ='2') then
+        begin
+          AT(10,12,'CHANGE PAPER AT PRINTER PAUSE...');
+          CrtPause(Ch); CntLn := 0;
+          AT(10,12,'                                 ');
+        end;
+        writeln(Out); readln(InT);  {advance Line}
+      end;
+      None := Off; StartPrint := Off;
+    end;
+  end;
+  if None then
+  begin
+    Table[MarkFile] := 'T'; Toggle := On; PRINTERUTILITY(MarkFile)
+  end;
+  if Toggle then Table[MarkFile] := 'U'; EnhanOn := On;
+  AT(10,10,'PRINT TEXT PROCESSING COMPLETED...');  RetToFirst := On;
+end;
+{------------------------------------------------------------------------------}
+procedure LISTFILE (Position : integer);
+    var                            LINEOFDATA  : STRING[132];
+                                 Toggle, None  : boolean;
+                                MarkFile,  c2  : integer;
+
+      procedure READ_TO_EOF;
+      begin
+        while not EOF(INTEXT) do
+        begin
+          Ch := '*';
+          readln(INTEXT,LINEOFDATA);
+          if escPress  then begin Ch := '*'; exit(READ_TO_EOF); end;
+          if BrkPress  then exit(ListFile);
+          if Ch <> '*' then begin CrtPause(ch); write(chr(08)); end;
+          writeln(OUTTEXT,LINEOFDATA);
+        end;
+      end;
+
+begin
+   CURSOR(Off); LblsOff; MarkFile := Position;
+   None := On; Toggle := Off;
+   for c2 := 1 to d[0].dnumfiles do
+   begin
+     if TABLE[c2] = 'T' then
+     begin
+       VOL_FILE := CONCAT('/',VolName,'/',FileTable[c2]);
+       CLEAR(Command);
+       write('VIEW file: ',VOL_FILE,'   ');
+       write('Press [Esc] for next file, [Break] to exit.');
+       CLEAR(Main);
+       reset(INTEXT,VOL_FILE); rewrite(OUTTEXT,'/CONSOLE');
+       READ_TO_EOF;
+       if not TypeTable[c2] then ERROR_MESSAGE(20,36); {not text}
+       if EOF(INTEXT) then CrtPause(Ch); Ch := chr(33); None := Off;
+     end;
+   end;
+   if None then
+     begin
+       Table[MarkFile] := 'T'; Toggle := On; LISTFILE(MarkFile)
+     end;
+   if Toggle then Table[MarkFile] := 'U';
+   CURSOR(On);
+end;
+{------------------------------------------------------------------------------}
+procedure SPOOL;
+    var                                      p : array[1..80] of pstr64;
+                                            pp : pstrtbl;
+                                            qq : array[1..80] of str64;
+                                        a3, a1 : integer;
+begin
+  LblsOff; CLEAR(Special);
+  pp := @p[1]; p[1] := @qq[1]; p[2] := @qq[2];
+  qq[1] := 'LINEFEED=NO'; qq[2] := 'START=YES'; a3 := 2;
+  for a1 := 1 to d[0].dnumfiles do
+  begin
+    if TABLE[a1] = 'T' then
+    begin
+      a3 := a3 +1;
+      p[a3] := @qq[a3];
+      qq[a3] := CONCAT('/',VolName,'/',FileTable[a1]);
+      TABLE[a1] := 'A';
+    end;
+  end;
+  Result := call ('!SPOOL',input,output,pp^,a3); {SPOOL v 4.0}
+  TEST_IO(Result,8);  RetToFirst := On;
+end;
+{------------------------------------------------------------------------------}
+procedure HELP;
+  var                                      Ch  : char;
+begin
+  LblsOff;  CLEAR(Main);
+  AT(10,08,'          FMA Help...');
+  AT(10,10,'User instructions for FMA are provided in a text file');
+  AT(10,12,'titled "HELP.FMA.TEXT".  This file is structured as a ');
+  AT(10,14,'user manual and is formatted with page breaks. ');
+  CrtPause(Ch); RetToFirst := On;
+end;
+{------------------------------------------------------------------------------}
+procedure CRUNCH_VOL;
+   var                                q1, q2, q3 : str64;
+                                      p1, p2, p3 : pstr64;
+                                               p : pstrtbl;
+                                            Last : integer;
+begin
+  LblsOff; CLEAR(Special);
+  p :=@p1; p1 := @q1; p2 := @q2; p3 := @q3;
+  q1 := 'krunch'; q2 := '-q'; q3 := CONCAT('/',VolName);
+  Result := call ('!CC.FilMgr',input,output,p^,3);
+  TEST_IO(Result,9); WAIT(OpComplete);
+  GetVolDir (VolName,d1,BlkFlg1,DevNbr1,ValFlg1);
+  Result := IOresult; TEST_IO(Result,10);
+  Last := d1[0].dnumfiles;
+  Space[0,CurUnit] := d1[0].deovblock - d1[Last].nextblock;
+end;
+{------------------------------------------------------------------------------}
+procedure SET_VOL;
+    var                                   q1, q2 : str64;
+                                          p1, p2 : pstr64;
+                                               p : pstrtbl;
+begin
+  LblsOff; CLEAR(Command);
+  p :=@p1; p1 := @q1; p2 := @q2;
+  q1 := 'setvol';  q2 := CONCAT('/',VolName);
+  Result := call ('!CC.FilMgr',input,output,p^,2);
+  TEST_IO(Result,11); WAIT(OpComplete); CLEAR(Command);
+  AT(1,10,'Select Function   (use function or arrow keys)');
+  SETWND(Main); LblsOn
+end;
+{------------------------------------------------------------------------------}
+procedure COPYFILE (TypeOfCpy : integer);
+   var                                CurVolName : VID;
+                                        VolFile  : string[32];
+                                               p : array[1..80] of pstr64;
+                                              pp : pstrtbl;
+                                              qq : array[1..80] of str64;
+                 Strglen,   UnitNo, Last, a1, a3 : integer;
+
+    procedure ERROR_SPACE(Required : integer);
+    begin
+      AT(1,2,' Error - Insufficient open blocks in Target volume');
+      AT(1,3,' Crunch Target ? (Yes No)');
+      WAIT(IOerror);
+      repeat begin read(ch); ch := Uppercase(ch) end
+      until (ch = 'Y') or (ch ='N');
+      if ch = 'N' then
+       begin VolName := CurVolName; CurUnit := UnitNo; exit(COPYFILE) end
+       else CRUNCH_VOL;
+      CLEAR(Special);
+      if Required > Space[0,CurUnit] then ERROR_SPACE(Required);
+    end;
+
+    procedure COMP_NAMES;
+    begin
+      if (CurVolName = VolName) and (TypeOfCpy = 1) then
+       begin
+         AT(1,1,'Error - Target volume is Source volume');
+         WAIT(IOerror); exit(COPYFILE)
+       end;
+      AT(1,1,'  TARGET volume is '); write(VolName); writeln;
+      if ACCESS[CurUnit] = 'RO' then
+      begin
+        AT(1,2,'Error - Target volume is READ ONLY');
+        WAIT(IOerror); VolName := CurVolName; CurUnit := UnitNo; exit(COPYFILE);
+      end;
+    end;
+
+    procedure ERROR_FILES;
+    begin
+      AT(1,2,' Error - Insufficient directory space in Target volume');
+      WAIT(IOerror); VolName := CurVolName; CurUnit := UnitNo; exit(COPYFILE);
+    end;
+
+    procedure GET_CAT_FILE_NAME;
+    begin
+      CLEAR(Special);
+      AT(1,0,' Concatenate flaged file(s)');
+      GET_FILE_NAME(0);
+      if GFNerror then exit(COPYFILE);
+    end;
+
+    procedure CHECK_FOR_DUPLICATE_FILENAME;
+       var                               i : integer;
+    begin
+      for i := 1 to Last do if d1[i].dtid = New_File then
+       begin
+         CLEAR(Special);
+         AT(1,1,'Error - FileName ');
+         write(New_File,'  is already present in /',VolName,'.');
+         AT(1,3,'File will be overwritten by Concatenate File.');
+         AT(1,4,'CONTINUE ? (Y or N)'); WAIT(IOerror);
+         repeat begin read(ch); ch := Uppercase(ch) end
+         until (ch = 'Y') or (ch ='N');
+         if ch = 'N' then
+           begin VolName := CurVolName; CurUnit := UnitNo;
+             exit(COPYFILE);
+           end;
+       end;
+    end;
+
+    procedure WRITE_EXEC_FILE;
+       var                 Count1, Count2, i : integer;
+                               First, Follow : boolean;
+    begin
+      VolFile := concat('/',VolName,'/temp.FMA.text');
+      rewrite(OUTTEXT,VolFile);
+      if NoFiles < 3 then
+       begin
+         write(OUTTEXT,'!CC.FilMgr catfil');
+         for i := 1 to LastFile do if TABLE[i] = 'T' then
+          write(OUTTEXT, concat(' /',CurVolName,'/',FileTable[i]));
+         writeln(OUTTEXT,' > /',VolName,'/',New_file);
+       end else
+       begin
+         Count1 := NoFiles; Count2 := NoFiles;
+         Follow := Off; First := On;
+         write(OUTTEXT,'!CC.FilMgr catfil');
+         for i := 1 to LastFile do if TABLE[i] = 'T' then
+          begin
+            Count1 := Count1 - 1;
+            if Follow then
+              begin
+                if not First then
+                  writeln(OUTTEXT,concat('!CC.FILMGR CRUNCH -q /',VolName));
+                write(OUTTEXT,'!CC.FilMgr catfil');
+                write(OUTTEXT,concat(' /',VolName,'/',New_file));
+                First := Off;
+              end;
+            write(OUTTEXT, concat(' /',CurVolName,'/',FileTable[i]));
+            if Count1 + 2 = Count2 then
+             begin
+               writeln(OUTTEXT,' > /',VolName,'/',New_file);
+               Count2 := Count1 + 1; Follow := On;
+             end;
+          end;
+       end;
+      writeln(OUTTEXT,concat('!CC.FILMGR delFil -q /',VolName,'/TEMP.FMA.TEXT'));
+      Close(OUTTEXT,lock);
+      for i := 1 to LastFile do  TABLE[i] := ' ';
+    end;
+
+    procedure CHECK_FILE_KIND;
+      var                                    i : integer;
+                            TypeText, TypeData : boolean;
+    begin
+      TypeText := Off; TypeData := Off;
+      for i := 1 to LastFile do if TABLE[i] = 'T' then
+       if TypeTable[i] then TypeText := On else TypeData := On;
+      if TypeText = TypeData then
+       begin
+         At(1,4,'Error - mixed Text and Data files selected');
+         WAIT(IOerror); VolName := CurVolName; CurUnit := UnitNo;
+         exit(COPYFILE);
+       end;
+    end;
+
+begin {COPYFILE}
+  if NoFiles = 0 then exit(COPYFILE); RetToFirst := On;
+  CurVolName := VolName; UnitNo := CurUnit;
+  LblsOff;  CLEAR(Special);
+  if TypeOfCpy = 2 then begin CHECK_FILE_KIND; GET_CAT_FILE_NAME end;
+  SET_LABELS(CopyTarget); LblsOn; CLEAR(Special);
+  if TypeOfCpy = 1 then AT(1,0,' COPY FILES TO WHICH VOLUME ?')
+                   else AT(1,0,'CONCATENATE File(s) to which Volume ?');
+  AT(1,1,' select volume with cursor and press [Target]');
+  SETWND(Main); SWITCH_CONTROL(2);
+  LblsOff; CLEAR(Special);
+  COMP_NAMES;
+  if TypeOfCpy = 1 then
+    begin  {copyfile}
+      if VolName <> 'FLOPPY' then
+      begin
+        if NoBlks > Space[0,CurUnit] then ERROR_SPACE(NoBlks);
+        if NoFiles + SPACE[1,CurUnit] > 77 then ERROR_FILES;
+      end;
+      pp := @p[1]; p[1] := @qq[1]; qq[1] := 'CpyFil'; p[2] := @qq[2];
+      p[3] := @qq[3]; qq[2] := '-q'; qq[3] := concat('-v',VolName); a3 := 3;
+      for a1 := 1 to LastFile do
+      begin
+        if TABLE[a1] = 'T' then
+        begin
+          a3 := a3 +1; p[a3] := @qq[a3];
+          qq[a3] := concat('/',CurVolName,'/',FileTable[a1]);
+        end;
+      end;
+      Result := call ('!CC.FILMGR',input,output,pp^,a3);
+    end else
+
+    begin {catfile}
+      if Space[1,CurUnit] > 75 then ERROR_FILES;
+      if ((NoBlks * 2) + 8 > Space[0,CurUnit]) and (NoFiles > 2) then
+       ERROR_SPACE((NoBlks * 2) + 8) else
+        if NoBlks + 8 > Space[0,CurUnit] then ERROR_SPACE(NoBlks + 8);
+      GetVolDir (VolName,d1,BlkFlg1,DevNbr1,ValFlg1);
+      Result := IOresult; TEST_IO(Result,12); Last := d1[0].dnumfiles;
+      CHECK_FOR_DUPLICATE_FILENAME; WRITE_EXEC_FILE;
+      pp := @p[1]; p[1] := @qq[1]; qq[1] := concat('/',VolName,'/temp.FMA.text');
+      AT(1,4,'Concatenate File(s) inprocess.. Please wait.');
+      Result := call ('!CC.EXEC',input,output,pp^,1);
+    end;
+
+  TEST_IO(Result,13); GetVolDir (VolName,d1,BlkFlg1,DevNbr1,ValFlg1);
+  Result := IOresult; TEST_IO(Result,14); Last := d1[0].dnumfiles;
+  Space[0,CurUnit] := d1[0].deovblock - d1[Last].nextblock;
+  Space[1,CurUnit] := Last;
+  WAIT(OpComplete); VolName := CurVolName; CurUnit := UnitNo;
+end;
+{------------------------------------------------------------------------------}
+procedure DELETEFILE (TypeOfFile : integer);
+    var                                    p : array[1..80] of pstr64;
+                                          pp : pstrtbl;
+                                          qq : array[1..80] of str64;
+                                      a3, a1 : integer;
+begin
+  LblsOff; RetToFirst := On; CLEAR(Command); CLEAR(Special);
+  if TypeOfFile = 2 then
+    begin
+      AT(2,1,'Delete Temporary File(s) Utility'); AT(2,3,'');
+      p[2] := @qq[2]; qq[2] := '-t'; a3 := 2;
+    end
+    else a3 := 1;
+  pp := @p[1]; p[1] := @qq[1]; qq[1] := 'delFil';
+  for a1 := 1 to d[0].dnumfiles do
+  begin
+    if TABLE[a1] = 'T' then
+    begin
+      a3 := a3 +1; p[a3] := @qq[a3];
+      qq[a3] := CONCAT('/',VolName,'/',FileTable[a1]); TABLE[a1] := 'A';
+    end;
+  end;
+  Result := call ('!CC.FILMGR',input,output,pp^,a3); TEST_IO(Result,15);
+  GetVolDir (VolName,d1,BlkFlg1,DevNbr1,ValFlg1);
+  Result := IOresult; TEST_IO(Result,16); LastFile := d1[0].dnumfiles;
+  Space[0,CurUnit] := d1[0].deovblock - d1[LastFile].nextblock;
+  Space[1,CurUnit] := LastFile; WAIT(OpComplete);
+end;
+{------------------------------------------------------------------------------}
+procedure REN_VOL(WhichOne : msg; UnId : integer);
+   var                      New_Vol, j2  : string[20];
+                           Last, j1, j3  : integer;
+                              q1, q2, q3 : str64;
+                              p1, p2, p3 : pstr64;
+                                       p : pstrtbl;
+begin
+  LblsOff; CLEAR(Command); CLEAR(Special);
+  if Access[UnId] = '' then
+   begin
+     At(1,0,'Error - Unit number '); write(UnId:2,' can not be renamed');
+     WAIT(IOerror); exit(REN_VOL);
+   end;
+  if Access[UnId] = 'RO' then
+   begin
+     At(1,0,'Error - volume ');write(WhichOne,' is READ ONLY');
+     WAIT(IOerror);  exit(REN_VOL);
+   end;
+  if WhichOne = 'CCSYS' then
+   begin
+     AT(2,0,'!! Renaming CCSYS is not RECOMMENDED !! continue? (Y/N)');
+     WAIT(IOerror); read(ch);
+     if (UpperCase(ch) <> 'Y') or EscPress then exit(REN_VOL);
+   end;
+  AT(2,1,'Rename Volume: '); write(WhichOne);
+  AT(2,3,' Enter new filename: /_______/ '); AT(24,3,''); readln(New_Vol);
+  if BrkPress or EscPress then exit(REN_VOL);
+  if (LENGTH(New_VoL) > 7) or (LENGTH(New_Vol) < 1) then
+  begin
+    AT(2,4,''); write(' volume name /',New_Vol,'/ is too long/short');
+    WAIT(IOerror); exit(REN_VOL);
+  end;
+  for j1 := 1 to length(New_VOL) do New_Vol[j1] := UpperCase(New_Vol[j1]);
+  for j1 := 1 to length(New_Vol) do
+  begin
+    j2 := copy(New_Vol,j1,1);
+    if j2 < 'A' then
+    begin
+      if (j2 = '.') and (j1 = 1) then j3 := 1;
+      if (j2 < '.') or (j2 = '/') then j3 := 1;
+      if j2 > '9' then j3 := 1;
+    end;
+    if j2 > 'Z' then j3 := 1;
+  end;
+  if j3 = 1 then
+  begin
+    AT(2,4,'Invalid new volume name'); WAIT(IOerror); exit(REN_VOL);
+  end;
+  p :=@p1; p1 := @q1; p2 := @q2; p3 := @q3;
+  q1 := 'renfil';  q2 := concat('/',WhichOne); q3 := concat('/',New_Vol);
+  Result := call ('!CC.FilMgr',input,output,p^,3);
+  TEST_IO(Result,17); CLEAR(Special);
+  At(2,2,''); write('Volume ',WhichOne,' is now ',New_Vol);
+  VolID[UnId] := New_Vol; WAIT(OpComplete);
+end;
+
+{------------------------------------------------------------------------------}
+procedure SYS_UTILITY (WhichOne : integer);
+   var                                       p : pstr64;
+                                       UTILITY : string[14];
+begin
+  LblsOff; CLEAR(Command); CLEAR(Main); CLEAR(Root);
+  case WhichOne of
+             Calc  :  UTILITY := '/ISYS/CC.CALC';
+             Clock :  UTILITY := '/ISYS/CC.CLOCK';
+      end; { case }
+  p := NIL;
+  Result := call(UTILITY,input,output,p^,0);
+  TEST_IO(Result,18); Box := On; RetToFirst := On;
+end;
+
+{$S}
+{------------------------------------------------------------------------------}
+{----------- CURSOR DIRECTION CONTROL FOR MAIN SCREEN -------------------------}
+procedure DIRECTION_CONTROL(Location : integer);
+  var                                       i  : integer;
+begin
+  i := Location;
+  read(KeyboardIO,Q);
+  case  ORD(Q) of
+      65  :   Q := 'A' ;      {UP}
+      66  :   Q := 'B' ;      {DOWN}
+      67  : begin {RIGHT}
+              if (not OSvrtCrt) then
+              if (X = 51) then VolDir := On else
+              if (X = 28) and (LASTFILE <= 52) then VolDir := On else
+              if (X =  6) and (LASTFILE <= 26) then VolDir := On;
+              if (X = 28) and (LASTFILE > i + 26) then
+                begin i := i + 25; X := 51; Y := - 43 end;
+              if (X = 28) and (LASTFILE <= i + 26) then
+                begin i := LASTFILE - 1; X := 51; Y := - 43 end;
+              if (X = 6) and (LASTFILE > i + 26) then
+                begin i := i + 25; X := 28; Y := - 17 end;
+              if (X = 6) and (LASTFILE <= i + 26) then
+                begin i := LASTFILE - 1; X := 28; Y := - 17 end;
+              if i < 1 then i := 1;
+            end;
+      68  : begin {LEFT}
+              if X = 28 then begin i := i -27; X := 6; Y := 9 end;
+              if X = 51 then begin i := i -27; X := 28; Y := -17 end;
+              if i < 1 then begin i := 1; Y := 9 end;
+              Q := 'U';
+            end;
+         end; { case }
+  if Q = 'A' then if i > 1 then i := i -2;
+  Pass := i;
+end;
+{------------------------------------------------------------------------------}
+{------------------ GET ACTION CONTROL ----------------------------------------}
+procedure GET_ACTION (Where  :  integer);
+  var                                     j,i  : integer;
+
+   procedure BLOCKCOUNTER;
+     var                                     S3  : integer;
+   begin
+     NoBlks := 0; NoFiles := 0; CURSOR(Off);
+     for S3 := 1 to d[0].dnumfiles do
+      begin
+        if TABLE[S3] = 'T' then
+         begin
+           NoBlks := NoBlks + BlockTable[S3];
+           NoFiles := NoFiles + 1;
+         end;
+      end;
+     AT(28,37,'     '); AT(59,37,'   ');
+     AT(28,37,''); write(NoBlks:1); AT(59,37,''); write(NoFiles:1);
+   end;
+
+begin  { GET ACTION}
+  CURSOR(Off); i := Where;
+  read(KeyBoardIO,Q);
+  case Q of
+     'C' : begin COPYFILE(1); BUILD_SCREEN(CurUnit) end;
+     'c' : begin COPYFILE(2); BUILD_SCREEN(CurUnit) end;
+     'D' : begin DELETEFILE(1); BUILD_SCREEN(CurUnit) end;
+     'E' : begin RUNPGM(i); BUILD_SCREEN(CurUnit) end;
+     'H' : begin HELP; BUILD_SCREEN(CurUnit) end;
+     'i' : begin DELETEFILE(2); BUILD_SCREEN(CurUnit) end;
+     'K' : begin CRUNCH_VOL; BUILD_SCREEN(CurUnit) end;
+     'N' : VolDir := On;
+     'O' : begin SPOOL; BUILD_SCREEN(CurUnit) end;
+     'P' : begin PRINTERUTILITY(i); BUILD_SCREEN(CurUnit) end;
+     'Q' : exitFMA;
+     'R' : begin RENAME(i); BUILD_SCREEN(CurUnit) end;
+     'S' : SET_VOL;
+     'T' : begin Table[i] := 'T'; AT(X,Y+i,'>') end;
+     'U' : begin Table[i] := 'U'; AT(X,Y+i,'  ') end;
+     'V' : begin LISTFILE(i); BUILD_SCREEN(CurUnit); end;
+     'X' : begin
+             if UndLnTxt then UndLnTxt := Off else UndLnTxt := On;
+             BUILD_SCREEN(CurUnit)
+           end;
+     'Y' : begin FindFile(0); BUILD_SCREEN(CurUnit) end;
+     'Z' : begin SYS_UTILITY(Clock); BUILD_SCREEN(CurUnit) end;
+     'W' : begin
+             if Alphabetize then Alphabetize := Off else Alphabetize := On;
+             for j := 1 to d[0].dnumfiles do Table[j] := 'U';
+             BUILD_SCREEN(CurUnit)
+           end;
+  end;{case}
+  BLOCKCOUNTER;
+ end;
+{------------------------------------------------------------------------------}
+procedure DoubleEagle(Xp,Yp,Where : integer);
+   var           Right1, Right2, Left1, Left2,
+                 Up1, Up2, Down1, Down2, count,
+                 Right1s, Right2s, Left1s, Left2s,
+                 Up1s, Up2s, Down1s, Down2s         : boolean;
+                 X1, X2, Y1, Y2, X1s, X2s, Y1s,
+                 Y2s, i, j                          : integer;
+                 MatrixX, MatrixXs   : array[1..2,1..20] of integer;
+                 MatrixY, MatrixYs   : array[1..2,1..20] of integer;
+
+     procedure INIT_IT;
+        var                      i  : integer;
+     begin
+       if OSvrtCrt then
+       begin
+         Xsmin := 25; Xsmax := MaxX-53; Xlmin := 5; Xlmax := MaxX-60;
+         Ysmin := 15; Ysmax := 203; Ylmin := 220; Ylmax := MaxY-30;
+       end else
+       begin
+         Xsmin := MaxX-221; Xsmax := MaxX-2; Xlmin := 5; Xlmax := MaxX-225;
+         Ysmin := 130; Ysmax := MaxY-40; Ylmin := 59; Ylmax := MaxY-30;
+       end;
+       Right1 := On; Right2 := On; Up1 := On; Up2 := On;
+       Left1 := Off; Left2 := Off; Down1 := Off; Down2 := Off;
+       Right1s := On; Right2s := On; Up1s := On; Up2s := On;
+       Left1s := Off; Left2s := Off; Down1s := Off; Down2s := Off;
+       X1 := TurtleX; X2 := TurtleX + 50; Y1 := TurtleY; Y2 := TurtleY - 50;
+       X1s := Xsmin; X2s := Xsmin + 50; Y1s := Ysmin; Y2s := Ysmax - 50;
+       for i := 1 to 20 do
+        begin
+          MatrixX[1,i] := 0; MatrixX[2,i] := 0;
+          MatrixY[1,i] := 0; MatrixY[2,i] := 0;
+          MatrixXs[1,i] := 0; MatrixXs[2,i] := 0;
+          MatrixYs[1,i] := 0; MatrixYs[2,i] := 0;
+        end;
+     end;
+
+     procedure DR(stX,stY,edX,edY : integer);
+     begin Drawline(stX,stY,edX,edY,-1); end;
+
+begin
+  INIT_IT; i := 1; count := Off;
+  repeat
+    if Right1 and (X1 < Xlmax - 2) then X1 := X1 + 2 else
+                begin Right1 := Off; Left1 := On; end;
+    if Right2 and (X2 < Xlmax - 3) then X2 := X2 + 3 else
+                begin Right2 := Off; Left2 := On; end;
+    if Left1 and (X1 > Xlmin+2) then X1 := X1 - 2 else
+                begin Left1 := Off; Right1 := On; end;
+    if Left2 and (X2 > Xlmin+3) then X2 := X2 - 3 else
+                begin Left2 := Off; Right2 := On; end;
+    if Up1 and (Y1 < Ylmax - 2) then Y1 := Y1 + 2 else
+                   begin Up1 := Off; Down1 := On; end;
+    if Up2 and (Y2 < Ylmax - 3) then Y2 := Y2 + 3 else
+                   begin Up2 := Off; Down2 := On; end;
+    if Down1 and (Y1 > Ylmin+2) then Y1 := Y1 - 2 else
+                   begin Down1 := Off; Up1 := On; end;
+    if Down2 and (Y2 > Ylmin+3) then Y2 := Y2 - 3 else
+                   begin Down2 := Off; Up2 := On; end;
+    MatrixX[1,i] := X1; MatrixX[2,i] := X2;
+    MatrixY[1,i] := Y1; MatrixY[2,i] := Y2;
+    DR(MatrixX[1,i],MatrixY[1,i],MatrixX[2,i],MatrixY[2,i]);
+    TIME_DISPLAY(Xp,Yp,Where);
+    if Right1s and (X1s < Xsmax - 2) then X1s := X1s + 2 else
+                begin Right1s := Off; Left1s := On; end;
+    if Right2s and (X2s < Xsmax - 3) then X2s := X2s + 3 else
+                begin Right2s := Off; Left2s := On; end;
+    if Left1s and (X1s > Xsmin+2) then X1s := X1s - 2 else
+                begin Left1s := Off; Right1s  := On; end;
+    if Left2s and (X2s > Xsmin+3) then X2s := X2s - 3 else
+                begin Left2s := Off; Right2s := On; end;
+    if Up1s and (Y1s < Ysmax - 2) then Y1s := Y1s + 2 else
+                   begin Up1s := Off; Down1s := On; end;
+    if Up2s and (Y2s < Ysmax - 3) then Y2s := Y2s + 3 else
+                   begin Up2s := Off; Down2s := On; end;
+    if Down1s and (Y1s > Ysmin+2) then Y1s := Y1s - 2 else
+                   begin Down1s := Off; Up1s := On; end;
+    if Down2s and (Y2s > Ysmin+3) then Y2s := Y2s - 3 else
+                   begin Down2s := Off; Up2s := On; end;
+    MatrixXs[1,i] := X1s; MatrixXs[2,i] := X2s;
+    MatrixYs[1,i] := Y1s; MatrixYs[2,i] := Y2s;
+    DR(MatrixXs[1,i],MatrixYs[1,i],MatrixXs[2,i],MatrixYs[2,i]);
+    if count then
+      begin
+       if i = 20 then j := 1 else j := i + 1;
+       DR(MatrixXs[1,j],MatrixYs[1,j],MatrixXs[2,j],MatrixYs[2,j]);
+       DR(MatrixX[1,j],MatrixY[1,j],MatrixX[2,j],MatrixY[2,j]);
+      end;
+    if i = 19 then count := On; if i = 20 then i := 1 else i := i + 1;
+    TIME_DISPLAY(Xp,Yp,Where);
+  until Unitbusy(2);
+    upDateTime := Off;
+    for i := 1 to 20 do if i <> J then
+      begin
+        DR(MatrixXs[1,i],MatrixYs[1,i],MatrixXs[2,i],MatrixYs[2,i]);
+        DR(MatrixX[1,i],MatrixY[1,i],MatrixX[2,i],MatrixY[2,i]);
+      end;
+end;
+{------------------------------------------------------------------------------}
+procedure TIME_DISPLAY {Xp, Yp, Where : integer};
+   var                                    CPB : ClkPB;
+                              Offset, Hr, Min : integer;
+                                           XX : string[3];
+begin
+  if not upDateTime then
+  begin
+    countD := countD + 1;
+    if countD = 15000 then
+    begin
+      countD := 0; upDateTime := On; DoubleEagle(Xp,Yp,Where);
+    end;
+  end;
+  ClkRead(CPB); Pulse := Pulse + 1;
+  if OSvrtCrt then Offset := 58 else Offset := 83;
+  if (Hr1 <> CPB.Hour) or (Min1 <> CPB.Mins) or
+    (Pulse = 300)  or ((Pulse = 25) and upDateTime) then
+    begin
+      if CPB.Hour > 12 then  Hr := CPB.Hour -12 else Hr := CPB.Hour;
+      if CPB.Hour > 11 then XX := ' pm' else  XX := ' am';
+      if Hr = 0 then Hr := 12;
+      Min := CPB.Mins; CURSOR(Off); AT(Offset,0,' Time ');
+      if upDateTime then
+       begin if (Pulse = 25) then if P then P := Off else P := On; end;
+      if not upDateTime then
+       begin if Pulse = 300 then if P then P := Off else P := On; end;
+      if P then
+        begin
+          if Min < 10 then write(Hr:1,' 0',Min:1,XX,' ') else
+           write(Hr:1,' ',Min:1,XX,' '); Pulse := 0;
+        end else
+        begin
+          if Min < 10 then write(Hr:1,':0',Min:1,XX,' ') else
+           write(Hr:1,':',Min:1,XX,' '); Pulse := 0;
+        end;
+      AT(Xp,Yp + Where,''); CURSOR(ON); Hr1 := CPB.Hour; Min1 := CPB.Mins;
+    end;
+end;
+{------------------------------------------------------------------------------}
+{------------------------PROGRAM CONTROLS--------------------------------------}
+procedure SWITCH_CONTROL; {From : integer}
+  var               Index, i1, X1pos, X2pos, Y1pos,
+                    Xp, Yp, Y2pos, i2                :  integer;
+
+  procedure INIT_SwCont;
+  begin
+    VolDir := Off; Recover := Off; Q1 := '1';
+    if From = 1 then begin LblsOff; SET_LABELS(SelectVols) end;
+    if OSvrtCrt then
+      begin X1pos := 9; X2pos := 43; Y1pos := 44; Y2Pos := 66; end
+       else
+      begin X1pos := 74; Y1pos := 8; Y2pos := 30; end;
+  end;
+
+  procedure EXIT_SW_CONT;
+  begin
+    if From = 2 then exit(SWITCH_CONTROL);
+    LblsOff; SET_LABELS(SelectFiles); exit(SWITCH_CONTROL);
+  end;
+
+  procedure GET_VID(Position : integer);
+  begin
+    if (OSvrtCrt) then
+      if Position = 44 then Index := 4 else
+      if Position = 45 then Index := 5 else
+      if Position > 45 then Index := Position - 37;
+    if not OSvrtCrt then
+      if Position = 8  then Index := 4 else
+      if Position = 9  then Index := 5 else
+      if Position > 9  then Index := Position - 1;
+    VolName := VolId[Index];
+  end;
+
+begin   {SWITCH CONTROL}
+  INIT_SwCont;
+    repeat
+     for i1:= Y1pos to Y2pos do
+     begin
+       if (not OSvrtCRT) or ((OSvrtCRT) and (i1<56)) then
+         begin Xp := X1pos; Yp := i1; GoToXY(X1pos,i1); end;
+       if (OSvrtCrt) and (i1>55) then
+         begin Xp := X2pos; Yp := i1-12; GotoXY(X2pos,i1-12); end;
+       CURSOR(On);
+       while not unitbusy(2) do TIME_DISPLAY(Xp,Yp,0); countD := 0;
+       if not Recover then read(KeyboardIO,Q1)
+         else begin Q1 := '*'; i1 := Y2pos end;
+       if ORD(Q1)= 27 then
+       begin
+         read(KeyboardIO,Q1);
+         if (not OSvrtCrt) and (Q1 = 'D') then EXIT_SW_CONT
+          else if Q1 = 'A' then
+         begin
+           if (not OSvrtCrt) and (i1 > 8) then i1 := i1 -2;
+           if (OSvrtCrt) then if (i1 > 44) then i1 := i1-2 else
+            if i1 = 44 then EXIT_SW_CONT;
+         end else
+         if (Q1 = 'C') or (Q1 = 'D') then i1 := i1 -1 else
+         if (Q1 <> 'B') and (Q1 <> 'C') and (Q1 <> 'D') then
+           exitFMA;
+       end else
+       if Q1 = '1' then
+       begin
+         read(KeyboardIO,Q1);
+         if Q1 = 'L' then
+         begin
+           GET_VID(i1);
+           if (VolName = '') and ((Index = 9) or (Index = 10)) then
+             begin VolName := 'FLOPPY'; Volid[Index] := VolName end;
+           Q1 := 'A'; CurUnit := Index;   {now new unit no}
+           if From = 1 then for i2 := 1 to 77 do TABLE[i2] := 'A';
+           if From = 1 then BUILD_SCREEN(CurUnit);
+           if LastFile <> 0 then Recover := On;
+           EXIT_SW_CONT;
+         end;
+         if Q1 = 'N' then
+           begin INITIALIZE; BUILD_SCREEN(CurUnit); EXIT_SW_CONT end;
+         if Q1 = 'H' then
+           begin HELP; BUILD_SCREEN(CurUnit); EXIT_SW_CONT end;
+         if Q1 = 'R' then
+            begin
+              GET_VID(i1); REN_VOL(VolName,Index);
+              BUILD_SCREEN(CurUnit); EXIT_SW_CONT
+            end;
+         if Q1 = 'Q' then exitFMA;
+       end else
+       if Q1 <> '*' then i1 := i1 -1;
+     end;
+    until Q1 = '*';
+  end;
+{------------------------------------------------------------------------------}
+procedure MAIN_SCREEN_CONTROL;
+  var                                       i  : integer;
+begin
+  CURSOR(Off);
+  repeat
+   if LastFile = 0 then SWITCH_CONTROL(1);
+   for i := 1 to LastFile do
+   begin
+     PrevLastFile := LastFile; RetToFirst := Off;
+     if i < 27 then X := 6; Y := 9;
+     if (i < 53) and (i > 26) then begin X := 28; Y := -17; end;
+     if (i < 79) and (i > 52) then begin X := 51; Y := -43; end;
+     AT(X,Y+i,''); CURSOR(ON);
+    {if (not Sorted) and (not unitbusy(2)) then FindFile(1);  }
+     while not unitbusy(2) do TIME_DISPLAY(X,Y,i); countD := 0;
+     read(KeyboardIO,Q);
+     if Ord(Q) = 27 then begin DIRECTION_CONTROL(i); i := Pass; end
+       else
+     if Q = '1' then
+      begin
+        CURSOR(Off); GET_ACTION(i);
+        if RetToFirst then i := PrevLastFile
+      end
+       else if i > 0 then i := i - 1;
+     if VolDir then begin SWITCH_CONTROL(1); i := PrevLastFile end;
+   end;
+  until Q = 'Q';
+end;
+{------------------------------------------------------------------------------}
+begin                         {NEW_FMA}
+  INITIALIZE;
+  BUILD_SCREEN(0);
+  MAIN_SCREEN_CONTROL
+end.
+{---------------------- E N D  O F  F M A -------------------------------------}
+{
+{       program by Neil Everhart, Mgr. Quality Engineering
+{
+{------------------------------------------------------------------------------}
+
+
+
+
+

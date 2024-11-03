@@ -1,0 +1,1088 @@
+.pl 59
+.tl 70
+.hd 'CORVUS CONFIDENTIAL''The physical transporter driver'
+.ft ''- % -'PRELIMINARY'
+
+         file : PTP.DOC.TEXT
+         date : 17-February-1984
+         from : Keith Ball
+
+
+
+
+              The physical transporter driver specification
+                               PRELIMINARY
+
+
+
+
+
+         Table of Contents
+
+         I.    What is the transporter driver? ......... page   2
+
+               A. General Operation of the Transporter Driver
+
+         II.   External interface to Transporter driver  page   3
+
+               A. Interface to the Transporter Driver .. page   3
+               B. Disk Server Driver Interface ......... page   4
+               C. The Functions ........................ page   4
+               D. User Interrupt Procedure ............. page   6
+               E. Error and Warning codes .............. page   8
+
+         III.  Internals of Transporter driver ......... page  10
+
+               A. Initial Operation Request Processing . page  10
+               B. Interrupt Handler in Driver .......... page  12
+               C. Interrupt Handling Without Interrupts  page  13
+               D. Strobe Algorithm ..................... page  14
+               E. Buffer Structure ..................... page  15
+               F. Operations with a Buffered Transporter page  17
+               G. Buffer Management Algorithms ......... page  18
+.pg
+
+         eAI.    What is the transporter driver?e@
+
+
+
+         The Transporter driver has three (3) main functions :
+
+            1) Hide the physical characteristics of the transporter
+               from the user.  This includes whether the transporter
+               is buffered or unbuffered.
+
+            2) Manage the user interface to the transporter, such as,
+               "strobe in" transporter commands, and handle
+               transporter generated interrupts.
+
+            3) Make sure only one immediate command and one receive on
+               each socket is attempted at the same time.
+
+
+
+         eAGeneral Operation of thee@ eATransporter Driver :e@
+
+         The user makes an operation request to the driver.  It passes
+         a parameter block to the driver specifying the exact
+         operation.  The driver will attempt to initiate the operation
+         to the transporter.  The driver will respond with an error if
+         it cannot strobe in the command block or a receive on the
+         socket specified is currently active.  It will queue up the
+         operation request if the current command socket is in use.
+         If the operation is queued the driver will call the user's
+         interrupt procedure if after it is dequeued the operation
+         fails to be accepted.  If the operation was accepted by the
+         transporter, then when the operation completes the driver
+         will call the user's interrupt procedure to indicate to the
+         user the operation's status.
+.pg
+         eAII.   External interface to thee@ eATransporter drivere@
+
+         eAInterface to thee@ eATransporter Driver :e@
+
+         The Transporter driver operates on information passed to it
+         in a parameter block.  The parameter block has the following
+         form.
+
+                                          field size for machines
+              Field Name        Type         16 bit       8 bit
+
+              CommandAddress    Pointer      4 bytes      2 bytes
+              ProcedurePointer  Pointer      4 bytes      2 bytes
+              UserData          LongWord     4 bytes      4 bytes
+              FunctionCode      Integer      2 bytes      1 byte
+              Flag              Bits         2 bytes      1 byte
+              DriverResult      Integer      2 bytes      1 byte
+
+         The field size will vary between 16-bit machines, like the
+         8086 and 8-bit machines, like the Z-80.
+
+         CommandAddress is the pointer to a valid Transporter Command
+         Block the caller wants the driver to "strobe" into the
+         transporter.  ProcedurePointer is the address of the global
+         level procedure the transporter driver will call when the
+         omninet interrupt occurs or after an operation request is
+         dequeued.  UserData is completely user-defined.  FunctionCode
+         selects the driver and/or transporter operation the user is
+         requesting.  Flag is a bit string of flags used to optimize
+         the disk server interface for buffered transporters.  They
+         are defined and discussed in the section on the disk server
+         interface.  DriverResult is the driver's error or warning
+         result code for the operation request (see the error and
+         warning code section).
+
+         The transporter driver does not validate the Transporter
+         Command Block (TCB).  The result code from the transporter
+         indicates if the control block is bad.  The TCB must be
+         resident, in a fixed location and unmodified while the
+         operation is active.  The user must not modify the TCB after
+         a successful operation request until after the user's
+         interrupt procedure is invoked for the operation complete
+         indication.
+
+         The ProcedurePointer must point at a valid user interrupt
+         service procedure or nil, all zeros.  A nil procedure pointer
+         means NO user interrupt service procedure exists to call when
+         the operation is complete.
+
+         The UserData parameter is available for any purpose the user
+         determines.  It's value is not examined or used for any
+         purpose internal to the driver.  It is returned unmodified to
+         the user's interrupt service procedure.  It can be used to
+         return any type of information the user needs.  For example,
+         it can be a pointer to an operation control block, a
+         transaction code, or an index into an array.
+
+
+         eADisk Server Driver Interface :e@
+
+         The Flag bits are used to allow the transporter driver to
+         know when the disk server driver is making calls.  It allows
+         certain preformatted commands to be used on buffered
+         transporters.  However, the disk server driver must still
+         build and pass a valid Transporter Command Block.
+
+         Bit definitions :
+
+               bit 0 :  Disk Server driver request (1 = true)
+
+           other bits valid only if bit 0 = 1 (or true)
+
+               bit 1 :  Send/Receive (1= send, 0 = receive)
+               bit 2 :  if bit 1 = 1 (send) then bit 2 is
+                           Cmd/Rest (1 = Cmd, 0 = Rest).
+                        if bit 1 = 0 (receive) then bit 2 is
+                           Go/Data (1 = Go, 0 = Data).
+
+         The bits must only be used by the disk server driver;  all
+         other users must make operation requests with bit 0 equal to
+         0.  For a buffered transporter system, the driver will set
+         into the buffer in the fixed area space the associated
+         transporter command blocks and result vectors for these
+         operations.  When bit 0 is set the driver uses bits 1 and 2
+         to determine where the command is to strobe and where the
+         results are instead of using the standard buffer management
+         mechanism.
+
+         This is only for the old disk server protocol.  The new
+         protocol will use the standard interface.
+
+         This special interface and mechanism will be deleted from the
+         specification if it does not prove to enhance the performance
+         of the disk server driver.  The disk server driver must set a
+         flag parameter value in the parameter block until the
+         determination is made.  It can always be taken out and will
+         not hurt anything if it is left in.
+
+
+         eAThe Functions :e@
+
+         The function codes are :
+
+            0 for send.
+
+            1, 2, 3, and 4 for a receive socket setup.  The function
+            code specifies which socket, where 1 is socket $80, 2 is
+            socket $90 and so on.
+
+            5 for initialize.
+
+            6 for who am I.
+
+            7 for echo.
+
+            8 for peek.
+
+            9 for poke.
+
+            $10 for call the driver's interrupt handler.
+
+            $81, $82, $83, $84, for end receive and clear a receive
+            socket.  The high order bit being set specifies the clear
+            operation.  The socket to be cleared is specified by the
+            rest of the function code, where 1 is socket $80, 2 is
+            socket $90 and so on.
+
+         Each of the functions, except the call the interrupt handler
+         function, use the same parameter block.  If another function
+         code value is used the driver returns an error code
+         indicating what was wrong (see section on error and warning
+         codes).  The clear a receive socket function will only clear
+         the driver's internal state for the socket specified if the
+         CommandAddress is nil, otherwise the CommandAddress must
+         point at a valid end receive command block.
+
+         The 4 receive sockets can each have only one receive pending
+         at a time.  If a receive setup is requested on a socket with
+         a receive pending then an in use error code is returned to
+         the caller and the driver takes no action.  If an "immediate"
+         operation request, such as send, peek, or echo, is made while
+         one is currently pending then the driver will queue the new
+         request if there is room on the queue.  The driver returns a
+         warning code if it queues a request (see error and warning
+         code section).  The receive socket setup function will not
+         setup the socket entry if an "immediate" operation is active.
+         It will queue the receive socket setup request just like the
+         "immediate" operations and then return the queue warning
+         message.  When the request is dequeued the receive will be
+         setup, if possible.  If the driver cannot setup the receive
+         then the user's interrupt procedure will be called with the
+         result code parameter defining the I/O error.  If it worked
+         the driver interrupt handler will call the user's interrupt
+         service procedure when the setup receive operation is
+         complete.  The user will receive no indication seperate from
+         the operation complete call that the operation request was
+         successfully dequeued.
+.pg
+         The driver will return an error or warning code to the user
+         in the result code section of the parameter block as well as
+         using any defined procedure which exists on the system.  The
+         caller must use the driver's result code for determining the
+         success of the operation request.
+
+         The driver has attempted to correct a bug in the transporter
+         design.  For the peek command, the transporter returns the
+         data as the result code.  Since the driver determines which
+         active command caused the interrupt from the result code, a
+         peek response of $FF will cause the driver to miss the
+         interrupt for the peek completion.  To prevent this, the
+         driver does a busy wait on the completion of the peek
+         command.  If the result code does not change within a certain
+         time length the driver assumes that the peek command returned
+         an $FF.  Because of this busy wait, the user must not
+         repeatedly make an operation request from within an interrupt
+         procedure because the driver result response is a queue full
+         or in use result code.  It may cause a deadlock if it is
+         possible that a peek command is active.
+
+         The call the interrupt handler function allows systems
+         without interrupts to check for operation completes.  This
+         function has no parameters.  It calls the driver's interrupt
+         handler which performs the same functions as if an omninet
+         interrupt occurred.
+
+
+
+         eAUser Interrupt Procedure :e@
+
+         The procedure pointed at by the ProcedurePointer must take
+         three parameters.  They are the operation result code, the
+         Transporter Command Block pointer from the operation request
+         parameter block, and the UserData parameter also from the
+         operation request parameter block (see the description in
+         Interface to Transporter Driver section).  The result code
+         parameter describes the operation complete status.  It is
+         either the driver's result for the strobe to the transporter
+         after it dequeued the operation request (see error and
+         warning codes) or it is the transporter result code if the
+         operation request was successfully "strobed in".
+
+         The user interrupt procedure interface is :
+
+         Procedure Done( RsltCode  : Integer;
+                         TCBPointer: Pointer;
+                         UserData  : LongWord);
+
+         The parameter sizes will vary from 8-bit to 16-bit machines.
+         On 8-bit machines, the integers will be 1 byte and the
+         pointer will be 2 bytes.  On 16-bit machines, the integers
+         will be 2 bytes and the pointer will be 4 bytes.  On both
+         size machines the long word, UserData, will be 4 bytes.
+
+         Parameters will be passed one of three ways.  First, on
+         systems with large stacks during interrupt time, they will be
+         passed on the stack, pushed left to right with the return
+         address pushed last.  Second, they will all be passed in
+         registers.  Third, they will be passed via a pointer in a
+         register to the parameters stored as a block in the driver's
+         data space will be used.
+
+         For all the driver functions, if the user has an interrupt
+         service procedure then this procedure must be resident in
+         memory the entire time the Transporter command is active.
+         Furthermore, if the code is Pascal then the procedure must be
+         a global level procedure.  A global level procedure is only
+         nested under the MAIN level program.  It is not a
+         sub-procedure of a sub-procedure.  Failure to comply with
+         these rules will result in catastrophic consequences.
+
+         Interrupt service procedures are called only for operation
+         completes.  An operation complete may be a failed dequeued
+         operation request or an indication of a good or bad
+         transporter completion.  If the result code is a driver
+         result code then the command block specified failed to get
+         "strobed in" when the driver tried to dequeue the operation
+         request.  Of course, the driver will not make another call if
+         the dequeue failed.  If the result code is one of the
+         transporter result codes, which includes the successful
+         values of less than $80 for a send or 0 for receive
+         indication and all the other immediate commands, then the
+         transporter received the request and tried to perform it.
+         Whether or not an operation complete is successful the
+         interrupt service procedure can call the transporter driver
+         to request the same or a different type operation.
+
+         For all operations, except the setup receive, only one
+         operation complete call to the interrupt service procedure
+         will be made per operation request.  For the setup receive
+         operation, two interrupt calls will be made.  One for the
+         completion of the setup receive and another for the receive
+         data indication.  The receive data indication call will only
+         be made if the setup receive operation completes
+         successfully.  The setup receive completion call is useful
+         for doing command chaining in an interrupt procedure with
+         protocols that require a receive to be setup before doing a
+         send, such as the disk server protocol.
+
+         The interrupt service procedure is called after the command
+         has been performed and the entry has been released.  Prior to
+         the procedure call the driver restores the interrupt level to
+         the state when the omninet interrupt occurred.  Upon return,
+         the driver resets the interrupt level to disable omninet
+         interrupts.
+
+         The user's interrupt service procedure must be very careful
+         about reentrancy problems, such as changing global variables
+         from within the interrupt procedure or calling non-reentrant
+         system functions.  It may call the transporter driver because
+         it will be reentrant.
+
+         Three possible deadlock condition exists with interrupt
+         service procedures that busy wait on operation completes.
+         First, the procedure cannot busy wait on a call to another
+         interrupt service procedure which indicates an operation
+         complete.  This will always cause a deadlock because the
+         second procedure will not be called until the busy waiting
+         procedure exits.  Second, it cannot busy wait on a result
+         code with an operation request with a nil procedure pointer
+         unless it can guarantee NO queueing will take place.  If an
+         operation request is queued it will not be dequeued until the
+         busy waiting procedure exits.  Third, the procedure cannot
+         repeatedly try to make an operation request that is failing
+         on queue full or in use error.  All three will deadlock
+         because the driver's interrupt handler will not process any
+         other transporter operation completes or new interrupts until
+         the current user's interrupt service procedure exits and all
+         the other entries are checked.
+
+
+
+         eAError and Warning codes :e@
+
+         The following is a list of the error and warning codes
+         returned by the driver to the calling procedure.  It also
+         includes the reasons the driver has returned the error or
+         warning code.
+
+         Note that the driver's result codes do not overlap the
+         transporter result codes.  Furthermore, they are greater
+         than $80, which is greater than the transporter's successful
+         operation result codes.
+
+         $00 - succesful operation request.
+
+         $90 - timeout on an Omninet event.  The driver returns this
+               when an immediate operation did not happen within the
+               driver's timeout period.
+
+         $91 - No space in transporter card buffer for operation
+               request.  This will only occur with buffered
+               transporter systems.
+
+         $92 - transporter not ready error code.  The driver returns
+               this code if the transporter fails to respond ready in
+               time when trying to "strobe in" the command.  It also
+               responds with this code when it times out waiting for
+               the receive setup response from the Transporter.
+
+         $93 - queued request warning code.  The driver responds with
+               this code whenever it queues up a request.  This can
+               occur for current command and receive socket setup
+               function calls.
+
+         $94 - entry in use error code.  This error code is returned
+               whenever the entry specified or implied has a command
+               pending on it.  The clear a receive socket function
+               will return this if the current command entry is in
+               use.  The receive socket setup function will return it
+               if the specified receive socket entry is in use or the
+               current command entry is in use and the queue was full.
+               The current command function will return it only if the
+               current command entry is in use and the queue is full.
+
+         $95 - queue full error code.  The driver tried to queue the
+               operation request but the queue was full.
+
+         $96 - invalid function code error code.  The driver returns
+               this code if the user passes a function code to the
+               unitstatus command that is not 0, 1, 2, 3, 4, 5, 6, 7,
+               8, 9, $81, $82, $83, or $84.
+.pg
+
+
+         eAIII.  Internals of Transporter drivere@
+
+
+         The user must be able to call the transporter driver from the
+         interrupt service procedure.  Therefore, the transporter
+         driver must be reentrant.
+
+
+         eAInitial Operation Request Processing :e@
+
+         The driver's 14 functions use a table internal to the driver
+         to control the operations.  This table has five entries.  One
+         for the current command and one for each of the receive
+         sockets.  The current command entry is used for send, peek,
+         poke, init, echo, and other immediate transporter commands.
+         The receive socket setup function will also use the current
+         command entry to transmit to the transporter the receive
+         socket setup command.  It, of course, will use the receive
+         socket entry if the command is successfully strobed into the
+         transporter.  The table is used to save the operation
+         requests parameter block data needed for interrupt processing
+         by the driver and for calls to the user's interrupt service
+         procedure.
+
+         Each entry in the table can be in use for only one command at
+         a time because the transporter requires only one active
+         operation on a socket at a time.  This is controlled with a
+         flag indicating if the entry is in use.  If a setup receive
+         request is made on a socket with a pending receive the driver
+         must return an in use error code and not process the receive.
+         If an immediate or a setup receive operation request occurs
+         when the current command entry is in use then the driver must
+         try to queue the operation request.
+
+         Queueing is to allow all the possible operations, one
+         immediate and four receives, to be requested without concern
+         of the useage of the current command entry.  It is not a
+         generalized mechanism to allow user's to concurrently request
+         multiple operations of the same type.  For example, user
+         should not request a second send before the completion of the
+         first send.  A higher level facility, the NIS interface, is
+         being specified to handle the generalized queued system
+         interface (see Phil Belanger's document on the NIS).
+
+         Before queueing an entry, the queue routine must verify that
+         a queue entry is available.  If an entry is not available
+         then return the queue full error code and exit the driver.
+         If an entry is available then save the operation request
+         parameters into the entry.  The values saved include but are
+         not restriceted to all the values passed to the driver in the
+         parameter block.  It must be all the information necessary to
+         restart the operation request.  Finally, return the queue
+         warning code to the caller.
+
+         Immediate commands will only use the current command entry in
+         the table.  Before the command is strobed to the transporter,
+         the driver must disable transporter interrupts to prevent
+         re-entry and then verify the current command entry is not in
+         use.  If it is then the driver must then attempt to queue the
+         operation request.  If it isn't in use then the driver saves
+         the user's information from the parameter and transporter
+         command blocks into the current command entry for the
+         interrupt processing and then strobes the TCB address to the
+         transporter.  If the strobe works then the driver marks the
+         current command entry in use.  If it fails the driver returns
+         Transporter Not Ready error code to the user.  Before exiting
+         the driver enables omninet interrupts.
+
+         The setup receive operation request uses two entries in the
+         table.  The current command, for the setup receive operation,
+         and the receive socket entry defined by the socket number or
+         function code.  A receive cannot be setup on a socket already
+         in use, therefore, verify that the entry is not in use.  If
+         it is then return the in use error code and exit the driver.
+         If it is not in use then disable the transporter interrupts
+         and call the current command procedure to strobe in the setup
+         receive request.  The parameters, except for the function
+         code, are the same.  The current command procedure must not
+         restore the transporter interrupt when it exits, because the
+         interrupt must remain disabled until after the in use flag
+         for the receive socket entry is set.  If the response from
+         the current command routine is good, no error or the queue
+         warning return codes, then save the operaton request
+         parameters in the receive socket's entry and mark the entry
+         in use.  Last, enable transporter interrupts, set the result
+         code parameter and exit the driver.  The interrupt handler
+         will free the receive socket entry if the setup fails (see
+         next section).
+
+         The driver must correct for the peek command bug in the
+         transporter design. The transporter returns the data as the
+         Aesult code.  Since the driver can determine which command
+         and therefore which entry caused the interrupt only by the
+         result code, a peek response of $FF will cause the driver to
+         miss the interrupt for the peek completion.  Consequently,
+         the driver will not release the current command entry.  To
+         prevent this, the driver must do a busy wait on the
+         completion of the peek command with the interrupts on.  If
+         the result code does not change within approximately 34
+         milliseconds, you may want to triple this time just to be
+         sure, the driver assumes that the peek command returned an
+         $FF and releases the current command entry.   If the entry is
+         in use after the time out then the driver must call the
+         dequeuer to dequeue any pending operation requests.
+         Unfortunately, this means that a user must not busy wait on
+         an in use error response from the driver in an interrupt
+         procedure if it is possible that a peek command is pending in
+         the current command entry.  For this last case, if the peek
+         response is $FF then the current command entry will not be
+         released.
+
+
+
+         eAInterrupt Handler in Driver :e@
+
+         The interrupt handler performs two functions.  Primarily, it
+         processes the transporter's interrupts.  Transporter
+         interrupts are indications to the host system of an operation
+         complete.  The second function is to dequeue and attempt to
+         process queued operation requests.
+
+         A transporter operation complete is indicated when a TCB
+         result code changes from a waiting value, $FF for immediate
+         and the setup receive commands or $FE for receives, to any
+         other value.  The interrupt handler checks all in use entry's
+         TCB result codes for operation complete.  When an operation
+         is complete the handler calls the user's interrupt service
+         procedure with the result code equal to the transporter
+         result code from the result vector (see section on interrupt
+         service procedure).  Before the handler calls the user it
+         must enable the transporter interrupt and upon return from
+         the user disable the interrupt.
+
+         When an operation complete occurs on the current command
+         entry the handler must check if it is a setup receive
+         operation.  If it is and the setup receive failed then the
+         driver must mark the receive socket's entry not in use.
+         This should be done before the handler calls the user or the
+         dequeuer.
+
+         Since interrupts are turned on when the user is called it is
+         necessary to prevent the interrupt handler from being
+         re-entered.  Use a counted semaphore which is initialized to
+         zero to control entry into the handler.  When the handler is
+         invoked increment the semaphore.  If it is not equal to one
+         then exit the handler, because it is already active.  After
+         all five table entries have been examined decrement the
+         semaphore.  If it is not equal to zero then another interrupt
+         occurred while the handler was processing an operation
+         complete.  To make sure the handler does not miss an
+         operation complete indication restart processing the entries
+         from the beginning.  Continue to decrement the semaphore and
+         restart processing the entries until the semaphore equals
+         zero.
+
+         The current command entry has an added function performed
+         upon it when its result code changes to signal an operation
+         complete.  The handler attempts to dequeue the waiting
+         operation requests before it calls the user for the operation
+         complete.  The dequeue routine removes each entry on the
+         queue in turn and calls the operation request processing
+         routine.  The routine uses the parameter block information
+         saved in the queue entry to call the operation request
+         processing routine.  If the operation request processing
+         reports an error then the routine must call the user's
+         interrupt service procedure to indicate the failure and the
+         operation complete.  The result code parameter is set to the
+         operation request processing error code.  The dequeue routine
+         continues to remove entries from the queue and process them
+         until the queue is empty or the current command entry is
+         marked in use.
+
+         Because the dequeue routine is also called from the operation
+         request processing routine for a peek command, it must have a
+         lock preventing re-entry.  Use a bit flag initialized to
+         zero.  When the dequeue routine is entered do a test and set
+         operation on the bit.  If it was set then exit the routine,
+         it is currently dequeueing.  If it was clear then do the
+         dequeue processing.  When finished dequeue processing clear
+         the bit to allow another invocation of the routine.
+
+
+         eAInterrupt Handling Without Interrupts :e@
+
+         Systems that do not have transporter cards that generate
+         interrupts, such as the Apple II or old IBM PC cards, must
+         attach the interrupt handler to a periodic interrupt in the
+         system, such as the timer or the keypress check in the Apple
+         II.  When the periodic interrupt occurs the driver's
+         interrupt handler can then check if an operaton complete has
+         occurred and perform the necessary processing.
+
+         The driver must implement the $10 function, call interrupt
+         handler, whether or not it has omninet interrupts.  For
+         systems without interrupts, the NIS will call this entry when
+         the user requests an examination of the operation complete
+         status.  This call is the only way a user can guarantee not
+         to miss an operation complete on a system without omninet
+         interrupts.
+
+         The driver on the IBM PC must be able to detect if the
+         transporter card is interrupting or non-interrupting.  If it
+         is non-interrupting then the driver must attach the interrupt
+         handler to a periodic interrupt in the system.  Otherwise,
+         the driver must use the interrupt capability of the new
+         transporter card.
+.pg
+         eAStrobe Algorithm :e@
+
+         NOTE :  Language is a combination of Pascal and C.
+
+         The strobe algorithm cannot be reentered, it is critical
+         code.
+
+         module Strobing;
+         /* 24-Jan-1984  kb
+
+         export functions Strobe;
+
+         begin global type
+         /*the msb of the address is index 0
+         /*the lsb of the address is index 2
+         record Cptr
+                   array[0..2] of byte;
+                   end record
+
+         begin global data
+         *bit[1]  XporterRdy;   /*address of transporter ready bit
+         *byte    XporterStb;   /*address of transporter strobe byte
+
+         begin initmodule
+         XporterRdy = address of transporter ready flag.
+         XporterStb = address of transporter strobe byte.
+         end initmodule
+
+         begin functions
+
+         (bool success-flag) <- WaitReady
+
+         /*exit:
+         /*    returns success-flag true  if ready to strobe.
+         /*    returns success-flag false if timedout on ready wait
+
+         begin local data
+
+         begin code
+         timeout = (34 * 2) milliseconds.
+
+         while (still time left) and (XporterRdy^[bit] = 0) do;
+              /* wait
+
+         return(success-flag <- XporterRdy^[bit] == 1);
+         end function Strobe
+
+         (bool success-flag) <- Strobe(Cptr CmdAddress)
+
+         /*entry:
+         /*    CmdAddress :  pointer to the transporter command block
+         /*                  This is a 3 byte field.  For 8-bit
+         /*                  machines the high-order byte is zero and
+         /*                  the low-order word is the 16 bit address.
+         /*                  For 16 bit machines this is a complete
+         /*                  24-bit address, except 8086 where this
+         /*                  is the absolute 20 bit address with the
+         /*                  high order nibble equal to zero.
+         /*
+         /*exit:
+         /*    returns success-flag true  if strobed in address.
+         /*    returns success-flag false if timedout on strobe,
+         /*        failed.
+
+         begin local data
+         int i;
+
+         begin code
+
+         for i = 0 to 3 unless(NOT success-flag) do-begin
+            success-flag = WaitReady;
+            if success-flag then XporterStb^ = CmdAddress[i];
+            end-do /*end of for
+
+         return(success-flag);
+         end function Strobe
+
+         end module Strobing
+
+
+
+         eABuffer Structure :e@
+
+         The 4K buffer is divide into two areas, the fixed and the
+         dynamic.  The fixed area contains transporter command blocks
+         and result records.   These are allocated here so that the
+         dynamic buffer algorithm could be simplified and to allow as
+         much preformatting of the commands and result records as
+         possible.  TCB's are allocated for all the possible commands.
+         One for each of the receive sockets, and one for each
+         immediate command, send, end receive, init, etc.  The TCB's
+         for sockets 80 and 90 also have result records allocated,
+         because they do not have user control portions.  The send and
+         receive on A0 and B0 operations have user control portions so
+         their result records are allocated in the dynamic space with
+         their data buffers.  All the other commands only require a
+         single byte result record which they share in common.
+
+         The disk server protocol commands, result records and some
+         data buffer space used by the special disk server interface
+         are also kept in the fixed area.
+.pg
+         Fixed area fields :
+
+
+         Standard interface
+
+         FIELD NAME      SIZE IN   PRESET SUB-FIELDS
+                          BYTES
+
+         socket 80 TCB     11      command code = $F0,
+                                   result record address,
+                                   socket number = $80,
+                                   user control length = 0
+         socket 80 result   4      none
+         socket 90 TCB     11      command code = $F0,
+                                   result record address,
+                                   socket number = $90,
+                                   user control length = 0
+         socket 90 result   4      none
+         socket A0 TCB     11      command code = $F0
+         socket B0 TCB     11      command code = $F0
+
+         send TCB          12      command code = $40,
+
+         end receive TCB    5      command code = $10
+                                   result record address
+         initialize TCB     4      command code = $20
+                                   result record address
+         who am I TCB       4      command code = $01
+                                   result record address
+         echo TCB           5      command code = $02
+                                   result record address
+         peek/poke TCB      8      command code = $08
+                                   result record address
+         common result code 1      none
+
+         TOTAL bytes       91
+
+         The socket 80 TCB and socket 90 TCB result record address is
+         set to the address of their respective result records.  The
+         TCBs following the send TCB in the table all have their
+         result record addresses set to the address of the common
+         result code.
+
+
+         Disk Server interface
+
+         FIELD NAME         SIZE IN   PRESET SUB-FIELDS
+                             BYTES
+
+         receive of GO TCB    11      command code = $F0,
+                                      result record address,
+                                      socket number = $A0,
+                                      data buffer address,
+                                      data length = 2,
+                                      control length = 0
+         receive of data TCB  11      command code = $F0,
+                                      result record address,
+                                      socket number = $A0,
+                                      data length = OS dependent,
+                                      control length = 0
+         common receive
+           result record       7      none
+         GO msg data area      2      none
+
+         send of cmd TCB      12      command code = $40,
+                                      result record address,
+                                      socket number = $B0,
+                                      data buffer address,
+                                      data length = 4,
+                                      control length = 4
+         send of data TCB     12      command code = $40,
+                                      result record address,
+                                      socket number = $A0,
+                                      data length = OS dependent,
+                                      control length = 0
+         common send result
+           record              8      none
+         drive command area    4      none
+
+         TOTAL bytes          67
+
+         The data buffers for the data receive and the data send are
+         allocated in the dynamic buffer space.   Since, this
+         interface is used for the system block I/O the block size,
+         therefore the data buffer lengths, are constant for a given
+         OS.  The receive of the GO message TCB's data buffer address
+         is set to the address of the GO message data area in the
+         buffer.  The send of the drive command TCB's data buffer
+         address is set to the address of the drive command area in
+         the buffer.
+
+
+         dynamic buffer space :
+
+         The data buffers for receives on sockets 80 and 90 and the
+         data buffers and result records for receives on sockets A0
+         and B0 and sends are allocated in the dynamic area.  The data
+         buffer and result record for the receives on A0 or B0 and the
+         send are allocated as a single space.
+
+
+         eAOperations with a Buffered Transporter : e@
+
+         * Do not free the space allocated for sockets 80 and 90 when
+           operation is complete.  Therefore, don't call the free
+           function on operation complete.
+
+         * Allocate data buffers and result vectors as one space.
+
+         * Make size/start records available outside of buffer
+           management module.  The information is used to determine
+           when to free sockets 80 and 90's data space.
+
+         * Release data space allocated for sockets 80 and 90 when :
+
+               a) size to small for new request on socket 80 or 90.
+               b) if (80 and/or 90 inactive) and (A0, B0, or
+                  send request don't have enough space).  Retry
+                  allocation after free space.
+               c) user performs a clear entry/end receive of socket.
+
+         * Report to the user the no room error if the driver fails to
+           find room for a data/result space.  Don't queue the request
+           because may get in a deadlock situation.
+
+         * For operation request, after determine entry is not in use
+           then allocate space in dynamic area, if any needed, before
+           move TCB data into buffer.  The allocation of new space may
+           require a free operation or no operation if the current
+           size allocated is adequate or all the space needed is in
+           the fixed area.  If allocate is successful then copy TCB
+           and data, if necessary, into buffer space.  Next, save
+           address of TCB for interrupt handler and then strobe in TCB
+           address in the buffer.
+
+         * In the interrupt handler, move the data from the buffer
+           into the host memory to the addresses specified by the TCB
+           before calling the user.  Only move out things that change,
+           ie. result vectors and receive data buffers.   If the
+           operation was a send, a receive on socket A0 or a receive
+           on socket B0 then free the space allocated in the dynamic
+           area.
+
+
+         eABuffer Management Algorithms :e@
+
+         NOTE :  Language is a combination of Pascal and C.
+
+         The buffer allocate and free algorithms cannot be
+         reentered.  They are both critical code.
+
+
+         module BufferManagement;
+         /* 14-Dec-1983  Denise Pitsch and Keith Ball
+
+         export functions Allocate,Free;
+                global data holes, datrslt;
+
+         begin types
+         record h
+                 int start,
+                     length;
+                 end record
+
+
+         record dr
+                 int start,
+                     length;
+                 end record
+
+
+         begin global data
+         /*free space control blocks
+         /*one record for each possible hole
+         /*plus a dummy record at the beginning and the end to
+         /*simplify the free algorithm
+         array holes[0..7] of h,
+               init all h.start = (address of last byte) + 1,
+               init all h.length = 0;
+
+         /*allocated data control blocks
+         /*one record for each receive socket and the send socket
+         array datrslt[0..4] of dr,
+               init all dr.start = $FFFF;
+
+         begin initmodule
+         /*initialize the free space control blocks
+         /*fixed space is in low memory.  dynamically allocated
+         /*space follows in the higher addresses.  It is
+         /*allocated low address to high address.
+         /*0 is a dummy before dynamically allocated space
+         h[0].start =  address of the last byte of the
+                       fixed space.
+         /*h[0].length already equals 0./
+
+         h[1].start =  first byte after fixed space.
+         h[1].length = (number of bytes in transporter buffer) -
+                       (number of bytes in fixed area).
+
+         /*h[2] thru h[7] already initialized
+         /*h[7] is dummy after dynamically allocated space
+         end initmodule
+
+         begin functions
+         (int address,bool success-flag)
+               <- Allocate(int drtype,length)
+
+         /*entry:
+         /*drtype = index [0..4] of which field to allocate
+         /*         0 = socket $80 data
+         /*         1 = socket $90 data
+         /*         2 = socket $A0 data/result
+         /*         3 = socket $B0 data/result
+         /*         4 = socket send data/result
+         /*length = number of byts [1..2047] to allocate
+         /*
+         /*exit:
+         /*address = address of start of space in transporter
+         /*success-flag = true means allocated space                                                                                                                                                                                               ocate
+         /*               false means no room
+         /*
+         /* This is a single point allocation algorithm.  It
+         /* allocates all memory from the low order addresses
+         /* upwards.  Holes may have zero (0) length.  Dummy hole
+         /* entries 0 and 7 must never be used.  They will always
+         /* have a zero length.
+
+         begin local data
+         int old,hole,i;
+
+         begin code
+         old = MAXINT; hole = -1;
+
+         /*find best fit
+         /*2nd condition of if not needed for first fit
+         /*change unless to hole <> -1 for first fit
+         for i = 1 to 6 unless(old == length) do
+           if (length <= holes[i].length) and
+              (old > holes[i].length) then-begin
+              old = holes[i].length;
+              hole = i;
+              end-then
+
+         if (hole == -1) then return(address <- 0,
+                                       success-flag <- false)
+         else-begin
+            address = holes[hole].start;       /*start of data
+            holes[hole].length -= length;      /*   space
+            holes[hole].start += length;       /*may leave a 0
+                                               /* length hole
+
+            /*set socket to get data space just allocated
+            datrslt[drtype].start = address;
+            datrslt[drtype].length = length;
+
+            return(address, success-flag <- true);
+            end-else
+
+         end function Allocate
+
+         (bool success-flag) <- Free(int drtype)
+
+         /*entry:
+         /*drtype = index [0..4] of which field to free
+         /*         0 = socket $80 data
+         /*         1 = socket $90 data
+         /*         2 = socket $A0 data/result
+         /*         3 = socket $B0 data/result
+         /*         4 = socket send data/result
+         /*
+         /*exit:
+         /*success-flag = true means allocated space                                                                                                                                                                                               ocate
+         /*               false means no room
+         /*
+         /* Free the data space allocated to a socket.  It is
+         /* either contiguous with an already existing hole or is
+         /* a new hole.
+         /*
+         /* Holes must remain ordered in ascending order by
+         /* start. A zero length is OK.  The dummy entries 0,
+         /* points to last of fixed space, and 7, points beyond
+         /* buffer space, allow the algorithm to work with no
+         /* special casing of end points.  They are never used by
+         /* the allocation algorithm and never added to by the
+         /* free algorthim.
+
+         begin local data
+         int drstart,drlen,drend,i,j;
+         bool found;
+
+         begin code
+         drstart = datrslt[drtype].start;
+         drlen  = datrslt[drtype].length;
+         drend  = draddr + drlen;
+         datrslt[drtype].start = $FFFF; /*deassign socket data
+
+
+         found = false;
+         for i=1 to 6 unless(found) do-begin
+           /*stop on all conditions except when fall through
+           /*   all the if conditions
+           found = true;
+
+           if ((hole[i-1].start + hole[i-1].length)
+                                           == drstart) then-begin
+             /*put new space with hole i-1
+             hole[i-1].length += drlen;
+
+             /*see if hole i-1 is contiguous with hole i
+             if ( (hole[i-1].start + hole[i-1].length)
+                        == hole[i].start) then-begin
+                /*merge hole i into hole i-1
+                (hole[i-1].length += hole[i].length;
+                /*reorder hole records
+                for j=i to 6 do-begin
+                  h[j].start = h[j+1].start;
+                  h[j].length = h[j+1].length;
+                  end-do
+                end-then
+             end-then
+
+           else if (hole[i].start == drend) then-begin
+                  /*connect new space in front of hole i
+                  h[i].start = drstart;
+                  h[i].length += drlen;
+                  end-then
+
+                else if (drstart > (hole[i-1].start +
+                                        hole[i-1].length) ) and
+                        (drend < hole[i].start) then-begin
+                       /*insert hole between i-1 and i
+                       for j=5 to i do-begin
+                         h[j+1].start = h[j].start;
+                         h[j+1].length = h[j].length;
+                         end-do
+                       hole[i].start = draddr;
+                       hole[i].length = drlen;
+                       end-then
+
+                     else found = false;  /*check next hole
+           end-do /*end of main for loop
+
+         return(success-flag <- true);
+         end function Free
+
+         end module BufferManagement
+
+
+         Hypotheses :
+
+            1) Can never have more than 1 hole point to same address.
+            2) If inserting a hole between i and i+1 then hole 6 must
+               be empty and pointing beyond buffer.  Hole 6 will also
+               be equal to hole 7.
+
+         These must be proven.

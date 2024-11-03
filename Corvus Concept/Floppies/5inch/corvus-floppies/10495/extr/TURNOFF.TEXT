@@ -1,0 +1,92 @@
+start
+        move.l  $180.w, a0
+        move.l  72(a0), -(sp)   ;save cur kbrd tbl
+        lea     trantbl, a1
+
+        movea.l a1,a2
+        move.l  a1,d1
+        moveq   #6,d0           ;add address to table
+s1      add.l   d1, (a2)+
+        dbra    d0, s1
+
+        move.l  a1, 72(a0)      ;put in this one
+
+; read char
+
+        tst.w   -(sp)           ;allocate data space
+        move.l  sp, d0
+        move.w  #1, -(sp)       ;unit number
+        move.l  d0, -(sp)       ;data address
+        move.w  #1, -(sp)       ;number of bytes
+        clr.l   -(sp)           ;0 for block number and mode
+
+        move.l  8(a0), a0       ;sysvect
+        move.l  4(a0), a0       ;unitread
+        jsr     (a0)
+
+        tst.w   (sp)+           ;free data space
+
+; restore old table
+
+        move.l  $180.w, a0
+        move.l  (sp)+, 72(a0)
+        rts
+
+; file makes kbrd generate no chars except 1.
+;
+;
+; TRANSLATION TABLE
+;
+TRANTBL
+            DATA.L     STABLE - TRANTBL          ;POINTER TO SHIFT TABLE
+            DATA.L     RTABLE - TRANTBL          ;POINTER TO REGULAR TABLE
+            DATA.L     ETABLE - TRANTBL          ;POINTER TO ESCAPE # TABLE
+            DATA.L     SMTABLE- TRANTBL          ;PTR TO STANDARD MULT CHAR TABLE
+            DATA.L     CQTABLE- TRANTBL          ;POINTER TO CAP/QUALIFIER TABLE
+            DATA.L     RLTABLE- TRANTBL          ;POINTER TO RELEASE TABLE
+            DATA.L     BKEYCOD- TRANTBL          ;POINTER TO BREAK KEYCODE TABLE
+
+
+STABLE
+
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+;
+RTABLE
+
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F   ;$00
+  DATA.B  $9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$9F,$41,$9F   ;$00
+;
+CQTABLE
+                                                                            ;MSB
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$00
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$10
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$20
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$30
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$40
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$50
+; LSB      0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+;
+ETABLE
+;        KEYCODE FILL   US/UC  SHIFT  COMMAND   C/S
+  DATA.B  $FF,    0,    'FE',  'FE',  'FE',    'FE' ;LEFT COMMAND (RELEASE)
+
+SMTABLE
+
+  DATA.B    $FF,    0                               ;NULL KEYCODE - END OF TABLE
+
+RLTABLE
+;
+  DATA.B    $FF,            $00                     ;NULL KEYCODE - END OF TABLE
+
+BKEYCOD  DATA.B    $FF,0                         ;BREAK CLOSURE KEYCODE,FILLER
+;
+         END      START

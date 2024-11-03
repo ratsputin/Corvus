@@ -1,0 +1,18 @@
+
+Directory of UCSD disk image file 'apple2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume APPLE2 has 10 files,  0 to 6 (6), eov 500, size 0, free 10
+
+ 1: OMNIPASCA1.TEXT Text  3-Sep-81    6-  18(  12),  6144+512=  6656 bytes
+ 2: CF18.4AP.DATA   Data 14-Dec-82   18-  58(  40), 20480+512= 20992 bytes
+ 3: AP.OMNIPAS.TEXT Text 14-Dec-82   58-  92(  34), 17408+512= 17920 bytes
+ 4: CF18.4.DATA     Data  9-Dec-82   92- 132(  40), 20480+512= 20992 bytes
+ 5: AP.OMNIPAS.CODE Code 15-Dec-82  132- 137(   5),  2560+512=  3072 bytes
+ 6: RT.DDIAG.TEXT   Text 21-Dec-82  137- 247( 110), 56320+350= 56670 bytes
+ 7: AP.DDIAG.TEXT   Text 21-Dec-82  247- 357( 110), 56320+ 42= 56362 bytes
+ 8: CFX.DATA        Data 20-Dec-82  357- 397(  40), 20480+512= 20992 bytes
+ 9: AP.DDIAG.CODE   Code 21-Dec-82  397- 462(  65), 33280+512= 33792 bytes
+10: 2RT.DDIAG.CODE  Code 21-Dec-82  462- 500(  38), 19456+512= 19968 bytes

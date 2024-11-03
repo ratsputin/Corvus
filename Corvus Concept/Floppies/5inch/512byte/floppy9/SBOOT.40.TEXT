@@ -1,0 +1,402 @@
+;
+; File: sboot.40.text
+; Date: 10-Jul-82
+; By:   C.Crump
+;
+; last modified : 08-Feb-1984
+; History:
+;   2.0    initial release, August software, some bugs
+;   2.1    no known bugs                                15-aug-82
+;   3.0    added multiple disk server boot              24-oct-82
+;   3.2    debugged version of 3.0                      14-jan-83
+;   3.3    longer timeout on checking for disk server   1-Feb-83
+;   3.4    broadcast logon command at end of boot       3-Jun-83
+;   3.5    fixed all DskRd to use Longint for address   10-Jun-83
+;   3.6    fixed invalid corvus volume read             30-Aug-83
+;   3.8    modifications for OmniDrive                  05-Dec-83
+;   4.0    blind server boot                            30-Sep-83
+;
+; Purpose: This is the secondary boot loader for the Corvus Constellation II
+;          operating system boot procedure. This code reads the remaining
+;          boot blocks from the disk boot code file, gets the user name and
+;          password, finds the users boot volume, and reads in the operating
+;          system so that the secondary boot process can complete.
+;
+;
+;
+;          The values passed in registers to the operating system are:
+;
+;       +---------------+---------------+---------------+---------------+
+;    D0 | low data memory address                                       |
+;       +---------------+---------------+---------------+---------------+
+;    D1 | high data memory address                                      |
+;       +---------------+---------------+---------------+---------------+
+;    D2 | low code memory address                                       |
+;       +---------------+---------------+---------------+---------------+
+;    D3 | high code memory address                                      |
+;       +---------------+---------------+---------------+---------------+
+;    D4 | ORB ($30F61)  | boot device   | boot slot     | boot server   |
+;       +---------------+---------------+---------------+---------------+
+;    D5 | extcrt flag   | OS vol drive  | block < 64K OS vol block or 0 |  *3.6
+;       +---------------+---------------+---------------+---------------+
+;    D6 | if block # >= 64 K then OS system volume block  else 0        |  *3.6
+;       +---------------+---------------+---------------+---------------+
+;    D7 |                                                             0 |
+;       +---------------+---------------+---------------+---------------+
+;
+        ident   SECBOOT
+;
+;
+;       include '/CCPROM/CC.PROM.EQ' (not listed)
+;
+        list 0
+        include '/CCPROM/CC.PROM.EQ.TEXT'
+        list 1
+
+        page
+
+;
+DiOfset equ     8                   ;corvus volume pointer block
+Crvofst equ     36                  ;Offset of the address of the Corvus volume in the Drive.Info table
+UARTda  equ     $30f21              ;UART data port
+UARTst  equ     $30f23              ;UART status port
+UARTcm  equ     $30f25              ;UART command port
+UARTct  equ     $30f27              ;UART control port
+ORB     equ     $030F61             ;VIA output register B (boot switches)
+RdBit   equ     3                   ;Busy bit for input
+WrBit   equ     4                   ;Busy bit for output
+;
+BELL    equ     $07                 ;ASCII <BELL>
+ESC     equ     $1B                 ;ASCII <ESCAPE>
+CR      equ     $0d                 ;ASCII <CR>
+LF      equ     $0a                 ;ASCII <LF>
+;
+;
+er10    equ    -10                  ;invalid user name
+er11    equ    -11                  ;user not found
+er12    equ    -12                  ;invalid password
+er13    equ    -13                  ;unexpected error condition
+er14    equ    -14                  ;no user boot volume on dirve
+er15    equ    -15                  ;user disk server not found
+er16    equ    -16                  ;omninet i/o error
+er20    equ    -20                  ;boot directory read error
+er21    equ    -21                  ;no CC.KERNEL file
+er22    equ    -22                  ;can't read file CC.KERNEL
+er23    equ    -23                  ;not quick-load file
+er24    equ    -24                  ;invalid DRIVE.INFO table  *3.6
+er25    equ    -25                  ;fail to read NETWORK.USER table *4.0
+
+;
+;
+; corvus volume table attributes
+;
+;
+DiDUlof equ      62                 ;DRIVE.USER   length  offset in DRIVE.INFO block
+DiDAlof equ      64                 ;DRIVE.ACCESS length  offset in DRIVE.INFO block
+DiDVlof equ      60                 ;DRIVE.VOLUME length  offset in DRIVE.INFO block
+DiNUlof equ      58                 ;NETWORK.USER length  offset in DRIVE.INFO block
+;
+DiDUaof equ      78                 ;DRIVE.USER   address offset in DRIVE.INFO block
+DiDAaof equ      82                 ;DRIVE.ACCESS address offset in DRIVE.INFO block
+DiDVaof equ      74                 ;DRIVE.VOLUME address offset in DRIVE.INFO block
+DiNUaof equ      70                 ;NETWORK.USER address offset in DRIVE.INFO block
+;
+DIdrvinit equ    52                 ;byte - = 1 if drive intialized
+DIdrvnmbr equ    54                 ;word - drive number (1 to DrMax)
+DIonline  equ    56                 ;byte - = 1 if drive intialized
+DIspecial equ    68                 ;word - = 1982 if drive intialized
+;
+DUbtflg equ      24                 ;offset into DU entry of boot flag
+DUusrid equ      18                 ;offset into DU entry of user id
+DUmtcnt equ      20                 ;offset into DU entry of no. of mounted volumes
+
+DAusrid equ      00                 ;offset into DA entry of user id
+DAvolad equ      02                 ;offset into DA entry of volume address
+DAmtdev equ      06                 ;offset into DA entry of volume address
+
+NUusrnm equ      00                 ;offset into NU entry of user name
+NUusrpw equ      10                 ;offset into NU entry of user password
+NUusrds equ      18                 ;offset into NU entry of user home server name
+NUopsys equ      28                 ;offset into NU entry of user OS type
+NUusrtp equ      30                 ;offset into NU entry of user type
+NUstanm equ      31                 ;offset into NU entry of station host number
+
+namelen equ      10                 ;length of a user or server name
+pswlen  equ      08                 ;length of a password
+DrMax   equ      08                 ;maximum number of drives
+
+;*************************************************************
+;
+; Entry Point to Secondary Boot (First Byte)
+;
+;*************************************************************
+
+ConBoot
+;
+;;;;;   trap       #15
+;;;;;   data       0
+;
+        BRA     start               ;Start the boot process
+
+ptrs                                ;data to pass to OS
+bootdev data.b  4                   ;Boot unit number
+bootslt data.b  5                   ;Boot slot number
+bootsrv data.b  0                   ;Boot volume server
+bootdrv data.b  1                   ;Boot volume drive
+bootblk data.l  0                   ;Bootblk
+extcrt  data.b  0,0                 ;External CRT flag
+LODATA  data.l  USRbase             ;Lowest data memory location
+HIDATA  data.l  USRbase+$10000      ;Highest data memory + 1
+LOCODE  data.l  USRbase+$10000      ;Lowest code location
+HICODE  data.l  $0BFFFE             ;Highest memory location - 1
+
+        ; Transporter return codes
+
+Waiting         EQU     $FF
+CmdAccept       EQU     $FE
+Echoed          EQU     $C0             ;echo command was successful
+GaveUp          EQU     $80             ;aborted a send command after MaxRetries tries
+TooLong         EQU     $81             ;last message sent was too long for the receiver
+NoSocket        EQU     $82             ;sent to an uninitialized socket
+HdrErr          EQU     $83             ;sender's header length did not match receiver's
+BadSock         EQU     $84             ;illegal socket number
+Inuse           EQU     $85             ;tried to set up a receive on an active socket
+BadDest         EQU     $86             ;sent to an illegal host number
+
+NoTrans         EQU     -1              ;could not strobe command addresses to transporter
+TimedOut        EQU     -2              ;timed out waiting for an omninet event
+
+        ; transporter opcodes
+
+EndOp           EQU     $10             ;transporter EndRecv command
+RecvOp          EQU     $F0             ;transporter Setuprecv command
+SendOp          EQU     $40             ;transporter Send command
+
+        ; values for Constellation II commands
+
+Broadcast       EQU     $FF             ;broadcast address
+C2_pid          EQU     $1FE            ;protocol for Const II messages
+C2_whrru        EQU     $300            ;message type for Where are you command
+C2_hello        EQU     $00             ;message type for Hello command
+C2_dsksrv       EQU     $01             ;device type for disk server
+C2_Anysrv       EQU     $FF             ;device type for any server  *4.0
+C2_wrkstn       EQU     $20             ;generic device type for work station
+C2_CCwrkstn     EQU     $37             ;specific device type for Corvus Concept
+C2_sock         EQU     $80             ;socket number for Const II messages
+C2_dlen         EQU     $12             ;length of all Const II messages is 18 bytes
+C2_clen         EQU     $0              ;control length is always 0
+
+        INCLUDE 'sboot.40.1.text'
+
+        INCLUDE 'sboot.40.2.text'
+
+        INCLUDE 'sboot.40.3.text'
+
+        INCLUDE 'sboot.40.4.text'
+
+        page
+
+;
+;
+; name/password base/incr used by encrypt/decrypt routines
+;
+;
+nambase data.w   31
+        data.w   146
+        data.w   135
+        data.w   26
+        data.w   99
+        data.w   00
+        data.w   07
+        data.w   78
+        data.w   125
+        data.w   98
+;
+namincr data.w   2
+        data.w   1
+        data.w   1
+        data.w   1
+        data.w   1
+        data.w   1
+        data.w   2
+        data.w   1
+        data.w   1
+        data.w   1
+;
+pswbase data.w   25
+        data.w   36
+        data.w   122
+        data.w   150
+        data.w   43
+        data.w   18
+        data.w   96
+        data.w   112
+;
+pswincr data.w   2
+        data.w   1
+        data.w   -1
+        data.w   1
+        data.w   2
+        data.w   1
+        data.w   -1
+        data.w   1
+
+;
+;
+; search routine control vector.
+;
+;
+entvect                         ;          pointer to search vector
+entcnt  data.w   0              ;   00     no. of entries/block
+entboff data.w   0              ;   02     beginning of useful table info in block
+entflen data.w   0              ;   04     length of match/search item in entry
+entelen data.w   0              ;   06     length of individual entry in table
+entsrch data.l   0              ;   08     ptr to string to match
+entmtch data.l   0              ;   12     ptr to location to place matched entry
+entptr  data.l   0              ;   16     ptr to beginning of the table
+enteoff data.w   0              ;   20     offset of match/search item in entry
+;
+srchitm data.b   '          '   ;search item     10 bytes
+mtchitm data.b   '          '   ;location of matched field
+        data.b   '          '   ;10 bytes
+        data.b   '            ' ;12 bytes
+;
+; Drive.Info length & address field save area
+;
+c2DUlen data.w   0              ;drive.user length
+c2DAlen data.w   0              ;drive.access length
+c2DVlen data.w   0              ;drive.volume length
+c2NUlen data.w   0              ;network.user length
+;
+c2DUadr data.l   0              ;drive.user table address
+c2DAadr data.l   0              ;drive.access table address
+c2DVadr data.l   0              ;drive.volume table address
+c2NUadr data.l   0              ;newtork.user table address
+
+
+c2curdr data.w   0              ;current disk drive number
+c2totdr data.w   0              ;total drives in boot or home disk cluster
+homesrv data.b   0              ;address of disk server responding to boot command
+xtra111 data.b   0              ;unused
+
+;
+;
+;       Logon greetings and error messages
+;
+;
+c2msg01 data.b  'Please enter your name: ','          '       ;*4.0
+        data.b  8,8,8,8,8,8,8,8,8,8,0                         ;*4.0
+c2msg02 data.b  'Please enter your password: ','          '   ;*4.0
+        data.b  8,8,8,8,8,8,8,8,8,8,0                         ;*4.0
+c2erm10 data.b  'Invalid user name.              ',7,CR,LF,0  ;*4.0
+c2erm11 data.b  'User not found.                 ',7,CR,LF,0  ;*4.0
+c2erm12 data.b  'Invalid password.               ',7,CR,LF,0  ;*4.0
+c2erm13 data.b  'Unexpected error condition.     ',7,CR,LF,0  ;*4.0
+c2erm14 data.b  'No user boot volume on drive.   ',7,CR,LF,0  ;*4.0
+c2erm15 data.b  'User disk server not responding.',7,CR,LF,0  ;*4.0
+c2erm16 data.b  'Omninet I/O error.              ',7,CR,LF,0  ;*4.0
+c2erm20 data.b  'Boot directory read error.      ',7,CR,LF,0  ;*4.0
+c2erm21 data.b  'No CC.KERNEL file in volume.    ',7,CR,LF,0  ;*4.0
+c2erm22 data.b  'Can''t read file CC.KERNEL.      ',7,CR,LF,0 ;*4.0
+c2erm23 data.b  'CC.KERNEL file not quick-load.  ',7,CR,LF,0  ;*4.0
+c2erm24 data.b  'Invalid DRIVE.INFO table.       ',7,CR,LF,0  ;*4.0
+c2erm25 data.b  'Can''t read NETWORK.USER table.  ',7,CR,LF,0 ;*4.0
+
+c2msg03 data.b  '                *    ',CR,0
+c2msg04 data.b  '                    *',CR,0
+c2msg05 data.b  '                          C O R V U S   S Y S T E M S',CR,0
+c2msg06 data.b  '                      *         CONSTELLATION II     ',CR,0
+c2msg07 data.b  '                  *    *           V 4.0 ('              ;*4.0
+c2msg08 data.b  'nn)       ',CR,0                                         ;*4.0
+        data.w  0                        ;if uneven get asm error
+c2nmbuf data.b  '                    '   ;user name buffer
+        data.b  '                    '   ;each string is 20 bytes
+        data.b  '                    '
+        data.b  '                    '
+c2pwbuf data.b  '                    '   ;user password buffer
+        data.b  '                    '   ;each string is 20 bytes
+        data.b  '                    '
+        data.b  '                    '
+
+
+;====================================================================================
+
+Data_area       ; each section contains a set of equates for offsets in the data area,
+                ; followed by the actual data area itself.  The data areas are:
+                ; C2_cmd for the Where are you and My ID is... commands, Rcv_hdr for
+                ; the results of the SetUpRecv command, Snd_Hdr for the results of
+                ; the Send command, and TransCmd for the transporter command itself.
+
+;====================================================================================
+C2_hdr          EQU     0
+C2_proto        EQU     0+C2_Hdr
+C2_msgtype      EQU     2+C2_Hdr
+C2_src          EQU     4+C2_Hdr
+C2_devtype      EQU     6+C2_Hdr
+C2_name         EQU     8+C2_Hdr
+
+C2_cmd          data.w  0               ;protocol id
+                data.w  0               ;message type
+                data.w  0               ;source host number
+                data.w  0               ;device type
+                data.b  '          '    ;name    10 bytes
+
+C2x_hdr         EQU     18+C2_hdr
+C2x_proto       EQU     0+C2x_Hdr
+C2x_msgtype     EQU     2+C2x_Hdr
+C2x_src         EQU     4+C2x_Hdr
+C2x_devtype     EQU     6+C2x_Hdr
+C2x_name        EQU     8+C2x_Hdr
+
+C2x_cmd         data.w  0               ;protocol id
+                data.w  0               ;message type
+                data.w  0               ;source host number
+                data.w  0               ;device type
+                data.b  '          '    ;name    10 bytes
+;====================================================================================
+
+;====================================================================================
+RHdr            EQU     18+C2x_Hdr
+RCode           EQU     0+Rhdr
+Source          EQU     1+RHdr
+Dlen            EQU     2+RHdr
+
+Rcv_Hdr         data.b  $FF             ;return code from transporter
+                data.b  0               ;the source of the meswage
+                data.w  0               ;data length
+;====================================================================================
+
+;====================================================================================
+SHdr            EQU     4+Rhdr
+Snd_Hdr         data.b  $FF             ;return code from transporter
+                data.b  0               ;unused
+                data.w  0               ;also unused
+;====================================================================================
+
+;====================================================================================
+TCmd            EQU     4+SHdr          ;general transporter command
+TC_op           EQU     0+Tcmd
+TC_PRslt        EQU     0+Tcmd          ;3 byte field beginning at 1, but we will
+                                        ;   MOVE long words to 0
+TC_sock         EQU     4+Tcmd          ;
+TC_PData        EQU     4+Tcmd          ;same trick here
+TC_Dlen         EQU     8+Tcmd          ;data length
+TC_Hlen         EQU     10+Tcmd         ;header length
+TC_Dest         EQU     11+Tcmd         ;destination host number
+
+Trans_Cmd       ; area used for constructing transporter commands
+                data.w  0               ;op code and result address HI
+                data.w  0               ;result address MED and LO
+                data.w  0               ;socket number and buffer address HI
+                data.w  0               ;buffer address MED, LO
+                data.w  0               ;data length
+                data.w  0               ;header length and destination host number
+;====================================================================================
+
+OSBuf                           ;OS buffer (first part of file)
+IObuf   equ     OSBuf+16
+DirBuf  equ     OSBuf+16        ;Directory buffer
+Pgmlen  equ     (%-Conboot)+16  ;No of bytes in program
+Nobtblk equ     (Pgmlen/512)+1  ;Calculate no. of blocks in this boot file
+
+        end     ConBoot

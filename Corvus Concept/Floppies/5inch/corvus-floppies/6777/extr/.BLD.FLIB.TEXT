@@ -1,0 +1,21 @@
+;
+; .BLD.FLIB -- Build FTNLIB
+;
+library < %
+
+/svs5/ftnlib
+f77rts
+/svsmlib/ftnchar
+/svsmlib/gftn
+/svsmlib/ftn.misc
+/svsmlib/cai
+/svsmlib/guc
+/svsmlib/cmplxf
+/svsmlib/iupi
+
+;
+; Finished ....
+;
+
+
+

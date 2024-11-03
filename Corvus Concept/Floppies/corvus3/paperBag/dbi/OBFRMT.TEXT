@@ -1,0 +1,80 @@
+procedure doupdate( netadr: integer);
+var hd,i,len:integer;
+   fname,cfile:string80;
+    buf:sndrcvstr;
+    cd: cdaddr;
+    afile:file;
+begin
+  cd.stationno := netadr;
+  cd.slotno := slt;
+  cd.driveno := 1;
+  cd.blkno := 0;
+  cd.netno := 0;
+  cd.kind := omninetdisk;
+  cfile := '/CCUTIL/CF18.3';
+  write('Enter controller code file: ');
+  if getstring(cfile)<>normal then exit(doupdate);
+  fname:=concat(cfile,'.DATA');
+  writeln('Opening firmware file ',fname);
+  reset(afile,fname);
+  rslt := ioresult;
+  If rslt <> 0 THEN
+    BEGIN
+      WRITELN(beep,'Cannot open firmware file, error = ',rslt);
+      EXIT( doupdate );
+    END;
+  crt(startbeat);
+  if i < 0 then BEGIN WRITELN(beep,'Cannot update station ', netadr:3 ); exit(doupdate);  END;
+  for hd:=0 to 1 do       { 1.3  do only 40 blocks }
+  begin
+    for i:=0 to 19 do
+    begin
+      len:=blockread(afile,buf.b[3],1);
+      if len<>1 then
+      begin
+        writeln('*** Error reading code file ***');
+        exit(doupdate);
+      end;
+      begin
+        buf.b[1] := 51;
+        buf.b[2] := hd*32+i;
+        buf.sln := 514; buf.rln := 1;
+        cdsend(cd,buf); cdrecv(cd,buf);
+        IF buf.b[1] < 0 THEN BEGIN WRITELN(beep,'Update error: ',buf.b[1]); EXIT(doupdate); END;
+        crt(heartbeat);
+      end;
+    end;
+  end;
+  i := unprep( cd );
+end;
+
+procedure format;
+var len,adr:integer;
+    buf:sndrcvstr;
+    cd: cdaddr;
+begin
+  writeln('Format drive :');
+  adr := getaddr;
+  WRITELN('Reset the drive at station address ',adr, ' then press <return>...');
+  ch := getbyte;
+  cd.stationno := adr;
+  cd.kind := omninetdisk;
+  cd.blkno := 0;
+  cd.driveno := 1;
+  cd.slotno := slt;
+  i := putprep( cd, '!DIAG.DATA' );
+  if i < 0 then BEGIN WRITELN('Cannot format station ', adr:3,'error= ',i:4 ); exit(format);  END;
+  buf.b[1]:=1;
+  buf.b[2]:=-27;                          { $e5 }
+  moveleft(buf.b[2],buf.b[3],511);          { fill buf with $e5 }
+  buf.sln := 513; buf.rln := 1;
+  cdsend( cd, buf) ;  cdrecv( cd, buf );
+  IF buf.b[1] < 0 THEN BEGIN WRITELN('Cannot format station ', adr:3 ); exit(format);  END;
+  crt(startbeat);
+  writeln('Format complete - now updating firmware');
+  doupdate(adr);
+  writeln;
+  writeln('Turn format switch off and reset drive');
+end;
+
+

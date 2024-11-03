@@ -1,0 +1,39 @@
+
+Directory of UCSD disk image file 'ccutil#1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 31 files,  0 to 6 (6), eov 500, size 23, free 31
+
+ 1: BLIB.R2.CODE    Code 20-Sep-83    6-  45(  39), 19968+512= 20480 bytes
+ 2: BLIB.R4.CODE    Code 20-Sep-83   45-  84(  39), 19968+512= 20480 bytes
+ 3: C2.HELP.TEXT    Text 30-Jun-83   84-  88(   4),  2048+512=  2560 bytes
+ 4: C2.MENU.TEXT    Text  1-Aug-83   88-  96(   8),  4096+512=  4608 bytes
+ 5: CF18.9.DATA     Data  5-Jun-83   96- 136(  40), 20480+512= 20992 bytes
+ 6: CCOS.1.2.TEXT   Text 20-Sep-83  136- 156(  20), 10240+512= 10752 bytes
+ 7: CITOH.TEXT      Text 20-Sep-83  156- 160(   4),  2048+512=  2560 bytes
+ 8: CORVUS.14.16    Data 19-Feb-83  160- 167(   7),  3584+  8=  3592 bytes
+ 9: CS.CONVERT      Data  4-Feb-83  167- 175(   8),  4096+512=  4608 bytes
+10: CSD.09.13.ALT   Data 26-Apr-83  175- 187(  12),  6144+200=  6344 bytes
+11: CSD.HALFTONE    Data 10-Feb-83  187- 194(   7),  3584+  8=  3592 bytes
+12: CSK.REV3        Data  4-Feb-83  194- 196(   2),  1024+512=  1536 bytes
+13: CSK.REV4        Data  4-Feb-83  196- 198(   2),  1024+512=  1536 bytes
+14: DESPOOL.CODE    Code 20-Sep-83  198- 220(  22), 11264+512= 11776 bytes
+15: DIABLO.TEXT     Text 20-Sep-83  220- 224(   4),  2048+512=  2560 bytes
+16: GOTHIC.14.16    Data 19-Feb-83  224- 231(   7),  3584+  8=  3592 bytes
+17: LOGO.TEXT       Text 22-Jun-83  231- 235(   4),  2048+512=  2560 bytes
+18: LOOKUP          Data  4-Feb-83  235- 251(  16),  8192+512=  8704 bytes
+19: PAT.CITOH       Data 20-Sep-83  251- 252(   1),   512+512=  1024 bytes
+20: PAT.DIABLO630   Data 20-Sep-83  252- 253(   1),   512+512=  1024 bytes
+21: PAT.EPSONMX     Data 20-Sep-83  253- 254(   1),   512+512=  1024 bytes
+22: PAT.NEC         Data 20-Sep-83  254- 255(   1),   512+512=  1024 bytes
+23: PAT.NOENHANCE   Data 20-Sep-83  255- 256(   1),   512+512=  1024 bytes
+24: PAT.OKIDATA     Data 20-Sep-83  256- 257(   1),   512+512=  1024 bytes
+25: PAT.TOSHIBA     Data 20-Sep-83  257- 258(   1),   512+512=  1024 bytes
+26: RTLIB2.CODE     Code 20-Sep-83  258- 286(  28), 14336+512= 14848 bytes
+27: RTLIB4.CODE     Code 20-Sep-83  286- 314(  28), 14336+512= 14848 bytes
+28: SPOOL.CODE      Code 20-Sep-83  314- 336(  22), 11264+512= 11776 bytes
+29: PURG.1.2.TEXT   Text 20-Sep-83  336- 344(   8),  4096+512=  4608 bytes
+30: DDIAG           Data 20-Sep-83  344- 437(  93), 47616+512= 48128 bytes
+31: CF18.4AP.DATA   Data 20-Sep-83  437- 477(  40), 20480+512= 20992 bytes

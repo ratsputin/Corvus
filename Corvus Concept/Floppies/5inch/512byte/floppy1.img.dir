@@ -1,0 +1,68 @@
+
+Directory of UCSD disk image file 'floppy1.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY1 has 61 files,  0 to 6 (6), eov 1440, size 259, free 61
+
+ 1: AGENDA.TEXT     Text  3-Jan-84    6-  14(   8),  4096+512=  4608 bytes
+ 2: BOOTFILES.TEXT  Text 23-Feb-83   14-  36(  22), 11264+512= 11776 bytes
+ 3: BUGREPORT.TEXT  Text 29-Nov-82   36-  40(   4),  2048+512=  2560 bytes
+ 4: C2.SCHED.TEXT   Text 17-Feb-84   40-  50(  10),  5120+512=  5632 bytes
+ 5: C2CHNG.DOC.TEXT Text  7-Dec-83   50-  70(  20), 10240+512= 10752 bytes
+ 6: C2MEET.TEXT     Text 13-Dec-83   70-  74(   4),  2048+512=  2560 bytes
+ 7: C2MEET2.TEXT    Text  6-Jan-84   74-  86(  12),  6144+512=  6656 bytes
+ 8: C2RESCHED.TEXT  Text  4-Jan-84   86-  90(   4),  2048+512=  2560 bytes
+ 9: CCOSINIT.TEXT   Text  9-Feb-84   90- 104(  14),  7168+512=  7680 bytes
+10: CONST2.DOC.TEXT Text 14-Nov-83  104- 122(  18),  9216+512=  9728 bytes
+11: DC.DOC.TEXT     Text 23-Feb-83  122- 126(   4),  2048+512=  2560 bytes
+12: DCDSGN.TEXT     Text 23-Feb-83  126- 164(  38), 19456+512= 19968 bytes
+13: DCEVAL.TEXT     Text 23-Feb-83  164- 172(   8),  4096+512=  4608 bytes
+14: DCPCMDLINE.TEXT Text 20-Jan-83  172- 184(  12),  6144+512=  6656 bytes
+15: DEVTYP.TEXT     Text 14-Mar-84  184- 188(   4),  2048+512=  2560 bytes
+16: DSKDRV.DOC.TEXT Text 21-Feb-84  188- 206(  18),  9216+512=  9728 bytes
+17: EXCEPDSGN.TEXT  Text 23-Feb-83  206- 222(  16),  8192+512=  8704 bytes
+18: FILEDIR.TEXT    Text 24-Feb-83  222- 234(  12),  6144+512=  6656 bytes
+19: FILEHDR.TEXT    Text 24-Feb-83  234- 246(  12),  6144+512=  6656 bytes
+20: FIRSTC2.TEXT    Text 13-Dec-83  246- 256(  10),  5120+512=  5632 bytes
+21: FLOP.MAN.TEXT   Text 21-Jun-83  256- 282(  26), 13312+512= 13824 bytes
+22: FLOP48TPI.TEXT  Text 16-Nov-83  282- 288(   6),  3072+512=  3584 bytes
+23: FLPY.DOC.TEXT   Text 10-May-83  288- 298(  10),  5120+512=  5632 bytes
+24: FLPYSPEC.TEXT   Text 11-Apr-83  298- 306(   8),  4096+512=  4608 bytes
+25: INCOMPAT.TEXT   Text  1-Dec-82  306- 312(   6),  3072+512=  3584 bytes
+26: INTERRUPTS.TEXT Text 23-Feb-83  312- 324(  12),  6144+512=  6656 bytes
+27: KBRDCHRRV3.TEXT Text  1-Jun-82  324- 340(  16),  8192+512=  8704 bytes
+28: KBRDDSGN.TEXT   Text  2-Mar-82  340- 406(  66), 33792+512= 34304 bytes
+29: KBRDSTAT.TEXT   Text 10-Jan-83  406- 412(   6),  3072+512=  3584 bytes
+30: KBRDTBLS.TEXT   Text 23-Sep-82  412- 440(  28), 14336+512= 14848 bytes
+31: KYBD.TEMP       Data 21-Mar-83  440- 441(   1),   512+144=   656 bytes
+32: LABELDSGN.TEXT  Text 16-Mar-82  441- 497(  56), 28672+512= 29184 bytes
+33: LETTER.TEXT     Text  7-Oct-83  497- 503(   6),  3072+512=  3584 bytes
+34: LTR.MCS.TEXT    Text 15-Mar-84  503- 513(  10),  5120+512=  5632 bytes
+35: MN.ASMXREF.TEXT Text 10-Sep-82  513- 523(  10),  5120+512=  5632 bytes
+36: MSDOS.DOC.TEXT  Text  2-Nov-83  523- 647( 124), 63488+ 32= 63520 bytes
+37: NET.OUT.TEXT    Text  9-Mar-83  647- 707(  60), 30720+512= 31232 bytes
+38: NEWDRVCMD.TEXT  Text 31-Oct-83  707- 717(  10),  5120+512=  5632 bytes
+39: NEWDRVINT.TEXT  Text 15-Mar-83  717- 725(   8),  4096+512=  4608 bytes
+40: OUTKTBLS.TEXT   Text 23-Sep-82  725- 743(  18),  9216+512=  9728 bytes
+41: PD.DOC.TEXT     Text  8-Aug-83  743- 757(  14),  7168+512=  7680 bytes
+42: PIPES.DOC.TEXT  Text 14-Feb-84  757- 767(  10),  5120+512=  5632 bytes
+43: PRNT.DOC.TEXT   Ux2003 27-Jan-83  767- 819(  52), 26624+512= 27136 bytes
+44: PRNTDSGN.TEXT   Text  1-Jun-82  819- 837(  18),  9216+512=  9728 bytes
+45: PTP.DOC.TEXT    Text 17-Feb-84  837- 941( 104), 53248+512= 53760 bytes
+46: PTP.MEMO.TEXT   Text  8-Feb-84  941- 947(   6),  3072+512=  3584 bytes
+47: SCHEDULE.TEXT   Text  2-Nov-82  947- 959(  12),  6144+512=  6656 bytes
+48: SIMPLEKBRD.TEXT Text 10-Mar-82  959- 973(  14),  7168+512=  7680 bytes
+49: SPLDRV.DOC.TEXT Text  6-Jan-84  973- 987(  14),  7168+512=  7680 bytes
+50: STATREPORT.TEXT Text 29-Apr-83  987- 999(  12),  6144+512=  6656 bytes
+51: TIMER.DOC.TEXT  Text  8-Feb-83  999-1023(  24), 12288+512= 12800 bytes
+52: TIMERDSGN.TEXT  Text 26-Jan-82 1023-1067(  44), 22528+512= 23040 bytes
+53: TRANPDOC.TEXT   Text 18-Jul-83 1067-1099(  32), 16384+512= 16896 bytes
+54: TRANPDSGN.TEXT  Text 18-Mar-82 1099-1117(  18),  9216+512=  9728 bytes
+55: TRMNL.DOC.TEXT  Text 11-May-83 1117-1129(  12),  6144+512=  6656 bytes
+56: UP.CCOS.TEXT    Text 27-Jan-84 1129-1133(   4),  2048+512=  2560 bytes
+57: VOLLCK.DC2.TEXT Text  2-Dec-83 1133-1143(  10),  5120+512=  5632 bytes
+58: VOLLCK.DC3.TEXT Text  6-Jan-84 1143-1155(  12),  6144+512=  6656 bytes
+59: VOLLCK.DOC.TEXT Text  2-Dec-83 1155-1165(  10),  5120+512=  5632 bytes
+60: XTRAPROM.TEXT   Text 15-Mar-83 1165-1171(   6),  3072+512=  3584 bytes
+61: ONE.TEXT        Text  4-Apr-84 1171-1181(  10),  5120+312=  5432 bytes

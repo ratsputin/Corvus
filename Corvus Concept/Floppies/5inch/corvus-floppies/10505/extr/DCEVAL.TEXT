@@ -1,0 +1,61 @@
+
+
+Evaluation of Karasik's data com driver
+
+Keith Ball
+04 November 1982
+
+
+
+The driver needs changes in 2 areas :
+
+1) The driver currently handles a single data com port at a time.  The
+   user cannot talk with both ports at the same time.  This can be
+   handled in 3 ways.  The first, make the driver deal only with one
+   data com port and have two copies of the driver in the system.  The
+   second, make the driver handle both ports as different unit numbers.
+   Therefore, talking to unit number x is port 1 and unit number y is
+   port 2.  The third is a variation of the second.  The driver uses the
+   same data com interrupt routine to control the interrupts from either
+   ports.  This requires the interrupt routine to be reentrant.
+
+   If the second or third option is taken the buffers and control
+   variables must be duplicated for each port supported.  Therefore,
+   we'll need 2 versions of the port dependent data areas.
+
+   A viable solution to the interrupt problem is seperate entry points
+   for each port which reads the port then disables interrupt for the
+   other port's interrupt level if not already disabled.  Furthermore, it
+   must set a register to tell which port interrupted.  After this
+   seperate operation the code could be shared.
+
+
+2) The handshake protocols must be implemented for both read and write.
+   This involves changes to the interrupt and main routines.
+
+   The protocols needed are Line type, XON/XOFF, ENQ/ACK, and ETX/ACK.
+   The Line protocols are in the code but must be tied to the current
+   driver's busy mechanism.  The character protocols must be fully added
+   except for the testing of the buffer's high and low marks for turning
+   on and off the busy state.
+
+   It is also necessary to add user an interface to unistatus to allow
+   the user to force the Busy state on and off.
+
+   2 potential problems exist for the line protocols.  The data com
+   control interrupt is genrated by a change in an odd number of the
+   data com control lines (CTS, DCD, and DSR).  If an even number of
+   lines change simultaneously then a state change will be missed.  If
+   a modem is used on one port and a line printer using a line protocol
+   is also being used this could occur.  The second potential problem
+   deals with the sharing of the data com control interrupt with the
+   Apple I/O slots.  If an Apple slot interrupt driven driver is used in
+   the system then some form of dispatching to different drivers needs
+   to be built.  I suggest a simple chaining mechanism to start off with.
+   This means whoever takes over the level 1 interrupt vector from the
+   data com driver must call the data com driver's level 1 interrupt
+   routine if the interrupt was not for them.
+
+3) Reorganize the unitstatus function codes to make them upward
+   compatible with the old printer driver.  This is minor and will
+   consume an insignificant amount of time and effort.

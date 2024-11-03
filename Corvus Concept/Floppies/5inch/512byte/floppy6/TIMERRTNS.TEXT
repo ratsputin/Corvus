@@ -1,0 +1,121 @@
+program maketimers;
+
+const
+    LOCODELOC = $108;  {address of low code pointer}
+    HICODELOC = $10C;  {address of hi code pointer}
+    RTS = $4E75;       {hex for RTS instruction}
+
+type
+    byte = -128..127;
+    Words = array[0..9999] of integer;
+    pWords = ^Words;
+
+    TimerPB = record
+               RtnAdr: pWords;
+               Count : integer;
+               Flags : integer;
+               TblID : integer;
+               end;
+
+var
+    rts1,rts2,rts3: pWords;
+    i: integer;
+    TPB: TimerPB;
+    TID1,TID2,TID3: integer;
+
+    procedure allocate (size: integer; var bufptr: pWords);
+        var i: integer;
+            plocode,phicode: ^longint;
+        begin
+        bufptr := NIL;
+        plocode := pointer (LOCODELOC); phicode := pointer (HICODELOC);
+        if odd(size) then size := size+1;
+
+        if phicode^-plocode^ < size+100 then exit (allocate);
+
+        bufptr := pointer (plocode^);
+        plocode^ := plocode^ + size;
+        end; {allocate}
+
+begin  {maketimers}
+writeln('allocating the space...');
+allocate(6,rts1);   {allocate 6 bytes in driver area}
+if rts1 = NIL then
+   begin
+   writeln('No room.....');
+   end;
+rts2 := @rts1^[1];  {2nd word is for 2nd rts}
+rts3 := @rts1^[2];  {3rd word is for 3rd rts}
+
+writeln('putting in the RTS instructions...');
+{put in rts instruction}
+for i := 0 to 2 do rts1^[i] := RTS;
+
+with TPB do
+   begin
+   {************* first entry *************}
+   writeln('putting in first entry...');
+   RtnAdr := rts1;
+   Count  := 10;
+   Flags  :=  4;  {continuous & skip first call flag}
+   unitstatus(34,TPB,1); i := ioresult; {create entry}
+   if i <> 0 then
+      begin
+      writeln('create I/O error: ',i:1);
+      exit(maketimers);
+      end;
+   TID1 := TblID;  {save table id}
+
+   unitstatus(34,TID1,3); i := ioresult; {disable entry}
+   if i <> 0 then
+      begin
+      writeln('disable I/O error: ',i:1);
+      exit(maketimers);
+      end;
+
+
+   {************* second entry *************}
+   writeln('putting in second entry...');
+   RtnAdr := rts2;
+   Count  := 10;
+   Flags  :=  4;  {continuous & skip first call flag}
+   unitstatus(34,TPB,1); i := ioresult; {create entry}
+   if i <> 0 then
+      begin
+      writeln('create I/O error: ',i:1);
+      exit(maketimers);
+      end;
+   TID2 := TblID;  {save table id}
+
+   unitstatus(34,TID2,3); i := ioresult; {disable entry}
+   if i <> 0 then
+      begin
+      writeln('disable I/O error: ',i:1);
+      exit(maketimers);
+      end;
+
+   {************* third entry *************}
+   writeln('putting in third entry...');
+   RtnAdr := rts3;
+   Count  := 10;
+   Flags  :=  4;  {continuous & skip first call flag}
+   unitstatus(34,TPB,1); i := ioresult; {create entry}
+   if i <> 0 then
+      begin
+      writeln('create I/O error: ',i:1);
+      exit(maketimers);
+      end;
+   TID3 := TblID;  {save table id}
+
+   unitstatus(34,TID3,3); i := ioresult; {disable entry}
+   if i <> 0 then
+      begin
+      writeln('disable I/O error: ',i:1);
+      exit(maketimers);
+      end;
+
+   end;  {with TPB}
+
+writeln('All done....');
+
+end.     {maketimers}

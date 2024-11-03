@@ -1,0 +1,116 @@
+;
+; file : pmgrasm.text
+; date : 16-August-1983 kb
+;
+;        INCLUDE   '/CCOS/OS.GBL.ASM.TEXT'  (not listed)
+;
+         list      0
+         INCLUDE   '/CCOS/OS.GBL.ASM.TEXT'
+         list      1
+
+; Function codes for protocol manager
+;
+PMFCatch EQU       0                   ;attach
+PMFCdtch EQU       1                   ;detach
+PMFCsend EQU       2                   ;send
+PMFCrecv EQU       3                   ;receive
+PMFCdpnd EQU       4                   ;protocol dependent
+PMFCstat EQU       5                   ;status
+
+; Protocol manager table entry
+;
+PMpid    EQU       0                   ;word - protocol ID
+PMentry  EQU       PMpid+2             ;lint - ptr to pmgr entry
+PMpData  EQU       PMentry+4           ;lint - ptr to pmgr global data
+PMVrsn   EQU       PMpData+4           ;word - version bytes (vers,level)
+PMActiv  EQU       PMVrsn+2            ;byte - active entry boolean
+PMtype   EQU       PMActiv+1           ;byte - flags
+PMTlen   EQU       PMtype+1            ;length of single entry
+
+PMnument EQU       20                  ;number of entries in protocol mgr table
+PMtblLen EQU       PMnument*PMTlen     ;length of table
+
+; Parameter list and lengths
+;
+PMPBlock EQU       0
+PMPtype  EQU       PMPBlock+0          ;word - msg type or dependent function code
+PMPpdta  EQU       PMPtype+2           ;lint - buffer, buffer ctrl block,
+                                       ;       or parameter block pointer
+PMPlngt  EQU       PMPpdta+4           ;word - length of data (signed)
+PMPb4fc  EQU       PMPlngt+2           ;length before function code
+PMPfncd  EQU       PMPlngt+2           ;word - pmgr function code
+PMPfulLN EQU       PMPfncd+2           ;length of full parameter block
+   page
+;
+; function and procedures
+;
+         GLOBAL    PMAttach, PMDetach, PMSend, PMRecv
+         GLOBAL    PMDpndnt, PMStatus
+
+; Protocol manager function routers
+;
+; Procedure Attach(PID);
+; Procedure Detach(PID);
+;
+PMAttach MOVEQ     #PMFCatch, D0       ;set attach as function code
+         BRA.S     PMR0010
+PMDetach MOVEQ     #PMFCdtch, D0       ;set detach as function code
+PMR0010  MOVE.W    (SP)+, D1           ;get PID
+         SUBA.W    #PMPb4fc, SP        ;push fake parm list up to function code
+         BRA.S     PMcommon            ;goto common code
+
+; Procedure Send(MsgType, pBuffer, DataLength, PID);
+; Procedure Recv(MsgType, pBufCtl, DataLength, PID);
+;
+; Buffer control block for read is a record of :
+;   1) pointer to buffer
+;   2) boolean initially false.  True means data in
+;      buffer available to user.
+;
+PMRecv   MOVEQ     #PMFCrecv, D0       ;set receive as function code
+         BRA.S     PMR0020
+PMSend   MOVEQ     #PMFCsend, D0       ;set send as function code
+PMR0020  MOVE.W    (SP)+, D1           ;get PID
+                                       ;has full param list
+         BRA.S     PMcommon            ;goto common code
+
+; Procedure Dependent(FunctionCode, pPrmBlk, PID);
+; Procedure Status(StatusType, pStatBlk, PID);
+;
+PMDpndnt MOVEQ     #PMFCatch, D0       ;set attach as function code
+         BRA.S     PMR0030
+PMStatus MOVEQ     #PMFCstat, D0       ;set status as function code
+PMR0030  MOVE.W    (SP)+, D1           ;get PID
+         SUBA.W    #PMPb4fc-PMPlngt,SP ;push fake length parameter
+   page
+PMcommon MOVE.W    D0, -(SP)           ;put function code on stack
+
+; Get address of Protocol mgr table from SysCom
+;
+         MOVE.L    $1B4.W, A0          ;temp for development ******
+         ADDQ.L    #2, A0              ;PAST IORESULT        ******
+;;;;     MOVE.L    pSysCom.W, A0       ;get syscom ptr
+;;;;     MOVE.L    SCpmgrtbl(A0), A1   ;get pmgr table ptr
+
+; find entry for this PID (in D1)
+;
+         CLR.L     D0                  ;index to pmgr tbl entries
+
+PMCnext  TST.B     PMactiv(A1,D0)      ;is entry active?
+         BEQ.S     PMCnactv            ;no, go to next entry
+         CMP.W     PMpid(A1,D0), D1    ;yes, then is this the PID?
+         BEQ.S     PMCfound            ;yes, then call pmgr for this PID
+
+PMCnactv ADDI.W    #PMTlen, D0         ;no, index inc by entry length
+         CMPI.W    #PMtbllen, D0       ;past last entry?
+         BLT.S     PMCnext             ;no, see if it is this one
+         MOVE.W    #IOEioreq, (A0)     ;yes then IOresult error
+         ADDA.W    #PMPfulLN, SP       ;remove params
+         RTS                           ;    and exit
+
+; procedure PMuser(Type, pData, DataLength, FunctionCode)
+;
+PMCfound MOVEA.L   PMentry(A1,D0), A1  ;get pmgr procedure address
+         JMP       (A1)                ;call pmgr procedure
+                                       ;   then exit
+         END

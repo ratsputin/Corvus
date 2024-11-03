@@ -1,0 +1,448 @@
+                  Software release requirements
+                          Denise Pitsch
+                         January 4, 1982
+
+
+This document details the procedure for releasing a software
+product.  It also lists who is responsible for each step.
+
+1.  Documentation for tech writers to work from                 Engineer
+    Includes:
+    a)  Brief description of user interface
+    b)  Limitations
+    c)  O.S. assumptions and patches
+    d)  Compatibility requirements (hardware and software)
+    
+2.  For each floppy,
+    a) a catalog of the floppy, with dates and version
+       numbers                                                  Engineer
+    b) a CRC checksum of the floppy                             Engineer
+    c) cross-reference to source file names                     Engineer
+    d) checksum for each source file                            Jennifer
+    e) mirror tape of all source files                          Jennifer
+    f) listings of all compilations and assemblies              Jennifer
+    
+3. For any sources that changed, verify that there is an 
+   entry in the revision history.                               Engineer 
+
+4. Update the documentation files:
+   a)  Flop hist (from PCO)                                     Jennifer
+   b)  Bug report                                               Denise
+   
+5. Generate PCO                                                 Denise
+
+To be filled out at each software release, by engineer:
+
+1)  Name of product:
+
+2)  Reason for new release:
+
+3)  Source files changed:
+
+4)  Changes in user interface:
+
+$P
+
+                     ROM AND FLOPPY Release Sequence
+
+
+The following steps should be taken in order to insure smooth release
+and change of FIRMWARE and SOFTWARE.
+
+1.  ENGINEERING tests new software as completely as possible.
+    A review is held involving Development Engineering, Service,
+    Product Marketing, Q.A and Manufacturing Engineering for
+    major releases.
+
+2.  Product Marketing is notified of any changes which affect customer
+    documentation.
+
+3.  A PCO is generated with checksum and label information included
+    by Engineering along with (3) copies of the FLOPPY or ROM.  Product
+    Marketing is responsible for attaching the updated shipping package,
+    if necessary.
+
+4.  Service, Manufacturing Engineering and Q.A are given the FLOPPY or
+    ROM to check out for (1 week limit) along with the PCO form.
+
+5.  If after one week, the feedback is positive, Engineering proceeds
+    with submitting the PCO to Document Control.  If the feedback is
+    negative Engineering attempts to rectify the problem.  If no
+    feedback is given, Engineering assumes that the response is positive
+    and proceeds with the the PCO process.
+
+6.  If manual changes are necessary, either an addendum must be added,
+    or the manual must be changed before the PCO can become effective.
+
+7.  Engineering makes (2) additional copies and submits to Document
+    Control.
+             1.  Document Control- Archival storage
+             2.  Purchasing- if mass production is required.
+    These are held by Document Control until PCO has been approved.
+
+8.  After approval, PCO's are distributed by Document Control and
+    Purchasing is given their master copy if outside duplication
+    is required.
+
+
+$P
+
+Apple II/DOS notes:
+
+
+1. Source files:
+    a) Basic files are found in the Basic area of the network,
+       as follows:
+
+    -- drive 1, volume 1- currently released AP utilities
+    -- drive 1, volume 2- currently released Constellation utilities
+    -- drive 2, volume 9- working copy of AP utilities
+    -- drive 2, volume 10- working copy of constellation utilities
+
+2. Code files:
+    a) Same as source files
+    b) .OBJ sources are in A2DEV1, A2DEV2
+
+3. Create the master diskette:
+    a) Use COPY3 to create the master diskette.
+
+4. Reproduce floppy sets:
+    a) Use Apple II FORMATTER program to format new floppies.
+    b) Use Apple II RDMAKEFLOP program to copy and verify.
+
+Requirements checklist:
+
+    a) a catalog of the floppy, with dates and version numbers,
+       to be filed with floppy history
+    -- Must be done by hand.
+    b) a CRC checksum of the floppy
+    -- Use RDMAKEFLOP on Apple II.
+    c) cross reference to source file names
+    -- Tell Jennifer so she can update the binders.
+    d) checksum for each source file
+    e) mirror tape of all source files
+    -- Use MIRROR on Basic, store 9 and 10, drive 2
+    f) listings of all sources and assemblies.
+
+$P
+   
+Apple II/Pascal notes:
+
+1. Source files:
+    a) source files are in volumes A2DEV1: and A2DEV2:
+
+2. Code files:
+    a) files are compiled into A2CODE
+
+3. Create master diskette:
+    a) use filer to create master diskette
+    b) in volumes CORVUS1, CORVUS2, CONST on network
+
+4. Reproduce floppy sets:
+    a) use Apple II FORMATTER program to format new floppies
+    b) use Apple II RDMAKEFLOP program to copy and verify
+
+Requirement checklist:
+
+   a) a catalog of the floppy, with dates and version
+      numbers, to be filed with floppy history
+   -- Use CRCLIST on Apple II.
+   b) a CRC checksum of the floppy
+   -- Use RDMAKEFLOP on Apple II.
+   c) cross-reference to source file names
+   -- Tell Jennifer so she can update the binders.
+   d) checksum for each source file
+   -- Use CRCLIST on Apple II, checksum A2DEV1, A2DEV2, A2CODE.
+   e) mirror tape of all source files
+   -- Use AMIRROR on Apple II, store A2DEV1, A2DEV2.
+   f) listings of all compilatons and assemblies
+
+
+$P
+
+
+Apple II/CPM notes:
+
+1.Source files:
+   a) Pascal source files are in CPMAP1.
+   b) CPM source files are in CPMAP2.
+
+2. Code files:
+    a) Pascal code files are in CPMAP1.
+    b) CPM source files  are in CPMAP2.
+
+3. Create master floppy:
+    a) Use filer to create Pascal master floppy.
+    b) Use PIP program to create CPM master floppy.
+
+4. Reproduce floppy sets:
+    a) Use Apple II FORMATTER program to format new floppies.
+    b) Use Apple II RDMAKEFLOP program to copy and verify.
+
+Requirement checklist:
+   a) a catalog of the floppy, with dates and version
+      numbers, to be filed with floppy history
+   -- Use CRCLIST for CPMAP1, by hand for CPMAP2.
+   b) a CRC checksum of the floppy
+   -- Use RDMAKEFLOP on Apple II.
+   c) cross reference to source file names
+   -- Tell Jennifer so she may update binders.
+   d) checksum for each source file
+   -- Use CRCLIST on Apple II, checksum CPMAP1, CRCK4 for CPMAP2.
+   e) mirror tape of all source files
+   -- Use AMIRROR on Apple II, store CPMAP1, CPMAP2.
+   f) listings of all compilations and assemblies
+
+
+$P
+
+
+
+Apple III notes:
+
+1. Source files:
+    a) Source files are in A3DEV:, A2DEV2: and A2DEV1:
+
+2. Code files :
+    a) Code files are compiled into A3CODE:
+
+3. Create master diskette:
+    a) Use filer on Apple /// to create master diskette.
+
+4. Reproduce floppy sets:
+    a) Use Apple /// UTILS programs to copy diskette
+    b) Use Apple II RDMAKEFLOP program to verify copies.
+
+Requirement checklist:
+   a) a catalog of the floppy, with dates and version
+      numbers, to be filed with floppy history.
+   -- Use CRCLIST on Apple ///.
+   b) a CRC checksum of each floppy
+   -- Use RDMKEFLOP program on Apple II.
+   c) cross-reference to surce file names
+   -- Tell Jennifer so she can update the binders.
+   d) checksum for each source file
+   -- Use CRCLIST on Apple II, checksum  A3DEV, A3CODE.
+   e) mirror tape of all source files
+   -- Use AMIRROR on Apple II, store A3DEV
+   f) listings of all compilations and assemblies
+
+$P
+AppleShare notes:
+
+1. Source files:
+    a) Source files are in OASHR
+    b) Volume 14, drive 1 of Basics area
+
+2. Code files:
+    a) Code files are in OASHR
+
+3. Create the master floppy:
+    a) Use filer to create master diskette for Pascal
+    b) Use Copy3 to create master diskette for Basics
+
+4. Reproduce floppy sets:
+    a) Use Apple II FORMATTER program to format new floppies
+    b) Use Apple II RDMAKEFLOP program to copy and verify
+
+Requirement checklist:
+
+   a) a catalog of the floppy, with dates and version
+      numbers, to be filed with floppy history.
+   b) a CRC checksum of the floppy
+   -- Use RD MAKEFLOP on Apple II.
+   c) cross reference to source file names
+   -- Tell Jennifer so she can update the binders.
+   d) checksum for each source file
+   -- Use Apple II CRCLIST.
+   e) mirror tape of all source files
+   -- Use AMIRROR on Apple II,store OASHR,
+   f) listings of compilations ans assemblies
+
+
+
+$P
+
+CP/M notes:
+
+1. Source files:
+    a)
+    b)
+
+2. Code files:
+    a)
+    b)
+
+3. Create the master diskette:
+    a)
+    b)
+
+4> Reproduce floppy sets:
+    a)
+    b)
+    c)
+
+Requirements checklist:
+
+    a) a catalog of the floppy, with dates and version
+       numbers
+    -- Needs to be done by hand.
+    b) a CRC checksum of the floppy
+    -- Use CRCK4 for CP/M.
+    c) cross-reference to source file names
+    -- Tell Jennifer so she can update the binders.
+    d) checksum for each source file
+    -- Use CRCK4 for CP/M.
+    e) mirror tape of all source files
+    -- Use MIRROR on CP/M.
+    f) listings of all compilations and assemblies
+
+
+$P
+
+TRS-80 I,III notes:
+
+1. Source files:
+    a) Source files ar in A3DEV.
+
+2. Code files:
+    a) Code files are compiled into A3CODE.
+
+3. Create master diskette:
+    a)
+    b)
+    c)
+    d)
+
+4. Reproduce floppy sets:
+    a)
+    b)
+    c)
+    d)
+
+Requirements checklist:
+
+    a) a catalog of the floppy, with dates and version
+       numbers
+    -- Use CRCLIST on Apple ///.
+    b) a CRC checksum of the floppy
+    -- Use RDMAKEFLOP on Apple II.
+    c) cross-reference to source file names
+    -- Tell Jennifer so she can update the binders.
+    d) checksum for each source file
+    -- Use CRCLIST on Apple II, checksum A3DEV, A3CODE.
+    e) mirror tape of all source files
+    -- Use AMIRROR on Apple II, store A3DEV
+    f) listings of all compilations and assemblies
+
+
+
+$P
+
+LSI-11 notes:
+
+1. Source files:
+    a) Source files are in A3DEV.
+
+2. Code files:
+    a) Code files files compiled into A3CODE.
+
+3. Create the master diskette:
+    a)
+    b)
+    c)
+    d)
+
+4. Reproduce floppy sets:
+    a)
+    b)
+    c)
+    d)
+
+Requirements checklist:
+
+   a) a catalog of the floppy, with dates and version
+      numbers, to be filed with floppy history.
+   -- Use CRCLIST on Apple II.
+   b) a CRC checksum of the floppy
+   -- Use RDMAKEFLOP on Apple III.
+   c) cross-reference to source file names
+   -- Tell Jennifer so she can update the binders.
+   d) checksum for each source file
+   -- Use CRCLIST on Apple II, checksum A3DEV, A3CODE.
+   e) mirror tape of all source files
+   -- Use AMIRROR on Apple II, store A3DEV.
+   f) listings of all compilations and assemblies
+
+
+$P
+
+
+Firmware notes:
+
+1. Source files:
+    a) Source files are in CF17.
+
+2. Code files:
+    a) Code files are compiled into:
+
+3. Create the master diskette:
+    a)
+    b)
+
+4. Reproduce floppy sets:
+    a)
+    b)
+
+Requirements checklist:
+
+    a) cross-reference to source file names
+    -- Tell Jennifer so she can update the binders.
+    b) checksum for each source file
+    -- Use CRCLIST on Apple II, checksum CF17.
+    c) mirror tape of all source files
+    -- Use AMIRROR on Apple II, store CF17.
+    d) listings of all assemblies
+
+
+
+$P
+
+Rom notes:
+
+1. Source files:
+    a) Source files are in CF17.
+
+2. Code files:
+    a) Code files are assembled into CF17.
+
+3. Create the master diskette:
+    a)
+    b)
+
+4. Reproduce floppy sets:
+    a)
+    b)
+
+Requirements checklist:
+
+    a) cross reference to source file names
+    -- Tell Jennifer so she can update the binders.
+    b) checksum for each source file
+    -- Use CRCLIST on Apple II, checksum CF17.
+    c) mirror tape of all source files
+    -- Use AMIRROR on Apple II, store CF17.
+    d) listings of all compilations and assemblies
+
+$P
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,119 @@
+
+{DATA FOR omninet disk burn in PROGRAM}
+
+CONST
+   vers = '0.E3';
+   maxadr = 63; {maximum omninet address}
+   mxerr = 40; {max # of trks reported in error}
+   srlsiz = 12;
+   slt = 5; {always omninet for disk commands}
+   driv = 1; {always drive 1}
+   timin = 0;
+   timsec = 5; {timeout period = 5 secs}
+   sctrquiet = 'Q';{test disk}
+   dumperr = 'P'; {return errors}
+   bivrzn = 'W';
+   dumpmem = 'V';
+   modmem = 'Z';
+   biprep = 'BI.DATA';
+   birpt = 'BIRPT';
+   Opart = 79;
+   Gpart = 71; {go message(GO)}
+
+  {omninet interface}
+   dsdskt = $A0; {data to disk socket}
+   dscskt = $B0; {short commands and control part of long messages}
+   mxretlen = 512; {max size of block returned by disk server}
+
+
+TYPE
+
+
+  bits = 0..255;
+  {8 bit unsigned value}
+
+  lw = PACKED RECORD {4 byte lowng word returned by burinin}
+               lsb1, {lsb of least significant word}
+               lsb2, {msb of least sig. word}
+               msb1, {lsb of most sig. word}
+               msb2:  byte; {msb of most sig. word}
+              END;
+
+  trkrpt = PACKED RECORD used: BOOLEAN; trk: INTEGER; hrd,sft: INTEGER END;
+
+  trkerr = PACKED RECORD trk,hrd,sft: INTEGER; END;
+
+  station = RECORD  srl: STRING[srlsiz] ; {disk serial number}
+                    status: byte; {0=unused, -1=used, -2=used but has received invalid data in a report}
+                    seeks: longint;
+                    time: STRING[srlsiz]; {hr/min/sec}
+                    date: STRING[srlsiz]; {month day, year}
+                    rtime: STRING[srlsiz]; {hr/min/sec}
+                    rdate: STRING[srlsiz]; {month day, year}
+                    errs: ARRAY[1..mxerr] OF trkrpt; {disk errors}
+            END;
+
+  diskrpt = RECORD CASE BOOLEAN OF
+              TRUE: (rpt: RECORD
+                            rcode: byte;
+                            num:   byte; {number of trks reported in error}
+                            seeks: lw;
+                            err:   PACKED ARRAY[1..61] OF trkerr;
+                          END );
+              FALSE: (blk: PACKED ARRAY[1..2050] OF byte );
+            END;
+
+
+  rptimg = RECORD
+             rcode: byte;
+             num:   byte; {number of trks reported in error}
+             seeks: lw;
+             err:   PACKED ARRAY[1..61] OF trkerr;
+           END ;
+
+
+  VAR
+
+  rcd: byte;
+
+  ch: CHAR;
+
+  vectr : sndrcvstr;
+
+  clock : clkpb;
+
+  netwrk: ARRAY[0..maxadr] OF station;  {array of disks under test}
+
+  reprt: TEXT ; {file type for file output of status}
+
+  filout: BOOLEAN; {true if write to file}
+
+  morrpt: boolean; {true if reporting more than 1 station}
+
+  filstr,instr: STRING80; {used by getstring}
+
+  stn : cdaddr; {used to access disk under test}
+
+  j,i,rslt: INTEGER;
+
+  o,r :  RECORD
+
+          rslt: ocrsltrcd;    {omninet result record}
+
+          ctrl: RECORD CASE BOOLEAN OF {!!!!!MUST FOLLOW rslt IMMEDIATELY!!!!}
+                  true: (byt: ARRAY[1..4] OF byte) ;
+                 false: (int: ARRAY[1..2] OF INTEGER);
+                END;
+       END;
+
+  dreport: diskrpt;
+
+  debug: BOOLEAN; {debug on/off flag}
+
+  dt: clkstr40;
+
+  curstn: integer; {current station address for continuous monitoring}
+
+  pfil: FILE; {used to read bi prep blocks in}
+
+  autofile: BOOLEAN; {true if automatically generate a text file after completing a cycle}

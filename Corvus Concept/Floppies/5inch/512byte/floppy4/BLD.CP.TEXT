@@ -1,0 +1,16 @@
+clrwnd
+;
+; BLD.CP -- Build Corvus Plus Boot PROM
+;
+delfil -q cp.prom.text cp.prom.obj cp.prom
+crunch -q /newprom
+vsippp prom cp -a
+asm68k cp.prom
+delfil -q cp.prom.text
+crunch -q /newprom
+linker cp.prom
+delfil -q cp.prom.obj
+crunch -q /newprom
+;
+; Finished ....
+;

@@ -1,0 +1,31 @@
+/* a C program */
+#include "/big/stdio.m"
+#define size   8190    /* size of number array */
+#define false  0
+#define true   1
+#define ntimes 10
+       char    flag[size + 1];
+main() /* compute primes by sieve of Eratosthenes */
+{
+       int     i,j,k,count,prime;
+
+       printf(" 10 iterations  \n");
+       for (i=1; i <= ntimes; i++)
+       {
+               count = 0;
+               for (j=0;j<=size;j++)   /* initialise aray */
+                       flag[j]=true;
+               for (j=0;j<=size;j++)
+               {
+                       if (flag[j] == true)
+                    {
+                       prime = j + j + 3;
+                       for (k=j+prime;k<=size; k+=prime)
+                               flag[k]=false;/*discard multiples*/
+               count++;
+                    }
+               }
+
+               printf("%d primes,\n",count);
+       }
+}

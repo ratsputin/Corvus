@@ -1,0 +1,27 @@
+
+Directory of UCSD disk image file 'bootmgr_1feb84.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 19 files,  0 to 6 (6), eov 500, size 100, free 19
+
+ 1: CC.KERNEL       Data  1-Feb-84    6-  60(  54), 27648+512= 28160 bytes
+ 2: CC.SETUP        Data  1-Feb-84   60-  97(  37), 18944+512= 19456 bytes
+ 3: CC.DISPAT       Data  1-Feb-84   97- 126(  29), 14848+512= 15360 bytes
+ 4: CC.EXEC         Data  1-Feb-84  126- 142(  16),  8192+512=  8704 bytes
+ 5: CC.FILMGR       Data  1-Feb-84  142- 194(  52), 26624+512= 27136 bytes
+ 6: CC.WNDMGR       Data  1-Feb-84  194- 230(  36), 18432+512= 18944 bytes
+ 7: DRV.DISPHZ      Data  1-Feb-84  230- 241(  11),  5632+512=  6144 bytes
+ 8: DRV.DISPVT      Data  1-Feb-84  241- 252(  11),  5632+512=  6144 bytes
+ 9: DRV.KYBD        Data  1-Feb-84  252- 257(   5),  2560+512=  3072 bytes
+10: DRV.SYSTRM      Data  1-Feb-84  257- 264(   7),  3584+512=  4096 bytes
+11: DRV.TIMER       Data  1-Feb-84  264- 268(   4),  2048+512=  2560 bytes
+12: DRV.FDISK1      Data  1-Feb-84  268- 272(   4),  2048+512=  2560 bytes
+13: DRV.FDISK2      Data  1-Feb-84  272- 277(   5),  2560+512=  3072 bytes
+14: CSD.DEFAULT     Data  1-Feb-84  277- 279(   2),  1024+512=  1536 bytes
+15: CSK.DEFAULT     Data  1-Feb-84  279- 281(   2),  1024+512=  1536 bytes
+16: ASSIGN          Data  1-Feb-84  281- 294(  13),  6656+512=  7168 bytes
+17: DRV.OMNINET     Data  1-Feb-84  294- 297(   3),  1536+512=  2048 bytes
+18: BOOT.CONCEPT    Data  1-Feb-84  297- 307(  10),  5120+512=  5632 bytes
+19: BOOTMGR         Data  1-Feb-84  307- 400(  93), 47616+512= 48128 bytes

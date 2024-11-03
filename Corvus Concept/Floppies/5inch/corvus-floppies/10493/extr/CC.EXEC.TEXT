@@ -1,0 +1,457 @@
+{ CC.EXEC.TEXT ---------------------------------------------------------}
+{
+{       CC.EXEC -- Command File Processing for Corvus CONCEPT
+{
+{       (c) Copyright 1982 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  02-08-82  SVS  Original program (SHELL.TEXT)
+{       v 1.1  07-01-82  LEF
+{       v 1.2  10-11-82  LEF  Minor modifications
+{       v 1.3  12-06-82  LEF  Minor modifications
+{       v 1.4  07-17-83  LEF  Window processing modifications
+{                             Add BrkPress processing
+{       v 1.5  01-18-84  KB   Added parameter substitution
+{
+{-----------------------------------------------------------------------}
+
+{$R-}
+{$I-}
+
+program exec;
+
+USES {$U /CCOS/OS.GLOBALS} globals;
+
+CONST version = '1.5';
+
+{1.4} msg04 = 'file';
+{1.4} msg81 = 'no code memory';
+{1.4} msg82 = 'code read error';
+{1.4} msg83 = 'not code';
+{1.4} msg84 = 'link?';
+{1.4} msg85 = 'can not open code file';
+{1.4} msg86 = 'too many processes';
+{1.4} msg87 = 'no data memory';
+{1.4} msg88 = 'terminated by user';
+{1.4} msg89 = 'error ';
+{1.4} msg90 = 'syntax error';
+{1.4} msg91 = 'file not found'; { arg error }
+{1.4} msg92 = 'window function error';
+{1.4} msg93 = 'press <space> to continue';
+{1.4} msg94 = 'input file error';
+{1.4} msg95 = 'output file error';
+{1.4} msg96 = 'output volume is READ ONLY';
+{1.5} msg97 = 'invalid parameter substitution';
+
+TYPE  pInteractive = ^interactive;
+
+VAR   largc: integer;
+      largv: pstringtable;
+      cmdline: str120;
+      command: string64;
+      linput,loutput: interactive;
+      pinput,poutput: pInteractive;
+      inname,outname: string64;
+      PromptFlag: Boolean;
+      fid: string64; iost: integer;
+      f: pInteractive;
+      SysComPtr:  pSysCom;
+      ppSysCom:   ^pSysCom;
+      extcrt:     boolean;
+{1.4} kybd:       integer;
+    
+procedure xcli (fcmdline: pStr120;
+                var pcommand: pString64;
+                var pinname,poutname: pString64;
+                var largc: integer;
+                var largv: pStringtable;
+                var ErrorFlag,ArgError,
+                    NewInput,NewOutput: Boolean); external;
+
+{$P}
+{ uppercase -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE uppercase(pstring: pstring64);
+      var i: integer;
+      begin
+      for i := 1 to length(pstring^) do
+          if (pstring^[i] >= 'a') and (pstring^[i] <= 'z') then
+             pstring^[i] := chr(ord(pstring^[i])-ord('a')+ord('A'));
+      end;
+
+{ wrST ----------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE wrST (st: string80);
+      begin
+      if (st[1] >= 'a') AND (st[1] <= 'z') then
+          st[1] := chr(ord(st[1])-ord('a')+ord('A'));
+      write (st);
+      end;
+
+{ wrlnST --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE wrlnST (st: string80);
+      begin wrST (st); writeln; end;
+
+{ SelWindow -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SelWindow (wnd: integer);
+{1.4} var iost: integer; ch: char; PgmWndRcd: pWndRcd;
+      begin
+{1.4} PgmWndRcd := NIL;
+      if wnd = 99
+{1.4}     then unitstatus (1,PgmWndRcd^,Wselect)
+          else unitstatus (1,SysComPtr^.WndowTbl^[wnd]^,Wselect);
+      end;
+
+{ gotoxy --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE gotoxy (x,y: integer);
+      begin write (chr(27),'=',chr(x),chr(y)); end;
+
+{ eraseall ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE eraseall;
+      begin write (chr(27),'J'); end;
+
+{ eraseol -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE eraseol;
+      begin write (chr(27),'K'); end;
+
+{ BrkPress ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION BrkPress: boolean;
+{1.4} var i: integer;
+{1.4} begin unitstatus (kybd,i,1); BrkPress := i = 1; end;
+
+{ ReportError ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+procedure ReportError (st: string64);
+{1.4} begin wrlnST (st); write (chr(07)); end;
+
+{ echo ----------------------------------------------------------------}
+{----------------------------------------------------------------------}
+procedure echo(var foutput: interactive);
+      var i: integer;
+      begin
+      for i := 1 to largc do write(foutput,largv^[i]^.s,' ');
+      writeln(foutput);
+      end; {echo}
+
+{$P}
+{ pause ---------------------------------------------------------------}
+{----------------------------------------------------------------------}
+procedure pause(var finput,foutput: interactive);
+      var i: integer; ch: char;
+      begin
+{1.3} repeat
+          if largc = 0
+              then write (foutput,'Continue')
+              else for i := 1 to largc do begin
+                  write (foutput,largv^[i]^.s);
+                  if i <> largc then write (foutput,' ');
+                  end;
+          write (foutput,'? [Y/N]: '); read (finput,ch);
+          if not eoln (finput) then writeln (foutput);
+{1.3}     if eoln (finput) then ch := ' ';
+{1.3}     if ch = 'y' then ch := 'Y';
+{1.3}     if ch = 'n' then ch := 'N';
+{1.3}     if ch = 'N' then halt (8);
+{1.3}     until ch = 'Y';
+      end; {pause}
+
+procedure hexout(fval: longint; n: integer);
+      var i,index: integer; hex: packed array[1..16] of char;
+          nibbles: packed array[0..7] of 0..15;
+      begin
+      moveleft(fval,nibbles,4);
+      hex := '0123456789ABCDEF';
+      for i := 8 - n to 7 do
+          begin
+          if odd(i) then index := i - 1 else index := i + 1;
+          write(hex[nibbles[index]+1]);
+          end;
+      end; {hexout}
+
+procedure sp(fargv: pstringtable; fargc: integer);
+      label 8,9;
+      var lsyscom: ^psyscom; newsp: longint; lmemmap: ^memrec;
+          ch: char; i,k: integer; RestartFlag,startup: Boolean;
+      begin
+      lsyscom := pointer(SYSCOMPLOC);
+      lmemmap := @lsyscom^^.memmap^;
+      RestartFlag := FALSE; startup := FALSE;
+      if fargc = 0 then goto 8;
+      if fargc >= 2 then begin
+           uppercase (@fargv^[2]^.s);
+           if fargv^[2]^.s = 'STARTUP' then startup := TRUE;
+           end;
+      if not startup and (lsyscom^^.numpros > 1)
+          then begin writeln('Not first exec'); goto 9; end;
+      newsp := 0; i := 1;
+      while i <= length(fargv^[1]^.s) do begin
+          ch := fargv^[1]^.s[i];
+          if ch >= 'a' then ch := chr(ord(ch) - 32);
+          if (ch >= '0') and (ch <= '9')
+             then k := ord(ch) - ord('0')
+             else if (ch >= 'A') and (ch <= 'F')
+                 then k := ord(ch) - ord('A') + 10
+                 else begin writeln('hex?'); goto 9; end;
+          newsp := newsp*16 + k; i := i + 1;
+          end;
+      if odd(newsp) then newsp := newsp - 1;
+      if (newsp >= lmemmap^.hicode) or (newsp <= lmemmap^.lodata)
+          then begin writeln('range?'); goto 9; end;
+      if newsp <> lmemmap^.hidata
+          then begin
+              lmemmap^.hidata := newsp; lmemmap^.locode := newsp;
+              lsyscom^^.numpros := 1; halt (9);
+              end
+          else if startup then goto 9;
+8:    write('sp = '); hexout(lmemmap^.hidata,8); writeln;
+9:    end; {sp}
+
+procedure docommand(fcmdline: pstr120; var f: interactive);
+      var ErrorFlag,ArgError,NewInput,NewOutput: Boolean;
+          FileError,CantRun,RunError,finished: Boolean;
+          i,iost: integer; heap: pBytes;
+          pcommand,pinname,poutname: pString64;
+{1.5}     newcmd: Str120;
+
+      procedure callpgm;
+          var i: integer;
+          begin
+          i := call(command,pinput^,poutput^,largv^,largc);
+{1.3}     SelWindow (99);
+          CantRun := i > 0; RunError := i < 0;
+          if CantRun then begin
+{1.4}          wrST (msg04 {File}); write (' "',command,'": ');
+               case i of
+{1.4}                  1: wrST (msg81 {no code memory});
+{1.4}                  2: wrST (msg82 {code read error});
+{1.4}                  3: wrST (msg83 {not code});
+{1.4}                  4: wrST (msg84 {link?});
+{1.4}                  5: wrST (msg85 {can not open code file});
+{1.4}                  6: wrST (msg86 {too many processes});
+{1.4}                  7: wrST (msg87 {no data memory});
+{1.4}                  8: wrST (msg88 {terminated by user});
+{1.4}          otherwise: begin
+{1.4}                     wrST (msg89 {error}); write (' ',i:1);
+{1.4}                     end;
+                    end; {case}
+              writeln;
+              end;
+          end;
+
+      procedure callsyspgm (pgm,fnc: String16);
+          var i: integer;
+          begin
+          new(largv^[largc+1]);
+          for i := largc downto 1 do largv^[i+1] := largv^[i];
+          largv^[1] := @fnc;
+          largc := largc+1;
+          command := concat ('!CC.',pgm);
+          callpgm;
+          end;
+
+{1.5} function SubParameters(pcmd: pstr120): pstr120;
+{1.5}     {parameter substitution strings are a '#' followed }
+{1.5}     {by a character number from '0' to '9', inclusive. }
+{1.5}     {The number specifies which parameter following the}
+{1.5}     {command file name is used for substitution.       }
+{1.5}     {Parameter 0 is the command file name.  A parameter}
+{1.5}     {may be inserted into a string.  To have a '#' in a}
+{1.5}     {line put two #'s in the line, the substituter will}
+{1.5}     {drop one.                                         }
+{1.5}     var i,l,n: integer;
+{1.5}     begin
+{1.5}     newcmd := '';
+{1.5}     l := length(pcmd^); if l > 120 then l := 120;
+{1.5}     i := 1; ArgError := FALSE;
+{1.5}     while (i <= l) and (NOT ArgError) do begin
+{1.5}        if (pcmd^[i] = '#') and (i + 1 <= l) then begin
+{1.5}            if (pcmd^[i+1] in ['0'..'9']) then begin
+{1.5}                n := ord(pcmd^[i+1]) - ord('0');
+{1.5}                if n < argc then
+{1.5}                    {append arv[n+1] onto newcmd}
+{1.5}                    newcmd := concat (newcmd, argv[n+1]^)
+{1.5}                else begin
+{1.5}                    wrlnST(msg97); {invalid param}
+{1.5}                    ArgError := TRUE;
+{1.5}                    end;
+{1.5}                i := i + 1;  {did 2 chars in pcmd^}
+{1.5}                end  {2nd if then}
+{1.5}            else begin   {add '#' to newcmd}
+{1.5}                newcmd := concat (newcmd, '#');
+{1.5}                if (pcmd^[i+1] = '#') then i := i + 1; {drop other #}
+{1.5}                end;
+{1.5}            end  {1st if then}
+{1.5}        else begin                         {add character to line}
+{1.5}            newcmd := concat (newcmd, ' ');
+{1.5}            newcmd[length(newcmd)] := pcmd^[i];
+{1.5}            end;
+{1.5}        i := i + 1; {always do 1 character}
+{1.5}        end; {while}
+{1.5}     SubParameters := @newcmd;
+{1.5}     end;
+
+      begin {docommand}
+      pcommand := @command; pinname := @inname; poutname := @outname;
+      {remove leading blanks from command line}
+      finished := FALSE;
+      repeat
+          if length(fcmdline^) = 0 then exit (docommand);
+          if fcmdline^[1] <> ' '
+              then finished := TRUE
+              else delete (fcmdline^,1,1);
+          until finished;
+
+{1.5} fcmdline := SubParameters(fcmdline);
+      if fcmdline^[1] in [';','|','{','}'] then begin
+          writeln (fcmdline^); exit (docommand); end;      {comment line}
+{1.5} if ArgError then begin {invalid parameter substitution}
+{1.5}    if PromptFlag then exit (docommand)
+{1.5}                  else halt(-1);
+{1.5}    end;
+
+      FileError := false; CantRun := false; RunError := false;
+      mark (heap);
+      {CLI does removal of leading blanks}
+      xcli (fcmdline,         {pStr120}
+            pcommand,         {pString64}
+            pinname,poutname, {pString64}
+            largc,            {integer}
+            largv,            {pStringtable}
+            ErrorFlag,ArgError,NewInput,NewOutput);
+      if      ErrorFlag     then ReportError (msg90 {Syntax error})
+      else if ArgError      then ReportError (msg91 {Arg error})
+      else if command <> '' then begin
+
+          if command = 'DIR'    then command := 'LSTVOL';
+          if command = 'ERA'    then command := 'DELFIL';
+          if command = 'DEL'    then command := 'DELFIL';
+          if command = 'REN'    then command := 'RENFIL';
+          if command = 'COPY'   then command := 'CATFIL';
+          if command = 'TYPE'   then command := 'LSTFIL';
+
+          if command = 'LS'     then command := 'LSTVOL';
+          if command = 'RM'     then command := 'DELFIL';
+          if command = 'CD'     then command := 'SETVOL';
+          if command = 'CRUNCH' then command := 'KRUNCH';
+          if command = 'MV'     then command := 'RENFIL';
+          if command = 'CAT'    then command := 'CATFIL';
+          if command = 'CATT'   then command := 'LSTFIL';
+          if command = 'MAKE'   then command := 'MAKFIL';
+          if command = 'DATE'   then command := 'SETDAT';
+          if command = 'TIME'   then command := 'SETTIM';
+
+{1.5}     if command = 'DO'     then command := '!CC.EXEC';
+
+          if NewInput then begin
+              reset(linput,inname); iost := ioresult;
+              if iost <> 0 then begin
+                  FileError := TRUE;
+{1.4}             { mesg -- Input file error (IORESULT = n) }
+{1.4}             wrST (msg94);
+{1.4}             writeln (' (IORESULT = ',iost:1,')');
+                  end;
+              pinput := @linput;
+              end
+          else pinput := @f;
+
+          if NewOutput then begin
+              rewrite(loutput,outname); iost := ioresult;
+              if iost <> 0 then begin
+                  FileError := TRUE;
+                  if iost = 16
+{1.4}                { mesg -- Output volume is READ ONLY }
+{1.4}                then wrlnST (msg96)
+{1.4}                { mesg -- Output file error (IORESULT = n) }
+{1.4}                else begin wrST (msg95);
+{1.4}                    writeln (' (IORESULT = ',iost:1,')');
+{1.4}                    end;
+                  end;
+              poutput := @loutput;
+              end
+          else poutput := @output;
+
+          if      FileError          then begin end
+          else if command = 'LSTVOL' then callsyspgm ('FILMGR','LSTVOL')
+          else if command = 'DELFIL' then callsyspgm ('FILMGR','DELFIL')
+          else if command = 'SETVOL' then callsyspgm ('FILMGR','SETVOL')
+          else if command = 'KRUNCH' then callsyspgm ('FILMGR','KRUNCH')
+          else if command = 'RENFIL' then callsyspgm ('FILMGR','RENFIL')
+          else if command = 'CPYFIL' then callsyspgm ('FILMGR','CPYFIL')
+          else if command = 'CATFIL' then callsyspgm ('FILMGR','CATFIL')
+          else if command = 'LSTFIL' then callsyspgm ('FILMGR','LSTFIL')
+          else if command = 'MAKFIL' then callsyspgm ('FILMGR','MAKFIL')
+          else if command = 'SETDAT' then callsyspgm ('SYSMGR','SETDAT')
+          else if command = 'SETTIM' then callsyspgm ('SYSMGR','SETTIM')
+          else if command = 'SP'     then sp (largv,largc)
+          else if command = 'PAUSE'  then pause (pinput^,poutput^)
+          else if command = 'ECHO'   then echo (poutput^)
+{1.3}     else if command = 'CLRWND' then write (poutput^,'\1BJ')
+          else callpgm;
+          if NewInput then
+              close(linput,NORMAL);
+          if NewOutput then
+{1.5}         if FileError or CantRun or ArgError
+                  then close(loutput,NORMAL)
+                  else close(loutput,LOCK);
+          end;
+      release (heap);
+      if not PromptFlag
+          then if FileError or ArgError or ErrorFlag or
+                  CantRun or RunError then halt(-1);
+      end; {docommand}
+
+procedure commandfile (f: pInteractive);
+      var ch: char;
+      begin
+{1.4} if BrkPress then;
+      if PromptFlag then write('% ');
+      readln(f^,cmdline);
+      while not eof(f^) do begin
+{1.4}       if BrkPress then begin
+{1.4}           write ('Terminate exec file? [Y/N]: '); read (ch);
+{1.4}           if eoln then ch := ' ' else writeln;
+{1.4}           if ch = 'y' then ch := 'Y';
+{1.4}           if ch = 'Y' then halt (8);
+{1.4}           end;
+            docommand (@cmdline,f^);
+            if PromptFlag then write ('% ');
+            readln (f^,cmdline);
+            end;
+      if PromptFlag then writeln;
+      end; {commandfile}
+
+
+      begin {exec}
+{1.3} if argc = 0 then exit (exec);
+{1.3} ppSysCom := pointer(SysComPLoc); SysComPtr := ppSysCom^;
+{1.3} with SysComPtr^.sysdevtab^ do
+{1.3}     if dt[0].driver = dt[MAXDEV].driver
+{1.3}         then extcrt := TRUE else extcrt := FALSE;
+{1.4} kybd := SysComPtr^.sysdevtab^.maxdevno - 1;
+{1.3} if argv[1]^ = '%' then PromptFlag := TRUE else PromptFlag := FALSE;
+      if PromptFlag
+          then commandfile (@input)
+          else begin
+               new (f);
+               fid := argv[1]^;
+               uppercase (@fid);
+               reset (f^,fid); iost := ioresult;
+               if (iost = 10) and (pos ('.TEXT',fid) = 0) then begin
+                   fid := concat (fid,'.TEXT');
+                   reset (f^,fid); iost := ioresult;
+                   end;
+               if iost = 0
+                   then commandfile (f)
+{1.3}              else ReportError (concat ('Can not open "',fid,'"'));
+{1.3}          SelWindow (99);
+               end;
+      end. {exec}
+

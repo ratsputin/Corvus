@@ -1,0 +1,22 @@
+
+Directory of UCSD disk image file 'dreen_4.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume DREEN.4 has 14 files,  0 to 6 (6), eov 500, size 0, free 14
+
+ 1: 4CCOS.BUGS      Data  6-Apr-84    6- 222( 216), 110592+276= 110868 bytes
+ 2: SYSTEM.COMSRV   Data 11-Jul-83  222- 245(  23), 11776+512= 12288 bytes
+ 3: SYSTEM.MISCINFO Data 15-May-88  245- 246(   1),   512+512=  1024 bytes
+ 4: SYSTEM.PASCAL   Data  9-Dec-81  246- 280(  34), 17408+512= 17920 bytes
+ 5: SYSTEM.STARTUP  Code 21-Sep-83  280- 312(  32), 16384+512= 16896 bytes
+ 6: P.CONFG         Data 17-Jan-88  312- 313(   1),   512+512=  1024 bytes
+ 7: P.CONFG.TEST3   Data 17-Jan-88  313- 314(   1),   512+512=  1024 bytes
+ 8: P.CONFG.TESTA   Data 17-Jan-88  314- 315(   1),   512+512=  1024 bytes
+ 9: P.SERV.TBL      Data 10-Nov-83  315- 316(   1),   512+512=  1024 bytes
+10: P.SERVER.BOOT   Data  2-Aug-83  316- 318(   2),  1024+512=  1536 bytes
+11: PSMGR           Data 22-Sep-83  318- 402(  84), 43008+512= 43520 bytes
+12: TSMGR           Data 22-Sep-83  402- 446(  44), 22528+512= 23040 bytes
+13: BOOT.PRINTSRV   Data 28-Sep-83  446- 448(   2),  1024+512=  1536 bytes
+14: 4THEODORE.TEXT  Text  0-Bad-100  448- 500(  52), 26624+512= 27136 bytes

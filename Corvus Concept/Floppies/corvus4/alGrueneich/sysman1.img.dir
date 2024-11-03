@@ -1,0 +1,25 @@
+
+Directory of UCSD disk image file 'sysman1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume SYSMAN1 has 17 files,  0 to 6 (6), eov 500, size 114, free 17
+
+ 1: CCOS.1.2.TEXT   Text 10-Jan-84    6-  26(  20), 10240+512= 10752 bytes
+ 2: CCOS.1.2A.TEXT  Text 10-Jan-84   26-  42(  16),  8192+512=  8704 bytes
+ 3: CITOH.TEXT      Text 10-Jan-84   42-  46(   4),  2048+512=  2560 bytes
+ 4: CLEANUP         Text 25-Jan-84   46-  50(   4),  2048+512=  2560 bytes
+ 5: DEVUTIL         Data 28-Oct-83   50- 107(  57), 29184+512= 29696 bytes
+ 6: DIABLO.TEXT     Text 10-Jan-84  107- 111(   4),  2048+512=  2560 bytes
+ 7: FIXIT           Data 10-Jan-84  111- 144(  33), 16896+512= 17408 bytes
+ 8: LOCK            Data  2-Jul-83  144- 164(  20), 10240+512= 10752 bytes
+ 9: MASTERLOCK      Data  2-Jul-83  164- 191(  27), 13824+512= 14336 bytes
+10: MOVE            Data 10-Jan-84  191- 223(  32), 16384+512= 16896 bytes
+11: NMOVE           Data 13-Oct-83  223- 276(  53), 27136+512= 27648 bytes
+12: OS.GBL.ASM.TEXT Text 10-Jan-84  276- 304(  28), 14336+512= 14848 bytes
+13: RATKO.DCOM.TEXT Text 26-Sep-83  304- 308(   4),  2048+512=  2560 bytes
+14: UNCAT           Data 10-Jan-84  308- 320(  12),  6144+512=  6656 bytes
+15: UNLOCK          Data  2-Jul-83  320- 340(  20), 10240+512= 10752 bytes
+16: USERKEYS.TEXT   Text 12-Jan-84  340- 344(   4),  2048+512=  2560 bytes
+17: ZAP             Data 10-Jan-84  344- 386(  42), 21504+512= 22016 bytes

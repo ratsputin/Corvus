@@ -1,0 +1,74 @@
+; File: pasinit.text
+; Date: 15-May-81
+;
+
+        IDENT   PASINIT
+        
+        GLOBAL  %_BEGIN,%_END,%_TERM
+        
+;
+; %_BEGIN - The initial routine when executing under UCSD
+;
+; Upon entry the stack is:
+;
+; |-----------|
+; |   Argc    |
+; |   Argv    |
+; | ^ output  |
+; |  ^ input  |
+; | Ret. Addr | <-- SP
+; |-----------|
+;
+
+%_BEGIN
+        RTS
+
+;
+; Once the main program has done a:
+;
+;       LINK    #xxx,A5
+;
+; the stack will be:
+;
+; |-----------|
+; |   Argc    |    +20
+; |   Argv    |    +16
+; | ^ Output  |    +12
+; |  ^ Input  |     +8
+; | Ret. Addr |     +4
+; |  Old A5   | <-- A5
+; |-----------|
+; |    ...    |
+; |  Globals  |
+; |    ...    |
+; |-----------| <-- SP
+;
+
+;
+; %_TERM - Next to last routine
+;
+
+%_TERM
+        RTS
+
+;
+; %_END - The Final Routine
+;
+
+%_END
+        RTS
+
+;
+; The resulting stack is:
+;
+; |-----------|
+; |   Argc    |
+; |   Argv    |
+; | ^ output  |
+; |  ^ input  |
+; | Ret. Addr | <-- SP
+; |-----------|
+;
+        
+        END
+

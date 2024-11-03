@@ -1,0 +1,19 @@
+
+Directory of UCSD disk image file 'unlab_crtdrvsrc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 11 files,  0 to 6 (6), eov 500, size 112, free 11
+
+ 1: OS.GBL.ASM.TEXT Text  5-Aug-83    6-  34(  28), 14336+512= 14848 bytes
+ 2: FIND            Data  7-Mar-83   34-  48(  14),  7168+512=  7680 bytes
+ 3: DRV.HCRT        Data 27-Apr-83   50-  61(  11),  5632+512=  6144 bytes
+ 4: DRV.HCRT.G.TEXT Text 21-Apr-83   61- 115(  54), 27648+512= 28160 bytes
+ 5: DRV.HCRT.I.TEXT Text 12-Jul-82  115- 121(   6),  3072+512=  3584 bytes
+ 6: DRV.HCRT.TEXT   Text 27-Apr-83  121- 207(  86), 44032+512= 44544 bytes
+ 7: DRV.VCRT        Data 15-Jun-83  207- 218(  11),  5632+512=  6144 bytes
+ 8: DRV.VCRT.G.TEXT Text 21-Apr-83  218- 272(  54), 27648+512= 28160 bytes
+ 9: DRV.VCRT.I.TEXT Text 15-Jun-83  272- 282(  10),  5120+512=  5632 bytes
+10: DRV.VCRT.TEXT   Text 15-Jun-83  282- 374(  92), 47104+512= 47616 bytes
+11: DRV.XCRT.T.TEXT Text  3-Jan-82  374- 390(  16),  8192+512=  8704 bytes

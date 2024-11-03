@@ -1,0 +1,97 @@
+
+
+         From :  Keith Ball
+         To   :  John Nguyen
+         Date :  31 October 1983
+
+         Re   :  New Drive command
+
+
+         Test and set/clear byte in 512 byte sector
+
+         Command code value
+
+            xxx (decimal)
+            $xx (hexidecimal)
+
+
+         Bytes sent to drive :
+
+         byte 1  COMMAND CODE
+              2  OPERATION CODE
+              3  SECTOR
+              4    NUMBER
+              5    (d,lsb,msb)
+              6  BYTE
+              7    INDEX  (lsb,msb)
+              8  MASK
+
+         This specification uses the same sector addressing as
+         specified in John's Bank and Drive command document.
+
+         OPERATION CODE determines the type of operation to be
+         performed.  Values range from 0 to 2, inclusive.  0
+         means no operation, 1 means clear, 2 means set and all
+         other values are invalid.
+
+         BYTE INDEX is the offset from the first byte of the
+         specified sector to the desired byte.  Values range from
+         0 to 511, inclusive.  An index value of 0 selects the
+         first byte in the 512 byte sector, while a value 511
+         selects the last byte.
+
+         MASK is a bit mask specifying which bits within the byte
+         selected are operated upon.  A mask bit with a value of
+         1 means to perform the operation on the corresponding
+         bit in the selected byte.  If the mask bit is 0 the bit
+         is ignored.  Example, if mask bit 7 is 1 then perform
+         the operation on bit 7 of the byte selected.
+
+
+         Bytes received from drive :
+
+         byte 1 RESULT CODE
+              2 test byte before operation
+.pg
+         RESULT CODE is the standard set of disk result codes
+         returned for a disk operation.  Errors specific to this
+         command are :
+
+               a) invalid sector number,
+               b) invalid byte index,
+               c) invalid operation code.
+
+         Disk result codes for any other possible disk operation
+         errors are also returned.
+
+         The second byte returned is the value of the byte
+         selected before the specified operation is performed.
+         This is the test result.
+
+
+         Example :
+
+         A byte within the 512 byte sector $37 (hex) with a byte
+         index of $76 (hex) has a value of $52 (hex).
+
+         The host sends the following drive command :
+
+          byte  value       comment
+           1     $xx        command code
+           2     $02        operation code = set bits
+           3     $01        sector
+           4     $37          number
+           5     $00          (d,lsb,msb)
+           6     $76        byte
+           7     $00         index  (lsb,msb)
+           8     $0F        mask = set all low bits
+
+         The host receives :
+
+          byte  value       comment
+           1     $00        result code (assume it worked)
+           2     $52        test byte before operation
+
+         After the command the byte within the 512 byte sector
+         $37 (hex) with a byte index of $76 (hex) has a value of
+         $5F (hex).

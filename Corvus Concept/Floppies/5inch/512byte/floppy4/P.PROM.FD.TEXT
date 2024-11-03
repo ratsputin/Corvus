@@ -1,0 +1,978 @@
+;
+; File: CC.PROM.FD.TEXT
+; Date: 13-May-83
+; By:   Ravi Luthra
+;       Keith Ball
+;
+
+;
+;       Fboot -- Floppy disk boot processing
+;
+Fboot   move.b  d0,CPbtslot.w       ;set boot slot number
+        move.b  d0,CPosslot.w       ;set OS slot number
+        clr.b   CPbtsrvr.w          ;set boot server number             0.7
+        pea     FDblkIO             ;set boot disk blk i/o subr pointer
+        move.l  (sp)+,CPblkio.w     ;*
+        pea     FDsecIO             ;set boot disk sector i/o subr pointer
+        move.l  (sp)+,CPdskio.w     ;*
+        moveq   #0,d0               ;                                   0.7
+        move.b  d0,CPossrvr.w       ;set OS server number               0.7
+        move.w  d0,CPosblk+1.w      ;set OS volume block number         0.7
+        move.b  d0,CPosdrv.w        ;set OS volume drive number         0.7
+        bsr     FDI8sssd            ;set up floppy constants
+        bsr     FDinit              ;initialize floppy drive
+        blt.s   Fboot90             ;just return if error
+                                    ;
+Fboot1  move.l  #USRbase,a0         ;get block buffer pointer
+        moveq   #0,d0               ;
+        move.w  d0,d1               ;
+        moveq   #DskRead,d5         ;get read block function code
+                                    ;
+        bsr.s   FDblkIO             ;read block 1 of boot code
+        blt.s   Fboot90             ;just return if error
+        bsr.s   FDblkIO             ;read block 2 of boot code
+        blt.s   Fboot90             ;just return if error
+        move.l  #USRbase,a0         ;get block buffer pointer
+                                    ;
+Fboot90 rts                         ;return
+
+        page    ;FDblkIO
+;
+; PHILOSOPHY:  The user views floppy as a set of 512 byte blocks.
+;              The driver then translates this block to track address, sector
+;              address, side.
+;              It then makes the necessary number of request to read sectors.
+;              Partial sectors are not read or written, the excess is ignored.
+;              Sector length of an Apple floppy is 256 bytes.
+;
+; RESTRICTION: Bytes per sector must be exact divisor of 512 (block size).
+;              The block address must be less than (2**15)/bytes per sector,
+;              so that when sector is formed, it fits in the D3.W.
+;
+; RESULTS OF SOME COMMANDS:
+;
+;  1) TRACK REG is incremented by 1 during STEPIN even
+;     though there is a seek error because the TRACK adrs
+;     requested exceeds the maximum track addres allowed
+;
+;  2) STEPOUT: the track register is not decremented below 0
+;     after TRK00. The seek error bit is set.
+;
+
+;
+; FDblkIO - Read/Write a Corvus floppy disk block subroutine
+;
+;       Enter:  A0.L - Buffer address
+;               D0.W - Block number
+;               D1.W - Drive number
+;               D5.W - Read ($32) or Write ($33) command
+;
+;       Exit:   A0.L - Next free location in buffer
+;               D0.W - Updated block number
+;               D7.W - IORESULT
+;
+;       All other registers are preserved.
+;
+FDblkIO MOVEM.L D0-D6/A1-A6,-(SP)       ;
+        MOVE.W  #BLKSZ,D2               ;BLOCK SIZE IN BYTES
+        MOVE.W  D0,D3                   ;
+        BSR     FDrdwr                  ;
+        MOVEM.L (SP)+,D0-D6/A1-A6       ;restore registers
+        ADDQ.W  #1,D0                   ;INC BASE BLOCK
+        TST.B   D7                      ;set return condition code
+        RTS                             ;return
+
+        page    ;FDsctIO
+;
+; FDsctIO - Read/Write a Corvus floppy disk sector
+;
+;       Enter:  A0.L - Buffer address
+;               D1.W - Bytes per sector (128 for single density)
+;               D3.W - Track number
+;               D4.W - Sector number
+;               D5.W - Read ($32) or Write ($33) command
+;
+;       Exit:   D7.W - IORESULT
+;
+;       All other registers are preserved.
+;
+;DsecIO MOVEM.L D0-D6/A0-A6,-(SP)       ;save registers
+;       BSR     FDgetadr                ;set address registers
+;                                       ;A1 = ptr to device description info
+;                                       ;A2 = ptr to slot controller registers
+;                                       ;A3 = ptr to slot static RAM
+;       CLR.L   D0                      ;
+;       BSR     FDlcmd1                 ;turn on motor and setup controller
+;       BSR     FDseek                  ;get to track
+;       BNE.S   FDsio9                  ;if error, return
+;       CMPI.W  #DskWrit,D5             ;only do write if cmd is a write
+;       BNE.S   FDsio2                  ;else do a read
+;       BSR     FDsecW                  ;
+;       BRA.S   FDsio9                  ;
+;                                       ;
+
+FDsecIO CMPI.W  #DskWrit,D5             ;make sure cmd is a read cmd
+        BNE.S   FDsio1                  ;it is
+        BRA     FDEopcd                 ;it isn't, return error
+                                        ;
+FDsio1  MOVEM.L D0-D6/A0-A6,-(SP)       ;save registers
+        BSR     FDgetadr                ;set address registers
+                                        ;A1 = ptr to device description info
+                                        ;A2 = ptr to slot controller registers
+                                        ;A3 = ptr to slot static RAM
+        CLR.L   D0                      ;
+        BSR     FDlcmd1                 ;turn on motor and setup controller
+        BSR     FDseek                  ;get to track
+        BNE.S   FDsio9                  ;if error, return
+
+FDsio2  BSR     FDsecR                  ;read sector specified by D4.W
+                                        ;
+FDsio9  BSR     FDmtrof                 ;turn off motor
+        MOVEM.L (SP)+,D0-D6/A0-A6       ;restore registers
+        TST.B   D7                      ;set return condition code
+        RTS                             ;return
+
+        page    ;floppy equates
+SVLCMD  equ     0       ;SAVE OF LOCAL COMMAND
+                        ;
+NNMI1   equ     0       ;BIT POSITION FOR EACH STATUS BIT
+NNMI2   equ     1       ;
+NNMI3   equ     2       ;
+NNMI4   equ     3       ;
+                        ;
+NIRQ1   equ     4       ;
+NIRQ2   equ     5       ;
+NIRQ3   equ     6       ;
+NIRQ4   equ     7       ;
+;
+; Bytes per sector
+;
+BPS8ISD equ     128     ;Single density 8"
+BPS8IDD equ     256     ;Double density 8"
+BPS5ISD equ     256     ;Apple 5 1/4" floppy
+;
+; Sectors per track
+;
+SCPT8SD equ     26      ;Single density 8"
+SCPT8DD equ     26      ;Double density 8"
+SCPT5SD equ     16      ;Apple 5 1/4" floppy
+;
+; Tracks per side
+;
+TKPS8SD equ     77      ;Single density 8"
+TKPS8DD equ     77      ;Double density 8"
+TKPS5SD equ     35      ;Apple 5 1/4" floppy
+;
+; Number of blocks per disk
+;
+NBLK8SD equ     500     ;Single density 8" single sided
+NBLK8DD equ     1001    ;Double density 8" single sided
+NBLK5SD equ     280     ;Apple 5 1/4" floppy
+;
+; Error return codes
+;
+RGOOD     equ   0       ;disk accss successful
+RBDBLK    equ   -1      ;Block requested is out of range
+RBDUNT    equ   -2      ;bad unit number or driver not implemented
+RBDOPCO   equ   -3      ;Requested unit I/O function is not valid
+RHWRERR   equ   -4      ;Hardware error
+RLOSTDEV  equ   -5      ;Lost device. i.e. device went offline
+                        ;
+RWRPROT   equ   -16     ;the unit is write protected
+RSEEKERR  equ   -17     ;SEEK Error
+RBUSY     equ   -18     ;device busy
+RRNF      equ   -19     ;record not found - maybe disk is bad
+RNOTRDY   equ   -20     ;device not ready
+RERRUNOWN equ   -64     ;error origin unknown
+
+        page    ;floppy hardware equates
+;
+; This section conatins the equates for Floppy Disk cont FD1793
+; All references are w.r.t NDEV1AD in A2
+; Prefix of 'L' means that this reference is to the 'LOCAL'
+; logic on the disk controller board
+; Prefix of FDC means that this referenc is to the Floppy disk controller
+;
+; Local disk controller board equates
+;
+LSTRR     equ   0       ;index to the local Status reg
+LCMDR     equ   0       ;index to the local command reg
+                        ;
+LSDRQ     equ   0       ;BIT 0   =1 DRQ
+LSINT     equ   1       ;INTERRUPT REQUEST
+LS1SD2SD  equ   4       ;=0 if 2 sided , =1 if one sided
+LS8INMIN  equ   5       ;=1 if 8 inch , =0 if min
+LSDSKCHG  equ   6       ;=0 if disk changd, 1 if not
+LSFMMFM   equ   7       ;=1 if sigl density =0 if double
+;
+; Command register equates
+;
+LCFLPSD1  equ   0       ;=0 if side 0 , =1 if side 1
+LCDE0     equ   1       ;drive selct bit 0
+LCDE1     equ   4       ;drive select bit 1
+LCMOTOROF equ   5       ;=1 if motor to be turned off
+LC8INMIN  equ   6       ;
+LCFLP8IN  equ   6       ;=1 to select 8 in, =0 for 5 1/4
+LCFMMFM   equ   7       ;=1 to select singl density , 0 for dbl
+
+        page    ;
+;
+; Floppy disk controllers equates
+;
+FDCAD     equ   $10     ;Floppy disk controller base index
+;
+; address of the internal registers of FDC
+;
+FDCCMDR   equ   FDCAD+0 ;ADRS OF FDC COMMAMD REG
+FDCSTRR   equ   FDCAD+0 ;ADRS OF FDC STATUS REG
+FDCTRKR   equ   FDCAD+2 ;ADRS OF FDC TRACK REG
+FDCSECR   equ   FDCAD+4 ;ADRS OF FDC SECTOR REG
+FDCDATR   equ   FDCAD+6 ;ADRS OF FDC DATA REG
+;
+; Command code equates
+;
+CRESTORE  equ   0       ;0 0 0 0 H V R1 R0
+CSEEK     equ   $10     ;0 0 0 1 h v r1 r0
+CSTEP     equ   $20     ;0 0 1 U h v r1 r0
+CSTEPIN   equ   $40     ;0 1 0 U h v r1 r0
+CSTEPOUT  equ   $60     ;0 1 1 U h v r1 r0
+;
+; Type II commands
+;
+CRDSEC    equ   $80     ;1 0 0 m F2 E F1 0
+CWRSEC    equ   $A0     ;1 0 1 m F2 E F1 0
+;
+;TYpe III commands
+;
+CRDAM     equ   $C0     ;1 1 0 0 0  E 0  0
+CRDTRK    equ   $E0     ;1 1 1 0 0  E 0  0
+CWRTRK    equ   $F0     ;1 1 1 1 0  E 0  0
+CFRCINT   equ   $D0     ;1 1 0 1 I1 12 I3 I4
+;
+; FLAGS equates -- all flags have prefix of F
+;
+FHld      equ   $8      ;if =1 load head in the beginning
+                        ;if =0  unload head in  beginning
+FVerify   equ   $4      ;if =1 verify destination trk else not
+FUpdttrk  equ   $10     ;if =1 update TRK reg after each STEP
+FSTPRT3ms equ   $0      ;step rate = 3 milliseconds
+FSTPRT6ms equ   $1      ;step rate = 6 milliseconds
+FSTPRT10ms equ  $2      ;step rate = 10 milliseconds
+FSTPRT15ms equ  $3      ;step rate = 15 milliseconds
+                        ;
+FMPS      equ   $10     ;M=1 if multiple sectors else =0
+FDLY      equ   $4      ;E=1 if internal dly of 15 ms =0 no dly
+FSDCPM    equ   $8      ;F2=0 compare with side 0,=1 with side 1
+FSDCMPEN  equ   $2      ;F1=1 enable side compare, =0 disable cmp
+                        ;
+FINTRDY   equ   $1      ;not ready to ready
+FINTNRDY  equ   $2      ;ready to not ready
+FINTIDXP  equ   $4      ;interrupt on index pulse
+FINTIMM   equ   $8      ;terminate command immediately and intrpt
+
+        page    ;status register equates
+;
+; Status register equates -- all status reg bits have prefix of S
+;
+;name       bit position
+;
+SBUSY     equ   0       ;S0  busy
+                        ;
+SINDEX    equ   1       ;S1  index pulse encountered
+SDRQ      equ   1       ;S1  data request
+                        ;
+STRK0     equ   2       ;S2  track 00
+SDTOVER   equ   2       ;S2  data over run
+SDTUNDR   equ   2       ;S2  data under run
+                        ;
+SCRCERR   equ   3       ;S3  crc error
+                        ;
+SSEEKERR  equ   4       ;S4  seek error
+SRNF      equ   4       ;S4  record not found
+                        ;
+SHDLDD    equ   5       ;S5  head loaded
+SRECTYP   equ   5       ;S5  record type
+SWRFAULT  equ   5       ;S5  write fault
+                        ;
+SWRPROT   equ   6       ;S6  floppy write protected
+                        ;
+SNOTRDY   equ   7       ;S7  floppy not ready
+
+        page    ;FDI....., FDinit
+;
+; FDI8sssd -- Set up constants for Corvus 8" single side single density
+;
+FDI8sssd
+        bsr     FDgetadr                ;set address registers
+                                        ;A1 = ptr to device description info
+                                        ;A2 = ptr to slot controller registers
+                                        ;A3 = ptr to slot static RAM
+        move.w  #NBLK8SD,CPfdvsz(A1)    ;set device size in blocks
+        move.w  #BPS8ISD,CPfbps(A1)     ;set bytes per sector
+        move.b  #SCPT8SD,CPfspt(A1)     ;set sectors per track
+        move.b  #TKPS8SD,CPftps(A1)     ;set tracks per side
+        bra.s   FDI8ss                  ;set other values and return
+
+;
+; FDI8ssdd -- Set up constants for Corvus 8" single side double density
+;
+FDI8ssdd
+        bsr     FDgetadr                ;set address registers
+                                        ;A1 = ptr to device description info
+                                        ;A2 = ptr to slot controller registers
+                                        ;A3 = ptr to slot static RAM
+        move.w  #NBLK8DD,CPfdvsz(A1)    ;set device size in blocks
+        move.w  #BPS8IDD,CPfbps(A1)     ;set bytes per sector
+        move.b  #SCPT8DD,CPfspt(A1)     ;set sectors per track
+        move.b  #TKPS8DD,CPftps(A1)     ;set tracks per side
+FDI8ss  move.b  #1,CPfspd(A1)           ;set sides per disk
+        move.b  #1,CPfofst(A1)          ;set first track offset
+        rts                             ;return
+
+;
+; FDinit -- Initialize Corvus floppy disk drive
+;
+FDinit  BSR     FDgetadr                ;set address registers
+                                        ;A1 = ptr to device description info
+                                        ;A2 = ptr to slot controller registers
+                                        ;A3 = ptr to slot static RAM
+        CLR.L   D0                      ;
+        MOVEQ   #1,D1                   ;A FAKE SECTOR LENGTH
+        BSR.S   FDlcmd1                 ;turn on motor and setup controller
+        BSR     FDrst                   ;restore to track 0
+        BSR.S   FDmtrof                 ;turn motor off
+        TST.B   D7                      ;set return condition code
+        RTS                             ;return
+
+        page    ;FDmtrof, FDlcmd
+;
+;  D0.W  -- FREE
+;  D1.W  -- FREE
+;  D2.W  -- BYTE CNT
+;  D3.W  -- BASE BLK  ADRS
+;  D4.W  -- FREE
+;  D5.W  -- USER CMD
+;  D6.W  -- FREE
+;
+;  A0.L  -- USER BUFFER ADDRESS
+;  A1.L  -- DEVICE DESCRIPTION AREA BASE ADDRESS
+;  A2.L  -- FLOPPY CONTROLLER BASE ADDRESS
+;  A3.L  -- STATIC RAM BASE ADDRESS
+;
+;
+; FDmtrof -- Turn motor off
+;
+FDmtrof move.b  SVLCMD(A3),D4           ;get current local command
+        bset    #LCMOTOROF,D4           ;set motor off flag
+        move.b  D4,LCMDR(A2)            ;move command to command register
+        move.b  D4,SVLCMD(A3)           ;save current local command
+        rts                             ;return
+
+;
+; FDlcmd -- GET THE LOCAL COMMAND FOR THIS DRIVE INTO REGISTER D0.B
+;           RETURNS WITH D7 CLEAR LONG
+;
+FDlcmd  bsr     FDclcTS         ;Calc first side trk sec
+        ;
+        ; form a local command in D0
+        ; Entry used for Read/Write a sector
+        ;
+FDlcmd1 bclr    #LCMOTOROF,D0   ;clear motor off bit
+        bset    #LCFLP8IN,d0    ;indicate 8 inch flp
+        bset    #LCFMMFM,d0     ;indicate 8 inch flp
+        move.b  CPosdrv(a1),d7  ;sel drive
+        ror.w   #1,d7           ;note DE0 is B0
+        lsl.b   #2,d7           ;DE1 is B4
+        rol.w   #2,d7           ;
+        or.b    d7,d0           ;set into d0
+        move.b  d0,SVLCMD(a3)   ;save then command
+        move.b  d0,LCMDR(a2)    ;set local command register
+        clr.l   d7              ;clear error register
+        rts                     ;return
+
+        page    ;FDrdwr
+FDrdwr  BSR     FDgetadr        ;set address registers
+                                ;A1 = pointer to device description info
+                                ;A2 = pointer to slot controller registers
+                                ;A3 = pointer to slot static RAM
+        TST.W   D3              ;test base block
+        BMI     FDEblck         ;jump if first blk rqstd is invalid
+        cmp.w   CPfdvsz(A1),d3  ;is it in limit
+        bge     FDEblck         ;jump final block exceeds max
+        BSR.S   FDlcmd          ;set local command register
+
+;----------------------------------------------------------------
+;  D0.W  -- LOCAL COMMAND
+;  D1.W  -- BYTES PER SEC
+;  D2.W  -- WORD CNT
+;  D3.W  -- TRACK ADDRESS
+;  D4.W  -- SECTOR ADDRESS
+;  D5.W  -- USER COMMAND
+;  D6.W  -- FREE
+;----------------------------------------------------------------
+; READS/WRITES ONLY COMPLETE SECTORS
+; For the rest of the code:
+;         A0       points to the user buffer address
+;         A1       points to the beginning of the device
+;                  table entry for this volume in D0 at the entry
+;         A2       Contains the NDEVICE address of the slot
+;                  specified in the device table for this Volume
+;         A3       BASE ADDRESS OF LOCAL STATIC RAM
+;----------------------------------------------------------------
+
+        bsr     FDseek          ;seek the desired track
+        bne.s   FDrdwr9         ;if error, return
+                                ;
+FDrdwr1 sub.w   d1,d2           ;
+        bmi.s   FDrdwr9         ;return if no more sectors to process
+        bsr.s   FDsecRW         ;process sector
+        tst.b   d7              ;d7 contains result code
+        bne.s   FDrdwr9         ;if error, return
+        bsr     FDincTS         ;
+        BNE.S   FDrdwr9         ;TIMED OUT ERROR
+        bra.s   FDrdwr1         ;process next sector
+                                ;
+FDrdwr9 bsr     FDmtrof         ;turn off motor
+        rts                     ;return
+
+        page    ;FDsecRW, FDsecR
+;
+; FDsecRW -- Read or write a sector of data to the floppy
+;            It transfer the data to/from the adrs in A0
+;            from / to the floppy
+;
+;       Enter:  D5 - DskRead or DskWrit
+;
+FDsecRW                          ;fall thru to FDsecR
+;        cmp.w   #DskWrit,D5     ;see if it is a Unit write
+;        beq.s   FDscRW1
+;        bsr.s   FDsecR
+;        bra.s   FDscRW9
+;FDscRW1 bsr.s   FDsecW
+;FDscRW9 rts
+
+;
+; FDsecR -- Read one sector of data
+;
+;       Enter:  bytes per sec --->  D1.w
+;               sector adrs  -----> D4.w
+;               buffer adrs  -----> A0
+;               floppy must be poitioned on desired track
+;
+;       Exit:   OS result code --->  D7
+;               data   to the adrs pointed by A0
+;
+FDrcRd  equ     4               ;read sector retry count
+FDrcDOr equ     4               ;data overrun retry count
+                                ;
+FDsecR  movem.l d5-d6,-(SP)     ;save
+        move.w  #FDrcRd,d5      ;get read sector retry count
+        move.l  a0,a4           ;save user buf ptr
+                                ;
+FDsecR1 move.w  #FDrcDOr,d6     ;get data overrun retry count
+                                ;
+FDsecR2 move.l  a4,a0           ;get user buf adrs
+        BSR     FDwRdy          ;WAIT FOR READY OR TIMED OUT
+        BNE.S   FDsecR9         ;TIMED OUT ERR
+        BSR     FDccRd          ;
+        btst    #SDTOVER,d7     ;is ther  data overrun
+        dbeq    d6,FDsecR2      ;data over run, try again.
+        btst    #SCRCERR,d7     ;is ther crc error
+        DBEQ    d5,FDsecR1      ; DO UNTIL (no crc error)
+                                ;   or (no more retries left)
+                                ;
+FDsecR3 BSR     FDrdSta         ;check read status
+        beq.S   FDsecR9         ;
+        move.l  a4,a0           ;
+                                ;
+FDsecR9 movem.l (sp)+,d5-d6     ;
+        tst.b   d7              ;d7 contains result code
+        rts                     ;return
+
+        page    ;FDsecW
+;
+; FDsecW -- Write one sector of data
+;
+;       Enter:  bytes per sec --->  D1.w
+;               sector adrs  -----> D4.w
+;               buffer adrs  -----> A0
+;               floppy must be poitioned on desired track
+;
+;        Exit:  OS result code --->  D7
+;               data   to the adrs pointed by A0
+;
+;FDrcWr  equ     4               ;write sector retry count
+;FDrcDOw equ     4               ;data overrun retry count
+;                                ;
+;FDsecW  movem.l d5-d6,-(SP)     ;save registers
+;        move.w  #FDrcWr,d5      ;get write retry count
+;        move.l  a0,a4           ;save user buf ptr
+;                                ;
+;FDsecW1 move.w  #FDrcDOw,d6     ;get data overrun retry count
+;                                ;
+;FDsecW2 move.l  a4,a0           ;get user buf adrs
+;        BSR     FDwRdy          ;WAIT FOR READY OR TIMED OUT
+;        BNE.S   FDsecW9         ;TIMED OUT ERR
+;        BSR     FDccWr          ;
+;        btst    #SDTOVER,d7     ;data overrun?
+;        dbeq    d6,FDsecW2      ;yes, try again
+;        btst    #SCRCERR,d7     ;CRC error?
+;        dbeq    d5,FDsecW1      ;yes, try again
+;                                ;
+;        BSR     FDwrSta         ;check write status
+;        beq.S   FDsecW9         ;if no error, return
+;        move.l  a4,a0           ;
+;                                ;
+;FDsecW9 movem.l (sp)+,d5-d6     ;restore registers
+;        tst.b   d7              ;d7 contains result code
+;        rts                     ;return
+
+        page    ;FDccRd
+; ***** TYPE II COMMANDS *****
+
+;
+; FDccRd -- Read one sector of data
+;
+;       Enter:  bytes per sec --->  D1.w
+;               sector adrs  -----> D4.w
+;               buffer adrs  -----> A0
+;               floppy must be positioned on desired track
+;
+;       Exit:   status   ----->  D7
+;               data   to the adrs pointed by A0
+;
+FDccRd  move.w  d1,-(SP)                ;save
+        subq.w  #1,d1                   ;byte count
+        move.w  sr,-(SP)                ;
+        ori.w   #$0700,sr               ;disable interrupts
+        move.b  d4,FDCSECR(A2)          ;
+        move.b  #CRDSEC,FDCCMDR(A2)     ;issue command
+        move.w  #25,d7                  ;wait at least 28 micro-second
+FDccRd1 dbf     d7,FDccRd1              ;
+                                        ;
+FDccRd2 btst    #SBUSY,FDCSTRR(A2)      ;see if the ctlr is busy
+        beq.S   FDccRd2                 ;jump if not busy
+        ;
+        ; ***** TIME CRITICAL LOOP
+        ;
+FDccRd3 move.b  LSTRR(A2),D7            ;read status
+        btst    #LSDRQ,d7               ;is DRQ there
+        bne.s   FDccRd5                 ;yes , jump
+                                        ;
+FDccRd4 btst    #LSINT,D7               ;is FDC done
+        beq.s   FDccRd3                 ;no, jump
+        bra.s   FDccRd6                 ;ctlr terminated too soon
+                                        ;
+FDccRd5 move.b  FDCDATR(A2),(a0)+       ;get a byte from FDC
+        dbf     d1,FDccRd3              ;read the remaining bytes
+        ;
+        ; a complete sector has been read.
+        ;
+        bsr      FDnRdy                 ;
+                                        ;
+FDccRd6 move.b   FDCSTRR(A2),d7         ;read the status
+        move.w   (sp)+,sr               ;restore SR
+        move.w   (SP)+,d1
+        rts
+
+        page    ;FDccWr
+;
+; FDccWr -- Write one sector of data
+;
+;       Enter:  bytes per sec --->  D1.w
+;               sector adrs  -----> D4.w
+;               buffer adrs  -----> A0
+;               floppy must be poitioned on desired track
+;
+;       Exit:   status   ----->  D7
+;               data   to the adrs pointed by A0
+;
+;FDccWr  move.w  d1,-(SP)                ;save
+;        subq.w  #1,d1                   ;byte count
+;        move.w  sr,-(SP)                ;
+;        ori.w   #$0700,sr               ;disable interrupts
+;        BSR.S   FDccWr1                 ;CALL time critical FDccWr PART
+;        bsr     FDnRdy                  ;
+;        move.b  FDCSTRR(A2),d7          ;read the status
+;        move.w  (sp)+,sr                ;restore SR
+;        move.w  (SP)+,d1                ;
+;        rts                             ;return
+;                                        ;
+;                                        ;
+;FDccWr1 move.b  d4,FDCSECR(A2)          ;
+;        move.b  #CWRSEC,FDCCMDR(A2)     ;issue command
+;                                        ;
+;        move.w  #25,d7                  ;wait at least 28 micro-second
+;FDccWr2 dbf     d7,FDccWr2              ;
+;                                        ;
+;FDccWr3 btst    #SBUSY,FDCSTRR(A2)      ;
+;        beq.s   FDccWr3                 ;
+;        ;
+;        ; ***** TIME CRITICAL LOOP
+;        ;
+;FDccWr4 move.b  LSTRR(A2),D7            ;FDCSTRR(A2),d7 ;read status
+;        btst    #LSDRQ,d7               ;is DRQ there
+;        bne.s   FDccWr6                 ;yes , jump
+;                                        ;
+;FDccWr5 btst    #LSINT,D7               ;is FDC done
+;        beq.s   FDccWr4                 ;no , jump
+;        rts                             ;terminated too soon
+;                                        ;
+;FDccWr6 move.b  (a0)+,FDCDATR(A2)       ;move a byte to FDC
+;        dbf     d1,FDccWr4              ;write the reamining bytes
+;        RTS                             ;return
+
+        page    ;FDgetadr
+;
+; FDgetadr -- Get pointers to device description info, controller registers,
+;             and static RAM for current slot
+;
+;       Exit:   A1 = pointer to device description info
+;               A2 = pointer to controller registers for slot
+;               A3 = pointer to static RAM for slot (CPosslot)
+;
+FDgetadr
+        movea.l #0,A1           ;get pointer to device description info
+        move.l  #NDEV1AD,A2     ;get pointer to controller registers
+        move.b  CPosslot(a1),d7 ;*
+        ext.w   d7              ;*
+        mulu.w  #DEVADOFST,d7   ;*
+        adda.l  d7,a2           ;*
+        lea     CPsl1ram.w,A3   ;get pointer to static RAM
+        move.b  CPosslot(a1),d7 ;*
+        ext.w   d7              ;*
+        subq.w  #1,d7           ;*
+        mulu    #$100,d7        ;*
+        adda.l  d7,A3           ;*
+        rts                     ;return
+
+        page    ;FDclcTS
+;
+; FDclcTS -- calculate the Side, Track address and sector
+;            address for the First block requested by the user
+;
+;       Enter:  A1      - device table address
+;               D3      - block address
+;
+;       Exit:   D0.bit  - side flag
+;               D3.w    - track address
+;               D4.w    - sector address
+;
+FDclcTS clr.l   d0              ;
+        move.w  CPfbps(A1),D1   ;get bytes per sector
+        ext.l   d3              ;clear the upper 16 bits of d3
+        move.l  #BLKSZ,d7       ;
+        divu    d1,d7           ;
+        mulu    d7,d3           ;absolute sector adrs to d3
+        move.l  d3,d7           ;
+        clr.w   d4              ;make sure that upper byte is 00
+        move.b  CPfspt(A1),d4   ;
+        divu    d4,d7           ;
+        move.w  d7,d3           ;absolute track adrs to d3
+        swap    d7              ;
+        move.b  CPfofst(a1),d4  ;get first sector offset
+        ext.w   d4              ;*
+        add.w   d7,d4           ;get sector address
+; ----  bclr    #LCFLPSD1,d0    ;select side 0          (already 0)
+        move.b  CPftps(A1),d7   ;get tracks per side
+        ext.w   d7              ;*
+        cmp.w   d7,d3           ;is track on side 0?
+        blt.s   FDclcT9         ;yes, return
+        cmpi.b  #1,CPfspd(a1)   ;is there a side 1?
+        beq.s   FDclcT8         ;no, report error
+        bset    #LCFLPSD1,D0    ;select side 1
+        sub.w   d7,d3           ;update track address
+        cmp.w   d7,d3           ;is track on side 1?
+        blt.s   FDclcT9         ;yes, return
+                                ;
+FDclcT8 bra     FDEblck         ;indicate block number error
+                                ;
+FDclcT9 clr.w   d7              ;indicate no error
+        rts                     ;return
+
+        page    ;FDincTS
+;
+; FDincTS -- update the sector address by one. If it was the last
+;            sector on the track then update the Track adrs by
+;            one. If it was the last track then update the side
+;            in the Local command reg and D0 and restore track to 0.
+;
+;       Exit:   NE - error and D7 has error code
+;               EQ - successful update D7 = 0
+;
+FDincTS addq.w  #1,d4           ;increment sector number
+        move.b  CPfspt(A1),d7   ;get last sector number + 1
+        add.b   CPfofst(A1),d7  ;*
+        cmp.b   d7,d4           ;are we past last sector?
+        bge.s   FDincT1         ;yes, go to next track
+        clr.w   d7              ;show successful
+        bra.s   FDincT9         ;return
+                                ;
+FDincT1 move.b  CPfofst(A1),d4  ;reset sector number
+        ext.w   D4              ;*
+        move.b  CPftps(A1),d7   ;get tracks per side
+; ----  cmpi.b  #DTa5,CPftyp(a1);is this an Apple floppy drive?        0.7
+; ----  beq.s   FDincT5         ;yes, process it                       0.7
+        ;
+        ; Corvus 8" floppy drive
+        ;
+        cmp.b   d7,d3           ;are we past last track on side?
+        bge.s   FDincT2         ;yes, go to next side
+        addq.w  #1,d3           ;increment track number
+        bsr.s   FDwRdy          ;wait for ready or timeout
+        bne.s   FDincT9         ;return if timeout error
+        bsr     FDccSin         ;step in 1 track
+        bsr     FDskSta         ;check seek status
+        bra.s   FDincT9         ;return
+                                ;
+FDincT2 clr.w   d3              ;reset track number
+        bset    #LCFLPSD1,D0    ;Select side 1
+        move.b  D0,LCMDR(A2)    ;*
+        bsr     FDrst           ;restore to track 0
+; ----  bra.s   FDincT9         ;return                                0.7
+; ----  ;                                                              0.7
+; ----  ; Apple 5" floppy drive                                        0.7
+; ----  ;                                                              0.7
+;DincT5 cmp.b   d7,d3           ;are we past last track on side?       0.7
+; ----  bge     FDEblck         ;yes, report error                     0.7
+; ----  addq.w  #1,d3           ;increment track number                0.7
+; ----  bsr     ADccSin         ;step in 1 track                       0.7
+                                ;
+FDincT9 tst.w   d7              ;set return condition codes
+        rts                     ;return
+
+        page    ;FDwRdy
+;
+; FDwRdy --  WAIT UNTIL FDC SAYS DRIVE IS READY OR
+;            TIME OUT (NOT MORE THAN 1 SECOND)
+;
+;       Exit:   NE = timed out D7 has error result
+;               EQ = ready (D7 = 0)
+;
+FDtmoHi equ     4                       ;SHOULD BE AT LEAST 1 SECOND
+FDtmoLo equ     $7FFF                   ;*
+                                        ;
+FDwRdy  CLR.L   D7                      ;
+        MOVEM.W D5-D6,-(SP)             ;SAVE D6 AND D5
+        MOVE.W  #FDtmoLo,D5             ;
+        MOVE.W  #FDtmoHi,D6             ;
+                                        ;
+FDwRdy1 BTST    #SNOTRDY,FDCSTRR(A2)    ;IS FLOPPY READY
+        DBEQ    D5,FDwRdy1              ;DO UNTIL (FLOPPY READY) OR (TIME OUT)
+        DBEQ    D6,FDwRdy1              ;
+        BEQ.S   FDwRdy9                 ;DIDN'T TIME OUT
+        MOVE.W  #RNOTRDY,D7             ;
+                                        ;
+FDwRdy9 MOVEM.W (SP)+,D5-D6             ;
+        TST.W   D7                      ;SET CONDITION CODES - NE MEANS ERROR
+        RTS                             ;return
+
+        page    ;FDseek
+;
+; FDseek --
+;
+; It is assumed that TRACK REG contains the number of the track
+; of the current position of the read write Head.
+;
+;       Enter:  D3.W - Seek track address
+;
+FDrcSk  equ     4               ;seek retry count
+                                ;
+FDseek  BSR.S   FDwRdy          ;WAIT FOR READY OR TIMED OUT
+        BNE.S   FDseek9         ;TIMED OUT ERR
+        BSR     FDccSk          ;
+        BSR     FDskSta         ;check seek status
+        BEQ.S   FDseek9         ;there is NO error
+        move.w  d5,-(sp)        ;save d5
+        move.w  #FDrcSk,D5      ;
+                                ;
+FDseek1 BSR.S   FDwRdy          ;WAIT FOR READY OR TIMED OUT
+        BNE.S   FDseek8         ;TIMED OUT ERR
+        BSR.S   FDccRst         ;
+        BSR.S   FDwRdy          ;WAIT FOR READY OR TIMED OUT
+        BNE.S   FDseek8         ;TIMED OUT ERR
+        BSR.S   FDccSk          ;
+        btst    #sseekerr,d7    ;
+        DBEQ    d5,FDseek1      ;try until no seek error or
+                                ;no more retries
+        BSR     FDskSta         ;check seek status
+                                ;
+FDseek8 move.w  (sp)+,d5        ;
+                                ;
+FDseek9 TST.B   D7              ;set return condition code
+        RTS                     ;return
+
+        page    ;FDrstW, FDrst
+;
+; FDrstW -- Restore the floppy to track 0
+;           It exits when it has successfully restored the floppy to
+;           track 0 or when the retry count has exhausted.
+;           Then it calls the FDswSta routine to analyse status.
+;           Note W in FDswSta. It looks at WRprot bit of FDCSTRR.
+;
+FDrstW  movem.l a6/d6,-(sp)     ;
+        lea     FDswSta,a6      ;
+        bra.s   FDrst0          ;
+
+;
+; FDrst -- same as FDrstW except no W there.
+;          It does not look at Write protect status bit in FDCSTRR.
+;
+FDrst   movem.l a6/d6,-(sp)     ;
+        lea     FDskSta,a6      ;
+                                ;
+FDrst0  move.w  #4,d6           ;
+                                ;
+FDrst1  BSR.S   FDwRdy          ;WAIT FOR READY OR TIMED OUT
+        BNE.S   FDrst2          ;TIMED OUT ERR
+        bsr.s   FDccRst         ;
+        jsr     (a6)            ;
+        dbeq    d6,FDrst1       ;do until (successful) or (tried enough)
+                                ;
+FDrst2  movem.l (sp)+,a6/d6     ;
+        rts                     ;return
+
+        page    ;FDcc...
+;
+; ***** TYPE I COMMANDS *****
+;
+FDCrst   equ    CRESTORE+FSTPRT15ms+FVERIFY
+FDCstp   equ    CSTEP+FSTPRT6ms+FVERIFY+FUpdttrk
+FDCstpIn equ    CSTEPIN+FSTPRT6ms+FVERIFY+FUpdttrk
+FDCstpOt equ    CSTEPOUT+FSTPRT6ms+FVERIFY+FUpdttrk
+FDCseek  equ    CSEEK+FSTPRT6ms+FVERIFY
+;
+; FDccRst -- bring the floppy back to track 00
+;            Then set the FDCTRKR = 0
+;            Stepping pulses are given at the rate specified in cmd
+;
+FDccRst move.b  #FDCrst,FDCCMDR(A2)     ;issue command
+        bra.s   FDnRdy                  ;wait for not ready
+;
+; FDccStp -- FDCTRKR+/-1 --> FDCTRKR
+;
+FDccStp move.b  #FDCstp,FDCCMDR(A2)     ;issue command
+        bra.s   FDnRdy                  ;wait for not ready
+;
+; FDccSin -- FDCTRKR+1 --> FDCTRKR
+;
+FDccSin move.b  #FDCstpIn,FDCCMDR(A2)   ;issue command
+        bra.s   FDnRdy                  ;wait for not ready
+;
+; FDccSot -- FDCTRKR-1 --> FDCTRKR
+;
+FDccSot move.b  #FDCstpOt,FDCCMDR(A2)   ;issue command
+        bra.s   FDnRdy                  ;wait for not ready
+;
+; FDccSk -- issue a seek command.  If there is a seek error,
+;           flip the density flag in D0 and try again
+;
+FDccSk  move.w  d5,-(sp)                ;save d5
+        move.b  D3,FDCDATR(A2)          ;load the desired TRACK adrs
+        moveq   #2,d5                   ;
+                                        ;
+FDccSk1 move.b  #FDCseek,FDCCMDR(A2)    ;issue command
+        bsr.s   FDnRdy                  ;wait for not ready
+; ----  btst    #sseekerr,d7            ;
+; ----  beq     FDccSk2                 ;no seek error
+; ----  bchg    #LSFMMFM,d7             ;flip the density bit
+; ----  dbf     d5,FDccSk1              ; $$$ WE MAY HAVE TO FLIP $$$
+                                        ;
+FDccSk2 move.w  (sp)+,d5                ;get back d5
+        rts                             ;return
+
+        page    ;FDnRdy
+;
+; FDnRdy --  WAIT UNTIL FDC SAYS DRIVE IS NOT BUSY OR TIME OUT
+;
+;       Exit:   D7 = controller status register (FDCSTRR)
+;
+FDnRdy  movem.w d5-D6,-(SP)             ;
+        move.w  #FDtmoLo,d6             ;
+        move.w  #2,d5                   ; add 3*$8000 iterations
+                                        ;
+FDnRdy1 btst    #LSINT,LSTRR(a2)        ;is it busy
+        dbNE    d6,FDnRdy1              ;DO UNTIL (not busy) or (no more retries)
+        dbNE    d5,FDnRdy1              ;DO UNTIL (not busy) or (no more retries)
+                                        ;
+FDnRdy2 movem.w (SP)+,d5-d6             ;
+        MOVE.B  FDCSTRR(A2),D7          ;GET CONTROLLER STATUS
+        RTS                             ;return
+
+        page    ;check status
+;
+; Check status subroutines
+;
+;       Exit:   D7 - IORESULT code
+;
+FDrdSta move.b  FDCSTRR(A2),d7  ;read the status
+;        bra.s   FDrwSta         ;
+;                                ;
+;FDwrSta move.b  FDCSTRR(A2),d7  ;read the status
+;        btst    #SWRPROT,d7     ;
+;        bon.s   FDEprot         ;
+;        btst    #SWRFAULT,d7    ;
+;        bon.s   FDEherr         ;
+                                ;
+FDrwSta btst    #SCRCERR,d7     ;
+        bon.s   FDEcrc          ;
+        btst    #SRNF,d7        ;
+        bon.s   FDErnf          ;
+                                ;
+FDrwSt1 btst    #SBUSY,d7       ;
+        bon.s   FDEbusy         ;
+        btst    #SNOTRDY,d7     ;
+        bon.s   FDEnrdy         ;
+        bra.s   FDokSta         ;no error, return
+                                ;
+FDswSta move.b  FDCSTRR(a2),d7  ;
+        btst    #SWRPROT,d7     ;
+        bon.s   FDEprot         ;
+        bra.s   FDskSt1         ;
+                                ;
+FDskSta move.b  FDCSTRR(a2),d7  ;
+                                ;
+FDskSt1 btst    #SSEEKERR,d7    ;seek error?
+        bon.s   FDEseek         ;SEEK ERROR IN RSLT CODE
+        btst    #SCRCERR,d7     ;
+        bon.s   FDEcrc          ;
+        btst    #sbusy,d7       ;
+        bon.s   FDEbusy         ;HARDWARE ERROR
+        btst    #SNOTRDY,d7     ;
+        bon.s   FDEnrdy         ;
+                                ;
+FDokSta clr.w   d7              ;indicate no error
+                                ;
+FDerSta tst.w   d7              ;set return condition code
+        rts                     ;return
+
+        page    ;set error status
+FDEcrc                          ;error -- CRC
+FDEblck move.w  #RBDBLK,d7      ;error -- invalid block number
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEunit move.w  #RBDUNT,d7      ;error -- invalid unit number
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEopcd move.w  #RBDOPCO,d7     ;error -- invalid op code
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEherr move.w  #RHWRERR,d7     ;error -- hardware
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEprot move.w  #RWRPROT,d7     ;error -- write protect
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEseek move.w  #RSEEKERR,d7    ;error -- seek
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDErnf  move.w  #RRNF,d7        ;error -- record (sector) not found
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEbusy move.b  #CFRCINT+FINTIMM,FDCCMDR(A2)
+        move.w  #RBUSY,D7       ;error -- busy
+        bra.s   FDerSta         ;set condition code and return
+                                ;
+FDEnrdy move.w  #RNOTRDY,d7     ;error -- not ready
+        bra.s   FDerSta         ;set condition code and return
+

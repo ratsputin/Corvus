@@ -1,0 +1,57 @@
+
+
+                                                  8-Apr-82
+
+
+
+This pco covers the OMNI TEST diagnostic Program [1.1].
+
+The OMNI TEST program is an end user Omninet transporter
+diagnostic with limited capabilities for the "dumb" user
+and field service.
+
+There is one floppy in this release. Product documentation is
+included on the floppy.
+
+Onmni Test was tested with the standard 48k Apple.
+
+Responsible engineer:  Joel Kinderman-Applicatons.
+
+Note:  See file DOC.TEXT for further documentation information.
+
+$P
+
+Diskette copy
+-------------
+
+Use the Apple II SYS:FORMATTER program to format blank diskettes.
+
+Use the Apple II RELEASE:RDMAKEFLOP program to copy diskettes.
+
+1.INIT
+ Choose the INIT option to initialize the master diskette.
+2.COPY
+ Choose the COPY option.
+3.VERIFY
+ Choose the VERIFY option to make shure that the contents have
+been copied correctly.
+4.SHOW
+The SHOW option does a checksum pass. Choose M For the M)aster
+and F for the F)loppy.
+
+
+The contents of the floppy are listed below:
+
+Files:                  Date:                Size:
+
+RTSTND   .APPLE       3-Jan-81               29 blks
+SYSTEM   .PASCAL     17-Dec-80               29 blks
+SYSTEM   .LIBRARY     3-Jan-81               36 blks
+SYSTEM   .MISCINFO    4-May-79                1 blk
+SYSTEM   .STARTUP     7-Apr-82               29 blks
+DOC      .TEXT        8-Apr-82               16 blks
+
+                              Checksum Total=    255
+
+$P
+

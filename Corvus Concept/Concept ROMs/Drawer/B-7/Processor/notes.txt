@@ -1,0 +1,18 @@
+Processor board in base of drawer
+U403 is:
+  Motorola
+  MCM7681DC
+  8206
+U706/ROM0U is:
+  TMS
+  2532JL-45
+  DBP8140
+  label:
+    CC
+    0.6H
+U711/ROM0L is:
+  Hitachi
+  HN462532G
+  label:
+    CC
+    0.6L

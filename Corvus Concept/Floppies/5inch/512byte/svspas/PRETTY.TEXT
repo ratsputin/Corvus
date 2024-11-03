@@ -1,0 +1,12 @@
+Program Fast;
+
+{ Set Prism to quality mode }
+
+Var
+  Ptr : Text;
+
+Begin
+  Reset(Ptr,'/printer');
+  Write(Ptr,Chr(27),'R,1,$')
+End.
+

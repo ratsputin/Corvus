@@ -1,0 +1,1042 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                             File: FRDWR.TEXT                              *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               09-Nov-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+{ Initialize the format scanner }
+
+procedure ifmt(ffmt: ppac);
+begin {ifmt}
+curfmt := ffmt; fmtp := 1; scanfmt; 
+if fmttok <> '(' then error(32);
+edcnt := 1; gplevel := 1; gpcount[1] := 1; gpbegin[1] := fmtp;
+lastgppos := fmtp; lastgprep := 1; lastgplevel := 1;
+FieldFound := FALSE; OKToExit := FALSE; InhibitFinalCR := FALSE; 
+pval := 0; PrintOptionalPlus := FALSE;
+end; {ifmt}
+
+
+{ Does the work for %_ixfwr and %_ixfrd }
+
+procedure ixf(unitnum: longint);
+begin {ixf}
+errornumber := 0; InternalIO := FALSE;
+curunit := findunit(unitnum);
+if curunit = nil
+then error(30)
+else begin
+  if curunit^.PastEndFile and (curunit <> consoleunit) then error(55);
+  if not curunit^.Formted then error(31);
+  BZFlag := not curunit^.BlankNull;
+  end;
+end; {ixf}
+
+
+{ Does the work for %_iifwr and %_iifrd }
+
+procedure iif(fintfile: pint1array; fintreclen: integer);
+begin {iif}
+errornumber := 0; InternalIO := TRUE;
+intfile := fintfile; intreclen := fintreclen; 
+intbufp := 1; { pointer to character position of next internal I/O }
+if intreclen > MAXRECLEN 
+then begin error(82); intreclen := MAXRECLEN; end;
+BZFlag := FALSE;
+end; {iif}
+
+
+procedure fposition(rec: longint);
+  var targetposition,targnxtbyte,recsperbigblock,bigblocknumber: longint;
+begin {fposition}
+if curunit <> nil
+then 
+  with curunit^ do begin
+    rec := rec - 1; { Prefer to work with zero origin indexing }
+    if rec < 0 
+    then error(56)
+    else
+      if Seqen 
+      then error(57)
+      else begin
+        updatehighwatermark;
+        recsperbigblock := 1024 div reclen;  { Note, <cr> is allowed last }
+        bigblocknumber := rec div recsperbigblock;
+        targnxtbyte := (rec mod recsperbigblock) * reclen; { In a bigblock }
+        targetposition := bigblocknumber * 1024 + targnxtbyte;
+        sysseek(targetposition);
+        end;
+    end;
+end; {fposition}
+
+
+{ Initialize external write or print statement (sequential access) }
+
+procedure %_ixfwr{unitnum: longint; ffmt: ppac; ffmtlen: integer};
+begin {%_ixfwr}
+Reading := FALSE; ixf(unitnum); ifmt(ffmt);
+{ Set up output buffer for record }
+recbufp := 1; lastwritten := 0; maxlastwritten := 0;
+end; {%_ixfwr}
+
+
+{ Initialize external write or print statement (with seek) }
+
+procedure %_pxfwr{unitnum: longint; ffmt: ppac; ffmtlen: integer; rec: longint};
+begin {%_pxfwr}
+%_ixfwr(unitnum,ffmt,ffmtlen); fposition(rec);
+end; {%_pxfwr}
+
+
+{ Initialize internal write or print statement (sequential access) }
+
+procedure %_iifwr{fintfile: pint1array; fintreclen: integer; 
+                    ffmt: ppac; ffmtlen: integer};
+begin {%_iifwr}
+Reading := FALSE; iif(fintfile,fintreclen); ifmt(ffmt);
+{ Set up output buffer for record }
+recbufp := 1; lastwritten := 0; maxlastwritten := 0;
+end; {%_iifwr}
+
+
+{ Terminate write or print statement }
+
+procedure %_tfwr{fiostat: plongint; errexit: pcodearray};
+begin {%_tfwr}
+OKToExit := TRUE; { Inhibit wrap around } getfmt; 
+if (curunit = consoleunit) and InhibitFinalCR
+then begin
+  if lastwritten > maxlastwritten then maxlastwritten := lastwritten;
+  foutputrecbuf;
+  end
+else nextrec; 
+if (not InternalIO) and (curunit <> nil) then curunit^.lastop := WRITEOP;
+termiostmt(fiostat,errexit);
+end; {%_tfwr}
+
+
+{ Initialize external read statement (sequential access) }
+
+procedure %_ixfrd{unitnum: longint; ffmt: ppac; ffmtlen: integer};
+begin {%_ixfrd}
+Reading := TRUE; EofFlag := FALSE; ixf(unitnum); ifmt(ffmt); 
+if curunit <> nil
+then
+  if curunit^.Seqen then forceeofiflastwritten;
+nextrec;
+end; {%_ixfrd}
+
+
+{ Initialize external read statement (with seek) }
+
+procedure %_pxfrd{unitnum: longint; ffmt: ppac; ffmtlen: integer; rec: longint};
+begin {%_pxfrd}
+Reading := TRUE; EofFlag := FALSE; ixf(unitnum); ifmt(ffmt); 
+fposition(rec); nextrec;
+end; {%_pxfrd}
+
+
+{ Initialize internal read statement (sequential access) }
+
+procedure %_iifrd{fintfile: pint1array; fintreclen: integer; 
+                    ffmt: ppac; ffmtlen: integer};
+begin {%_iifrd}
+Reading := TRUE; EofFlag := FALSE; 
+iif(fintfile,fintreclen); ifmt(ffmt); nextrec;
+end; {%_iifrd}
+
+
+{ Terminate read statement }
+
+procedure %_tfrd{fiostat: plongint; errexit, endexit: pcodearray};
+begin {%_tfrd}
+OKToExit := TRUE; { Inhibit wrap around } 
+getfmt; { Required if, for example, / edit descriptors are next }
+if (not InternalIO) and (curunit <> nil)
+then begin
+  if curunit^.Seqen and EofFlag then curunit^.PastEndFile := TRUE;
+  curunit^.lastop := READOP;
+  end;
+if EofFlag and (endexit[1] = nil) then error(-601);
+termiostmt(fiostat,errexit);
+if EofFlag and (endexit[1] <> nil) and (errornumber = 0)
+then begin
+  if fiostat <> nil then fiostat^ := -1;
+  endexit[0] := endexit[1];
+  end;
+end; {%_tfrd}
+
+
+(*****************************************************************************)
+(*                           Formatted Write                                 *)
+(*****************************************************************************)
+
+
+{ Write a character expression }
+
+procedure %%wrfch(fpac: ppac; paclen: integer);
+  var lpaclen,i: integer;
+begin {%%wrfch}
+if not EdwPresent then edw := paclen;
+putblanks(edw - paclen);
+if edw < paclen then lpaclen := edw else lpaclen := paclen;
+for i := 1 to lpaclen do
+  putch(fpac^[i]);
+end; {%%wrfch}
+
+procedure %_wrfch{fpac: ppac; paclen: integer};
+begin {%_wrfch}
+getfmt; if edlet <> 'A' then error(46);
+%%wrfch(fpac,paclen);
+end; {%_wrfch}
+
+
+{ Write an integer }
+
+procedure %%wrfi(fint: int4);
+  var buf: packed array[1..10] of char; i, col, colcnt: integer;
+      Signed: Boolean; signch: char;
+begin {%_wrfi4}
+if edlet <> 'I' then error(41);
+Signed := TRUE; { Unless otherwise discovered }
+if (fint < 0) and ((fint - 1) > 0)
+then begin signch := '-'; buf := '2147483653'; col := 0; end
+else begin
+  if fint < 0 
+  then begin fint := - fint; signch := '-'; end
+  else 
+    if PrintOptionalPlus then signch := '+' else Signed := FALSE;
+  col := 10; buf := '          ';
+  if (edm = 0) and (fint = 0)
+  then Signed := FALSE { Even if PrintOptionalPlus }
+  else 
+    repeat
+      buf[col] := chr((fint mod 10) + ord('0'));
+      fint := fint div 10; col := col - 1;
+    until fint = 0;
+  end;
+if edm > (10 - col) then colcnt := edm else colcnt := 10 - col;
+if Signed then colcnt := colcnt + 1;
+if colcnt > edw 
+then putstars
+else begin
+  putblanks(edw - colcnt);
+  if Signed then putch(signch);
+  for i := 10 - col to edm - 1 do
+    putch('0');
+  for i := col + 1 to 10 do
+    putch(buf[I]);
+  end;
+end; {%%wrfi}
+
+procedure %_wrfi4{fint: int4};
+begin
+getfmt;
+if edlet = 'A' then %%wrfch(@fint,4) else %%wrfi(fint);
+end; {%_wrfi4}
+
+procedure %_wrfi2{fint: int2};
+begin {%_wrfi2}
+getfmt;
+if edlet = 'A' then %%wrfch(@fint,2) else %%wrfi(fint);
+end; {%_wrfi2}
+
+procedure %_wrfi1{fint: int1};
+begin {%_wrfi1}
+getfmt;
+if edlet = 'A' then %%wrfch(@fint,1) else %%wrfi(fint);
+end; {%_wrfi1}
+
+
+procedure putreal8(freal: real8);
+  const NUMDECDIGITS = 16; NUMEXPDIGITS = 8; EXPGUESS = 32;
+  var NegFlag, ZeroFlag, AllStars: Boolean; normval: real8; 
+      eddctr, lcol, i, leftw, leftb, exp, truncval,digcols, prntcols: integer;
+      buf: array[1..NUMDECDIGITS] of char;
+      expbuf: packed array[1..NUMEXPDIGITS] of char;
+      savededlet: char; savededd, savededw, savedpval: integer;
+      lrec: unpkrec;
+  
+  procedure prcol;
+  begin {prcol}
+  lcol := lcol + 1;
+  if lcol <= NUMDECDIGITS then putch(buf[lcol]) else putch('0');
+  end; {prcol}
+
+begin {putreal8}
+
+{ Check for + or - infinity and NAN }
+
+%pd_unpk(freal,lrec);
+if lrec.kind >= 4
+then begin
+  if lrec.kind = 4
+  then
+    if lrec.sign < 0
+    then fillfield('-')
+    else fillfield('+')
+  else fillfield('?');
+  end
+else begin
+  
+  { Compute sign, 1.0 <= normalized value < 10.0, and exponent + 1 of value }
+  { This is the exponent of the digits if printed in .ddddd form.           }
+  
+  if freal < 0
+  then begin NegFlag := TRUE; freal := -freal; end
+  else NegFlag := FALSE;
+  
+  savededlet := edlet; 
+  if edlet = 'G'
+  then begin { Simulate another edit enviroment }
+    savededd := edd; savededw := edw; savedpval := pval;
+    if (freal < 1D-1) or (freal >= %_dpwr10(edd))
+    then edlet := 'E'
+    else begin
+      edlet := 'F'; pval := 0; { The scale factor "has no effect" }
+      if EdePresent then edw := edw - ede - 2 else edw := edw - 4;
+      end;
+    end;
+  
+  exp := 0; normval := freal;
+  if normval <> 0
+  then begin
+    if normval >= 10
+    then begin
+      i := EXPGUESS; { Must be a power of 2 }
+      repeat
+        if normval >= %_dpwr10(i)
+        then begin
+          exp := exp + i; normval := freal/%_dpwr10(exp);
+          end
+        else i := i div 2;
+      until i = 0;
+      end
+    else
+      if normval < 1
+      then begin
+        i := EXPGUESS; { Must be a power of 2 }
+        repeat
+          if normval < 1/%_dpwr10(i - 1)
+          then begin
+            exp := exp - i; normval := freal*%_dpwr10(-exp);
+            end
+          else i := i div 2;
+        until i = 0;
+        end;
+    exp := exp + 1; { exp + pval is num of printing digits left of . for 'F' }
+    end;
+  
+  { Time to set edd for 'G' editing }
+  
+  if (edlet = 'F') and (savededlet = 'G') then edd := edd - exp;
+  
+  { Round by adding 1/2 to digit just beyond printing decimal places }
+  
+  if edlet = 'F'
+  then prntcols := exp + pval + edd { Number of printing digits for F format }
+  else { (edlet = 'E') or (edlet = 'D') }
+    if pval > 0
+    then prntcols := edd + 1
+    else 
+      if pval = 0
+      then prntcols := edd
+      else
+        if pval > -edd  { Otherwise error condition }
+        then prntcols := edd + pval;
+  
+  { Note: prntcols = 0 before rounding may be prntcols = 1 after rounding }
+  
+  if prntcols >= 0  { May not print at all for F format with large -exp }
+  then
+    if prntcols >= NUMDECDIGITS { Round as little as possible }
+    then normval := normval + 5/%_dpwr10(NUMDECDIGITS)
+    else normval := normval + 5/%_dpwr10(prntcols);
+  
+  { Fix normalization if rounding messed it up }
+  
+  if normval > 10
+  then begin
+    exp := exp + 1; normval := normval / 10;
+    if edlet = 'F' 
+    then begin
+      prntcols := prntcols + 1;
+      if savededlet = 'G' then edd := edd - 1;
+      end;
+    end;
+  
+  { Fill in the characters of buf }
+  
+  ZeroFlag := TRUE;
+  for i := 1 to NUMDECDIGITS do begin
+    truncval := trunc(normval);
+    if (truncval <> 0) and (i <= prntcols) then ZeroFlag := FALSE;
+    buf[i] := chr(truncval + ord('0')); 
+    normval := (normval - truncval)*10;
+    end;
+  if ZeroFlag then NegFlag := FALSE;
+  
+  if edlet = 'F' 
+  then begin
+    exp := exp + pval;  { External value different from internal value }
+    if ZeroFlag and (exp > 0) then exp := 0;
+    leftw := edw - edd - 1;
+    if leftw < 0 then error(42);
+    if exp <= 0 then leftb := leftw else leftb := leftw - exp;
+    if NegFlag or PrintOptionalPlus then leftb := leftb - 1;
+    if (edd = 0) and (exp <= 0) then leftb := leftb - 1;
+    if leftb < 0
+    then putstars { Too big to fit into field width }
+    else begin
+      putblanks(leftb); 
+      if NegFlag 
+      then putch('-')
+      else
+        if PrintOptionalPlus then putch('+');
+      lcol := 0;
+      if (edd = 0) and (exp <= 0)
+      then putch('0')
+      else
+        while exp > 0 do begin
+          prcol; exp := exp - 1;
+          end;
+      putch('.'); eddctr := edd;
+      while (exp < 0) and (eddctr > 0) do begin
+        putch('0'); exp := exp + 1; eddctr := eddctr - 1;
+        end;
+      for i := 1 to eddctr do
+        prcol;
+      end;
+    end
+  else
+    if (edlet = 'E') or (edlet = 'D')
+    then begin
+      if (pval <= (- edd)) or (pval > (edd + 1)) then error(43);
+      if ZeroFlag 
+      then exp := 0
+      else exp := exp - pval; { Set printable exp }
+      
+      { Determine if exponent fits into field and calculate the number of }
+      { digit columns, those to be used for [-][0].ddddd                  }
+      
+      AllStars := FALSE;
+      if EdePresent 
+      then begin
+        if abs(exp) >= pwroften(ede) then AllStars := TRUE;
+        digcols := edw - ede - 2;
+        end
+      else begin
+        if abs(exp) >= 1000 then AllStars := TRUE;
+        digcols := edw - 4;
+        end;
+      
+      { if pval >= 1 then need edd + 2 places for digits else need edd + 1 }
+      
+      prntcols := edd + 1 + ord(pval>=1);
+      if NegFlag or PrintOptionalPlus then prntcols := prntcols + 1;
+      if digcols < prntcols then AllStars := TRUE;
+      if AllStars
+      then putstars
+      else begin
+        putblanks(digcols - prntcols); 
+        if NegFlag 
+        then putch('-')
+        else
+          if PrintOptionalPlus then putch('+');
+        lcol := 0;
+        for i := 1 to pval do  { Digits to the left of decimal point }
+          if ZeroFlag and (i <> pval) then putch(' ') else prcol;
+        putch('.');
+        for i := -1 downto pval do  { Zeros to the right of decimal point }
+          putch('0');
+        
+        { Cases in which edd + 1 digits print, except if all left of point }
+        
+        if (pval >= 1) and (pval < (edd + 1)) then prcol;
+        
+        { Significant digits after decimal point }
+        
+        for i := 1 to edd - abs(pval) do
+          prcol;
+        
+        { Print exponent part }
+        
+        if EdePresent 
+        then putch(edlet)
+        else
+          if abs(exp) < 100
+          then begin putch(edlet); ede := 2; end { OK to use ede as temp since }
+          else ede := 3;                         { not EdePresent.             }
+        if exp < 0 then begin exp := - exp; putch('-'); end else putch('+');
+        lcol := NUMEXPDIGITS;
+        repeat
+          expbuf[lcol] := chr((exp mod 10) + ord('0'));
+          exp := exp div 10; lcol := lcol - 1;
+        until exp = 0;
+        for i := 1 to ede - (NUMEXPDIGITS - lcol) do
+          putch('0');
+        for i := lcol + 1 to NUMEXPDIGITS do
+          putch(expbuf[i]);
+        end;
+      end
+    else error(44);
+  if savededlet = 'G'
+  then begin { print trailing blanks and restore true edit descriptor }
+    if edlet = 'F' 
+    then
+      if EdePresent then putblanks(ede + 2) else putblanks(4);
+    edlet := savededlet; edd := savededd; edw := savededw; pval := savedpval;
+    end;
+  end; { lrec.kind < 4 }
+end; {putreal8}
+
+procedure %_wrfr8{freal: real8};
+begin {%_wrfr8}
+getfmt;
+if edlet = 'A' then %%wrfch(@freal,8) else putreal8(freal);
+end; {%_wrfr8}
+
+
+procedure putreal4(freal: real4);
+  const NUMDECDIGITS = 7; NUMEXPDIGITS = 8; EXPGUESS = 8;
+  var NegFlag, ZeroFlag, AllStars: Boolean; normval: real4; 
+      eddctr, lcol, i, leftw, leftb, exp, truncval,digcols, prntcols: integer;
+      buf: array[1..NUMDECDIGITS] of char;
+      expbuf: packed array[1..NUMEXPDIGITS] of char;
+      savededlet: char; savededd, savededw, savedpval: integer;
+      lrec: unpkrec;
+  
+  procedure prcol;
+  begin {prcol}
+  lcol := lcol + 1;
+  if lcol <= NUMDECDIGITS then putch(buf[lcol]) else putch('0');
+  end; {prcol}
+
+begin {putreal4}
+
+{ Check for + or - infinity and NAN }
+
+%pf_unpk(freal,lrec);
+if lrec.kind >= 4
+then begin
+  if lrec.kind = 4
+  then
+    if lrec.sign < 0
+    then fillfield('-')
+    else fillfield('+')
+  else fillfield('?');
+  end
+else begin
+  
+  { Compute sign, 1.0 <= normalized value < 10.0, and exponent + 1 of value }
+  { This is the exponent of the digits if printed in .ddddd form.           }
+  
+  if freal < 0
+  then begin NegFlag := TRUE; freal := - freal; end
+  else NegFlag := FALSE;
+  
+  savededlet := edlet; 
+  if edlet = 'G'
+  then begin { Simulate another edit enviroment }
+    savededd := edd; savededw := edw; savedpval := pval;
+    if (freal < 1/10) or (freal >= pwroften(edd))
+    then edlet := 'E'
+    else begin
+      edlet := 'F'; pval := 0; { The scale factor "has no effect" }
+      if EdePresent then edw := edw - ede - 2 else edw := edw - 4;
+      end;
+    end;
+  
+  exp := 0; normval := freal;
+  if normval >= 10
+  then begin
+    i := EXPGUESS; { Must be a power of 2 }
+    repeat
+      if normval >= pwroften(i)
+      then begin
+        exp := exp + i; normval := freal / pwroften(exp);
+        end
+      else i := i div 2;
+    until i = 0;
+    end;
+  if normval <> 0
+  then begin
+    if normval < 1 
+    then begin
+      i := EXPGUESS; { Must be a power of 2 }
+      repeat
+        if normval < (1 / pwroften(i - 1))
+        then begin
+          exp := exp - i; normval := freal * pwroften(-exp);
+          end
+        else i := i div 2;
+      until i = 0;
+      end;
+    exp := exp + 1; { exp + pval is num of printing digits left of . for 'F' }
+    end;
+  
+  { Time to set edd for 'G' editing }
+  
+  if (edlet = 'F') and (savededlet = 'G') then edd := edd - exp;
+  
+  { Round by adding 1/2 to digit just beyond printing decimal places }
+  
+  if edlet = 'F'
+  then prntcols := exp + pval + edd { Number of printing digits for F format }
+  else { (edlet = 'E') or (edlet = 'D') }
+    if pval > 0
+    then prntcols := edd + 1
+    else 
+      if pval = 0
+      then prntcols := edd
+      else
+        if pval > -edd  { Otherwise error condition }
+        then prntcols := edd + pval;
+  
+  { Note: prntcols = 0 before rounding may be prntcols = 1 after rounding }
+  
+  if prntcols >= 0  { May not print at all for F format with large -exp }
+  then
+    if prntcols >= NUMDECDIGITS { Round as little as possible }
+    then normval := normval + 5/pwroften(NUMDECDIGITS)
+    else normval := normval + 5/pwroften(prntcols);
+  
+  { Fix normalization if rounding messed it up }
+  
+  if normval >= 10 
+  then begin
+    exp := exp + 1; normval := normval / 10;
+    if edlet = 'F' 
+    then begin
+      prntcols := prntcols + 1;
+      if savededlet = 'G' then edd := edd - 1;
+      end;
+    end;
+  
+  { Fill in the characters of buf }
+  
+  ZeroFlag := TRUE;
+  for i := 1 to NUMDECDIGITS do begin
+    truncval := trunc(normval);
+    if (truncval <> 0) and (i <= prntcols) then ZeroFlag := FALSE;
+    buf[i] := chr(truncval + ord('0')); 
+    normval := (normval - truncval) * 10;
+    end;
+  if ZeroFlag then NegFlag := FALSE;
+  
+  if edlet = 'F' 
+  then begin
+    exp := exp + pval;  { External value different from internal value }
+    if ZeroFlag and (exp > 0) then exp := 0;
+    leftw := edw - edd - 1;
+    if leftw < 0 then error(42);
+    if exp <= 0 then leftb := leftw else leftb := leftw - exp;
+    if NegFlag or PrintOptionalPlus then leftb := leftb - 1;
+    if (edd = 0) and (exp <= 0) then leftb := leftb - 1;
+    if leftb < 0
+    then putstars { Too big to fit into field width }
+    else begin
+      putblanks(leftb); 
+      if NegFlag 
+      then putch('-')
+      else
+        if PrintOptionalPlus then putch('+');
+      lcol := 0;
+      if (edd = 0) and (exp <= 0)
+      then putch('0')
+      else
+        while exp > 0 do begin
+          prcol; exp := exp - 1;
+          end;
+      putch('.'); eddctr := edd;
+      while (exp < 0) and (eddctr > 0) do begin
+        putch('0'); exp := exp + 1; eddctr := eddctr - 1;
+        end;
+      for i := 1 to eddctr do
+        prcol;
+      end;
+    end
+  else
+    if (edlet = 'E') or (edlet = 'D')
+    then begin
+      if (pval <= (- edd)) or (pval > (edd + 1)) then error(43);
+      if ZeroFlag 
+      then exp := 0
+      else exp := exp - pval; { Set printable exp }
+      
+      { Determine if exponent fits into field and calculate the number of }
+      { digit columns, those to be used for [-][0].ddddd                  }
+      
+      AllStars := FALSE;
+      if EdePresent 
+      then begin
+        if abs(exp) >= pwroften(ede) then AllStars := TRUE;
+        digcols := edw - ede - 2;
+        end
+      else begin
+        if abs(exp) >= 1000 then AllStars := TRUE;
+        digcols := edw - 4;
+        end;
+      
+      { if pval >= 1 then need edd + 2 places for digits else need edd + 1 }
+      
+      prntcols := edd + 1 + ord(pval>=1);
+      if NegFlag or PrintOptionalPlus then prntcols := prntcols + 1;
+      if digcols < prntcols then AllStars := TRUE;
+      if AllStars
+      then putstars
+      else begin
+        putblanks(digcols - prntcols); 
+        if NegFlag 
+        then putch('-')
+        else
+          if PrintOptionalPlus then putch('+');
+        lcol := 0;
+        for i := 1 to pval do  { Digits to the left of decimal point }
+          if ZeroFlag and (i <> pval) then putch(' ') else prcol;
+        putch('.');
+        for i := -1 downto pval do  { Zeros to the right of decimal point }
+          putch('0');
+        
+        { Cases in which edd + 1 digits print, except if all left of point }
+        
+        if (pval >= 1) and (pval < (edd + 1)) then prcol;
+        
+        { Significant digits after decimal point }
+        
+        for i := 1 to edd - abs(pval) do
+          prcol;
+        
+        { Print exponent part }
+        
+        if EdePresent 
+        then putch(edlet)
+        else
+          if abs(exp) < 100
+          then begin putch(edlet); ede := 2; end { OK to use ede as temp since }
+          else ede := 3;                         { not EdePresent.             }
+        if exp < 0 then begin exp := - exp; putch('-'); end else putch('+');
+        lcol := NUMEXPDIGITS;
+        repeat
+          expbuf[lcol] := chr((exp mod 10) + ord('0'));
+          exp := exp div 10; lcol := lcol - 1;
+        until exp = 0;
+        for i := 1 to ede - (NUMEXPDIGITS - lcol) do
+          putch('0');
+        for i := lcol + 1 to NUMEXPDIGITS do
+          putch(expbuf[i]);
+        end;
+      end
+    else error(44);
+  if savededlet = 'G'
+  then begin { print trailing blanks and restore true edit descriptor }
+    if edlet = 'F' 
+    then
+      if EdePresent then putblanks(ede + 2) else putblanks(4);
+    edlet := savededlet; edd := savededd; edw := savededw; pval := savedpval;
+    end;
+  end; { lrec.kind < 4 }
+end; {putreal4}
+
+procedure %_wrfr4{freal: real4};
+begin {%_wrfr4}
+getfmt;
+if edlet = 'A' then %%wrfch(@freal,4) else putreal4(freal);
+end; {%_wrfr4}
+
+
+{ Write a logical }
+
+procedure %%wrfl(flog: int4);
+begin {%%wrfl}
+if edlet <> 'L' then error(45);
+putblanks(edw - 1);
+if flog = 0 then putch('F') else putch('T');
+end; {%%wrfl}
+
+procedure %_wrfl4{flog: int4};
+begin {%_wrfl4}
+getfmt;
+if edlet = 'A' then %%wrfch(@flog,4) else %%wrfl(flog);
+end; {%_wrfl4}
+
+procedure %_wrfl2{flog: int2};
+begin {%_wrfl2}
+getfmt;
+if edlet = 'A' then %%wrfch(@flog,2) else %_wrfl4(flog);
+end; {%_wrfl2}
+
+procedure %_wrfl1{flog: int1};
+begin {%_wrfl1}
+getfmt;
+if edlet = 'A' then %%wrfch(@flog,1) else %_wrfl4(flog);
+end; {%_wrfl1}
+
+
+{ Write a complex }
+
+procedure %_wrfc8{fimag,freal: real4};
+begin {%_wrfc8}
+%_wrfr4(freal); %_wrfr4(fimag);
+end; {%_wrfc8}
+
+
+(*****************************************************************************)
+(*                           Formatted Read                                  *)
+(*****************************************************************************)
+
+
+function rdintconst(width: integer; OpSigned: Boolean): int4;
+  var lch: char; lint: int4; PosFlag: Boolean;
+begin {rdintconst}
+lint := 0; col := 0;
+repeat
+  getch(lch);
+until (lch <> ' ') or (col = width);
+PosFlag := lch <> '-';
+if (lch = '-') or (lch = '+')
+then begin
+  if not OpSigned then error(1);
+  if col = width then error(2);
+  getch(lch);
+  end;
+while col <= width do begin
+  if lch = ' ' 
+  then begin
+    if BZFlag then lint := 10 * lint;
+    end
+  else begin
+    if (lch < '0') or (lch > '9') then error(3);
+    lint := (10 * lint + ord('0')) - ord(lch);
+    end;
+  if col < width then getch(lch) else col := col + 1;
+  end;
+if PosFlag then rdintconst := - lint else rdintconst := lint;
+end; {rdintconst}
+
+
+{ Read a character variable }
+
+procedure %%rdfch(fpac: ppac; paclen: integer);
+  var i: integer; lch: char;
+begin {%%rdfch}
+if not EdwPresent then edw := paclen;
+for i := 1 to edw - paclen do
+  getch(lch);
+for i := 1 to edw do begin
+  getch(lch); fpac^[i] := lch;
+  end;
+for i := edw + 1 to paclen do
+  fpac^[i] := ' ';
+end; {%%rdfch}
+
+procedure %_rdfch{fpac: ppac; paclen: integer};
+begin {%_rdfch}
+getfmt;
+if edlet <> 'A' then error(40);
+%%rdfch(fpac,paclen);
+end; {%_rdfch}
+
+
+{ Read an integer }
+
+procedure %_rdfi4{var fint: int4};
+begin {%_rdfi4}
+getfmt;
+if edlet = 'A'
+then %%rdfch(@fint,4)
+else begin
+     if edlet <> 'I' then error(33);
+     fint := rdintconst(edw,TRUE);
+     end;
+end; {%_rdfi4}
+
+
+procedure %_rdfi2{var fint: int2};
+begin {%_rdfi2}
+getfmt;
+if edlet = 'A'
+then %%rdfch(@fint,2)
+else begin
+     if edlet <> 'I' then error(33);
+     fint := rdintconst(edw,TRUE);
+     end;
+end; {%_rdfi2}
+
+
+procedure %_rdfi1{var fint: int1};
+begin {%_rdfi1}
+getfmt;
+if edlet = 'A'
+then %%rdfch(@fint,1)
+else begin
+     if edlet <> 'I' then error(33);
+     fint := rdintconst(edw,TRUE);
+     end;
+end; {%_rdfi1}
+
+
+{ Read a real }
+
+procedure %_rdfr8{var freal: real8};
+  var lch: char; lreal: real8; NegFlag, ExpFound: Boolean; 
+      scale: integer; exp: integer;
+begin {%_rdfr8}
+getfmt;
+if edlet = 'A' then begin %%rdfch(@freal,8); exit(%_rdfr8); end;
+if (edlet < 'D') or (edlet > 'G') then error(34);
+lreal := 0; col := 0; ExpFound := FALSE;
+scale := - 32767; { Used to count places after decimal point }
+repeat
+  getch(lch);
+until (lch <> ' ') or (col = edw);
+NegFlag := lch = '-';
+if (lch = '-') or (lch = '+')
+then
+  if col = edw then lch := ' ' else getch(lch);
+while (col <= edw) and (not ExpFound) do begin
+  if lch = ' ' 
+  then begin
+    if BZFlag 
+    then begin lreal := lreal*10; scale := scale + 1; end
+    end
+  else
+    if lch = '.' 
+    then begin if scale >= 0 then error(35); scale := 0; end
+    else 
+      if (lch = 'E') or (lch = 'D') or (lch = 'e') or (lch = 'd')
+      then begin 
+        exp := rdintconst(edw - col,TRUE); ExpFound := TRUE;
+        end
+      else 
+        if (lch = '+') or (lch = '-')
+        then begin
+          exp := rdintconst(edw - col,FALSE);
+          if lch = '-' then exp := -exp; ExpFound := TRUE;
+          end
+        else begin
+          if (lch < '0') or (lch > '9') then error(36);
+          lreal := lreal*10 + (ord(lch) - ord('0'));
+          scale := scale + 1;
+          end;
+  if (col < edw) and (not ExpFound) then getch(lch) else col := col + 1;
+  end;
+if NegFlag then lreal := -lreal;
+if scale >= 0 
+then lreal := lreal/%_dpwr10(scale)
+else lreal := lreal/%_dpwr10(edd);
+if not ExpFound then exp := PVAL;
+if exp < 0
+then lreal := lreal/%_dpwr10(-exp)
+else lreal := lreal*%_dpwr10(exp);
+freal := lreal;
+end; {%_rdfr8}
+
+
+procedure %_rdfr4{var freal: real4};
+  var lch: char; lreal: real4; NegFlag, ExpFound: Boolean; 
+      scale: integer; exp: integer;
+begin {%_rdfr4}
+getfmt;
+if edlet = 'A' then begin %%rdfch(@freal,4); exit(%_rdfr4); end;
+if (edlet < 'D') or (edlet > 'G') then error(34);
+lreal := 0; col := 0; ExpFound := FALSE;
+scale := - 32767; { Used to count places after decimal point }
+repeat
+  getch(lch);
+until (lch <> ' ') or (col = edw);
+NegFlag := lch = '-';
+if (lch = '-') or (lch = '+')
+then
+  if col = edw then lch := ' ' else getch(lch);
+while (col <= edw) and (not ExpFound) do begin
+  if lch = ' ' 
+  then begin
+    if BZFlag 
+    then begin lreal := 10 * lreal; scale := scale + 1; end
+    end
+  else
+    if lch = '.' 
+    then begin if scale >= 0 then error(35); scale := 0; end
+    else 
+      if (lch = 'E') or (lch = 'D') or (lch = 'e') or (lch = 'd')
+      then begin 
+        exp := rdintconst(edw - col,TRUE); ExpFound := TRUE;
+        end
+      else 
+        if (lch = '+') or (lch = '-')
+        then begin
+          exp := rdintconst(edw - col,FALSE);
+          if lch = '-' then exp := -exp; ExpFound := TRUE;
+          end
+        else begin
+          if (lch < '0') or (lch > '9') then error(36);
+          lreal := 10 * lreal + (ord(lch) - ord('0')); 
+          scale := scale + 1;
+          end;
+  if (col < edw) and (not ExpFound) then getch(lch) else col := col + 1;
+  end;
+if NegFlag then lreal := - lreal;
+if scale >= 0 
+then lreal := lreal / pwroften(scale)
+else lreal := lreal / pwroften(edd);
+if not ExpFound then exp := PVAL;
+if exp < 0
+then lreal := lreal / pwroften(-exp)
+else lreal := lreal * pwroften(exp);
+freal := lreal;
+end; {%_rdfr4}
+
+
+{ Read a logical }
+
+function %%rdfl: int4;
+  var lch: char;
+begin {%%rdfl4}
+if edlet <> 'L' then error(37); col := 0;
+repeat
+  getch(lch);
+until (lch <> ' ') or (col = edw);
+if lch = '.'
+then
+  if col = edw then error(39) else getch(lch);
+if (lch <> 'T') and (lch <> 'F') and 
+   (lch <> 't') and (lch <> 'f') and (not EofFlag)
+then error(39);
+if (lch = 'T') or (lch = 't') then %%rdfl := 1 else %%rdfl := 0;
+while col < edw do
+  getch(lch);
+end; {%%rdfl}
+
+procedure %_rdfl4{var flog: int4};
+begin {%_rdfl4}
+getfmt;
+if edlet = 'A' then %%rdfch(@flog,4) else flog := %%rdfl;
+end; {%_rdfl4}
+
+procedure %_rdfl2{var flog: int2};
+begin {%_rdfl2}
+getfmt;
+if edlet = 'A' then %%rdfch(@flog,2) else flog := %%rdfl;
+end; {%_rdfl2}
+
+procedure %_rdfl1{var flog: int1};
+begin {%_rdfl1}
+getfmt;
+if edlet = 'A' then %%rdfch(@flog,1) else flog := %%rdfl;
+end; {%_rdfl1}
+
+
+{ Read a complex }
+
+procedure %_rdfc8{var fcomplex: complex};
+begin {%_rdfc8}
+%_rdfr4(fcomplex.realpart); %_rdfr4(fcomplex.imagpart);
+end; {%_rdfc8}
+
+

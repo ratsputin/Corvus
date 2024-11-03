@@ -1,0 +1,415 @@
+{$S ADJUST}
+procedure AdjustTask;
+
+var
+  CLin: integer;
+  Src, Tmp: BA;
+  Quit, Done, Dum: boolean;
+  ParInd, StdInd, I, Ind, Brk, Len, Siz, Lft, Rht: integer;
+
+
+function Hyphenate( var Str: BA; Ndx, Lim: integer ): integer;
+
+var
+  Ans: char;
+  Tmp: StrTyp;
+  Wrd: BA;
+  Brk, L, WrdLft, WrdLen: integer;
+
+begin
+  if debug then pcall(128);
+  DpyChg := true;
+  WrdLft := SpanNE( Str, Ndx, ' ' ) mod MaxLinLen;
+
+  if NDX<LIM then begin
+    WrdLen := SpanEQ( Str, WrdLft, ' ' ) - WrdLft;
+    Brk := Lim - 1;
+    Bell(BelAck);
+    repeat
+      fillchar( Wrd, MaxLinLen, ' ' );
+      L := Brk - WrdLft + 1;
+      moveleft( Str[WrdLft], Wrd[1], L );
+      Wrd[L+1] := ord('|');
+      moveleft( Str[Brk+1], Wrd[L+2], WrdLen-L );
+      BAToStr( Wrd, 1, Tmp );
+      TellUsr( @Tmp );               { Display word with imbedded "|" }
+      NextCmd;
+      case Cmd of
+        KCSRL: Brk := max( WrdLft, Brk-1 );
+        KCSRR: Brk := min( Lim, Brk+1 );
+        KF10 : Quit := true;
+        KF3  : begin
+                 if Brk<Lim then begin
+                   Ndx := Brk+1;
+                   moveright( STR[NDX], STR[NDX+1], MAXLINLEN-NDX );
+                   STR[NDX] := ord('-');
+                 end else begin
+                   Bell(BelErr);
+                   Cmd := KBAD;
+                 end;
+               end;
+        KF4  :Ndx := Brk;
+        KF6: begin
+            TellUsr( Msg(MGEDIT,14) );
+            Lim := WrdLft+WrdLen-1;
+          end;
+        KCR:   begin
+            if Lim=WrdLft+WrdLen-1 then
+              Ndx := Lim; {mar rel=>no split}
+          end;
+      end;
+    until Cmd in [ KCR, KF3, KF4, KF10 ];
+  end;
+  ClrMsg;
+  HYPHENATE := NDX;
+  DpyChg := false;
+  if debug then pexit;
+end;
+
+
+function  GoParaTop: boolean;
+
+var OK: boolean;
+    OCurLin: integer;
+
+begin
+  FlushNewTxt;
+  OCurLin := CurLin;
+  OK := true;
+
+  while (CurLin > 1) and not BlankLine( CurLin ) and OK do begin
+     OK := UsrIdle;
+     SetUpNewTxt( CurLin - 1 );
+  end;
+
+  if BlankLine( CurLin ) then
+    SetUpNewTxt( CurLin + 1 );
+
+  if not OK then
+    SetUpNewTxt( OCurLin );
+
+  GoParaTop := OK;
+end;
+
+
+procedure FillPara( FmtNum: integer );
+
+var CLin, Split1, Split2, BufLft, BufRht, i, j, k: integer;
+    Done: boolean;
+
+
+  procedure Justify( var Buf: BA );
+
+  var RMar: integer;
+      Pad : byte;
+
+  begin
+    RMar := LastNB( Buf );
+    Pad := $20;
+    while RMar<FillRMar do begin
+      JstfPt := SpanNE( Buf, SpanEQ( Buf, JstfPt+1, ' ' ), ' ' );
+      if JstfPt>MaxLinLen then begin
+        JstfPt := BAColToNdx( FillLMar, Buf );
+        JstfPt := SpanEQ( Buf, JstfPt, ' ' );
+        JstfPt := SpanNE( Buf, JstfPt, ' ' );
+      end;
+      if JstfPt<MaxLinLen then begin
+         BAInsByt( Buf, JstfPt, 1, Pad );
+         RMar := RMar + 1;
+      end else begin
+         RMar := FillRMar;
+      end;
+    end;
+  end;
+
+
+  procedure FlshFB1( Just: boolean );
+
+  begin
+     if not FB1Mty then begin
+        FB1Mty := true;
+        if Just then Justify( FB1 );
+        InsertLine( CLin, FB1 );
+        ShowLine( CLin );
+        CLin := CLin + 1;
+        fillchar( FB1[1], MaxLinLen, ' ' );
+     end;
+
+     FB1Avail := FillLMar;
+  end;
+
+
+  procedure StuffFB1( Fst, Lst: integer );
+
+  var E: EnhSetTyp;
+      Enh: array[1..3] of byte;
+
+  begin
+    if FB1Avail>3 then begin
+       if (FB1[FB1Avail-2]=ord('-')) and (FB1[FB1Avail-3]<>ord('-')) then
+          FB1Avail := FB1Avail - 2;
+    end;
+    moveleft( FB2[Fst], FB1[FB1Avail], Lst-Fst+1 );
+    FB1Avail := BkSpanNE( FB1, MaxLinLen, ' ' ) + 2;
+    if chr(FB1[FB1Avail-2]) in SentEnd then
+       FB1Avail := FB1Avail + 1;
+    FB1Mty := false;
+    if LastNB(FB1)>FillRMar then FlshFB1( JstfOpt );
+    EnhAtCol( FB2, BANdxToCol(Lst,FB2), E );
+    fillchar( FB2[1], Lst, ' ' );
+    BufLft := FirstNB( FB2 );
+    if (E<>[]) and (FB2[BufLft]<>ord(' ')) then begin
+       CnvEnhByt( E, Enh[3] );
+       Enh[1] := 27;
+       Enh[2] := ord('e');
+       BAInsByt( FB2, BufLft, 3, Enh[1] );
+    end;
+  end;
+
+
+  procedure UnJustify( var B: BA );
+
+  { Compress multiple blanks to single blanks. Put two blanks after sentence
+    terminators. }
+
+  var
+    i,j,k: integer;
+    Prd  : Boolean;
+
+    procedure AppendBlank( C: char );
+
+    var i: integer;
+
+    begin
+       i := SpanEQ( B, 1, C ) + 1;
+       while i<MaxLinLen do begin
+          if B[i]=$20 then BAInsByt( B, i, 1, BlkStr[1] );
+          i := SpanEQ( B, i, C ) + 1;
+       end;
+    end;
+
+  begin            { eAUnJustifye@ }
+     Prd := False;
+     i := SpanEQ( B, FirstNB( B ), ' ' ) + 1;
+     If B[i-1] = Ord('.') Then Prd := True;
+     j := LastNB( B );
+     while (i<j) and (not Prd) do begin
+        k := SpanNE( B, i, ' ' );
+        BADelByt( B, i, k-i );
+        i := SpanEQ( B, i, ' ' ) + 1
+        end;
+
+     (*
+     AppendBlank( '.' );
+     *)
+
+     AppendBlank( '!' );
+     AppendBlank( '?' );
+     AppendBlank( ':' );
+  end;
+
+
+  procedure FillText;
+
+  var
+    Need: integer;
+
+  begin
+    UnJustify( FB2 );
+    BufLft := FirstNB( FB2 );                     { eAGete@ eApositione@ eAofe@ eAfirste@ eAchare@ }
+    BufRht := BkSpanNE( FB2, MaxLinLen, ' ' );    { eAGete@ eApositione@ eAofe@ eAlaste@ eAchare@ }
+
+    while BufLft <= BufRht do begin
+
+       Need := FillRMar - BANdxToCol(FB1Avail,FB1) + 2;
+       Split1 := BAColToNdx( Need+BufLft-1, FB2 );
+       Split2 := BkSpanEQ( FB2, Split1, ' ' );
+       if Split2 < BufLft then begin              { eANoe@ eAbreake@ eApoint.e@ }
+         if FB1Mty then StuffFB1( BufLft, Split1 ); { eAMovee@ eAae@ eAworde@ eAupe@ eAae@ eAline.e@ }
+         FlshFB1( JstfOpt )
+         end
+       else begin                                 { eAGote@ eAae@ eAbreake@ eApointe@ }
+         if HyphOpt and ((Split1-Split2) > HotZon) then
+            Split2 := Hyphenate( FB2, Split2, Split1 );
+         StuffFB1( BufLft, Split2 );
+         if not BAMatch( FB2, FirstNB(FB2), ' ' ) then FlshFB1( JstfOpt )
+         end;
+       BufRht := BkSpanNE( FB2, MaxLinLen, ' ' )
+       end;
+  end;
+
+
+begin                                          { eAFillParae@ }
+  FillLMar := max( 1, ParFmt[FmtNum].L );
+  FillRMar := min( MaxLinLen, ParFmt[FmtNum].R );
+
+  if FillLMar<FillRMar then begin
+     if GoParaTop then begin
+        LoadLabels( HyphFrame );
+        BeginEvent;
+        CLin := CurLin;
+        DpyChg := false;
+        FB1 := BlkStr;         { eASete@ eAtoe@ eAblankse@ }
+
+        if ParFmt[FmtNum].I then begin                 { eAItemizede@ eAparagraphe@ }
+           BADelByt( NewTxt, 1, FirstNB(NewTxt)-1 );
+           i := SpanEQ( NewTxt, 1, ' ' );
+           k := min( MaxLinLen, abs(ParFmt[FmtNum].F) );
+           j := max( 1, min( FillLMar-k-i+1, MaxLinLen ));
+           moveleft( NewTxt[1], FB1[j], i-1 );
+           FB1Avail := FillLMar;
+           BADelByt( NewTxt, 1, i );
+           NewTxtMty := false;
+           FlushNewTxt;
+           FB1Mty := false
+           end
+         else begin                                     { eANonitemizede@ eAparagraphe@ }
+           FB1Avail := FillLMar + ParFmt[FmtNum].F;     { eAPositione@ eAofe@ eAfirste@ eAavail...e@}
+           FB1Mty := true                               { eAchare@ eAine@ eAline.e@ }
+           end;
+
+        FB1Avail := max( 1, min( FB1Avail, MaxLinLen ) );
+        Done := false;
+        while not Done do begin
+           GetLine( FB2, CLin );
+           if chr(FB2[FirstNB(FB2)]) in ['.',' '] then begin { end of paragph }
+              Done := true;
+              FlshFB1( false )
+              end
+            else begin
+              DeleteLine( CLin );
+              FillText
+              end
+            end;
+
+        EndEvent;
+        for i := CLin to WinBot do ShowLine(i);
+        SetUpNewTxt( CLin+1 );
+        DpyChg := true;
+        LoadLabels(AdjtFrame);
+     end;
+  end else begin
+     TellUsr( Msg(MGEDIT,31) );
+  end;
+end;
+
+
+procedure GetParFmt( N: integer );
+
+begin
+   with ParFmt[N] do begin
+      if PmtInt( Msg(MGEDIT,28), F ) then begin
+         if F<0 then I := Confirm(Msg(MGEDIT,33), I )
+           else I := false;
+         if PmtInt( Msg(MGEDIT,29), L ) then
+            if PmtInt( Msg(MGEDIT,30), R ) then ClrMsg;
+      end;
+   end;
+end;
+
+
+function SetStyle: boolean;
+
+var
+  Buf: BA;
+  S,
+  DictKey  : Str255;
+
+begin
+   SetStyle := true;
+   TellUsr( Msg(MGEDIT,32) );
+   NextCmd;
+   case Cmd of
+      KF1: GetParFmt(1);
+      KF2: GetParFmt(2);
+      KF3: GetParFmt(3);
+      KF4: GetParFmt(4);
+      KF5: GetParFmt(5);
+      otherwise: SetStyle := false;
+   end;
+   moveleft( ParFmt, Buf[2], sizeof(ParFmt) );
+   Buf[1] := sizeof(ParFmt);
+   moveleft( Buf, S, sizeof(ParFmt)+1 );
+   DictKey := 'ParFmt';
+   DictSave( DictKey, S );
+   ClrMsg;
+end;
+
+
+procedure DoHyph;
+
+var
+  Dum: boolean;
+
+begin
+   HyphOpt := Confirm( Msg(MGEDIT,35), HyphOpt );
+   if HyphOpt then begin
+      Dum := PmtInt( Msg(MGEDIT,36), HotZon );
+   end;
+end;
+
+
+procedure PrvPara;
+
+var
+  Lin: integer;
+
+begin
+  Lin := CurLin;
+  repeat
+    Lin := Lin - 1;
+    SetUpNewTxt( Lin );
+  until (Lin<=1) or
+        (BlankLine(Lin-1) and not BlankLine(Lin));
+  SetUpNewTxt(Lin);
+  CurCol := FirstNB( NewTxt );
+end;
+
+
+procedure NxtPara;
+
+var
+  Lin: integer;
+
+begin
+  Lin := CurLin;
+  repeat
+    Lin := Lin + 1;
+    SetUpNewTxt( Lin );
+  until (Lin>=LstLin) or
+        (BlankLine(Lin-1) and not BlankLine(Lin));
+  SetUpNewTxt( Lin );
+  CurCol := FirstNB( NewTxt );
+end;
+
+
+begin
+   if WrtOK then begin
+      LoadLabels( AdjtFrame );
+      Done := false;
+      while not Done do begin
+         NextCmd;
+         case Cmd of
+           KF1: FillPara(1);
+           KF2: FillPara(2);
+           KF3: FillPara(3);
+           KF4: FillPara(4);
+           KF5: FillPara(5);
+           KF6: Done := not SetStyle;
+           KF7: JstfOpt := Confirm( Msg(MGEDIT,34), JstfOpt );
+           KF8: PrvPara;
+           KF9: NxtPara;
+           KF17:DoHyph;
+           KTEXT: Begin
+                    PushCBuf(Key);
+                    Cmd := KTASK;
+                    Key := Chr(TIDEdit);
+                    Done := True
+                    End;
+           Otherwise: Done := not LocalEdit
+           end
+         end
+      end else begin
+      { NextCmd}
+        end
+end;

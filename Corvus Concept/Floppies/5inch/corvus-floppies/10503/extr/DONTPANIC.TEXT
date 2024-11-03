@@ -1,0 +1,32 @@
+program dontpanic;
+  uses {$U /ccutil/cclib} ccdefn,cccrtio;
+  var i,j,k: integer;
+  begin
+  cccrtioinit;  k:=100;
+  CrtAction(EraseALL);  CrtAction(CursorOff);
+
+  gotoxy(5,2); write('Press any key to stop.');
+
+  gotoxy(15,12);
+  write('*******************************');
+  for i:=13 to 25 do
+      begin
+      gotoxy(15,i); write('*');
+      gotoxy(45,i); write('*');
+      end;
+  gotoxy(15,26);
+  write('*******************************');
+
+  repeat
+      begin
+      gotoxy(24,19); write('             ');
+      for i:=1 to 5000 do k := k*k DIV k;
+      gotoxy(24,19); write('DON''T PANIC!!');
+      for i:=1 to 5000 do k := k*k DIV k;
+      end;
+      until( unitbusy(2) );
+
+  gotoxy(5,2); write('                      ');
+  gotoxy(0,0);
+  CrtAction(CursorOn);
+  end.

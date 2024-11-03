@@ -1,0 +1,226 @@
+;
+; THIS FILE CONTAINS THE TABLES FOR THE KEYBOARD DRIVER FOR THE VERSION 04
+; KEYBOARD (Selectric style ASCII with ALT key and Back Space key moved from
+; the version 3 location).
+;
+; 04-13-82 kb MADE CHANGES TO ALLOW TABLES TO BE LOADED INTO SYSTEM SEPERATE FROM DRIVER
+; 04-13-82 kb added version dates and start address with garbage rts instruction
+; 04-14-82 lf added file length after translation table
+; 07-06-82 lf <enter> same as <return>, shift backspace = DEL ($7F)
+; 01-04-83 lf <esc> generates two escape characters
+;
+; file : csk.rev4.text
+; date : 04-Jan-83  lf
+;
+;
+; TRANSLATION TABLE
+;
+TRANTBL
+            DATA.L     STABLE - TRANTBL          ;POINTER TO SHIFT TABLE
+            DATA.L     RTABLE - TRANTBL          ;POINTER TO REGULAR TABLE
+            DATA.L     ETABLE - TRANTBL          ;POINTER TO ESCAPE # TABLE
+            DATA.L     SMTABLE- TRANTBL          ;PTR TO STANDARD MULT CHAR TABLE
+            DATA.L     CQTABLE- TRANTBL          ;POINTER TO CAP/QUALIFIER TABLE
+            DATA.L     RLTABLE- TRANTBL          ;POINTER TO RELEASE TABLE
+            DATA.L     BKEYCOD- TRANTBL          ;POINTER TO BREAK KEYCODE TABLE
+;
+; LENGTH OF FILE DATA AFTER TRANSLATION TABLE
+;
+            DATA.W     LENGTH
+;
+; VERSION DATE
+;
+VERSION     DATA.B     '010483'
+;
+START       RTS
+  page
+;
+; NOTE:
+; All the tables have keycodes with the closure/release bit (MSB) of the Keycode
+; clear (0), except the Break Keycode Table.
+;
+; THE SHIFT TABLE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE CHARACTER
+;        CODE FOR THE CORRESPONDING KEYCODE.
+;
+;  Used on Closure only when Shift key is being pressed (Shift flag is set).
+;
+;  The character symbol is above each character code
+;       SMC = special value for Standard Multiple Character Sequence
+;       QUL = special value for Qualifier
+;       EST = special value for Escape Sharp Character Sequence
+;       ... = No key for this keycode
+;
+STABLE
+
+;         SMC  3   9  SMC  6   ,   -   cr SMC  1   7   SMC 4   8   5   2    ;MSB
+  DATA.B  $9E,$33,$39,$9E,$36,$2C,$2D,$0D,$9E,$31,$37,$9E,$34,$38,$35,$32   ;$00
+;          +  ...  {  del  cr  }   |  ...  )   ?   P   _   :   ~   "  QUL
+  DATA.B  $2B,$00,$7B,$7F,$0D,$7D,$7C,$00,$29,$3F,$50,$5F,$3A,$7E,$22,$9F   ;$10
+;         EST EST EST EST EST ... ... ...  $   %   R   T   F   G   V   B
+  DATA.B  $9D,$9D,$9D,$9D,$9D,$00,$00,$00,$24,$25,$52,$54,$46,$47,$56,$42   ;$20
+;          @   #   W   E   S   D   X   C  esc  !  SMC  Q  QUL  A  QUL  Z
+; DATA.B  $40,$23,$57,$45,$53,$44,$58,$43,$1B,$21,$9E,$51,$9F,$41,$9F,$5A   ;$30
+;          @   #   W   E   S   D   X   C  SMC  !  SMC  Q  QUL  A  QUL  Z
+  DATA.B  $40,$23,$57,$45,$53,$44,$58,$43,$9E,$21,$9E,$51,$9F,$41,$9F,$5A   ;$30
+;          ^   &   Y   U   H   J   N   M  QUL QUL QUL sp  QUL  0  SMC  .
+  DATA.B  $5E,$26,$59,$55,$48,$4A,$4E,$4D,$9F,$9F,$9F,$20,$9F,$30,$9E,$2E   ;$40
+;          *   (   I   O   K   L   <   >  EST EST EST EST EST SMC EST EST
+  DATA.B  $2A,$28,$49,$4F,$4B,$4C,$3C,$3E,$9D,$9D,$9D,$9D,$9D,$9E,$9F,$9F   ;$50
+; LSB      0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  page
+;
+; THE REGULAR TABLE - UNSHIFTED OR LOWER CASE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE CHARACTER
+;        CODE FOR THE CORRESPONDING KEYCODE.
+;
+;  Used on Closure only when Shift key is released (Shift flag is clear).
+;
+;  The character symbol is above each character code
+;       SMC = special value for Standard Multiple Character Sequence
+;       QUL = special value for Qualifier
+;       EST = special value for Escape Sharp Character Sequence
+;       ... = No key for this keycode
+;
+RTABLE
+
+;         SMC  3   9  SMC  6   ,   -   cr SMC  1   7   SMC 4   8   5   2    ;MSB
+  DATA.B  $9E,$33,$39,$9E,$36,$2C,$2D,$0D,$9E,$31,$37,$9E,$34,$38,$35,$32   ;$00
+;          =  ...  [   bs  cr  ]   \  ...  0   /   p   -   ;   `   '  QUL
+  DATA.B  $3D,$00,$5B,$08,$0D,$5D,$5C,$00,$30,$2F,$70,$2D,$3B,$60,$27,$9F   ;$10
+;         EST EST EST EST EST ... ... ...  4   5   r   t   f   g   v   b
+  DATA.B  $9D,$9D,$9D,$9D,$9D,$00,$00,$00,$34,$35,$72,$74,$66,$67,$76,$62   ;$20
+;          2   3   w   e   s   d   x   c  esc  1  SMC  q  QUL  a  QUL  z
+; DATA.B  $32,$33,$77,$65,$73,$64,$78,$63,$1B,$31,$09,$71,$9F,$61,$9F,$7A   ;$30
+;          2   3   w   e   s   d   x   c  SMC  1  SMC  q  QUL  a  QUL  z
+  DATA.B  $32,$33,$77,$65,$73,$64,$78,$63,$9E,$31,$09,$71,$9F,$61,$9F,$7A   ;$30
+;          6   7   y   u   h   j   n   m  QUL QUL QUL sp  QUL  0  SMC  .
+  DATA.B  $36,$37,$79,$75,$68,$6A,$6E,$6D,$9F,$9F,$9F,$20,$9F,$30,$9E,$2E   ;$40
+;          8   9   i   o   k   l   ,   .  EST EST EST EST EST SMC EST EST
+  DATA.B  $38,$39,$69,$6F,$6B,$6C,$2C,$2E,$9D,$9D,$9D,$9D,$9D,$9E,$9F,$9F   ;$50
+; LSB      0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  page
+;
+; THE CAPS/QUALIFIER FLAG TABLE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE ENTRY FOR
+;        THE CORRESPONDING KEYCODE.
+;
+;  Used on Closure when a $9F is in the Keycode entry of the Shift or Regular
+;       Table, process a Qualifier.  Also on Closure when the Caps Lock Key is
+;       being pressed (CapsLock flag is set).
+;  Used on Release when a $9E action code is in the Keycode entry of the Release
+;       Table.
+;
+;  Each byte has 8 flags :
+;       D7 = Caps lock flag : when set means this keycode generates a
+;            shifted character when the Caps lock qualifier flag is set.
+;       D6 = Qualifier has an ESC # sequence flag.  When set then must process
+;            the keycode as a non-repeating ESC # sequence. Also has a Release
+;            sequence.
+;             ______________
+;       D5 = Command        |
+;       D4 = Alternate      |
+;       D3 = Fast           |      This bit says which type of Qualifier
+;       D2 = Caps lock      |_____ key the Keycode represents.
+;       D1 = Control        |
+;       D0 = Shift  ________|
+;
+CQTABLE
+                                                                            ;MSB
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00   ;$00
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$80,$00,$00,$00,$00,$01   ;$10
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$80,$80,$80,$80,$80,$80   ;$20
+  DATA.B  $00,$00,$80,$80,$80,$80,$80,$80,$00,$00,$00,$80,$04,$80,$01,$80   ;$30
+  DATA.B  $00,$00,$80,$80,$80,$80,$80,$80,$02,$08,$60,$00,$10,$00,$00,$00   ;$40
+  DATA.B  $00,$00,$80,$80,$80,$80,$00,$00,$00,$00,$00,$00,$00,$00,$08,$00   ;$50
+; LSB      0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  page
+; ESCAPE SHARP(#) SEQUENCE TABLE
+;        FORMAT :  (KEYCODE,FILLER,US/UC,SHIFT,COMMAND,C/S)
+;
+; Used on Closure when a $9D is in the Keycode entry of the Shift or
+;       Regular Table.
+; Used on Release when a $9D action code is in the Keycode entry of
+;       the Release Table.
+;
+; The fill field is added to keep each record on an even byte boundary
+; The other fields contain the character sequence to follow the ESCAPE #
+;       characters:
+;       US/UC = when the Shift and Command key are released
+;       SHIFT = when only the Shift key is still being pressed
+;     COMMAND = when only the Command key is still being pressed
+;         C/S = when the Shift and Command keys are still being pressed
+;
+ETABLE
+;        KEYCODE FILL   US/UC  SHIFT  COMMAND   C/S
+  DATA.B  $20,    0,    '00',  '0A',  '14',    '1E' ;FUNCTION KEY 1
+  DATA.B  $21,    0,    '01',  '0B',  '15',    '1F' ;FUNCTION KEY 2
+  DATA.B  $22,    0,    '02',  '0C',  '16',    '20' ;FUNCTION KEY 3
+  DATA.B  $23,    0,    '03',  '0D',  '17',    '21' ;FUNCTION KEY 4
+  DATA.B  $24,    0,    '04',  '0E',  '18',    '22' ;FUNCTION KEY 5
+  DATA.B  $4A,    0,    'FF',  'FF',  'FF',    'FF' ;LEFT COMMAND (CLOSURE)
+  DATA.B  $58,    0,    '05',  '0F',  '19',    '23' ;FUNCTION KEY 6
+  DATA.B  $59,    0,    '06',  '10',  '1A',    '24' ;FUNCTION KEY 7
+  DATA.B  $5A,    0,    '07',  '11',  '1B',    '25' ;FUNCTION KEY 8
+  DATA.B  $5B,    0,    '08',  '12',  '1C',    '26' ;FUNCTION KEY 9
+  DATA.B  $5C,    0,    '09',  '13',  '1D',    '27' ;FUNCTION KEY 10
+  DATA.B  $CA,    0,    'FE',  'FE',  'FE',    'FE' ;LEFT COMMAND (RELEASE)
+  page
+;
+; STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+;        FORMAT :  (KEYCODE,LENGTH,CHARACTER_SEQUENCE)
+;
+; Used on Closure when a $9E is in the Keycode entry of the Shift or
+;       Regular Table.
+;
+; The LENGTH field is the number of characters in the CHARACTER SEQUENCE field.
+; The CHARACTER SEQUENCE is the characters to return for the Keycode.
+;
+SMTABLE
+;         KEYCODE LENGTH CHARACTER SEQUENCE
+  DATA.B    $00,    2,     $1B,$43                  ;CURSOR RIGHT
+  DATA.B    $03,    2,     $1B,$48                  ;HOME UP
+  DATA.B    $07,    2,     $1B,$64                  ;ENTER
+  DATA.B    $08,    2,     $1B,$44                  ;CURSOR LEFT
+  DATA.B    $0B,    2,     $1B,$42                  ;CURSOR DOWN
+  DATA.B    $38,    2,     $1B,$1B                  ;ESCAPE
+  DATA.B    $3A,    2,     $1B,$69                  ;BACK TAB
+  DATA.B    $5D,    2,     $1B,$41                  ;CURSOR UP
+  DATA.B    $4E,    2,     $30,$30                  ;DOUBLE ZERO-( 00 KEY )
+  DATA.B    $FF,    0                               ;NULL KEYCODE - END OF TABLE
+  page
+;
+; RELEASE TABLE
+;        FORMAT :  (KEYCODE,ACTION_CODE)
+;
+; Used on all Release keycodes.
+;
+; The action code describes the type of key:
+;       9D = return an Escape Sharp Sequence for this keycode
+;       9E = a Qualifier key
+;all other = character code to return
+;
+RLTABLE
+;         KEYCODE       ACTION CODE
+  DATA.B    $1F,            $9E                     ;RIGHT SHIFT
+  DATA.B    $3C,            $9E                     ;CAPS LOCK
+  DATA.B    $3E,            $9E                     ;LEFT SHIFT
+  DATA.B    $48,            $9E                     ;CONTROL
+  DATA.B    $49,            $9E                     ;FAST
+  DATA.B    $4A,            $9E                     ;LEFT COMMAND
+  DATA.B    $4C,            $9E                     ;ALTERNATE
+  DATA.B    $5E,            $9E                     ;FAST (blank key near cursor keys)
+  DATA.B    $FF,            $00                     ;NULL KEYCODE - END OF TABLE
+;
+;
+; BREAK KEYCODE TABLE
+;        SINGLE BYTE TABLE.  THIS IS THE KEYCODE WHICH CAUSES START/STOP.
+;
+; Used on all keycodes.
+;
+; The filler is to keep the file on an even byte boundary
+;
+BKEYCOD  DATA.B    $DF,0                         ;BREAK CLOSURE KEYCODE,FILLER
+;
+LENGTH   EQU       %-VERSION                     ;LENGTH OF DATA AFTER TRANSLATION TABLE
+         END      START

@@ -1,0 +1,114 @@
+program reboot;
+{$I-}
+{***********************************************************
+{
+{ file :  reboot.text
+{ date :  28-Sep-1983
+{
+{***********************************************************}
+
+const
+    DATE        = '28-Sep-1983';
+    C2boot      = $44; {Const 2 boot cmd}
+    BroadCast   =  -1; {broadcast host number}
+    ConceptBoot =   4; {concept boot number}
+
+type
+    byte   = -128..127;
+    Bytes  = array[0..9999] of byte;
+    pBytes = ^Bytes;
+
+    Buffer  = array[0..1024] of byte;
+    pBuffer = ^Buffer;
+
+    DPB = record
+              DskCmdPtr : pBytes;  {pointer to drive command}
+              DskCmdLen : integer; {length of drive command}
+              SendBufPtr: pBuffer; {pointer to block to send}
+              SendBufLen: integer; {length to send}
+              RecvBufPtr: pBuffer; {pointer to receive buffer}
+              RecvBufLen: integer; {max. length to receive}
+              SlotNumber: integer; {slot number of drive}
+              ServerHost: integer; {server host number}
+              ActualRcvd: integer; {actual number of bytes received}
+              DiskResult: integer; {Corvus disk return code}
+              end;
+
+var
+    DskPB: DPB;   {generic disk cmd param blk}
+    RB: Buffer;   {receive buffer}
+    BootCmd: array[1..3] of byte;
+    ior: integer;
+    fname: string[40];
+    fout: file of Buffer;
+
+begin
+writeln; writeln( 'Boot Concept -  ',DATE);
+writeln;
+{set up boot cmd}
+BootCmd[1] := C2boot;     {command}
+BootCmd[2] := ConceptBoot;{comupter type}
+BootCmd[3] := 0;          {block number}
+
+{init parameter block}
+with DskPB do
+  begin
+  DskCmdPtr  := @BootCmd;
+  DskCmdLen  := 3;
+  SendBufPtr := Nil; {send cmd only}
+  SendBufLen := 0;
+  RecvBufPtr := @RB; {put 1st block in begin of buffer}
+  RecvBufLen := 512; {1 block}
+  write('Enter slot number : '); readln(SlotNumber);
+  if SlotNumber = 5 then
+     begin
+     write('Enter disk server host number : ');
+     readln(ServerHost);
+     end
+  else ServerHost := 0;
+  end; {with}
+
+write('Enter file name to write 1st 2 boot blocks : ');
+readln(fname);
+rewrite(fout,fname); ior := ioresult;
+if ior <> 0 then
+   begin
+   writeln('Open failed.  IORESULT = ',ior:1);
+   exit(reboot);
+   end;
+
+
+writeln('Issuing first boot command.');
+unitstatus(4,DskPB,0); {send boot command}
+ior := ioresult;
+with DskPB do
+  begin
+  writeln('IORESULT = ',ior:1,'  DiskResult = ',DiskResult:1);
+  writeln('Actual byte count received = ',ActualRcvd:1);
+  if (ior <> 0) or (DiskResult > 127) then
+     writeln('1st boot block read failed.')
+  else
+     begin
+     RecvBufPtr := @RB[512]; {put 2nd block at end of buffer}
+     BootCmd[3] := 1;        {read 2nd block}
+     writeln('Issuing second boot command.');
+     unitstatus(4,DskPB,0); {send boot command}
+     ior := ioresult;
+     writeln('IORESULT = ',ior:1,'  DiskResult = ',DiskResult:1);
+     writeln('Actual byte count received = ',ActualRcvd:1);
+     if (ior <> 0) or (DiskResult > 127) then
+        writeln('2nd boot block read failed.');
+
+     {read first boot block so write out buffer even if 2nd failed}
+     write(fout,RB); ior := ioresult;
+     if ior <> 0 then
+        writeln('Write of buffer to file failed.  IORESULT = ',ior:1);
+     end; {1st else}
+  end; {with}
+
+
+if ior <> 0 then close(fout,purge)
+            else close(fout,lock);
+ior := ioresult;
+if ior <> 0 then writeln('Close failed.  IORESULT = ',ior:1);
+end.

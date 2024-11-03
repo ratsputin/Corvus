@@ -1,0 +1,26 @@
+
+Directory of UCSD disk image file 'ccutil_2of3.img'
+
+Unknown density, disk image size 630784, 1232 blocks of 512 bytes each
+
+Volume BACKUP2 has 19 files,  0 to 6 (6), eov 1280, size 5, free 19
+
+ 1: 2ODRV.FIRMWARE  Ux7dc5 21-Sep-84    6-  32(  26), 13312+512= 13824 bytes
+ 2: NETMAP.TEXT     Text 27-Sep-84   32-  44(  12),  6144+512=  6656 bytes
+ 3: CCOS.1.TEXT     Text 16-Oct-84   44-  52(   8),  4096+111=  4207 bytes
+ 4: OMNIVIEW        Data 23-May-84   52- 155( 103), 52736+512= 53248 bytes
+ 5: BANK.FIRMWARE   Ux3e5  6-Feb-86  155- 191(  36), 18432+512= 18944 bytes
+ 6: VOLMGR          Ux7df5 11-Nov-85  191- 319( 128), 65536+512= 66048 bytes
+ 7: ACCMGR          Ux7df5 11-Nov-85  319- 416(  97), 49664+512= 50176 bytes
+ 8: USRMGR          Ux7df5 11-Nov-85  416- 526( 110), 56320+512= 56832 bytes
+ 9: PARMGR          Ux7df5 11-Nov-85  526- 616(  90), 46080+512= 46592 bytes
+10: C2LIB.OBJ       Ux7e95 10-Sep-85  616- 672(  56), 28672+512= 29184 bytes
+11: FUTIL           Ux7df5 11-Nov-85  672- 741(  69), 35328+512= 35840 bytes
+12: DEBUGGER.OBJ    Ux5c5 15-Feb-85  741- 748(   7),  3584+512=  4096 bytes
+13: VOLUTIL         Ux7dc5 15-Feb-85  748- 848( 100), 51200+512= 51712 bytes
+14: DISKX           Ux5c5 15-Feb-85  848- 856(   8),  4096+512=  4608 bytes
+15: SPOOL           Ux2095 21-Sep-84  856- 933(  77), 39424+512= 39936 bytes
+16: DESPOOL         Ux2095 21-Sep-84  933-1014(  81), 41472+512= 41984 bytes
+17: OUTPUT.TEXT     Ux6113 22-Mar-85 1014-1026(  12),  6144+187=  6331 bytes
+18: CCLIB.OBJ       Ux7e95 10-Sep-85 1026-1232( 206), 105472+512= 105984 bytes
+19: SYSTEM.LIBRARY  Ux7df5 10-Sep-85 1232-1275(  43), 22016+512= 22528 bytes

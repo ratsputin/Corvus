@@ -1,0 +1,35 @@
+B      0      xApple2
+B     19      xApple3
+B     24      xCompanion
+B      4      xConcept
+B     23      xConcept2
+B      9      xIBMPC
+B     25      xMacintosh
+B     18      xPrintsrv
+B     21      xTIPC
+H      2      xDiskServer
+H      3      xPrintServer
+H    130      xSNAgateway
+H     33      xUserWorkstation
+O      2      .4       14      xA2DOS3.3
+O      1      .2       12      xA2Pascal
+O     21      .4       14      xA2ProDOS
+O      5      .3        6      xA3SOS
+O     16      .2       29      xCCOS
+O     18      .1       16      xCP/M-68
+O      7      .1       16      xCP/M-80
+O     15      .1       16      xCP/M-86
+O     24      .1       16      xCP/M-Apple
+O     22      .2       12      xMacintosh
+O      4      .3       10      xMSDOS
+O     19      .2       12      xNCI-pSystem
+O     17      .2       12      xUCSDIV.0
+V     14      xCCOS
+V      2      xCPM
+V      5      xDOS3.3
+V     22      xMacintosh
+V      3      xMSDOS
+V     21      xProDOS
+V     12      xSOS
+V      1      xUCSD
+

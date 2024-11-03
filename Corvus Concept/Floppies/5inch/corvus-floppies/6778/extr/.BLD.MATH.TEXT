@@ -1,0 +1,48 @@
+;
+; .BLD.MATH -- Assemble/compile math routines
+;
+echo Information File NOTES.4.TEXT
+echo Pascal Unit D13
+echo Pascal Include File DCL
+echo Pascal Program FHLL
+echo Pascal Unit GDCL
+echo Pascal Unit GFTN
+echo Pascal Unit GPASC
+echo Pascal Unit GUC
+echo Pascal Unit GUR
+echo Pascal Program GUTIL
+echo Pascal Program IUPI
+
+Pascal D13
+Pascal GDCL
+Pascal GUC
+Pascal GUR
+Pascal GPASC
+Pascal GFTN
+Pascal FHLL
+Pascal GUTIL
+Pascal IUPI
+
+asm68k ADD
+asm68k CAI
+asm68k CMP
+asm68k DADD
+asm68k DCMP
+asm68k DIV
+asm68k DMUL
+asm68k DPK
+asm68k DVMD
+asm68k FPK
+asm68k FRT
+asm68k FTNCHAR
+asm68k FTN.MISC
+asm68k IPK
+asm68k MOD
+asm68k MUL
+
+fortran CMPLXF
+
+;
+; Finished ....
+;
+

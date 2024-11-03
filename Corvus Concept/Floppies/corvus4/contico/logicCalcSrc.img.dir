@@ -1,0 +1,23 @@
+
+Directory of UCSD disk image file 'logicCalcSrc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 15 files,  0 to 6 (6), eov 500, size 18, free 15
+
+ 1: FLOGICALC.TEXT  Text 14-Jul-89    6-  98(  92), 47104+512= 47616 bytes
+ 2: LCU.LBL.TEXT    Text 22-Jun-82   98- 106(   8),  4096+512=  4608 bytes
+ 3: LC.AUTO.TEXT    Text 22-Jun-82  106- 110(   4),  2048+512=  2560 bytes
+ 4: LC.EDIT.TEXT    Text 22-Jun-82  110- 124(  14),  7168+512=  7680 bytes
+ 5: LC.ADJUST.TEXT  Text 22-Jun-82  124- 130(   6),  3072+512=  3584 bytes
+ 6: LC.INIT.TEXT    Text 29-Jun-82  130- 136(   6),  3072+512=  3584 bytes
+ 7: LCU.MATH.TEXT   Text 30-Jun-82  136- 172(  36), 18432+512= 18944 bytes
+ 8: LC.INTERP.TEXT  Text 13-Jul-82  172- 216(  44), 22528+512= 23040 bytes
+ 9: LC.REPORT.TEXT  Text 14-Jul-82  216- 232(  16),  8192+512=  8704 bytes
+10: LC.EVAL.TEXT    Text 19-Jul-82  232- 266(  34), 17408+512= 17920 bytes
+11: LC.COMNDS.TEXT  Text 19-Jul-82  266- 294(  28), 14336+512= 14848 bytes
+12: LC.TEXT         Text 19-Jul-82  294- 350(  56), 28672+512= 29184 bytes
+13: LCDUMP.TEXT     Text 27-Jul-82  350- 364(  14),  7168+512=  7680 bytes
+14: COMMANDS.1.TEXT Text 10-Jul-89  364- 402(  38), 19456+512= 19968 bytes
+15: LOGICALC.TEXT   Text 10-Jul-89  402- 482(  80), 40960+512= 41472 bytes

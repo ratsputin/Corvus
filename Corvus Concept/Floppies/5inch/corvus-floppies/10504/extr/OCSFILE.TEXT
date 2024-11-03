@@ -1,0 +1,204 @@
+UNIT OCSfile;
+INTERFACE
+
+CONST
+    Blocksize = 512;
+    Vidlength = 7;
+    TIDlength = 15;
+    MAXdir    = 72;
+    MAXdev    = 20;
+
+TYPE
+    DirRange = 0..MaxDir;
+    Vid = String[Vidlength];
+    Tid = String[TIDlength];
+
+Filekind=(Untypedfile, Codefile, Textfile, Datafile);
+
+Daterec = Packed Record
+          Year : 0..100;
+          Day :  0..31;
+          Month :0..12;
+      End;
+
+DirEntry = Packed Record
+           FirstBlock,Nextblock   : Integer;
+           Status      : Boolean;
+           Filler      : 0..2047;
+           Case Fkind : Filekind of
+               Untypedfile : (Dvid : Vid;
+                   DEOVblock,Dnumfiles,DloadTime:Integer;
+                   DlastBott : Daterec;
+                   MemFlipped,DskFlipped : Boolean);
+                Codefile,Textfile,DataFile: (DTID : TID;
+                   DlastByte : 1..BlockSize;
+                   Daccess   : Daterec);
+     End;
+
+Directory = Array[DirRange] of Direntry;
+Pdirectory = ^Directory;
+
+Devrange = 0..MaxDev;
+
+BByte = -128..127;
+
+Abytes = Array[0..999] of BByte;
+ApBytes = ^ABytes;
+
+
+PFIB = ^FIB;
+FIB  = Record
+       Fwindow : APBytes;
+       FEOLN : Boolean;
+       FEOF  : Boolean;
+       Ftext : Boolean;
+       Fstate: (FTValid, FIEmpty, FiValid, FTEmpty);
+       Frecsize : Integer;
+       Case FIsOpen : Boolean of
+          True : (FIsBlocked : Boolean;
+                 Funit       : Integer;
+                 Fvid        : Vid;
+                 FrepeatCount,FnextBlock,FmaxBlock:Integer;
+                 Fmodified   : Boolean;
+                 Fheader     : DirEntry;
+                 Case SoftBuf: Boolean of
+                    True : (Fnextbyte,FmaxByte : Integer;
+                           FBufChngd : Boolean;
+                           Fbuffer   : Array[0..511] of BByte;
+                           FupArrow  : Integer;))
+  End;
+
+Universal = ^Longint;
+
+Procedure PrintFIB( APtr : Universal);
+Procedure XPut ( Ptr : Universal);
+Procedure XGet ( Ptr : Universal);
+Procedure Xseek ( Ptr : Universal; RecNum : Integer);
+
+IMPLEMENTATION
+
+
+Procedure PrintFIB;
+
+Var OneFIB : PFIB;
+
+BEGIN
+  OneFIB := Pointer(Ord(APtr));
+  With OneFib^ Do begin
+       Write(' EOLN = ',FEOLN);
+       Write(' EOF  = ',FEOF);
+       Write(' Text = ',FText);
+       Writeln(' Window = ',ORD(FWindow));
+       Write(' Record Size   = ',FRecSize);
+       Write(' VID  = ',FVID);
+       Write(' Unit = ',FUnit);
+       Writeln(' Repeat Count = ',FRepeatCount);
+       Write(' Next Block = ',FNextBlock);
+       Writeln(' Max Block = ',FMaxBlock);
+       Write(' Next Byte = ',FNextByte);
+       Writeln(' Max BYte = ',FMaxByte);
+       Write(' Up Arrow = ',FupArrow);
+       Write(' Modified = ',Fmodified);
+       Writeln(' Buffer Chg = ',FBufChngd);
+       Write(' Header ');
+       Write('First Block = ',FHeader.FirstBlock);
+       Write(' Next  Block = ',FHeader.NextBlock);
+       Writeln(' TID = ',FHeader.DTID);
+   End;
+   Writeln;
+   Writeln;
+END;
+
+
+Procedure Xput;
+
+Var Numwritten, Bytenum : Integer;
+    UnitNum, FirstBlk, SeekBlock : Integer;
+    Afile  : PFIB;
+
+Begin
+   AFile := Pointer( Ord(PTR) );
+   UnitNum:= AFile^.FUnit;
+   FirstBlk:= AFile^.FHeader.FirstBlock;
+   SeekBlock:=AFile^.FHeader.FirstBlock + Afile^.FnextBlock;
+   ByteNum  := Afile^.FnextByte;
+   If Bytenum = 512 Then Begin
+      Bytenum := 0;
+      SeekBlock := SeekBlock + 1;
+   End;
+   NumWritten :=0;
+   With Afile^ Do Begin
+     Repeat
+       FBuffer[Bytenum] := FWindow^[NumWritten];
+       NumWritten := NumWritten+1;
+       Bytenum := Bytenum+1;
+       If (Bytenum = 512) and (NumWritten <> FRecSize) Then Begin
+          ByteNUm:=0;
+          UnitWrite(UnitNum, FBuffer, 512, SeekBlock);
+          SeekBlock := Seekblock + 1;
+          UnitRead(UnitNum, FBuffer, 512, SeekBlock);
+       End;
+     Until NumWritten = Afile^.FRecSize;
+     UnitWrite(UnitNum, FBuffer, 512, SeekBlock);
+     AFile^.FNextBlock := SeekBlock - FirstBlk;
+     AFile^.FNextByte := ByteNum;
+   End;
+End;
+
+
+Procedure Xget;
+
+Var NumRead, Bytenum : Integer;
+    UnitNum, FirstBlk, SeekBlock : Integer;
+    AFile : PFIB;
+
+
+BEGIN
+  Afile  := Pointer( Ord(Ptr) );
+  UNitNum := AFile^.FUnit;
+  FirstBlk := Afile^.FHeader.FirstBlock;
+  SeekBlock := FirstBlk + AFile^.FnextBlock + 1;
+  ByteNum  := AFile^.FnextByte;
+  If ByteNum = 512 Then Begin
+     ByteNum := 0;
+     SeekBlock:= SeekBlock + 1;
+  End;
+  NumRead :=0;
+  With AFile^ Do Begin
+    Repeat
+      FWindow^[NumRead] := FBuffer[ByteNum];
+      NumRead := NumRead + 1;
+      ByteNum := ByteNum + 1;
+      If (ByteNum = 512) and (NumRead <> FRecSize) Then Begin
+         SeekBlock := SeekBlock + 1;
+         UnitRead(UnitNum, Fbuffer, 512, SeekBlock);
+         Bytenum:=0;
+      End;
+    Until NumRead = FRecSize;
+    FNextBlock := SeekBlock - FirstBlk;
+    FNextByte := Bytenum;
+  End;
+End;
+
+
+Procedure Xseek;
+
+Var RecSize, LRecNum, Temp : LongInt;
+    SeekBlock : Integer;
+    Afile : PFIB;
+
+Begin
+    AFile := Pointer( ORD(Ptr) );
+    LRecNum := RecNum;
+    RecSize := AFile^.FRecSize;
+    Temp := Recsize * LRecNum;
+    With Afile^ Do Begin
+      FNextBlock := Temp DIV 512;
+      FNextByte := Temp MOD 512;
+      SeekBlock := FHeader.FirstBlock + FnextBlock;
+      UnitRead(FUnit, FBuffer, 512, SeekBlock);
+    End;
+End;
+
+
+END.

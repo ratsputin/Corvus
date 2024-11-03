@@ -1,0 +1,48 @@
+program ileave;
+var i,j,il:integer;
+    sector,logical: array[1..26] of integer;
+
+  procedure printline;
+  var i: integer;
+  begin
+    write('          ');
+    for i:=1 to 26 do
+      write('--|');
+    writeln;
+  end;
+
+begin
+  write('Enter interleave: '); readln(il);
+  sector[1]:=1; logical[1] := 1; j:=1;
+  for i:=2 to 26 do
+    sector[i]:=-1;
+
+  for i:=2 to 26 do
+  begin
+    j:=j+il - 1;
+    repeat
+      j:=(j mod 26) + 1;
+    until sector[j]<0;
+    sector[j]:=i;
+    logical[i]:=j;
+  end;
+
+  writeln('Sector lists.  interleave = ',il:1); writeln;
+  write('physical: ');
+  for i:=1 to 26 do
+    write(i:2,'|');
+  writeln;
+  printline;
+  write('sector:   ');
+  for i:=1 to 26 do
+    write(sector[i]:2,'|');
+  writeln;
+  printline;
+  write('logical:  ');
+  for i:=1 to 26 do
+    write(logical[i]:2,'|');
+  writeln;
+end.
+
+
+

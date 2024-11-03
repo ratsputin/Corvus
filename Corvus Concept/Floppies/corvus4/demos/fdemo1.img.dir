@@ -1,0 +1,45 @@
+
+Directory of UCSD disk image file 'fdemo1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FDEMO1 has 37 files,  0 to 6 (6), eov 500, size 0, free 37
+
+ 1: A1.HPIC         Data  2-Dec-82    6-   8(   2),  1024+512=  1536 bytes
+ 2: A10.HPIC        Data  2-Dec-82    8-  16(   8),  4096+512=  4608 bytes
+ 3: A12.HPIC        Data  2-Dec-82   16-  21(   5),  2560+512=  3072 bytes
+ 4: A7.HPIC         Data  2-Dec-82   21-  34(  13),  6656+512=  7168 bytes
+ 5: AP1.HPIC        Data  5-Nov-82   34-  47(  13),  6656+512=  7168 bytes
+ 6: AP2.HPIC        Data  5-Nov-82   47-  60(  13),  6656+512=  7168 bytes
+ 7: AP3.HPIC        Data  5-Nov-82   60-  73(  13),  6656+512=  7168 bytes
+ 8: AP4.HPIC        Data  5-Nov-82   73-  86(  13),  6656+512=  7168 bytes
+ 9: B10.HPIC        Data  1-Dec-82   86-  87(   1),   512+512=  1024 bytes
+10: B17.HPIC        Data  1-Dec-82   87-  88(   1),   512+512=  1024 bytes
+11: B19.HPIC        Data  1-Dec-82   88- 108(  20), 10240+512= 10752 bytes
+12: B3.HPIC         Data  1-Dec-82  108- 109(   1),   512+512=  1024 bytes
+13: BIG.VPIC        Data  9-Nov-83  109- 155(  46), 23552+512= 24064 bytes
+14: C10.HPIC        Data  1-Dec-82  155- 157(   2),  1024+512=  1536 bytes
+15: C11.HPIC        Data 23-Nov-82  157- 202(  45), 23040+512= 23552 bytes
+16: C14.HPIC        Data  1-Dec-82  202- 207(   5),  2560+512=  3072 bytes
+17: C15.HPIC        Data  1-Dec-82  207- 248(  41), 20992+512= 21504 bytes
+18: C2.HPIC         Data  1-Dec-82  248- 255(   7),  3584+512=  4096 bytes
+19: C20.HPIC        Data  1-Dec-82  255- 283(  28), 14336+512= 14848 bytes
+20: C4.HPIC         Data  1-Dec-82  283- 288(   5),  2560+512=  3072 bytes
+21: C6.HPIC         Data  1-Dec-82  288- 295(   7),  3584+512=  4096 bytes
+22: C8.HPIC         Data  1-Dec-82  295- 343(  48), 24576+512= 25088 bytes
+23: CCFLIP.HPIC     Data 26-Nov-82  343- 418(  75), 38400+512= 38912 bytes
+24: CCL.HPIC        Data 23-Nov-82  418- 422(   4),  2048+512=  2560 bytes
+25: CCP.HPIC        Data 23-Nov-82  422- 426(   4),  2048+512=  2560 bytes
+26: CCPTH8.HPIC     Data  8-May-82  426- 428(   2),  1024+512=  1536 bytes
+27: CCPTMH.HPIC     Data  7-May-82  428- 453(  25), 12800+512= 13312 bytes
+28: CCPTV8.HPIC     Data  8-May-82  453- 455(   2),  1024+512=  1536 bytes
+29: CCS.HPIC        Data 26-Nov-82  455- 463(   8),  4096+512=  4608 bytes
+30: CF1982.HPIC     Data 26-Nov-82  463- 466(   3),  1536+512=  2048 bytes
+31: CHESS.HPIC      Data  2-Dec-82  466- 477(  11),  5632+512=  6144 bytes
+32: DEMO            Data 24-Nov-82  477- 486(   9),  4608+512=  5120 bytes
+33: DEMO.HP.TEXT    Text  6-Mar-83  486- 492(   6),  3072+512=  3584 bytes
+34: DICK.VPIC       Data  9-Nov-83  492- 494(   2),  1024+512=  1536 bytes
+35: LOGO3.HPIC      Data  2-Dec-82  494- 496(   2),  1024+512=  1536 bytes
+36: MARK.VPIC       Data  9-Nov-83  496- 498(   2),  1024+512=  1536 bytes
+37: TEST.HPIC       Data  1-Feb-83  498- 500(   2),  1024+512=  1536 bytes

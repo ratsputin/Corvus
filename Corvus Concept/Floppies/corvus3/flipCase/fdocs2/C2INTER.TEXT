@@ -1,0 +1,36 @@
+
+From:   Denise Pitsch
+
+To:     Concept utility writers
+
+Subject:  User interface
+
+The time has come to set some guidelines for user interfaces for Concept
+utilities.  This is a proposal for one possible convention; suggestions
+for improvement are welcomed, but must be made quickly.
+
+1) Use softkeys for menu prompts.  If you have more than 10 prompts,
+put the second 10 on the Command set.  No one should have more than 20
+prompts, I hope.
+
+2) The EXIT key is always the 10th key, uncommanded.
+
+3) The ALTSLOT key is always the 1st key, commanded.  An altslot
+procedure will be added to CCLIB.
+
+4) Keys which have similar functions should always be in the same
+place.  E.g., LIST for the user manager should be the same key as
+LIST for the drive manager.
+
+5) The two-line prompt window contains:
+
+   <Program name>, current slot is <slot #> (<slot-type>) <server-name>
+   Select an option by pressing a function key:
+
+6) Output of commands starts at the bottom of the default window, and
+scrolls up.
+
+7) On start-up, the program should print the copyright notice at the
+bottom of the default window.  It can go away after the first command
+is entered.  Procedure Copyright in CCLIB is provided for this purpose.
+

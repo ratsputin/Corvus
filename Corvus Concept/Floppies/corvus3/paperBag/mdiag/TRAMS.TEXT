@@ -1,0 +1,828 @@
+;
+; ***************************************************************
+; *                                                             *
+; *           THIS ROUTINE IS USED TO SET UP TSET AND           *
+; *           INITIALIZE THE MESSAGE OUTPUT DEVICE              *
+; *                                                             *
+; ***************************************************************
+;
+           jmp     menu1       ; display menu
+promt1     lea     pmes2,a5    ; output promt
+           jsr     string
+           jsr     inch        ;
+           jsr     ouch        ;
+           cmpi.b  #'M',d0     ; is 'menu'?
+           beq     menu1
+           cmpi.b  #'D',d0     ; is data test?
+           beq     datest
+           cmpi.b  #'A',d0     ; is address test?
+           beq     addtest
+           cmpi.b  #'S',d0     ; is scopeloop ?
+           beq     scope
+           cmpi.b  #'E',d0     ; is help?
+           beq     exit2
+           lea     games2,a5
+           jsr     string
+           bra     promt1      ; go to promt
+; **************************************************************
+; *                                                            *
+; *           THIS ROUTINE IS USED TO OUTPUT A MENU            *
+; *           FILE TO THE SCREEN                               *
+; *                                                            *
+; *                                                            *
+; **************************************************************
+;
+menu1      lea     mmesg2,a5
+           jsr     string
+           bra     promt1
+;
+; ***************************************************************
+; *                                                             *
+; *               THIS ROUTINE WILL USE TO POINT OUT            *
+; *               THE MEMORY BOARD DATA PROBLEM                 *
+; *                                                             *
+; ***************************************************************
+;
+datest     movea.l #rtabase,a0
+           move.b  #$00,d1
+hello      move.b  d1,(a0)+
+           cmpa.l  #Eflag+1,a0
+           bmi.s   hello
+rloop      lea     dmes1,a5     ; output test pattern message
+           jsr     string
+           jsr     gdata        ; get test pattren from user
+           cmpi.b  #$00,eflag.w ; is error flag set?
+           beq.s   rloop1       ; no,start execute
+           clr.b   eflag.w
+           bra     rloop
+rloop1     jsr     load
+rloop2     move.b  d1,(a3)+
+           cmpa.l  a2,a3
+           bne.s   rloop2
+           move.w  #20000,d3
+dloop      dbf     d3,dloop
+rloop3     move.b  -(a3),d2
+           cmp.b   d1,d2
+           beq.s   right
+           bsr     setf1
+right      cmpa.l  a3,a1        ; is end of test?
+           bne.s   rloop3       ; no, try again
+           jsr     load         ; reload test loc
+wloop1     move.b  #$fe,d1      ; load walking bit start test pat
+wlk0       move.b  d1,(a3)      ; start walk 0 test, write data
+           move.b  (a3),d2      ; read it back
+           cmp.b   d1,d2        ; compare
+           beq.s   good1        ; equal,go next
+           bsr     setf2
+good1      rol.b   #1,d1
+           bcs.s   wlk0
+           move.w  #$0001,d1
+wlk1       move.b  d1,(a3)      ; load it into test loc
+           move.b  (a3),d2      ; read it back
+           cmp.b   d1,d2        ; compare
+           beq.s   good2
+           bsr     setf2
+good2      asl.b   #1,d1        ; end of current test loc?
+           bcc     wlk1         ;
+           lea     $1(a3),a3    ; go get next test loc
+           cmpa.l  a2,a3        ; is end of memory?
+           blt     wloop1
+;          trap    #15
+;          data.w  0
+           bsr     adjust
+           move.b  #$01,Dflag.w ; this tell it is NOT data test
+           move.b  #$01,Dfailed.w;init data test fail flag
+           move.b  #$01,Rfailed.w
+           clr.b   Rflag.w ; this tell it is refresh test
+                                ; flag
+           movea.l #Rtabase,a1  ; get pointer to a1
+           move.b  #$01,Endflag.w; reset end flag
+tloop1     move.b #$00,d3      ; use d3 as a counter for diff
+                                ; bank
+tloop2     cmpi.b  #$00,(a1)    ; see if any error flag set
+           beq.s   tloop3       ; no,go test next set of flag
+           bsr     lookup       ; yes, go to lookup routine
+tloop3     adda.l  #$00000001,a1
+           addi.b  #1,d3        ;
+           cmpi.b  #8,d3
+           bne.s   tloop2
+;          trap    #15
+;          data.w  0
+           cmpi.b  #$00,Rflag.w
+           bne.s   data1
+           cmpi.b  #$00,Rfailed.w
+           beq.s   refbad
+           lea     Dmes5,a5
+           jsr     string
+           bra.s   tloop4
+refbad     lea     Dmes2,a5
+           jsr     string
+data1      cmpi.b  #$00,endflag.w
+           bne.s   tloop4
+           cmpi.b  #$00,Rfailed.w
+           bne.s   datagood
+           lea     Dmes3,a5
+           jsr     string
+           bra     promt1
+datagood   lea     Dmes4,a5
+           jsr     string
+           bra     promt1
+tloop4     clr.b   Dflag.w
+           move.b  #$01,Dfailed.w
+           move.b  #$01,Rfailed.w
+           move.b  #$01,rflag.w
+           cmpi.b  #$00,Endflag.w
+           beq     promt1
+           clr.b   Endflag.w
+           movea.l #Dtabase,a1
+           bra     tloop1
+;
+;
+;
+;
+LOAD       movea.l #P1memlo,a1
+           movea.l #SYSmem,a2
+           move.l  a1,a3
+           rts
+;
+;
+;
+;
+;
+;
+;
+setf1      eor     d1,d2
+           move.b  #$01,rfail.w
+           movea.l #rtabase,a4
+           jsr     chose
+           rts
+;
+;
+;
+;
+;
+;
+;
+;
+setf2      eor     d1,d2
+           move.b  #$01,dfail.w
+           movea.l #dtabase,a4
+           jsr     chose
+           rts
+;
+;
+;
+;
+;
+;
+;
+;
+chose      move.l  a3,d4
+           btst    #18,d4        ; see if a big system
+           bne.s   highhalf     ;
+chose1     btst    #1,d4
+           beq     row56
+           btst    #0,d4
+           bne     row2
+row1       clr.b   d3
+keepon     btst    d3,(a4)
+           bne.s   seted
+           btst    d3,d2
+           beq.s   seted
+           bset    d3,(a4)
+seted      addi.b  #$01,d3
+           cmpi.b  #$08,d3
+           beq     fin
+           bra.s   keepon
+fin        rts
+row2       adda.l  #$00000001,a4
+           bra     row1
+row56      btst    #0,d4
+           beq     row5
+           adda.l  #$00000005,a4
+           bra     row1
+row5       adda.l  #$00000004,a4
+           bra.s   row1
+highhalf   adda.l  #$00000002,a4
+           bra.s   chose1
+;
+;
+;
+;
+;
+;
+;
+;
+adjust     movea.l #dtabase,a2
+           movea.l #rtabase,a1
+           move.b  #$08,d1      ; use d1 as counter
+w1         move.b  #$00,d2
+w2         btst    d2,(a1)
+           beq.s   w3
+           btst    d2,(a2)
+           beq.s   w3
+           bclr    d2,(a1)
+w3         addi.b  #01,d2
+           cmpi.b  #08,d2
+           bne     w2
+           subi.b  #01,d1
+           bne.s   w4
+           rts
+w4         adda.l  #$00000001,a2
+           adda.l  #$00000001,a1
+           bra     w1
+;
+;
+;
+;
+;
+;
+;
+;
+;
+LOOKUP     clr.b   Dfailed.w  ; set flag for data test failed
+           clr.b   Rfailed.w ; set refresh test failed flag
+           btst    #0,d3     ; see if it is odd bank
+           bne     even
+           cmpi.b  #0,d3     ; see if it is first row
+           beq.s   first
+           clr.b   d2        ; clear the counter
+           btst    d2,(a1)   ; test first bit
+           beq.s   next1
+           jsr     floop     ; look first two digit
+           move.b  #$37,d1
+           jsr     outmsg    ; add counter with one
+           addi.b  #$01,d2
+           bra.s   next111
+next1      addi.b  #$01,d2
+next111    btst    d2,(a1)
+           beq     next11    ; init the counter
+           move.b  #$2f,d1
+           jsr     floop     ; add offset to d1
+           jsr     outmsg    ; test if flag set
+next11     addi.b  #$01,d2
+           cmpi.b  #7,d2     ;
+           ble.s   next111
+           rts
+first      clr.b   d2
+           btst    d2,(a1)
+           bne     first1
+first2     addi.b  #$01,d2
+           btst    d2,(a1)
+           bne     first3
+first4     addi.b  #$01,d2
+           btst    d2,(a1)
+           beq     next2
+           move.b  #$2E,d1
+           jsr     floop
+           jsr     outmsg
+next2      cmpi.b  #$07,d2
+           ble.s   first4
+           rts
+first1     lea     firmsg,a5
+           jsr     string
+           bra     first2
+first3     lea     secmsg,a5
+           jsr     string
+           bra     first4
+even       cmpi.b  #$8,d3
+           beq     last8
+           clr.b   D2
+even2      btst    d2,(a1)
+           beq     even1
+           jsr     floop
+           move.b  #$30,d1
+           jsr     outmsg
+even1      addi.b  #$01,d2
+           cmpi.b  #$07,d2
+           ble     even2
+           rts
+last8      clr.b   d2
+           btst    d2,(a1)
+           bne.s   last1
+last2      addi.b  #$01,d2
+last4      btst    d2,(a1)
+           bne     last3
+           addi.b  #$01,d2
+           cmpi.b  #$07,d2
+           ble.s   last4
+           rts
+last1      lea     lastmsg,a5
+           jsr     string
+           bra.s   last2
+last3      jsr     floop
+           move.b  #$2f,d1
+           jsr     outmsg
+           bra.s   last2
+;
+;
+;
+;
+;
+OUTMSG     move.b  d2,d0
+           add.b   d1,d0
+           movea.l #$30F00,a0
+twait1     move.b  $23(a0),d4
+           btst    #4,d4
+           beq.s   twait1
+           move.b  d0,$21(a0)
+           rts
+;
+;
+;
+;
+;
+; ***************************************************************
+; *                                                             *
+; *             THIS ROUTINE IS USED TO TEST CONCEPT            *
+; *             RAM SYSTEM ADDRESS BUS                          *
+; *                                                             *
+; ***************************************************************
+;
+addtest    lea     games2,a5
+           jsr     string
+           movea.l #atabase,a0
+           move.b  #$00,d1
+hello1     move.b  d1,(a0)+
+           cmpa.l  #addr,a0
+           bmi.s   hello1
+           jsr     load         ; load memory address
+           move.w  #$0000,d1    ; clear all the memory
+clear      move.w  d1,(a3)+
+           cmpa.l  a2,a3
+           bne.s   clear
+           move.l  a1,a3
+           move.b  #$00,d1
+aloop1     move.b  d1,(a3)+     ; load test pattrens to right
+           cmpi.b  #$ff,d1
+           beq.s   aloop2
+           addi.b  #$01,d1
+           bra.s   aloop1
+aloop2     move.b  -(a3),d2     ; read test pattrens back
+           cmp.b   d2,d1        ; compare
+           beq.s   aloop3
+           bsr.s   check
+aloop3     subi.b  #$01,d1
+           cmpa.l  a3,a1
+           bne.s   aloop2
+           bra     adtst2
+check      movea.l #Atabase,a4
+           eor     d1,d2
+           move.b  #$00,d3      ; use d3 as a counter
+cloop2     btst    d3,d2        ; check
+           bne.s   cloop1
+cloop3     addi.b  #1,d3
+           cmpi.b  #7,d3
+           ble.s   cloop2
+           rts
+cloop1     btst    d3,(a4)
+           bne.s   cc1
+           bset    d3,(a4)
+cc1        bra     cloop3
+adtst2     jsr     load         ; load memory address
+           move.w  #$0000,d1
+clear1     move.w  d1,(a3)+     ; clear memory
+           cmpa.l  a2,a3
+           bne.s   clear1
+           move.l  a1,a3
+           move.b  #$00,d1      ; load test pattrens into loc
+aloop4     move.b  d1,(a3)
+           adda.w  #$0100,a3
+           cmpi.b  #$ff,d1      ; use d1 as a counter
+           beq.s   aloop7
+           addi.b  #$01,d1
+           bra.s   aloop4
+aloop7     movea.l #$8ff00,a3
+aloop5     move.b  (a3),d2
+           cmp.b   d2,d1        ; compare
+           beq.s   aloop6
+           bsr.s   check1
+aloop6     subi.b  #$01,d1      ; yes, test next loc
+           suba.w  #$0100,a3    ;
+           cmpa.l  a3,a1        ; done?
+           bne.s   aloop5
+           bra     adtst3
+check1     movea.l #Atabase+1,a4
+           eor     d1,d2
+           move.b  #$00,d3      ; use d3 as a counter
+cloop5     btst    d3,d2
+           bne.s   cloop4       ; see if failed
+cloop6
+           addi.b  #1,d3
+           cmpi.b  #7,d3
+           ble.s   cloop5
+           rts
+cloop4     btst    d3,(a4)
+           bne     cl1
+           bset    d3,(a4)
+cl1        bra     cloop6
+adtst3     jsr     load         ; load memory address
+           cmpa.l  #$100000,a2
+           beq.s   phase2
+           move.b  #4,d1
+           bra.s   hloop1
+phase2     move.b  #8,d1
+hloop1     movea.l #$90000,a2
+           move.b  d1,d3
+           moveq   #$08,d2
+hloop2     move.b  d2,(a3)+     ; load test pattren into loc
+           cmpa.l  a3,a2
+           bne.s   hloop2
+           addi.b  #$01,d2
+           adda.l  #$10000,a2
+           subq    #$01,d1
+           bne.s   hloop2
+           subq    #$01,d2
+           suba.l  #$20000,a2
+           move.b  d3,d1
+hloop3     move.b  -(a3),d3     ; move the data back
+           cmp.b   d3,d2
+           bne.s   check2
+           cmpa.l  a3,a2
+           bne.s   hloop3
+           suba.l  #$10000,a2
+           subq    #$01,d2
+           subq    #$01,d1
+           bne.s   hloop3
+           bra     last
+check2     movea.l #Atabase+2,a4
+           eor     d2,d3
+           move.b  #$00,d4      ; use d4 as a counter
+h5         btst    d4,d3
+           bne.s   h4
+h6         addi.b  #$01,d4
+           cmpi.b  #2,d4
+           ble.s   h5
+           bra     last
+h4         bset    d4,(a4)
+           bra     h6
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+last       move.l  #$00000000,d1; use d1 and d2 as counter
+           move.l  #$00000000,d2
+           movea.l #Atabase,a1
+la2        btst    d1,(a1)
+           beq     la1
+           move.b  #$01,afail.w
+           cmpi.b  #$09,d2
+           ble     laddr
+           lea     ames1,a5
+           jsr     string
+           move.b  d2,d3        ; output which line bet A0-A9
+           subi.b  #$0a,d3
+           bra     la3
+laddr      lea     ames2,a5     ; the failed line is A10-A18
+           jsr     string
+           move.b  d2,d3
+la3        addi.b  #$30,d3
+           movea.l #$030f00,a0
+la4        move.b  $23(a0),d4
+           btst    #4,d4
+           beq.s   la4
+           move.b  d3,$21(a0)
+la1        addi.b  #$01,d1
+           addi.b  #$01,d2
+           cmpi.b  #19,d2
+           beq.s   la6
+           cmpi.b  #$08,d1
+           bne     la2
+           adda.l  #$00000001,a1
+           move.b  #$00,d1
+           bra     la2
+la6        cmpi.b  #$01,afail.w
+           beq.s   la5
+           lea     ames3,a5
+           jsr     string
+           bra     promt1
+la5        lea     ames4,a5
+           jsr     string
+           bra     promt1
+;
+;
+;
+;
+;
+;
+;
+;
+;
+floop      move.l   a1,d4
+           btst     #2,d4
+           bne      f1
+           btst     #1,d4
+           bne      f2
+           btst     #0,d4
+           bne      f3
+           lea      fmes1,a5
+           jsr      string
+           rts
+f3         lea      fmes2,a5
+           jsr      string
+           rts
+f2         btst     #0,d4
+           bne.s    f4
+           lea      fmes3,a5
+           jsr      string
+           rts
+f4         lea      fmes4,a5
+           jsr      string
+           rts
+f1         btst     #1,d4
+           bne      f5
+           btst     #0,d4
+           bne      f6
+           lea      fmes5,a5
+           jsr      string
+           rts
+f6         lea      fmes6,a5
+           jsr      string
+           rts
+f5         btst     #0,d4
+           bne.s    f7
+           lea      fmes7,a5
+           jsr      string
+           rts
+f7         lea      fmes8,a5
+           jsr      string
+           rts
+;
+;
+; ***************************************************************
+; *                                                             *
+; *            THIS SUBROUTINE IS USE TO CONTROL THE            *
+; *            FLOW OF SCOPELOOP FUNCTION                       *
+; *                                                             *
+; ***************************************************************
+;
+scope    lea         games2,a5
+         jsr         string
+         jsr         inuart
+         move.l      #dcovet,a0
+         movea.l     #$000070,a5
+         move.l      (a0),(a5)
+         move.b      #$00,eflag.w
+         bra         scope1
+intdco   move.w      #$2700,sr
+         movea.l     #$ff0,a7
+         cmpi.b      #'4',d0
+         beq         promt1
+scope1   lea         smes1,a5     ; output select function
+         jsr         string
+         jsr         inch         ; get input select function
+         jsr         ouch         ; echo to the consol
+         cmpi.b      #'1',d0      ; is read single addr only?
+         beq         rsingle
+         cmpi.b      #'2',d0      ; is write only?
+         beq         wsingle
+         cmpi.b      #'3',d0      ; is R/W ?
+         beq         rwsingle
+         cmpi.b      #'4',d0      ; go back to system prompt
+         lea         games2,a5
+         jsr         string
+         beq         promt1
+         bra         scope1
+rsingle  lea         smes2,a5     ; output select message
+         jsr         string
+         jsr         get
+         jsr         ready
+rsingle1 move.b      (a6),d4      ; read test always
+         bra.s       rsingle1
+wsingle  lea         smes3,a5     ; output select message
+         jsr         string
+         jsr         get          ; get input data and addr
+         jsr         ready
+wsingle1 move.b      d4,(a6)      ; write always
+         bra.s       wsingle1
+rwsingle lea         smes4,a5     ; output select message
+         jsr         string
+         jsr         get          ; get input data and addr
+         jsr         ready
+rwsingl  move.b      d4,(a6)      ; writr to test addr
+         move.b      (a6),d4      ; read data back
+         bra.s       rwsingl      ; loop always
+ready    movea.l     #$30f00,a3
+         move.b      d3,$23(a3)
+         move.b      #$09,$25(a3)
+         move.b      #$1e,$27(a3)
+         move.w      #$2300,sr
+         movea.l     addr.w,a6
+         move.b      dta.w,d4
+         move.b      d4,(a6)
+         rts
+;
+; ***************************************************************
+; *                                                             *
+; *            THIS ROUTINE WILL USE TO GET A VALID             *
+; *            TEST ADDRESS AND VALID TEST DATA FOR             *
+; *            SCOPELOOP TEST FUNCTION                          *
+; *                                                             *
+; ***************************************************************
+;
+get      lea         gmes1,a5     ; send mess to consol
+         jsr         string
+         jsr         gaddr
+         cmpi.b      #$00,eflag.w
+         beq.s       get2
+         clr.b       eflag.w
+         bra         get
+get2     movea.l     #addr,a6     ; load temp addr pointer
+         move.l      d1,(a6)+     ; load address into temp
+get1     lea         gmes2,a5     ; send message to consol
+         jsr         string       ;
+         jsr         gdata
+         cmpi.b      #$00,eflag.w
+         beq.s       get3
+         clr.b       eflag.w      ; clear error flag
+         bra         get1         ; do again
+get3     move.b      d1,(a6)      ; load data into data temp
+         rts
+; **************************************************************
+; *                                                            *
+; *            THIS ROUTINE WILL BE WAITTING FOR EIGHT         *
+; *            HEX NUMBER INPUT AND STORE THE LAST             *
+; *            EIGHT INPUT ADDRESS                             *
+; *                                                            *
+; **************************************************************
+;
+gaddr    clr.l       d1           ; clear d1
+         clr.l       d2           ; clear d2
+         jsr         inhx
+
+         jsr         othx
+         cmpi.b      #$00,eflag.w ; is error flag set?
+         beq.s       gaddr1
+gaddr3   lea         games1,a5    ; yes, report to consol
+         jsr         string
+         rts
+gaddr1   add.l       d0,d1        ; load d0 into d1
+         move.l      d1,d0
+         jsr         inch         ; get next input
+         cmpi.b      #$0d,d0      ; see if carrage return
+         beq         gaddr4       ; yes, go to gaddr2
+         jsr         inhx1
+         jsr         othx         ; echo to consol
+         cmpi.b      #$00,eflag.w ; is error flag set up?
+         beq         gaddr2
+         bra         gaddr3
+gaddr2   asl.w       #1,d1
+         roxl.w      #1,d2
+         asl.w       #1,d1
+         roxl.w      #1,d2
+         asl.w       #1,d1
+         roxl.w      #1,d2
+         asl.w       #1,d1
+         roxl.w      #1,d2
+         bra         gaddr1
+gaddr4   jsr         ouch
+         swap        d2
+         add.l       d2,d1
+         lea         games2,a5
+         jsr         string
+         rts
+;
+;
+; **************************************************************
+; *                                                            *
+; *            THIS ROUTINE WILL WAIT FOR TWO HEX INPUT        *
+; *            AND STORE BOTH IN D1 AND D2                     *
+; *                                                            *
+; **************************************************************
+;
+gdata    jsr         gaddr       ; use gaddr to get two hex
+                                 ; input stored in d1
+         move.b      d1,d2       ; store d1 to d2
+         rts
+;
+; **************************************************************
+; *                                                            *
+; *            THIS ROUTINE WILL PUT HEX INPUT INTO            *
+; *            LOWER BYTE OF D1, IF NOT HEX THEN ERROR         *
+; *                                                            *
+; **************************************************************
+;
+inhx     jsr         inch
+inhx1    cmpi.b      #$30,d0      ; compare d0 with 30h
+         bmi         error1
+         cmpi.b      #$3a,d0      ; compare d0 with 3ah
+         bmi         strp1
+         cmpi.b      #$41,d0      ; compare d0 with 41h
+         bmi         error1
+         cmpi.b      #$47,d0      ; compare d0 with 47h
+         bmi         strp2
+error1   move.b      #$01,eflag.w ; set up flag if error
+         rts                      ; go back
+strp1    subi.b      #$30,d0      ; subtract d0 with 30h
+         rts
+strp2    subi.b      #$37,d0      ; subtract d0 with 37h
+         rts
+;
+; ***************************************************************
+; *                                                             *
+; *            THIS ROUTINE IS USE TO OUTPUT A STRING OF        *
+; *            MESSAGE TO CONSOL                                *
+; *                                                             *
+; ***************************************************************
+;
+string   move.b      (a5)+,d0     ; get pointer to a4
+         cmpi.b      #$00,d0
+         beq.s       quit
+         jsr         ouch         ; output
+         bra         string       ; go get next output char
+quit     rts                      ;
+;
+; ***************************************************************
+; *                                                             *
+; *            THIS ROUTINE WILL BE WAITING FOR INPUT           *
+; *            FROM CONSOL AND STORE DATA INTO D0               *
+; *                                                             *
+; ***************************************************************
+;
+inch     movea.l     #$30f00,a0   ; get pointer
+inch1    move.b      $23(a0),d0   ; test status reg
+         btst        #3,d0
+         beq.s       inch1
+         clr.l       d0
+         move.b      $21(a0),d0   ; get data
+         andi.b      #$7f,d0
+         cmpi.b      #$60,d0
+         ble.s       inch2
+         cmpi.b      #$7a,d0
+         bgt.s       inch2
+         bclr        #5,d0
+inch2    rts
+;
+; ***************************************************************
+; *                                                             *
+; *            THIS ROUTINE WILL OUTPUT CHARACTER WHICH         *
+; *            IS STORE IN D0                                   *
+; *                                                             *
+; ***************************************************************
+;
+ouch     movea.l     #$30f00,a0   ; get pointer
+ouch1    move.b      $23(a0),d4   ; check status register
+         btst        #4,d4
+         beq.s       ouch1
+         move.b      d0,$21(a0)   ; get data
+         rts
+;
+; ***************************************************************
+; *                                                             *
+; *            THIS ROUTINE IS USE TO OUTPUT ONE HEX CHAR       *
+; *            WHICH IS STORE IN THE LOWER BYTE OF D0           *
+; *                                                             *
+; ***************************************************************
+;
+othx     move.l      d0,d3
+         cmpi.b      #$0a,d0      ; see if A-F
+         bmi.s       ot1          ; no,go to 0-9
+         addi.b      #$37,d0      ; convert to ascii code
+         jsr         ouch         ; output
+         move.l      d3,d0
+         rts
+ot1      addi.b      #$30,d0      ; convert code
+         jsr         ouch
+         move.l      d3,d0
+         rts
+;
+; ***************************************************************
+; *                                                             *
+; *               THIS ROUTINE IS USED TO INITIALIZE            *
+; *               CONCEPT USART                                 *
+; *                                                             *
+; ***************************************************************
+;
+inuart       movea.l  #$30f00,a0
+             move.b   d0,$23(a0)
+             move.b   #$0b,$25(a0) ; init command reg
+             move.b   #$1e,$27(a0) ; init control reg
+             move.w   #$200,d0     ; wait delay
+loop1        dbra     d0,loop1     ; loop around
+             rts
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

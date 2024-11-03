@@ -1,0 +1,29 @@
+
+Directory of UCSD disk image file 'fccgen.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCGEN has 21 files,  0 to 6 (6), eov 500, size 13, free 21
+
+ 1: CC.KERNEL       Data 21-Jul-82    6-  61(  55), 28160+512= 28672 bytes
+ 2: CC.SETUP        Data 21-Jul-82   61- 102(  41), 20992+512= 21504 bytes
+ 3: CC.DISPAT       Data 21-Jul-82  102- 119(  17),  8704+512=  9216 bytes
+ 4: CC.FILMGR       Data 21-Jul-82  119- 161(  42), 21504+512= 22016 bytes
+ 5: CC.WNDMGR       Data 21-Jul-82  161- 189(  28), 14336+512= 14848 bytes
+ 6: DRV.DISPHZ      Data 21-Jul-82  189- 197(   8),  4096+512=  4608 bytes
+ 7: DRV.DISPVT      Data 21-Jul-82  197- 205(   8),  4096+512=  4608 bytes
+ 8: DRV.KYBD        Data 21-Jul-82  205- 210(   5),  2560+512=  3072 bytes
+ 9: DRV.SYSTRM      Data 21-Jul-82  210- 216(   6),  3072+512=  3584 bytes
+10: DRV.TIMER       Data 21-Jul-82  216- 219(   3),  1536+512=  2048 bytes
+11: DRV.FDISK       Data 21-Jul-82  219- 223(   4),  2048+512=  2560 bytes
+12: CSH.DEFAULT     Data 21-Jul-82  223- 232(   9),  4608+512=  5120 bytes
+13: CSV.DEFAULT     Data 21-Jul-82  232- 235(   3),  1536+512=  2048 bytes
+14: CSK.DEFAULT     Data 21-Jul-82  235- 237(   2),  1024+512=  1536 bytes
+15: ASSIGN          Data 21-Jul-82  237- 247(  10),  5120+512=  5632 bytes
+16: DIAG.DATA       Data 21-Jul-82  247- 248(   1),   512+512=  1024 bytes
+17: BOOTL.CONCEPT   Data 21-Jul-82  248- 257(   9),  4608+512=  5120 bytes
+18: BOOTO.CONCEPT   Data 21-Jul-82  257- 266(   9),  4608+512=  5120 bytes
+19: CF17.3CD.DATA   Data 21-Jul-82  266- 326(  60), 30720+512= 31232 bytes
+20: DDIAG           Data 21-Jul-82  326- 403(  77), 39424+512= 39936 bytes
+21: SYSGEN          Data 21-Jul-82  403- 487(  84), 43008+512= 43520 bytes

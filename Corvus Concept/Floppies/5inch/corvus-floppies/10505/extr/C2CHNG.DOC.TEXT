@@ -1,0 +1,173 @@
+
+         To  : Distribution
+         From: Keith Ball
+
+         file: C2CHNG.DOC.TEXT
+         date: December 7, 1983
+
+         Re: Changes needed to Constellation 2 system software
+
+         Operating systems considered :
+
+               a)  CCOS
+               b)  MSDOS
+               c)  P-system  IV.0
+               d)  CP/M 86
+               e)  Apple DOS
+               f)  Apple SOS
+
+         Computers :
+
+                   IBM       TI        DEC Rainbow
+                   Z100      Concept   Apple 2
+                   Apple 3   S100 CP/M 86 systems
+                   Sony
+
+         Not supporting :
+
+               a) TRS systems          c) CP/M 80
+               b) Atari                d) UBT
+
+
+         For February engineering release of system software
+         only the following systems will be changed :
+
+               a) Concept with CCOS,
+               b) IBM with MSDOS 2.0,
+               c) IBM with UCSD P-system IV.0 (this is for our
+                  applications only),
+               d) Apple II DOS,
+               e) Apple II P-system (IV.0 and II.1)
+               f) Apple II CP/M.
+               g) Sony 8086/Z80 CP/M 86
+
+         The Apple II software for CP/M and DOS involves only a
+         disk driver for standard system block I/O and generic
+         drive commands.   The system manager utilities will
+         only run under the P-system.  Apple II development is
+         currently being performed by Sean Finley and Ed Paw.
+
+         Instead of implementing the Sony CP/M 86 version with
+         the usual buffered transporter kludge and old driver
+         software, I suggest we implement the new software on the
+         Sony system first and then move it to the IBM.  This
+         will save us from having to modify our software at a
+         later date.  Since the CP/M 86 version is already
+         implemented for the Rainbow, we may be able to use it as
+         a basis for this new software.  Also, we should not use
+         the old interface when we will be modifying it in the
+         near future.
+
+         Major work for the release involves two areas.  They are
+         1) changes to the disk drivers to support multiple disk
+         servers with the 8A transporters and, 2) development of
+         a physical transporter driver to manage the transporter
+         resource for the supported systems.  Current projects
+         that are important to this release 1) involve optimizing
+         the operation of the system manager utilities and 2)
+         implementing a version of the P-system IV.0 that runs on
+         top of MSDOS 2.0.  The P-system implementation is
+         necessary for the Z-100 project, which is not using this
+         new driver scheme.  This implementation may require
+         changes when we upgrade the disk drivers.
+
+         The disk driver changes involve adding timeout and
+         retries to correct when the transporter has failed to
+         make a send.  The timeouts change requires changes to
+         the disk driver for both system block I/O and generic
+         drive commands (commonly called "BCI"), Constellation II
+         logon and boot, system manager utilities and the user
+         utilities mount and spool.  The application changes
+         mainly involve library changes for the CDsend and
+         CDreceive interface.
+
+         The physical transporter driver is being specified by
+         Phil Belanger in his NIS document.  This driver is used
+         to manage the transporter for all system and application
+         software.  It hides from the user whether the
+         transporter is buffered or unbuffered, interrupting or
+         non-interrupting.  It provides a common program
+         interface to the transporter across all systems.  It
+         allows different system and application procedures to
+         share the transporter, because the driver sequences the
+         sending of commands to the transporter and prevents
+         multiple users from accessing the same receive socket.
+         It manages the transporter buffer for buffered
+         transporters, like the IBM, so that each application can
+         use the tranporter without colliding with another
+         application's useage.  This is essential for future
+         network software development by both Corvus and our
+         OEMS.
+
+         Along with the transporter driver we must develop a
+         library unit which simplifies the communication between
+         network application software and the transporter driver.
+         This unit has already been developed for the transporter
+         driver under CCOS.  It has proved a necessary part of
+         our SNA gateway, Bank transfer utility and an OEM's, PSR
+         systems, Tandem/Omninet link.
+
+         A network printer driver (or spool driver) is an
+         important enhancement to Constellation II functionality.
+         It will provide to the user a true spooling facility.
+         The non-network based application, such as WordStar,
+         will then be able to use the network based printer as if
+         it was a local printer.  This facility is already
+         provided by our competitors, like 3Com.
+
+         Volume locking should be developed for this release.  It
+         prevents multiple users from simultaneously writing to
+         the same Constellation II volume.  This is most
+         essential for operating systems with non-sequential file
+         structures, such as MSDOS and CP/M.  The locking
+         mechanism is embedded in the disk driver.  Unlocking may
+         also be provided from within the disk driver for some
+         systems, ie. MSDOS 2.0, and possibly in the OS for CCOS.
+         For most systems, a volume unlock utility will be
+         necessary to allow the user to release the volume.
+         Since volumes may remain locked after a user has
+         finished working a system manager unlock version is
+         necessary.  One unlock program will be built.  It will
+         allow the user to unlock a volume they do not have
+         access to if they provide the drive password.  The boot
+         and mount manager programs must be changed to allow the
+         user to mount or change access to volumes that were left
+         locked.  Because changes to the mount table are
+         necessary, the Constellation II utilities must be
+         slightly modified.
+
+         Work is also required on upgrading and modifying the
+         P-system IV.0 system utilites and all the user
+         utilities.  The version IV.0 utilities need a spooler
+         and the P-system Filer added to the release.  The Bank
+         utility creates a file under the P-system and currently
+         the user cannot display or print it.  All the user
+         utilities must be changed to be command line driven.
+         The MSDOS 2.0 and CP/M 86 spoolers are currently being
+         modified to run from the command line.  The CCOS spooler
+         already does.  The mount managers for all the systems
+         must be modified to run by command line.
+
+         Since a new interrupting IBM transporter card is to be
+         released and bugs exist in the current ROM, a new
+         version of the transporter ROM needs to implemented.
+         Since TI also uses the card, it is necessary to develop
+         a version that can detect the configuration of the
+         transporter card and operate in both computers.
+         Furthermore, it would be preferable if the ROM would
+         boot directly off the network on the TI.  TI has
+         provided a system mechanism to boot off Omninet and it
+         should be used.
+
+         Lastly, I must emphasize the need for interrupt driven
+         operation of our transporters.  It will allow us to
+         implement PC share and network management software on
+         the systems we support.  PC share allows workstations to
+         be disk servers or printer servers while they are being
+         used.  Network management software allows dynamic
+         resolution of resources and users available on the
+         network.  It provides a foundation for all future
+         development of our network system.  Network management
+         software can be developed for non-interrupt driven
+         systems but it CANNOT perform network operations while
+         doing ANYTHING ELSE.  Therefore, nothing in background.

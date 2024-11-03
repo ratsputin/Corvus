@@ -1,0 +1,148 @@
+  The list as shown below is the address of all locations of Uniplex
+  memory magagement special register
+  TRANSPARENT MODE - 64 SEGMT REGS
+  in the 'e' the '8' signifies context 1,
+  the '6' signifies segment register
+              ;TRANSPARENT MODE - 64 SEGMT REGS
+              ; in the 'e' the '8' signifies context 1,
+              ;the '6' signifies segment register
+              ;possibly page ff is not available
+
+
+  The first context is for Omninet context
+  The Omninet context is enabled when Omninet master memory
+
+
+ address      data      context      address    data    context
+  $200601     80           0         $300601     a0           0
+  $208601     81           0         $308601     a1           0
+  $210601     82           0         $310601     a2           0
+  $218601     83           0         $318601     a3           0
+  $220601     84           0         $320601     a4           0
+  $228601     85           0         $328601     a5           0
+  $230601     86           0         $330601     a6           0
+  $238601     87           0         $338601     a7           0
+  $240601     88           0         $340601     a8           0
+  $248601     89           0         $348601     a9           0
+  $250601     8a           0         $350601     aa           0
+  $258601     8b           0         $358601     ab           0
+  $260601     8c           0         $360601     ac           0
+  $268601     8d           0         $368601     ad           0
+  $270601     8e           0         $370601     ae           0
+  $278601     8f           0         $378601     af           0
+
+  $280601     90           0         $380601     b0           0
+  $288601     91           0         $388601     b1           0
+  $290601     92           0         $390601     b2           0
+  $298601     93           0         $398601     b3           0
+  $2a0601     94           0         $3a0601     b4           0
+  $2a8601     95           0         $3a8601     b5           0
+  $2b0601     96           0         $3b0601     b6           0
+  $2b8601     97           0         $3b8601     b7           0
+  $2c0601     98           0         $3c0601     b8           0
+  $2c8601     99           0         $3c8601     b9           0
+  $2d0601     9a           0         $3d0601     ba           0
+  $2d8601     9b           0         $3d8601     bb           0
+  $2e0601     9c           0         $3e0601     bc           0
+  $2e8601     9d           0         $3e8601     bd           0
+  $2f0601     9e           0         $3f0601     be           0
+  $2f8601     9f           0         $3f8601     bf           0
+
+  The context 1 is enabled when Uniplex is reset.
+  Context 1 is system context.
+
+ address      data      context      address    data    context
+  $200e01     80           1         $300e01     a0           1
+  $208e01     81           1         $308e01     a1           1
+  $210e01     82           1         $310e01     a2           1
+  $218e01     83           1         $318e01     a3           1
+  $220e01     84           1         $320e01     a4           1
+  $228e01     85           1         $328e01     a5           1
+  $230e01     86           1         $330e01     a6           1
+  $238e01     87           1         $338e01     a7           1
+  $240e01     88           1         $340e01     a8           1
+  $248e01     89           1         $348e01     a9           1
+  $250e01     8a           1         $350e01     aa           1
+  $258e01     8b           1         $358e01     ab           1
+  $260e01     8c           1         $360e01     ac           1
+  $268e01     8d           1         $368e01     ad           1
+  $270e01     8e           1         $370e01     ae           1
+  $278e01     8f           1         $378e01     af           1
+
+  $280e01     90           1         $380e01     b0           1
+  $288e01     91           1         $388e01     b1           1
+  $290e01     92           1         $390e01     b2           1
+  $298e01     93           1         $398e01     b3           1
+  $2a0e01     94           1         $3a0e01     b4           1
+  $2a8e01     95           1         $3a8e01     b5           1
+  $2b0e01     96           1         $3b0e01     b6           1
+  $2b8e01     97           1         $3b8e01     b7           1
+  $2c0e01     98           1         $3c0e01     b8           1
+  $2c8e01     99           1         $3c8e01     b9           1
+  $2d0e01     9a           1         $3d0e01     ba           1
+  $2d8e01     9b           1         $3d8e01     bb           1
+  $2e0e01     9c           1         $3e0e01     bc           1
+  $2e8e01     9d           1         $3e8e01     bd           1
+  $2f0e01     9e           1         $3f0e01     be           1
+  $2f8e01     9f           1         $3f8e01     bf           1
+
+
+  Context 2-F is user context.
+
+
+ address      data      context      address    data    context
+  $201601     80           2         $301601     a0           2
+  $209601     81           2         $309601     a1           2
+  $211601     82           2         $311601     a2           2
+  $219601     83           2         $319601     a3           2
+  $221601     84           2         $321601     a4           2
+  $229601     85           2         $329601     a5           2
+  $231601     86           2         $331601     a6           2
+  $239601     87           2         $339601     a7           2
+  $241601     88           2         $341601     a8           2
+  $249601     89           2         $349601     a9           2
+  $251601     8a           2         $351601     aa           2
+  $259601     8b           2         $359601     ab           2
+  $261601     8c           2         $361601     ac           2
+  $269601     8d           2         $369601     ad           2
+  $271601     8e           2         $371601     ae           2
+  $279601     8f           2         $379601     af           2
+
+  $281601     90           2         $381601     b0           2
+  $289601     91           2         $389601     b1           2
+  $291601     92           2         $391601     b2           2
+  $299601     93           2         $399601     b3           2
+  $2a1601     94           2         $3a1601     b4           2
+  $2a9601     95           2         $3a9601     b5           2
+  $2b1601     96           2         $3b1601     b6           2
+  $2b9601     97           2         $3b9601     b7           2
+  $2c1601     98           2         $3c1601     b8           2
+  $2c9601     99           2         $3c8601     b9           2
+  $2d1601     9a           2         $3d1601     ba           2
+  $2d9601     9b           2         $3d9601     bb           2
+  $2e1601     9c           2         $3e1601     bc           2
+  $2e9601     9d           2         $3e8601     bd           2
+  $2f1601     9e           2         $3f1601     be           2
+  $2f9601     9f           2         $3f9601     bf           2
+
+
+
+ Context 3 :201e01
+         4 :202601
+         5 :202e01
+         6 :203601
+         7 :203e01
+         8 :204601
+         9 :204e01
+         10:205601
+         11:205e01
+         12:206601
+         13:206e01
+         14:207601
+         15:207e01
+
+
+
+Context register   : 200200
+Exception register : 200000
+

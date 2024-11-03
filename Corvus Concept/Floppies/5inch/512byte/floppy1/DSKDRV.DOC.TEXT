@@ -1,0 +1,159 @@
+
+         To  : Distribution
+         From: Keith Ball
+         Date: 21-February-1984
+         File: /dsgn/dskdrv.doc.text
+
+         Re:  Proposed Constellation II disk driver change to fix
+              timeout and device type problem.
+
+
+         The Constellation II disk drivers must be changed in two
+         places.  One, the standard read and write disk section must
+         use a variable timeout based on volume's device type and user
+         specifiable timeout value.  Two, the generic disk command
+         interface (commonly called "BCI) must allow user to specify a
+         timeout value.
+
+         eHFor the standard read and write sectione@ :
+
+         New fields added to mount table (device table for Concept) :
+
+               a) timeout count in seconds - word.  A value of $0000
+                  means no timeout, wait forever.
+               b) device type code - word
+               c) retry count - word, with a default value of 2.  A
+                  value of $0000 means retry forever.
+
+         Timeout and device type are set each time a volume is
+         mounted.  The values are taken from a previously mounted
+         volume's entry or from the server itself.  Retry is set at a
+         default value of 2 and is changed by a parameter change call
+         to the driver.
+
+         The timeout value is kept in the status block of drive one on
+         each server.  It is initially set by the formatting and
+         firmware update program.  This program also provides a user
+         interface to allow the end user or field service people to
+         modify it.  The mounting programs must do a drive status
+         command to get the timeout value from the status block.  The
+         timeout information is a word at index xxx from the start of
+         the status block.
+
+         NOTE :  This change requires a firmware modification for the
+         revision H and earlier disks' drive firmware.
+
+         The following is a table of the default timeouts for
+         different devices.  They are to be used for read and write
+         block commands only.
+
+         device
+         type code    device name       timeout (in seconds)
+
+         1            old disk server     10
+         6            Omnidrive disk      10
+                      server
+         5            Bank                600 (10 minutes)
+
+         NOTE :  The mirror server has no volumes and is only
+         communicated with by generic drive commands.
+
+         When the driver is initialized or when a new volume is
+         mounted the volume's drive's device type is determined with
+         the Const II lookup protocol.  First, setup a receive on
+         socket $80 and then send the "Where are you?" message,
+         msgtype = $0300.  The server responds with a "Identification"
+         message, msgtype = $1000.  The device type field of the
+         response is saved in the mount table entry for the volume.
+         Of course, the field in a previously mounted volume on the
+         same server can be used.
+
+         See flowcharts for "long and short" command processing
+         example to follow with narrative.
+
+         During the processing of read and write block requests in the
+         "long and short" command processing code, after the setup
+         receive and the send of the command or the rest of the data,
+         the driver waits for the receive indication from the
+         transporter.  The wait uses the timeout from the volume's
+         mount table entry.  If the driver times out then it should do
+         an end receive on the socket setup and a flush server
+         command.  The flush is a disk server protocol message with
+         the same drive command and a TO length of 0 and a FROM length
+         of 0 (Mark's m and n) in the send header, the control bytes
+         in the send result vector.  After the flush is sent the
+         driver should delay for a short period of time, about five
+         seconds.  The operation is then restarted from the beginning
+         of the setup receive.  The retry count in the volume's mount
+         table entry is used to control the number of times the driver
+         restarts the operation after timeouts.  Therfore, the driver
+         will only allow <retry count> restarts before giving up and
+         reporting a timeout error to the system.
+
+         The driver must provide an interface to the system which
+         allows the user software to modifiy the timeout and retry
+         count words.  This should be specifiable on a volume or
+         server basis.  For example, the Concept would add a
+         unitstatus function to the driver.
+
+         eHThe generic disk command sectione@ :
+
+         The interface to this section must include a parameter
+         block of the following form :
+
+         DskCmdPtr : pointer;    {pointer to drive command}
+         SendBufPtr: pointer;    {pointer to data block to send}
+         TotalSndLn: word;       {length to send, including drive cmd}
+         RecvBufPtr: pointer;    {pointer to receive data buffer}
+         RecvBufLen: word;       {max. length to receive,
+                                       excludes result code}
+         SlotNumber: byte;       {slot number of drive/transporter}
+         ServerHost: byte;       {server host number}
+         TimeoutCnt: word;       {Timeout for command in seconds}
+         RetryCount: word;       {Retry count of timeout restarts}
+         ActualRcvd: word;       {actual number of bytes received}
+         ErrorType : byte;       {type of result code, 0= disk,}
+                                 {     1=omninet, 2=timeout}
+         ResultCode: byte;       {Omninet Transporter return code}
+
+         Pointer is 4 bytes on the 16 bit processors, the 8086
+         systems it is the data segment register and offset.  On
+         8 bit processors it is a word.  Byte fields on the 68000
+         would be words.
+
+         To have no timeout, necessary for format and mirror
+         commands, the timeout value is $0000.  To have infinite
+         retries use a value of $0000.  To send broadcast drive
+         command use ServerHost value of $FF.  To send to boot
+         server use ServerHost value of $80.
+
+         The operation of the generic command is the same as the
+         read and write block processing.  The wait for receive
+         must use the user specified timeout period and retry
+         count.
+
+         Software on the IBM system must go to the disk driver
+         and not directly to the transporter ROM.  It must get
+         the generic command driver address from the UTILHOOK
+         facility and pass this parameter block to it.
+         Furthermore, this section of the driver should use the
+         "long and short command" processing code of the read and
+         write block processing section.  The common code makes
+         the driver shorter and changes need only be made once.
+
+         For CCOS, the CDsend and Cdrecv procedures must be changed to
+         use the CDisk driver and not the SLOTIO driver.  The SLOTIO
+         and CDisk drivers must be changed to use the new interface.
+         Denise suggested a CDinit procedure to setup the timeout and
+         retry values before CDsend and CDrecv calls.
+
+         Distribution
+
+         Phil Belanger
+         Sean Findley
+         Bruce Kendall
+         Keith Odom
+         Denise Pitsch
+         Steve Schwartz
+         Bob Wohnoutka
+

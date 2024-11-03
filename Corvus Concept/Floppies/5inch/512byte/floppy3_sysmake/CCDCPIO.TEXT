@@ -1,0 +1,381 @@
+{ CCDCPIO.TEXT --------------------------------------------------------}
+{
+{       CCDCPIO -- Corvus CONCEPT DataCom and Printer I/O Unit
+{
+{       Copyright 1983 Corvus Systems, Inc.
+{                      San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  04-08-82  MB   Original unit (was CCprtIO)
+{       v 2.0  12-10-82  KB   Updated to new functions and datacom added
+{
+{----------------------------------------------------------------------}
+{$R-}
+
+UNIT CCdcpIO;
+
+INTERFACE
+
+USES {$U /CCUTIL/CCLIB} CCdefn;
+
+CONST  { UnitStatus function codes }
+       { not used by this unit }
+
+       {Printer driver}
+       FCMODECHG    = $80; {toggle transparent/translate mode}
+       FCINSTALT    = $81; {install alt char translate table}
+       FCATTCHPR    = $82; {attach printer to unit}
+       FCSLCTPITCH  = $83; {select pitch - 10 or 12}
+       FCSLCTINCH   = $84; {select lines per inch - 6 or 8}
+       FCINSTACT    = $85; {install printer action table}
+       FCCLPISTAT   = $86; {return state of CPI and LPI}
+
+       {DataCom driver}
+       FCRDSTATUS   = $07; {read buffer status}
+       FCWRSTATUS   = $08; {write buffer status}
+       FCSETHIWATER = $09; {set hi water mark for read buffer}
+       FCSETLOWATER = $0A; {set low water mark for read buffer}
+       FCRDOUTDSBL  = $0B; {toggle read buffer output disable - BUFFER TO USER}
+       FCRDINDSBL   = $0C; {toggle read buffer input disable - PORT TO BUFFER}
+       FCWROUTDSBL  = $0D; {toggle write buffer output disable - BUFFER TO PORT}
+       FCWRINDSBL   = $0E; {toggle write buffer input disable - USER TO BUFFER}
+       FCWRBUFCHRS  = $0F; {get the number of characters in the write buffer}
+       FCRDBUFCHRS  = $10; {get the number of characters in the read buffer}
+       FCAUTOLF     = $11; {toggle the forced auto line feed flag}
+       FCBTWNENQ    = $12; {set the number of chars between ENQ's or ETX's}
+       FCRDALTBUF   = $13; {set an alternate read buffer}
+       FCWRALTBUF   = $14; {set an alternate write buffer}
+{
+.PG
+}
+       { baud rate codes }
+       BAUD300  = 0;
+       BAUD600  = 1;
+       BAUD1200 = 2;
+       BAUD2400 = 3;
+       BAUD4800 = 4;            { default }
+       BAUD9600 = 5;
+       BAUD19200 = 6;
+       { parity codes }
+       PARDISABLED = 0;         { default }
+       PARODD      = 1;
+       PAREVEN     = 2;
+       PARMARKXNR  = 3;
+       PARSPACEXNR = 4;
+
+       { printer port select codes }
+       PORT1       = 0;
+       PORT2       = 1;         { default }
+
+       { word size (charsize) codes }
+       CHARSZ8     = 0;         { default }
+       CHARSZ7     = 1;
+
+       { handshake codes }
+       LINECTSINVERTED = 0;
+       LINECTSNORMAL   = 1;
+       LINEDSRINVERTED = 2;
+       LINEDSRNORMAL   = 3;     { default }
+       LINEDCDINVERTED = 4;
+       LINEDCDNORMAL   = 5;
+       XONXOFF         = 6;
+       ENQACK          = 7;
+       ETXACK          = 8;     {new protocol}
+       NOPROTOCOL      = 9;     {new protocol}
+
+       { unit number codes }
+       PRINTERUNIT     =  0;
+       DTACOM1UNIT     =  1;
+       DTACOM2UNIT     =  2;
+       DCPINVUNITNO    = -1;
+{
+.PG
+}
+TYPE
+      WrBufStatus = RECORD
+                      BufferSize : INTEGER;
+                      FreeSpace  : INTEGER;
+                      ChrBtwnENQ : INTEGER;
+                      InputDisbld: BOOLEAN;
+                      OutputDsbld: BOOLEAN;
+                      AutoLinFeed: BOOLEAN;
+                      AltBufAvail: BOOLEAN;
+                      AltBufAddr : pByte;
+                      AltBufSize : INTEGER;
+                      END;
+
+      RdBufStatus = RECORD
+                      BufferSize : INTEGER;
+                      FreeSpace  : INTEGER;
+                      HiWater    : INTEGER;
+                      LowWater   : INTEGER;
+                      InputDisbld: BOOLEAN;
+                      OutputDsbld: BOOLEAN;
+                      LostData   : BOOLEAN;
+                      AltBufAvail: BOOLEAN;
+                      AltBufAddr : pByte;
+                      AltBufSize : INTEGER;
+                      END;
+
+      PrtStatusBlk = RECORD
+                       CPI : INTEGER;
+                       LPI : INTEGER;
+                       END;
+
+VAR   PrtAvail: boolean;  { printer available (assigned) }
+      DC1Avail: boolean;  { datacom 1 available (assigned) }
+      DC2Avail: boolean;  { datacom 2 available (assigned) }
+      PRT: integer;       { unit number of /Printer }
+      DC1: integer;       { unit number of /Dtacom1 }
+      DC2: integer;       { unit number of /Dtacom2 }
+
+FUNCTION  DCPStatus    (var br,par,dc,chsz,hs: integer): integer;
+FUNCTION  DCPwrFree    (var freebytes: integer):         integer;
+FUNCTION  DCPrdFree    (var freebytes: integer):         integer;
+FUNCTION  DCPBaudRate  (baudrate: integer):              integer;
+FUNCTION  DCPParity    (parity: integer):                integer;
+FUNCTION  DCPCharSize  (charsize: integer):              integer;
+FUNCTION  DCPHandShake (protocol: integer):              integer;
+FUNCTION  DCPGetUnitNo:                                  integer;
+FUNCTION  DCPSetUnitNo (unitno: integer):                integer;
+FUNCTION  PrtDataCom   (port: integer):                  integer;
+FUNCTION  DCPRdStatus  (var RDst: RdBufStatus):          integer;
+FUNCTION  DCPWrStatus  (var WRst: WrBufstatus):          integer;
+FUNCTION  DCPAutoLF:                                     integer;
+FUNCTION  PrtTblStatus (var ChrInch,LinesInch: integer): integer;
+PROCEDURE CCdcpIOinit;
+{
+.PG
+}
+IMPLEMENTATION
+
+CONST
+           { UnitStatus function codes }
+    FWRFREE   = 0;     {new - write buffer free space}
+    FBAUDRATE = 1;
+    FPARITY   = 2;
+    FDATACOM  = 3;     {new - printer only}
+    FCHARSIZE = 4;
+    FHANDSHAKE= 5;
+    FSTATUS   = 6;
+
+    FRDFREE   = 3;     {new - read buffer free space, datacoms only}
+
+VAR   DCPunitno: integer; { current unit number }
+
+FUNCTION pOSdevNam (untnbr: integer): pString64;        external;
+FUNCTION OSprtrDv: integer;                             external;
+FUNCTION OSdcm1Dv: integer;                             external;
+FUNCTION OSdcm2Dv: integer;                             external;
+
+FUNCTION GetError: integer;
+    begin
+    if      DCPunitno = PRT then GetError := IOEnoprt
+    else if DCPunitno = DC1 then GetError := IOEnodtc
+    else if DCPunitno = DC2 then GetError := IOEnodtc
+    else                         GetError := IOEinvdev;
+    end;
+
+FUNCTION GotDevice(var ior : integer): boolean;
+    var devavail: boolean;
+    begin
+    ior := 0;
+    if      DCPunitno = PRT then devavail := PrtAvail
+    else if DCPunitno = DC1 then devavail := DC1Avail
+    else if DCPunitno = DC2 then devavail := DC2Avail
+    else                         devavail := FALSE;
+    if Not devavail then ior := GetError;
+    GotDevice := devavail;
+    end;
+{
+.PG
+}
+FUNCTION DCPStatus; {(var br,par,dc,chsz,hs: integer);}
+    type statusblock = record
+         baudrate,parity,port,charsize,handshake: integer; end;
+    var stb: statusblock;
+        ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus (DCPunitno,stb,FSTATUS);
+        ior := IORESULT;
+        if ior = 0 then with stb do begin
+            br := baudrate; par := parity; dc := port;
+            chsz := charsize; hs := handshake; end;
+        end;
+    DCPStatus := ior;
+    end;
+
+FUNCTION DCPwrFree; {(var freebytes: integer): integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus (DCPunitno,freebytes,FWRFREE);
+        ior := IORESULT;
+        end;
+    DCPwrFree := ior;
+    end;
+
+FUNCTION DCPrdFree; {(var freebytes: integer): integer;}
+    var ior: integer;
+    begin
+    if DCPunitno = PRT then ior := IOEinvdev
+    else if GotDevice(ior) then begin
+            UnitStatus (DCPunitno,freebytes,FRDFREE);
+            ior := IORESULT;
+            end;
+    DCPrdFree := ior;
+    end;
+
+FUNCTION DCPBaudRate; {(baudrate: integer): integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus(DCPunitno,baudrate,FBAUDRATE);
+        ior := IORESULT;
+        end;
+    DCPBaudRate := ior;
+    end;
+{
+.PG
+}
+FUNCTION DCPParity; {(parity: integer): integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus(DCPunitno,parity,FPARITY);
+        ior := IORESULT;
+        end;
+    DCPParity := ior;
+    end;
+
+FUNCTION PrtDataCom; {(port: integer): integer;}
+    begin
+    if PrtAvail then begin
+        UnitStatus (PRT,port,FDATACOM);
+        PrtDataCom := IORESULT;
+        end
+    else PrtDataCom := IOEnoprt;
+    end;
+
+FUNCTION DCPCharSize; {(charsize integer): integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus(DCPunitno,charsize,FCHARSIZE);
+        ior := IORESULT;
+        end;
+    DCPCharSize := ior;
+    end;
+
+FUNCTION DCPHandShake; {(protocol: integer): integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus(DCPunitno,protocol,FHANDSHAKE);
+        ior := IORESULT;
+        end;
+    DCPHandShake := ior;
+    end;
+{
+.PG
+}
+FUNCTION PrtTblStatus;{(var ChrInch,LinesInch: integer):integer;}
+    var ior: integer;
+        pb: PrtStatusBlk;
+    begin
+    if DCPunitno <> PRT then ior := DCPINVUNITNO
+    else if GotDevice(ior) then begin
+           UnitStatus(DCPunitno,pb,FCCLPISTAT);
+           ior := IORESULT;
+           if ior = 0 then
+              begin
+              ChrInch := pb.CPI;
+              LinesInch := pb.LPI;
+              end;
+           end;
+    PrtTblStatus := ior;
+    end;
+
+FUNCTION DCPRdStatus;{(var RDst: RdBufStatus):integer;}
+    var ior: integer;
+    begin
+    if DCPunitno = PRT then ior := DCPINVUNITNO
+    else if GotDevice(ior) then begin
+           UnitStatus(DCPunitno,RDst,FCRDSTATUS);
+           ior := IORESULT;
+           end;
+    DCPRdStatus := ior;
+    end;
+
+FUNCTION DCPWrStatus;{(var WRst: WrBufStatus):integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus(DCPunitno,WRst,FCWRSTATUS);
+        ior := IORESULT;
+        end;
+    DCPWrStatus := ior;
+    end;
+
+FUNCTION DCPAutoLF;{:integer;}
+    var ior: integer;
+    begin
+    if GotDevice(ior) then begin
+        UnitStatus(DCPunitno,ior,FCAUTOLF);
+        ior := IORESULT;
+        end;
+    DCPAutoLf := ior;
+    end;
+{
+.PG
+}
+FUNCTION  DCPGetUnitNo; {: integer;}
+    begin
+    if      DCPunitno = PRT then DCPGetUnitNo := PRINTERUNIT
+    else if DCPunitno = DC1 then DCPGetUnitNo := DTACOM1UNIT
+    else if DCPunitno = DC2 then DCPGetUnitNo := DTACOM2UNIT
+    else                         DCPGetUnitNo := DCPINVUNITNO;
+    end;
+
+FUNCTION DCPSetUnitNo; {(unitno: integer): integer;}
+    var ior,SVunitno: integer;
+        bad: boolean;
+    begin
+    bad := false;
+    SVunitno := DCPunitno;
+    case unitno of
+        PRINTERUNIT: DCPunitno := PRT;
+        DTACOM1UNIT: DCPunitno := DC1;
+        DTACOM2UNIT: DCPunitno := DC2;
+        otherwise: bad := true;
+        end;
+    if bad then ior := IOEinvdev
+           else if NOT GotDevice(ior) then DCPunitno := SVunitno;
+    DCPSetUnitNo := ior;
+    end;
+
+PROCEDURE CCdcpIOinit;
+    var pIDptr: pString64; i: integer;
+    begin
+    PRT := OSprtrDv;   { unit number of /Printer }
+    DC1 := OSdcm1Dv;   { unit number of /Dtacom1 }
+    DC2 := OSdcm2Dv;   { unit number of /Dtacom2 }
+    DCPunitno := PRT;  { default unit is printer }
+    pIDptr := pOSdevNam (PRT); PrtAvail := (pIDptr^ = 'PRINTER');
+    pIDptr := pOSdevNam (DC1); DC1Avail := (pIDptr^ = 'DTACOM1');
+    pIDptr := pOSdevNam (DC2); DC2Avail := (pIDptr^ = 'DTACOM2');
+    if DC1Avail then begin
+        UnitStatus (DC1,i,FWRFREE);
+        if IORESULT <> 0 then begin
+            PrtAvail := FALSE;
+            DC1Avail := FALSE;
+            DC2Avail := FALSE;
+            end;
+        end;
+    end;
+
+END.   {CCdcpIO}
+
+

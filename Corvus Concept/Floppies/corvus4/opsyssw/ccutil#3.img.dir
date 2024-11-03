@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'ccutil#3.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 13 files,  0 to 6 (6), eov 500, size 19, free 13
+
+ 1: SYSTEM.PASCAL   Data 20-Sep-83    6- 128( 122), 62464+512= 62976 bytes
+ 2: SYSTEM.MISCINFO Data  5-Nov-83  128- 129(   1),   512+512=  1024 bytes
+ 3: SYSTEM.LIBRARY  Data 20-Sep-83  129- 136(   7),  3584+512=  4096 bytes
+ 4: CPLIB           Data 20-Sep-83  136- 200(  64), 32768+512= 33280 bytes
+ 5: CFLIB.OBJ       Data 20-Sep-83  200- 243(  43), 22016+512= 22528 bytes
+ 6: CC.CPMUTIL      Data 12-May-83  243- 295(  52), 26624+512= 27136 bytes
+ 7: CPMD.ADM3       Data 21-Mar-83  295- 296(   1),   512+512=  1024 bytes
+ 8: CPMD.DEFAULT    Data 27-Apr-83  296- 297(   1),   512+512=  1024 bytes
+ 9: CPMD.SOROC      Data 21-Mar-83  297- 298(   1),   512+512=  1024 bytes
+10: CPMD.TELEV      Data 20-Mar-83  298- 299(   1),   512+512=  1024 bytes
+11: BOOTMGR         Data  1-Aug-83  299- 386(  87), 44544+512= 45056 bytes
+12: C2LIB.OBJ       Data 20-Sep-83  386- 434(  48), 24576+512= 25088 bytes
+13: CS.VSIUTXT.OBJ  Data  9-Nov-83  434- 481(  47), 24064+512= 24576 bytes

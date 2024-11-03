@@ -1,0 +1,17 @@
+
+Directory of UCSD disk image file 'fpsys2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FPSYS2 has 9 files,  0 to 6 (6), eov 500, size 3, free 9
+
+ 1: IV.LIB2         Data  8-Feb-84    6-  87(  81), 41472+512= 41984 bytes
+ 2: MN              Data  4-Nov-83   87- 164(  77), 39424+512= 39936 bytes
+ 3: DISASM          Data  2-Apr-82  164- 224(  60), 30720+512= 31232 bytes
+ 4: SYSTEM.EDITOR   Code 27-May-82  224- 271(  47), 24064+512= 24576 bytes
+ 5: PATCH.CODE      Code 18-May-82  271- 310(  39), 19968+512= 20480 bytes
+ 6: SYSTEM.IV1      Data  5-Sep-82  310- 348(  38), 19456+512= 19968 bytes
+ 7: IVMAKEFLOP.CODE Code 26-Jul-83  348- 377(  29), 14848+512= 15360 bytes
+ 8: SYSTEM.ASSMBLER Code 29-May-81  377- 437(  60), 30720+512= 31232 bytes
+ 9: 8086.ASSMBLER   Code 10-Jan-82  437- 497(  60), 30720+512= 31232 bytes

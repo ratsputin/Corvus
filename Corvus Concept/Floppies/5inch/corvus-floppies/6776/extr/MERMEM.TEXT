@@ -1,0 +1,114 @@
+; File: mermem.text
+; Date: 10-Sep-82
+
+        ident   mermem
+        
+        global  %_NEW,%_MARK,%_RELSE,%_MEMAV,%_DISP
+        global  %_NEW4,%_DISP4
+        
+;
+; System EQU's
+;
+
+PSYSCOM equ     $180            ; Address of pointer to SYSCOM
+
+;
+; jsvect - jump to routine in system vector
+;
+; Parameters: D0.W - routine offset
+;
+
+jsvect
+        move.l  PSYSCOM.w,a0    ; (A0) = syscom
+        move.l  8(a0),a0        ; (A0) = sysvect
+        move.l  0(a0,d0.w),a0   ; (A0) = desired entry point
+        jmp     (a0)            ; Call routine
+        
+;
+; %_NEW - Allocate memory in the heap
+;
+; Parameters:  ST.L - Address of pointer
+;              ST.W - Number of bytes needed
+;
+
+%_NEW
+        moveq   #52,d0          ; #52 = NEW
+        bra.s   jsvect          ; Returns directly to user
+        
+;
+; %_NEW4 - Allocate memory in the heap
+;
+; Parameters:  ST.L - Address of pointer
+;              ST.L - Number of bytes needed
+;
+
+%_NEW4
+        moveq   #104,d0         ; #104 = NEW4
+        bra.s   jsvect          ; Returns directly to user
+        
+;
+; %_DISP - Return memory to the heap
+;
+; Parameters:  ST.L - Address of pointer
+;              ST.W - Number of bytes being returned
+;
+
+%_DISP
+        moveq   #56,d0          ; #56 = DISPOSE
+        bra.s   jsvect          ; Returns directly to user
+        
+;
+; %_DISP4 - Return memory to the heap
+;
+; Parameters:  ST.L - Address of pointer
+;              ST.L - Number of bytes being returned
+;
+
+%_DISP4
+        moveq   #108,d0         ; #108 = DISPOSE4
+        bra.s   jsvect          ; Returns directly to user
+        
+;
+; %_MARK - Mark the heap
+;
+; Parameters:  ST.L - Address of pointer to be marked
+;
+
+%_MARK
+        moveq   #60,d0          ; #60 = MARK
+        bra.s   jsvect          ; Returns directly to user
+
+;
+; %_RELSE - Release the heap
+;
+; Parameters:  ST.L - Address of pointer to release to
+;
+
+%_RELSE
+        moveq   #64,d0          ; #60 = RELEASE
+        bra.s   jsvect          ; Returns directly to user
+
+;
+; %_MEMAV - Memory Available in the UCSD heap
+;
+; Parameters:  None.
+;
+; Results:     ST.L - #bytes available
+;
+; This routine preserves all registers.
+;
+
+%_MEMAV
+        clr.l   -(sp)           ; Clear room for result
+        movem.l d0-d7/a0-a6,-(sp)
+        move.l  64(sp),60(sp)   ; Set up return address
+        clr.l   -(sp)           ; Make room for the result
+        moveq   #68,d0          ; #68 = MEMAVAIL
+        bsr.s   jsvect          ; Call it
+        move.l  (sp)+,d0        ; Fetch and
+        move.l  d0,64(sp)       ; store the result
+        movem.l (sp)+,d0-d7/a0-a6
+        rts
+
+        end
+

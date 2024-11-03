@@ -1,0 +1,146 @@
+
+file : filehdr.text
+date : 24-Feb-1983
+
+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+::::::::       First Pass from Karl and me             ::::::::::
+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+
+Block pointers are 24 bits.
+Nil block pointers equal 0.
+End and beginning of a list specified by a nil block pointer.
+
+
+        File Header
+
+ +-------------------------------------+  <<--+
+ | header info - 28 bytes    ???       |      |
+ |---------+---------------------------|      |
+ | record  |   Block pointer to        |      |
+ | count   |   secondary index block   |      |
+ |---------+---------------------------|      |
+ | 2 bytes +  4 bytes  = 6 bytes       |      |-- first primary
+ |                                     |      |-- index block
+ |               .    total of         |      |-- file header blk
+ |               .    80 secondary     |      |
+ |               .    index block      |      |
+ |                    pointer records  |      |
+ |                                     |      |
+ |                                     |      |
+ |                                     |      |
+ |                                     |      |
+ |-------------------------------------|      |
+ |  pointer to next primary index blk  |      |
+ |     - 4 bytes                       |      |
+ +-------------------------------------+  <<--+
+
+  File header info :  must be defined
+       type, user name, protection,
+       fixed or variable records
+       max record length ???
+ .PG
+
+       Primary Index block - not header block
+
+ +-------------------------------------+  <<--+
+ |  ptr to file header block  4 bytes  |      |
+ |-------------------------------------|      |
+ |  ptr next primary index blk 4 bytes |      |
+ |-------------------------------------|      |
+ |  ptr prev primary index blk 4 bytes |      |
+ |-------------------------------------|      |
+ | record  |   Block pointer to        |      |
+ | count   |   secondary index block   |      |
+ |---------+---------------------------|      |-- next primary
+ |               .    total of         |      |-- index block
+ |               .    83 secondary     |      |
+ |               .    index block      |      |
+ |                    pointer records  |      |
+ |                                     |      |
+ |                                     |      |
+ |                                     |      |
+ |                                     |      |
+ |-------------------------------------|      |
+ | 2 bytes unused ?????                |      |
+ +-------------------------------------+  <<--+
+
+
+  Secondary index block pointer records :
+
+       2 byte count of records available from secondary
+              index block
+       4 byte pointer to a secondary index block
+              This is a block pointer.  The hi order byte
+              is always zero (0).
+
+.PG
+
+       Secondary index block
+
+ +-------------------------------------+
+ |  ptr to file header block  4 bytes  |
+ |-------------------------------------|
+ |  ptr next scndary index blk 4 bytes |
+ |-------------------------------------|
+ |  ptr prev scndary index blk 4 bytes |
+ |-------------------------------------|
+ | record  |   Block pointer to        |
+ | count   |   data block              |
+ |---------+---------------------------|
+ | 1 byte  +  3 bytes = 4 bytes        |
+ |                                     |
+ |               .    total of         |
+ |               .    123 data block   |
+ |               .    pointer records  |
+ |                                     |
+ |                                     |
+ |                                     |
+ |                                     |
+ +-------------------------------------+
+
+
+ Data block pointer record :
+
+       1 byte unsigned integer, count of records in
+              data block.
+       3 byte pointer to a data block.  A block pointer.
+
+
+
+.PG
+
+       Data block
+
+ +-------------------------------------+
+ |  ptr to file header block  4 bytes  |
+ |-------------------------------------|
+ |  pointer next data block   4 bytes  |
+ |-------------------------------------|
+ |  pointer prev data block   4 bytes  |
+ |-------------------------------------|
+ |                                     |
+ |                                     |
+ |         500 bytes of data           |
+ |                                     |
+ |                                     |
+ |     variable length records         |
+ |                                     |
+ |                                     |
+ |                                     |
+ |                                     |
+ |                                     |
+ |                                     |
+ +-------------------------------------+
+
+
+
+  variable length records :
+
+       1 unsigned byte, data length
+       n bytes data
+
+  Data can be read in sequential stream fashion by
+  chaining through data block list from beginning
+  to end.
+

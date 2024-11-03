@@ -1,0 +1,696 @@
+.PL 59
+.LM 1
+.RM 65
+.PO 10
+.HD '''Appendix B'
+.FT 'Constellation Software GTI''B-%'
+.PG 1
+Appendix B:  Operating system specifics
+---------------------------------------
+
+Each section covers the specific implementation details of the
+specified operating system.  This information includes the
+following:
+
+    o Overview.
+    o Volume format.
+    o Driver calls.
+    o Description of mount table.
+    o Memory locations used.
+    o Boot/logon process.
+    o Utilities.
+
+
+.HD '''Concept OS'
+B.1  Corvus Concept Operating System
+------------------------------------
+
+General overview
+
+There are 3 disk drivers for the Concept Operating System:  a
+floppy disk driver, an Omninet disk driver, and a flat cable disk
+driver.  All drivers are loadable.  Drivers are associated with
+unit numbers ranging from 1 to 36.  By convention, disk drivers
+are only associated with units 4, 5, and 9 through 29.  Unit 4 is
+always the system boot volume, and must contain certain operating
+system files.
+
+In addition to the disk drivers, there are two other drivers used
+by Constellation II.  One is called SLOTIO and is used for
+sending arbitrary disk commands.  The other is called OMNINET and
+is used for sending arbitrary Omninet commands.
+
+
+Volume format
+
+The volume format used by CCOS is identical to that used for
+UCSD p-system volumes.  By convention, volumes whose directory
+is stored with most significant byte first (i.e., a flipped
+directory) are called CCOS format, and volumes whose directory
+is stored with least significant byte first are called UCSD
+format.
+
+
+Driver calls
+
+    UNITREAD
+    UNITWRITE
+    UNITSTATUS
+    UNIT
+    UNIT
+
+
+Description of Concept mount table
+
+    devrange   = MINDEV..MAXDEV;
+
+    devtabentry  =         RECORD
+
+    {length offset}
+    {   02      0 }        comnds:  INTEGER;
+    {   04      2 }        driver:  pBytes;
+    {   01      6 }        Blocked: BOOLEAN;    { TRUE for disk volume }
+    {   01      7 }        Mounted: BOOLEAN;
+    {   08      8 }        Devname: STRING[7];  { from volume directory }
+    {   04     16 }        Devsize: LONGINT;    { " }
+    {   01     20 }        Devslt:  Byte;    {device slot nmbr}
+    {   01     21 }        Devsrv:  Byte;    {device server nmbr}
+    {   01     22 }        Devdrv:  Byte;    {disk drive nmbr}
+    {   01     23 }        Devtyp:  Byte;    {disk drive type}
+    {   01     24 }        Devspt:  Byte;    {sectors per track}
+    {   01     25 }        Devtps:  Byte;    {tracks per side}
+    {   01     26 }        Devro:   BOOLEAN; {device read only}
+    {   01     27 }        Fill1:   Byte;    {unused}
+    {   04     28 }        Devblk:  LONGINT; {disk base block}
+    { total    32 }        END;
+
+    {                                                                 }
+    { This record describes the devices and volumes which are active  }
+    { or configured in the system. Volume entries in this table       }
+    { occupy device table entries 9 thru 30....                       }
+    {                                                                 }
+    {                                                                 }
+    devtabrec    =         RECORD
+                           maxdevno: INTEGER;
+                           dt:       ARRAY[devrange] OF devtabEntry;
+                           END;
+
+Memory locations used
+
+The device table pointer is located in bytes 20 through 23 of
+the System Common area.
+
+The user name is located at byte $726.  The name is unencrypted.
+
+
+Boot process
+
+    After finding the user's boot volume, the boot code looks
+for the file CC.KERNEL in the boot volume.  This file is loaded
+starting at location ????, and then control is transferred to
+this location.  The boot code passes the following information to
+CC.KERNEL:
+
+    User name
+    User password
+    Location of boot volume
+
+When the screen goes blank after entering the user password, the
+boot code has completed executing.  The lines of dots seen next
+on the screen are output during execution of CC.KERNEL.
+
+    Once the kernel has completed, it transfers control to a
+program called CC.SETUP, which must also reside in the user's
+boot volume.  This program blanks the screen, puts up the
+user windows, and builds the user's mount table.
+
+
+Utilities
+
+
+.HD '''MSDOS 1.x'
+.NE 4
+B.2  MSDOS 1.x
+--------------
+
+Drivers currently available:  IBM PC/XT, TI Pro
+
+Overview
+
+The BIOS provided by IBM for MSDOS 1.x is replaced by the BIOS
+supplied by Corvus.  The Corvus supplied BIOS duplicates that
+provided by IBM as well as providing a Corvus driver.
+
+A maximum of 10 Corvus volumes and 2 floppies may be mounted.
+Volumes are referred to externally by letters A through L;
+internally, volumes are referred to as unit numbers 0 through 11.
+The volume mounted on unit A must contain the file COMMAND.COM.
+
+The ability to dynamically mount and unmount volumes is severely
+limited in MSDOS 1.x.  MSDOS uses a File Allocation Table (FAT)
+to control disk allocation; a copy of the FAT of each on-line
+volume is kept in memory.  The memory space for the FAT is
+allocated at boot time, and cannot be changed.  Therefore,
+whenever a volume is mounted, its FAT table must fit within the
+previous volume's FAT table.  Corvus has extended this
+restriction to say that a volume mounted over another must match
+that volume's configuration exactly.
+
+
+Volume format
+
+
+Driver calls
+
+
+Description of mount table
+
+Several tables within the BIOS must be modified when mounting a
+volume.  These are listed here merely as a summary; for complete
+information, consult the driver listings.
+
+   MTTAB:  Unit Assignment Table.  One byte entry for each
+possible unit (0 to 11), indicating whether unit is unassigned,
+assigned to a floppy, or assigned to a Corvus volume.  Also
+indicates read/write access for a Corvus volume.
+
+   DVTDVR:  Volume Configuration Pointer Table.  One byte entry
+for each possible unit (0 to 11).  Each entry is a DPH entry
+number (see below), so this table is really just a mapper of
+unit number to DPH entry number.
+
+   OFBAS:  Corvus drive(s) map.  5 byte entry for each possible
+Corvus volume.  Index is masked from MTTAB entry.  Each entry
+contains the starting disk block address of the volume and the
+Corvus server and drive number.
+
+   DPH:  Disk Configuration Tables.  Each entry consists of a
+unit number followed by a pointer to a volume configuration.  For
+any unit, at most one entry in this table is "activated" by an
+entry in the volume configuration pointer table DVTDVR.
+
+   DPTx:  Disk Parameter Table(s).  10 bytes each, one for each
+possible disk configuration.  Pointed to by DPH.  Includes
+information such as number of reserved sectors, FAT copies on
+disk number of directory entries, and sectors per disk.
+
+
+Memory locations used
+
+    Disk i/o port #:    2EEh
+    Disk status port #: 2EFh
+    Drive ready:        001h
+    Bus direction:      002h
+    Segment # of boot I/O ROM:  DF00h
+                                DF00h   ; dummy cold start
+                                DF03h   ; dummy warm start
+                                DF06h   ; ROM I/O support routines
+
+Boot process
+
+MSDOS 1.x must be booted from the Corvus hard disk; that is, it
+is not possible to boot MSDOS 1.x from a floppy and then
+"log-on" to the Corvus.  A boot from the Corvus hard disk is
+accomplished by jumping to the entry point of the Corvus
+supplied interface ROM at location DF00h.  The following BASIC
+program shows a jump to this ROM:
+
+       10 DEF SEG=&HDF00
+       20 X = 0
+       30 CALL X
+       40 END
+
+The boot volume (the one marked with x in the Access Manager)
+must be a UCSD-format volume which contains the file
+IBM.MSDOS.BIO and IBM.MSDOS.DOS.  The IBM.MSDOS.BIO file is
+supplied by Corvus on the distribution diskette CORIBM3:.  The
+IBM.MSDOS.DOS file is read from your IBM DOS boot diskette
+during installation.
+
+All other volumes mounted for the user must be MSDOS format
+volumes.  The volume mounted on unit A must contain the IBM
+supplied file COMMAND.COM.
+
+
+Utilities
+
+A mount manager program provides the ability for a user to mount
+or unmount specific volumes.  As mentioned above, this
+capability is limited in that volumes must be mounted over
+existing volumes, and the volume configurations of the two
+volumes must match exactly.
+
+
+.HD '''MSDOS 2.x'
+.NE 4
+B.3  MSDOS 2.x
+--------------
+
+Drivers currently available:  IBM PC/XT, TI Pro, DEC Rainbow
+
+Overview
+
+
+Volume format
+
+MSDOS volumes on the Corvus consist of a 4 block Corvus volume
+header, followed by a normal MSDOS volume as decribed in
+Appendix C of the DOS manual.  Volume attributes are specified
+by the system manager when the volume is created; these include
+volume size, number of reserved sectors, cluster
+size, and number of directory entries.  The
+other attributes of a volume are either fixed, or computed as
+shown below.
+
+Important note:  If the number of reserved sectors is 1 or more,
+then a BIOS parameter block is written into the first reserved
+sector, as described in Chapter 3 of the DOS manual.  Many
+applications use this BIOS parameter block, so you should always
+specify at least one reserved sector when creating a volume.
+
+Default  Actual
+Block    Block
+Off/len |Off/len | Description
+--------|--------|---------------------------------------------
+ 0 / 2  | 0 / 2  | Unused
+ 2 / 1  | 2 / 1  | UCSD directory entry for 1 volume and 1 file:
+        |        |   Volume MSDOS1 ...
+        |        |   File ...
+ 3 / 1  | 3 / 1  | Corvus parameter block:
+                 |   Byte
+                 |   Off/len   Description
+                 |    0 / 2    Bytes per sector, always 512
+                 |    2 / 2    Sectors per cluster
+                 |    4 / 2    Number of reserved sectors
+                 |    6 / 2    Number of FAT copies, always 2
+                 |    8 / 2    Number of directory entries
+                 |   10 / 2    Sectors per volume (does not
+                                 include header)
+                 |   12 / 2    Sectors per FAT
+                 |   14 / 498  Unused - always 0.
+ 4 / 1  | 4 / rs | Reserved sector containing DOS BIOS parameter
+                     block:
+                     Byte
+                     Off/len   Description
+
+ 5 / 1  | 4+rs / | FAT copy number 1
+        | fs     |
+ 6 / 1  | 4+rs+fs| FAT copy number 2
+        | / fs   |
+ 7 / 1  | 4+rs+2*| Directory
+        | fs / ds|
+   /    | 4+rs+2*| File data area
+        | fs+ds /|
+
+  The minimum FAT size is
+  one sector.  Since each FAT entry is 12 bits (1.5 bytes) long,
+  the FAT can address at most 4096 allocation units (clusters) of
+  data.  Thus, the maximum FAT size is 12 sectors, or 6K bytes.
+  Appendix C of the DOS 2.0 manual contains a description of the
+  DOS File Allocation Table.
+
+
+Driver calls
+
+
+Description of mount table
+
+4.2  Corvus Driver Data
+
+The following data was excerpted from the source of the
+installable Corvus hard disk driver CORDRV.BIN.  This data
+consists of both MSDOS and Corvus tables and buffers.
+
+;
+;*********************************
+;*   M S D O S   E Q U A T E S   *
+;*********************************
+;
+; BIOS Parameter Block (BPB) format
+;
+BPB_bps         EQU     0               ; # of bytes per sector
+BPB_spc         EQU     BPB_bps+2       ; # of sectors per cluster
+BPB_rs          EQU     BPB_spc+1       ; # of reserved sectors
+BPB_FATs        EQU     BPB_rs+2        ; # of FAT copies in volume
+BPB_dir         EQU     BPB_FATs+1      ; # of directory entries
+BPB_spv         EQU     BPB_dir+2       ; # of sectors per volume
+BPB_media       EQU     BPB_spv+2       ; media descriptor byte
+BPB_spf         EQU     BPB_media+1     ; # of sectors per FAT
+BPB_ESIZE       EQU     BPB_spf+2       ; BPB entry size
+{$PAGE+}
+                         - 17 -
+
+;***********************************
+;*   C O R V U S   E Q U A T E S   *
+;***********************************
+;
+; Mount Table (@ CS:MNTTBL) format
+;
+MT_TBLMAP       EQU        1Fh          ; CORMAP & BPB_TBL entry # + 1
+MT_UNUSED       EQU        20h          ; (currently unused)
+MT_CD           EQU        40h          ; 0 => Corvus drive, 1 => floppy drive
+MT_RO           EQU        80h          ; 0 => read-only, 1 => read/write
+;
+; Corvus Drive Map (@ CS:CORMAP) format
+;
+CM_DA_LO        EQU         0           ; disk addr bite 15-00
+CM_DA_HI        EQU         CM_DA_LO+2  ; disk addr bits 19-16
+CM_DRVNUM       EQU         CM_DA_HI+1  ; Corvus drive # (1-4)
+CM_SRVNUM       EQU         CM_DRVNUM+1 ; disk server #
+CM_ESIZE        EQU         CM_SRVNUM+1 ; CORMAP entry size
+;
+; Miscellaneous Corvus equates
+;
+CV_MAX          EQU        10           ; maximum # of Corvus volumes supported
+RETRIES         EQU       00Ah          ; # of retransmissions before aborting
+;*************************************************
+;*   D E V I C E   D R I V E R   H E A D E R S   *
+;*     (must be at the start of the driver)      *
+;*************************************************
+;
+; This is the device header for a dummy character device driver
+; which provides the "hook" into the Corvus tables.
+;
+                DW      NEXT_DEV        ; offset to next device header
+                DW      -1              ; segment of next device header
+                DW       8000h          ; character device
+                DW      DUM_STRATEGY    ; pointer to device strategy
+                DW      DUM_INT         ; pointer to device interrupt hander
+                DB      'UTILHOOK'      ; character device name
+;
+; This is the device driver header for the Corvus hard disk driver.
+;
+NEXT_DEV:       DD      -1              ; pointer to next device
+                DW      2000h           ; block device, non-IBM format
+                DW      DEV_STRATEGY    ; pointer to device strategy
+                DW      DEV_INT         ; pointer to device interrupt handler
+                DB      ?               ; # of block devices (DOS fills in w/INIT info)
+                DW      CORTBL          ; 7 bytes of filler
+                DB      0,0,0,0,0       ;
+;*   M S D O S   D A T A   *
+;*   also used by Corvus   *
+;***************************
+;
+; BIOS Parameter Block (BPB) Pointer Array
+; The address of this array of BPB pointers is returned in the INIT request.
+;
+;   Index in by MNTTBL entry MT_TBLMAP field - 1; entry size is 2;
+;   Each entry is a 2-byte offset (in the CS segment) to a BPBTBL entry.
+;
+BPB_PTR:        DW      BPBTBL                  ;
+                DW      BPBTBL+   BPB_ESIZE     ;
+                DW      BPBTBL+(2*BPB_ESIZE)    ;
+                DW      BPBTBL+(3*BPB_ESIZE)    ;
+                DW      BPBTBL+(4*BPB_ESIZE)    ;
+                DW      BPBTBL+(5*BPB_ESIZE)    ;
+                DW      BPBTBL+(6*BPB_ESIZE)    ;
+                DW      BPBTBL+(7*BPB_ESIZE)    ;
+                DW      BPBTBL+(8*BPB_ESIZE)    ;
+                DW      BPBTBL+(9*BPB_ESIZE)    ;
+;
+; BIOS Parameter Block (BPB) Table
+; The address of this table is returned in the BUILD_BPB request.
+;
+;   Offset is the BPB_PTR entry; entry size is BPB_ESIZE.
+;   Index into each entry w/ BPB_* equates.
+;   Each entry defines the "volume configuration" of the volume mounted
+;     on the unit used to index into MNTTBL.
+;
+BPBTBL:         DW      ?               ; bytes per sector
+                DB      ?               ; sectors per cluster
+                DW      ?               ; reserved sectors
+                DB      ?               ; FATs
+                DW      ?               ; directory entries
+                DW      ?               ; sectors per volume
+                DB      ?               ; media descriptor (non-IBM, so dc)
+                DW      ?               ; sectors occupied by FAT
+;
+                DB      (BPB_ESIZE*(CV_MAX-1)) DUP (?)  ; space for remaining entries
+{$PAGE+}
+                         - 20 -
+
+;*****************************
+;*   C O R V U S   D A T A   *
+;*****************************
+;
+; Constellation II MSDOS User Name
+;
+USER:           DB      10 DUP (?)      ; encrypted logon name,
+                DB      0               ;   terminated by a zero for BK
+                DB      0               ;   plus an extra byte for BK
+;
+; Corvus Volume Mount Table
+;
+;   Index in by logical unit number (0-?); entry size is 1.
+;   Mask off various fields w/ MT_* equates.
+;   A zero entry indicates the associate unit is not assigned a volme.
+;
+MNTTBL:         DB      CV_MAX DUP (0)  ; Corvus volumes mounted by HELLOC2
+;
+; Corvus Volume Offset Table
+;
+;   Index in by MNTTBL entry MT_TBLMAP field - 1; entry size is CM_ESIZE.
+;   Index into each entry w/ CM_* equates.
+;   Each entry defines the location of the Corvus volume mounted on the
+;     unit used to index into MNTTBL.
+;
+CORMAP:         DW      ?               ; disk addr bits 15-0
+                DB      ?               ; disk addr bits 19-16
+                DB      ?               ; Corvus drive # (1-4)
+                DB      ?               ; disk server station #
+;
+                DB      (CM_ESIZE*(CV_MAX-1)) DUP (?)   ; space for remaining entries
+;
+;*************************************************************************
+;*   S P E C I A L   D A T A   F O R   C O R V U S   U T I L I T I E S   *
+;*************************************************************************
+;
+; Boot time number of sectors per FAT.
+;
+;   Index in by MNTTBL entry MT_TBLMAP field - 1; entry size is 2.
+;   Each entry is the number of sectors per FAT for the volume mounted
+;     on the unit used to index into MNTTBL.
+;
+BOOTSPF:        DW      CV_MAX DUP (?)  ; filled in by INIT
+;
+; Boot ROM jump table for use by Corvus utility drivers.
+;
+ROMJMPS:F_JMP   ROMSEG,ROM_COLD         ; ROM cold start
+        F_JMP   ROMSEG,ROM_WARM         ; ROM warm start
+        F_JMP   ROMSEG,ROM_IO           ; ROM I/O service dispatcher
+        F_JMP   ROMSEG,ROM_DUMRET       ; ROM dummy interrupt return
+;
+
+
+.HD '''p-system IV.x'
+B.4  Softech p-system Version IV
+--------------------------------
+
+Drivers available for:  IBM, DEC Rainbow, TI
+
+
+.NE 4
+Overview
+
+...
+
+
+.NE 4
+Volume format
+
+...
+
+
+.NE 4
+Driver calls
+
+...
+
+
+
+.NE 4
+Description of mount table
+
+...
+
+
+.NE 4
+Memory locations used
+
+...
+
+
+.NE 4
+Boot process
+
+...
+
+
+.NE 4
+Utilities
+
+...
+
+
+.HD '''CP/M 86'
+B.5  CP/M 86
+------------
+
+Drivers currently available:  DEC Rainbow, Z-100
+
+.NE 4
+Overview
+
+...
+
+
+.NE 4
+Volume format
+
+...
+
+
+.NE 4
+Driver calls
+
+...
+
+
+
+.NE 4
+Description of mount table
+
+...
+
+
+.NE 4
+Memory locations used
+
+...
+
+
+.NE 4
+Boot process
+
+...
+
+
+.NE 4
+Utilities
+
+...
+
+
+.HD '''Apple II DOS 3.3'
+B.6  Apple II DOS 3.3
+---------------------
+
+
+.NE 4
+Overview
+
+...
+
+
+.NE 4
+Volume format
+
+...
+
+
+.NE 4
+Driver calls
+
+...
+
+
+
+.NE 4
+Description of mount table
+
+...
+
+
+.NE 4
+Memory locations used
+
+...
+
+
+.NE 4
+Boot process
+
+...
+
+
+.NE 4
+Utilities
+
+...
+
+
+.HD '''Apple II Pascal'
+B.7  Apple II Pascal
+--------------------
+
+.NE 4
+Overview
+
+...
+
+
+.NE 4
+Volume format
+
+...
+
+
+.NE 4
+Driver calls
+
+...
+
+
+
+.NE 4
+Description of mount table
+
+...
+
+
+.NE 4
+Memory locations used
+
+...
+
+
+.NE 4
+Boot process
+
+...
+
+
+.NE 4
+Utilities
+
+...
+
+
+.HD '''Apple ProDOS'
+.NE 4
+B.8  Apple ProDOS
+-----------------
+
+
+.HD '''Apple Macintosh'
+.NE 4
+B.9  Apple Macintosh
+--------------------
+
+
+.HD '''Apple /// SOS'
+.NE 4
+B.10  Apple /// SOS
+-------------------
+
+

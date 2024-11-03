@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'lgicalc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 6 files,  0 to 6 (6), eov 500, size 228, free 6
+
+ 1: CC.LGICLC       Data  8-Feb-83    6- 169( 163), 83456+512= 83968 bytes
+ 2: HELP.LC.TEXT    Text  8-Feb-83  169- 191(  22), 11264+512= 11776 bytes
+ 3: LC.CONVERT      Data  8-Feb-83  191- 206(  15),  7680+512=  8192 bytes
+ 4: TERMINAL.TEXT   Text 19-Jul-83  206- 260(  54), 27648+512= 28160 bytes
+ 5: HC4.TEXT        Text 19-Jul-83  260- 266(   6),  3072+512=  3584 bytes
+ 6: HCTR4.TEXT      Text 19-Jul-83  266- 272(   6),  3072+512=  3584 bytes

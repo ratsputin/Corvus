@@ -1,0 +1,48 @@
+
+Directory of UCSD disk image file 'floppy3_sysmake.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY3 has 41 files,  0 to 6 (6), eov 1440, size 393, free 41
+
+ 1: BLDACT          Data 21-Jan-83    6-  41(  35), 17920+512= 18432 bytes
+ 2: BLDACT.EQU.OBJ  Data 21-Jan-83   41-  46(   5),  2560+512=  3072 bytes
+ 3: BLDACT.EQU.TEXT Text 21-Jan-83   46-  52(   6),  3072+512=  3584 bytes
+ 4: BLDACT.TEXT     Text 21-Jan-83   52- 106(  54), 27648+512= 28160 bytes
+ 5: BLDALT          Data  3-Aug-83  106- 144(  38), 19456+512= 19968 bytes
+ 6: BLDALT.EQU.OBJ  Data  3-Aug-83  144- 149(   5),  2560+512=  3072 bytes
+ 7: BLDALT.EQU.TEXT Text  3-Aug-83  149- 155(   6),  3072+512=  3584 bytes
+ 8: BLDALT.OBJ      Data  3-Aug-83  155- 183(  28), 14336+512= 14848 bytes
+ 9: BLDALT.TEXT     Text  3-Aug-83  183- 225(  42), 21504+512= 22016 bytes
+10: CC.SETDCP       Data  3-Aug-83  225- 277(  52), 26624+512= 27136 bytes
+11: CC.SETDCP.OBJ   Data  3-Aug-83  277- 324(  47), 24064+512= 24576 bytes
+12: CC.SETDCP.TEXT  Text 15-Apr-83  324- 394(  70), 35840+512= 36352 bytes
+13: CCDCPIO.OBJ     Data 20-Jan-83  394- 415(  21), 10752+512= 11264 bytes
+14: CCDCPIO.TEXT    Text  8-Feb-83  415- 441(  26), 13312+512= 13824 bytes
+15: DIABLO.TEXT     Text 24-Jan-83  441- 445(   4),  2048+512=  2560 bytes
+16: DONTPANIC       Data  9-Feb-83  445- 457(  12),  6144+512=  6656 bytes
+17: DONTPANIC.TEXT  Text  9-Feb-83  457- 461(   4),  2048+512=  2560 bytes
+18: ED.USERKEY.TEXT Text 26-Jan-83  461- 465(   4),  2048+512=  2560 bytes
+19: FLOPE           Ux185 13-Jul-83  465- 513(  48), 24576+512= 25088 bytes
+20: FLOPE.TEXT      Ux183 13-Jul-83  513- 609(  96), 49152+512= 49664 bytes
+21: ILEAVE          Ux185 11-Apr-83  609- 615(   6),  3072+512=  3584 bytes
+22: ILEAVE.TEXT     Ux183 11-Apr-83  615- 619(   4),  2048+512=  2560 bytes
+23: JUNKKK          Ux185 28-Apr-83  619- 622(   3),  1536+512=  2048 bytes
+24: JUNKKK.TEXT     Ux183 28-Apr-83  622- 626(   4),  2048+512=  2560 bytes
+25: LDACTTBL.TEXT   Text 20-Dec-82  626- 640(  14),  7168+512=  7680 bytes
+26: LDNETPRNT       Data 10-Feb-84  640- 645(   5),  2560+512=  3072 bytes
+27: LDNETPRNT.OBJ   Data 10-Feb-84  645- 647(   2),  1024+512=  1536 bytes
+28: LDNETPRNT.TEXT  Text 10-Feb-84  647- 653(   6),  3072+512=  3584 bytes
+29: LDPRTALT.TEXT   Text  6-Jan-83  653- 667(  14),  7168+512=  7680 bytes
+30: NEWBUFF.TEXT    Text 11-Jan-83  667- 677(  10),  5120+512=  5632 bytes
+31: OUR.PAY.LC      Data 25-Feb-83  677- 680(   3),  1536+512=  2048 bytes
+32: PALT.TEST       Data 12-Apr-83  680- 683(   3),  1536+ 38=  1574 bytes
+33: PAT.DIABLO15    Data  1-Mar-83  683- 684(   1),   512+144=   656 bytes
+34: PAT.DIABLO630   Ux355 21-Jan-83  684- 685(   1),   512+144=   656 bytes
+35: PAT.NOENHANCE   Data 21-Jan-83  685- 686(   1),   512+144=   656 bytes
+36: PRIME.TEXT      Text 11-Feb-83  686- 690(   4),  2048+512=  2560 bytes
+37: TERMINAL        Data 21-Jun-83  690- 731(  41), 20992+512= 21504 bytes
+38: TERMINAL.TEXT   Text 21-Jun-83  731- 765(  34), 17408+512= 17920 bytes
+39: TMPFL.TEXT      Text 12-Jan-83  765- 769(   4),  2048+512=  2560 bytes
+40: W               Data 14-Feb-84  769-1043( 274), 140288+512= 140800 bytes
+41: XYZ.PAL         Data  3-Aug-83 1043-1047(   4),  2048+486=  2534 bytes

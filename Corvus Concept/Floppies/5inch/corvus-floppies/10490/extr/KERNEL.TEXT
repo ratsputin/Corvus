@@ -1,0 +1,2224 @@
+unit kernel;
+
+{$R-}
+{$I-}
+
+interface
+
+uses
+     {$U /ccutil/cclib }  ccdefn, cclblio, ccWndIo, ccgrfio,
+     {$U UTIL } Util,
+     {$U userio } userio,
+     {$U WKSP } WKSP,
+     {$U /wpspec/cs.vsiutxt} vsiutxt;
+
+CONST {.IX}
+    MAXLINLEN = 250;
+    SysTerm = 2;
+
+    MGEdwd = 50; MGEdit = 53; MGFrms = 54; MGMove = 55;
+    MGSrch = 57; MGEnh  = 58; MGUser = 59; MGPrnt = 61;
+    MGSet  = 62; MGSort = 63; MGIndx = 64; MGWkpd = 60;
+    MGPrgm = 66; MGSpell= 67; MGWdDisp=68; MGFile = 10;
+
+    SymLTab = -128; SymRTab = -127; SymDTab = -126;
+    SymCTab = -125; SymMar  = -124;
+
+    ExitFrame = 0;  MainFrame = 1;   BndFrame  = 2;
+    EnhFrame  = 3;  SrchFrame = 4;   WkpdFrame = 5;
+    UserFrame = 6;  FrmtFrame = 7;   FormFrame = 8;
+    GotoFrame = 9;  PrntFrame = 10;  SetFrame  = 11;
+    ReplFrame = 12; ShowFrame = 13;  HyphFrame = 14;
+    TabFrame  = 15; SortFrame = 16;  CopyFrame = 17;
+    DiagFrame = 18; MENU1Frame = 19; EXFrame   = 20;
+    CalcFrame = 22; AuxFrame   = 24; AdjtFrame = 25;
+    OffcFrame = 26; ListsFrame = 27; SpellFrame= 28;
+    WdDpFrame = 29; CalenFrame= 30;  ClockFrame= 31;
+    DEditFrame= 33; BaseFrame = 34;
+
+    DENam = 1;  DETtl = 12; DETyp = 49; DEFid = 53;
+    DELen = 59; DESav = 65; DESelf = 7; DEParent = 6;
+    EnhOff = '\1Be\40';
+
+    C_GotoXY = '\1B=';  C_CursUp = '\1BA';  C_CursDown = '\1BB';
+    C_CursRgt= '\1BC';  C_CursLft= '\1BD';  C_InsrtLn  = '\1BE';
+    C_SetNorm= '\1BG0'; C_SetInvrs='\1BG4'; C_SetUnLn  = '\1BG8';
+    C_Home   = '\1BH';  C_ClrHome ='\1BJ';  C_ClrEOL   = '\1BK';
+    C_OvrStk = '\1BO';  C_InsrtChr='\1BQ';  C_DelLin   = '\1BR';
+    C_DelChr = '\1BW';  C_ClrEOW  ='\1BY';  C_InvrtChrs= '\1BZ';
+    C_CsrOff = '\1Bb';  C_CsrOn   ='\1Bc';  C_GrfMode  = '\1Bg';
+    C_SetGrfOrg = '\1Bo';                   C_TxtMode  = '\1Bt';
+    C_ULnCsr = '\1Bu';  C_BlkCsr  ='\1Bw';
+
+    TIDEdit     =  1; TIDSearch   =  2; TIDPrint    =  3;
+    TIDForms    =  4; TIDEnhance  =  5; TIDSettings =  6;
+    TIDFormat   =  7; TIDCall     =  8; TIDStorage  =  9;
+    TIDSelfTest = 10; TIDGoto     = 11; TIDBound    = 12;
+    TIDHelp     = 13; TIDCopy     = 14; TIDExit     = 15;
+    TIDUserKeys = 16; TIDMenu     = 17; TIDCalc     = 18;
+    TIDPascal   = 19; TIDLinker   = 20; TIDFilMgr   = 21;
+    TIDAsmblr   = 22; TIDAdjust   = 23; TIDCalen    = 24;
+    TIDIntrst   = 25; TIDMail     = 26; TIDSpell    = 27;
+    TIDClock    = 28; TIDSavKys   = 29; TIDLists    = 30;
+    TIDMakList  = 31; TidNewWksp  = 32; TIDEX       = 33;
+
+    PrUnit = 6;
+    TXTTOP = 2;
+    CurVrs = '\1BeA\1BG4WordProc 1.8\1Be@\1BG4 Beta';
+
+    kylen      = 4;   wdlen      = 16;
+
+type
+   keywd   = packed array [1..kylen] of char;
+   word    = packed array [1..wdlen] of char;
+   WordRcd = record
+             ky: keywd;
+             wd: word;
+             so: byte;
+             end;
+
+    wordptr = ^wordsav;
+    wordsav = record
+                ll: wordptr;
+                rl: wordptr;
+                wd: word;
+                end;
+    wordlhd = packed array [1..26] of wordptr;
+
+    EnhTyp    = ( Bold,Inverse,Super,Sub,ULine,DblUline,StrkOut );
+    EnhSetTyp = set of EnhTyp;
+    BA        = array [1..MaxLinLen] of Byte;
+    XCMDTYP   = ( XREP, XRAB );
+    MaxStr    = String[MaxLinLen];
+
+var
+    BelTone      : boolean;  {sound margin warning tone}
+    BkTim        : integer;
+    BLK          : CHAR;
+    BLKSTR       : BA;
+    Blnk         : Byte;
+    BotMar       : integer;  { page margin reserved for footers }
+    BOTROW       : INTEGER;
+    BoundMode    : boolean;
+    Btm          : Boolean;
+    CallWin      : WndRcd;
+    CleanFlg     : Boolean;  { eATRUEe@ eAife@ eAwe'ree@ eAcleaninge@ eAthee@ eAinpute@ eAfile.e@ }
+    CLREOS       : string[10];
+    CLRSCR       : string[10];
+    Cmd          : KeyTyp;
+    CmdStr       : StrTyp;
+    CntrTxt      : boolean;
+    ColHdr       : BA;
+    ColLayOut    : integer; { text coordinate of layout page    }
+    Cols6x10     : integer; { layout window dimensions          }
+    CrtBuf       : Array[1..6] Of byte;   { eAUsede@ eAonlye@ eAine@ eAShowLinee@ }
+    CSense       : Boolean; { TRUE for case sensitive search    }
+    CSFlg        : Boolean; { eATRUEe@ eAife@ eAReDrawe@ eAise@ eAtoe@ eAcleare@ eAtoe@ eAscreene@ eAfirste@ }
+    CtrOpt       : boolean;
+    CTRROW       : INTEGER;
+    CURCOL       : INTEGER;
+    CurDE        : integer;
+    CurEnh       : EnhSetTyp;
+    CurMode      : StrTyp;     { eACurrente@ eAmode:e@ eAnone,e@ eAProgramming,e@ eAore@ eAComme@ }
+    CurPat       : integer;
+    CurTsk       : integer;    { Current Task ID }
+    CurVol       : StrTyp;     { current volume name }
+    CurWin       : WndRcd;
+    DictHeapPtr  : ^Integer;   { eAPointere@ eAtoe@ eAdictionarye@ eAheape@ }
+    Digit        : set of char;
+    DirFid       : FilId;
+    DirFlg       : Boolean;    { Used by DelPad; set to TRUE for deletion of subdirs }
+    DoIdle       : boolean;
+    DOT          : char;
+    DPYCHG       : BOOLEAN;
+    EmitStr      : Str255;
+    EndLine      : String[4];
+    EndPrint     : boolean;
+    EnhCod       : string[3];
+    EPageOff     : integer;
+    ErrorWin     : WndRcd;
+    ESCSTR       : STRING[ 1 ];
+    FastFlg      : Boolean;     { eATRUEe@ eAife@ eAReDrawe@ eAise@ eAtoe@ eAusee@ eAPlaceLinee@ }
+    FB1          : BA;
+    FB1Avail     : integer;
+    FB1Mty       : boolean;
+    FB2          : BA;
+    FBlk         : TXTcb;
+    FFID         : file;
+    FFID1        : TXTfile;
+    FIDFound     : Boolean;
+    FilInfo      : BA;
+    FillInd      : integer;
+    FillLMar     : integer;
+    FillOpt      : boolean;
+    FillRMar     : integer;
+    Flin         : TXTstring;
+    FmtCmd       : Byte;
+    FNAM         : StrTyp;
+    FollowEnh    : boolean;
+    FrmFid       : FilId;
+    FrmLen       : integer;
+    FstInd       : integer;
+    FstPag       : integer;
+    FunKey       : array[0..59] of KeyTyp;
+    GaugeWin     : WndRcd;
+    GenNdx       : boolean;
+    GhstCsr      : integer; { column of ghost cursor }
+    HotZon       : integer;
+    HyphOpt      : boolean;
+    INSCOL       : INTEGER;
+    INSMOD       : BOOLEAN;
+    INVVID       : string[10];
+    JB1          : BA;
+    JstfLMar     : integer;
+    JstfOpt      : boolean;
+    JstfPt       : integer;
+    JstfRMar     : integer;
+    KeepCnt      : Integer;    { eA#e@ eAofe@ eAwordse@ eAone@ eAdicte@ eAheape@ }
+    Key          : char;
+    LastCall     : StrTyp; { last call command }
+    LCase        : set of char;
+    LftJst       : boolean;
+    LftMar       : integer;
+    LINNEWTXT    : INTEGER;
+    LinSpc       : integer;
+    LndMrk       : StrTyp;
+    LoadUserKeys : boolean;
+    LogUndo      : boolean;
+    LPP          : integer;
+    MarkBot      : integer;
+    MarkLft      : integer;
+    MarkRht      : integer;
+    MarkTop      : integer;
+    MaxChg       : integer;
+    MicJus       : boolean; { Micro justification on/off }
+    NamNdxPad    : StrTyp;
+    NdxFid       : FilId;
+    NdxPagPfx    : StrTyp;
+    NEWTXT       : BA;
+    NEWTXTMTY    : BOOLEAN;
+    NoEnhance    : Boolean;
+    NRMVID       : string[10];
+    OldEnh       : EnhSetTyp;
+    OldGauge     : longint;
+    OldHomCol    : integer; { for HOME }
+    OldHomLin    : integer;
+    OPageOff     : integer;
+    PageEFt      : array [1..3] of BA;
+    PageEHd      : array [1..3] of BA;
+    PageNo       : integer;
+    PageOff      : integer;
+    PageOFt      : array [1..3] of BA;
+    PageOHd      : array [1..3] of BA;
+    PageTLen     : integer;
+    PagLen       : integer;
+    PAGNUM       : INTEGER;
+    PagOff       : integer;
+    ParFmt       : array [1..5] of record F,L,R: integer; I:boolean; End;
+    PAT          : StrTyp;
+    PB           : ^LongInt;
+    PBuf         : BA;
+    PBufLen      : integer;
+    PBufPtr      : integer;
+    PFID         : INTERACTIVE;
+    PFNam        : StrTyp;
+    PLS          : char;
+    PlsMns       : set of char;
+    PrevChar     : Char;     { eALaste@ eAcharactere@ eAtypede@ }
+    PrevTxtPad   : StrTyp;
+    PrintEnable  : boolean;
+    PrivDict     : Boolean;  { eATRUEe@ eAfore@ eAnon-networke@ eAdictionarye@ }
+    ProgFlg      : Boolean;  { eATRUEe@ eAfore@ eAwritinge@ eAprogramse@ }
+    PrtAbort     : Boolean;  { eATruee@ eAife@ eAusere@ eAhase@ eAabortede@ eAae@ eAprinte@ eAoperatione@ }
+    PrtDest      : (Spooler, Local, PFile, Display, LayOut);
+    PrtFid       : FilId;
+    PrtHdrFtr    : boolean;
+    PrtItpt      : boolean;
+    PrtNdv       : boolean;
+    PrtPause     : boolean;
+    PrvTsk       : integer;  { Previous Task ID }
+    PstTim       : integer;
+    PstWid       : integer;
+    Ptrn         : array [1..5] of StrTyp;
+    Raskin       : MaxStr;
+    RdwRqd       : boolean;  { Redraw required, time permitting }
+    RedoFid      : FilId;
+    RedoMty      : boolean;
+    RFID         : TEXT;
+    RhtMar       : integer;
+    RNMFID       : file;
+    RowLayOut    : integer; { text coordinate of layout page     }
+    Rows6x10     : integer; { layout window dimensions }
+    RPL          : StrTyp;
+    Saved        : boolean;
+    SclHgt       : integer;
+    SCRLFT       : integer;
+    ScrPagLen    : integer;{# lines between screen page boundaries}
+    SCRWID       : INTEGER;
+    SentEnd      : set of char;
+    SFID         : file ;
+    SglShtOpt    : Boolean;  { eATRUEe@ eAfore@ eAsinglee@ eAsheete@ eAprintinge@ }
+    ShwBnd       : boolean;
+    ShwPagBnd    : boolean;
+    ShwPat       : boolean;  {true if patterns are to be highlighted}
+    SlowFlg      : Boolean;  { eATRUEe@ eAife@ eAwee@ eAneede@ eAtoe@ eAwaite@ eAfore@ eAthee@ eAprintere@ }
+    SpecOut      : BA;
+    StartPage    : integer;
+    StopPage     : integer;
+    SuspWin      : WndRcd;
+    SysErr       : Integer;  { eAExperimental-e@ eAsete@ eAtoe@ eAvaluese@ eAfore@ eAWPe@ eAerrorse@ }
+    TabAra       : BA;
+    TabMod       : byte;    { current tab stop type }
+    TFID         : text;
+    TimZon       : integer; { 1-24 }
+    TMPFID       : TEXT;
+    TNAM         : StrTyp;
+    TokFnd       : boolean;
+    TopMar       : integer;  { page margin reserved for headers }
+    TxtFid       : FilId;
+    UCase        : set of char;
+    UlMode       : boolean;
+    UndoFid      : FilId;
+    UndoFullFlg  : boolean;  { TRUE if UNDO workpad is full }
+    UndoRedo     : boolean;
+    VfyChg       : boolean;
+    VrtOff       : integer;  { vertical page offset }
+    WINBOT       : INTEGER;
+    WINRWS       : INTEGER;
+    WINTOP       : INTEGER;
+    WkSpDrty     : boolean;
+    WkSpNam      : StrTyp;  { name of workspace }
+    wordque      : wordlhd;
+    WrdChr       : set of char;
+    XLayOut      : integer;   { dot coordinate of layout line      }
+    XNAM         : StrTyp;
+    YLayOut      : integer;   { dot coordinate of layout line      }
+    YnkFid       : FilId;
+    YNKINS       : BOOLEAN;
+    YNKLEN       : INTEGER;
+    YNKMTY       : BOOLEAN;
+    YNKWID       : INTEGER;
+    ZipAra       : BA;
+
+  {$S KERNEL }
+  {.IX procedures}
+  function  AddDE(Nam,Typ:StrTyp;Fid:FilId;Title:StrTyp):boolean;
+  procedure AppendLine( Lin: integer; var Buf:BA );
+  procedure BackGround;
+  function  BAColToNdx( Col: integer; var B: BA ): integer;
+  procedure BADelByt( var B:BA; Ndx, Cnt:integer );
+  procedure BADelChr( var B:BA; Ndx, Cnt: integer );
+  procedure BAInsByt( var Dst:BA; Ndx, Cnt:integer; var Src:byte );
+  function  BAMatch( var B:BA; Ndx: integer; S:StrTyp ): boolean;
+  function  BANdxToCol( Ndx: integer; var B: BA ): integer;
+  procedure BAToStr( var B: BA; Ndx: integer; var S: StrTyp );
+  procedure BeginEvent;
+  Procedure BKSlash(Var B,Tmp1 : BA; Var L1 : Integer);
+  function  BkSpanEQ( var B: BA; I: integer; C: char ): integer;
+  function  BkSpanNE( var B: BA; I: integer; C: char ): integer;
+  function  BlankLine( Lin: integer ): boolean;
+  procedure ClrBA( var B:BA; Ndx: integer );
+  procedure CnvBytEnh( EnhByt: byte; var EnhSet: EnhSetTyp );
+  procedure CnvEnhByt( EnhSet: EnhSetTyp; var EnhByt: byte );
+  procedure CodeAvail;
+  function  CurLin: integer;
+  procedure DeleteLine( Lin: integer );
+  procedure DrawColHdr;
+  procedure EndEvent;
+  procedure EnhAtCol( var B:BA; Col:integer; var EnhSet:EnhSetTyp );
+  function  FileExists(FN: StrTyp): Boolean;
+  function  FindDE( Fil:FilId; Pat:StrTyp; Col:integer;
+                    var DE:BA; var Rec: integer ):boolean;
+  function  FirstNB( var B: BA ): integer;
+  procedure FlushL( var Buf: BA; Dst: integer );
+  procedure FlushNewTxt;
+  procedure ForEachLine( Top, Bot, Lft, Rht: integer;
+                         procedure Op( Lft, Rht: integer ) );
+  procedure ForeGround;
+  function  GetFID( PNam: StrTyp; var Dir, Fil: FilId;
+                    var DENum: integer ): boolean;
+  procedure GetLine( var Txt: BA; Lin: integer );
+  Function  InSubDir : Boolean;       { eATRUEe@ eAife@ eAwe'ree@ eAine@ eAae@ eAsubdire@ }
+  function  GetParentOf( var Dir: FilId ): boolean;
+  procedure GetPathName( var PNam: StrTyp );
+  procedure GotoLine( L: integer );
+  function  InitDir( Self, Parent:FilId ): boolean;
+  procedure InitTxtFid;
+  procedure InsertLine( Lin: integer; var Buf:BA );
+  function  IsWrdBnd( var Buf: BA; I: integer ): boolean;
+  function  LastNB( var B: BA ): integer;
+  procedure LockKernel( procedure P );
+  Procedure LongStrToBA(var B:BA; Ndx: Integer; S: TXTString);
+  function  LstLin: integer;
+  procedure NextCmd;
+  procedure PrntWkSpErr;
+  procedure PutCursor( TXTLIN, TXTCOL: INTEGER );
+  procedure ReDraw( Lin: integer );
+  procedure ReFresh;
+  procedure ReplaceLine( Cmd:XCMDTYP;Lin:integer;var Buf: BA );
+  procedure ScrInsDelLin( InsDelLin: StrTyp; InsDelRow, Cnt: integer );
+  procedure SCROLL( CNT: INTEGER );
+  procedure SetUpNewTxt( Lin: integer );
+  procedure SHOW( LIN: INTEGER );
+  procedure ShowLine( Lin: integer );
+  function  SpanEQ( var B: BA; I: integer; C: char ): integer;
+  function  SpanNE( var B: BA; I: integer; C: char ): integer;
+  procedure SpecBAToStr( var B: BA; Ndx: integer; var S: TxtString );
+  procedure SplitNewTxt( Brk, Ind: integer );
+  Procedure StripEnhance(Var PS : TxtString);
+  procedure StrToBA( var B: BA; Ndx: integer; S: StrTyp );
+  Procedure TitleBar(Var T: StrTyp);
+  procedure UpdtDE( DE, Col: integer; S: StrTyp );
+  procedure UpdtGauge( Val, Range: longint );
+  procedure UpShift( var Str: StrTyp );
+  function  UsrIdle: boolean;
+  procedure View( PNam: StrTyp );
+  procedure Warn( M: pStrTyp );
+  function  WrtOK: boolean;
+
+
+{.IX} implementation
+
+{$S }
+
+Function BrkPress : Boolean; External;
+
+Function OSvrtCRT : Boolean; External;
+
+Function BitTest(Data,BitNum : Integer): Boolean; External;
+
+Function BitSet(Data,BitNum : Integer) : Integer; External;
+
+
+Procedure PrepLine(Lin : Integer; Var LinImg : BA; Var A,B,Col,Row : Integer);
+
+{ eAReturnse@ eAstartinge@ eA(A)e@ eAande@ eAendinge@ eA(B)e@ eAindicese@ eAofe@ eAdisplayablee@ eAcharse@ eAine@ eALinImge@ }
+{ eAclippede@ eAagainste@ eAthee@ eAcurrente@ eAwindow.e@ }
+
+Var
+  P,
+  LeftNDX,
+  RightEdge : Integer;
+  Found     : Boolean;
+
+begin
+  Row := TxtTop + Lin - WinTop;                       { eAComputee@ eAscreene@ eAlinee@ }
+  GotoXY( 0, Row );                                   { eAPositione@ eAcursore@ }
+  unitwrite( 1, CrtBuf, 3 );                          { eAEnhancementse@ eAoffe@ }
+
+  if Lin=LinNewTxt then
+    moveleft( NewTxt, LinImg, MaxLinLen )
+  else
+    GetLine( LinImg, Lin );
+
+  If ScrLft = 1 Then Begin            { eATriviale@ eAcasee@ }
+    A := FirstNB(LinImg);
+    Col := BANdxToCol(A,LinImg);
+    If Col > 0 Then Col := Col - 1
+    End
+  Else Begin                          { eANote@ eAsoe@ eAtriviale@ }
+    A := BAColToNdx(ScrLft,LinImg);
+    B := SpanEQ(LinImg,1,Chr(27));
+    If B < A Then
+      While B < A Do Begin
+        if BAMatch( LinImg, B, EnhCod ) then
+          unitwrite( 1, LinImg[B], 3 );      { eAOutpute@ eAenhancemente@ eAcodee@ }
+        B := SpanEQ( LinImg, B+1, chr(27) )
+        end;
+    Col := 0
+    End;                              { eAAe@ eAande@ eACOLe@ eAnowe@ eAsete@ }
+
+  B := max( A, BkSpanNE( LinImg, MaxLinLen, ' ' )+1 );
+  if BAMatch( LinImg, B-2, EnhCod ) then B := B + 1;  { eABlanke@ eAmaye@ eAbee@ eAparte@ eAofe@ eAenhancemente@ }
+  RightEdge := ScrLft+ScrWid;
+  If B > BAColToNdx(RightEdge,LinImg) Then B := BAColToNdx(RightEdge,LinImg)
+End;
+
+function UsrIdle;
+begin
+  UsrIdle := true;
+  if BrkPress then begin
+    unitclear( 1 );
+    Bell(BelAck);
+    if not Confirm( Msg(MGGenl,3), true ) then begin
+      UsrIdle := false;
+      TellUsr( Msg(MGGenl,4) );
+    end else begin
+      TellUsr( Msg(MGGenl,5) );
+    end;
+    if BrkPress then begin end; {clear break key}
+  end;
+end;
+
+{
+function LstLin  : integer;
+}
+function LstLin;
+var I: integer;
+begin
+  if FilNumRecs( TxtFid, I ) then begin
+    LstLin := I;
+  end else begin
+    LstLin := 0;
+  end;
+end;
+
+{
+procedure UpdtGauge( Val, Range: longint );
+}
+procedure UpdtGauge;
+begin
+   Val := max( 1, Val );
+   if Val<Range then begin
+      Val := (ord4(Val-1)*100) div Range;
+   end else begin
+      if Range>1 then Val := 100;
+   end;
+   if Val<>OldGauge then begin
+      PushWindow( GaugeWin );
+      write( '\1Bb' ); {cursor off}
+      Gauge( Val );
+      PopWindow;
+      OldGauge := Val;
+   end;
+end;
+
+{
+function CurLin(: integer);
+}
+function CurLin;
+var I: integer;
+begin
+  if FilCurRec( TxtFid, I ) then begin
+    CurLin := I;
+  end else begin
+    CurLin := 1;
+  end;
+end;
+
+{
+procedure StrToBA( var B: BA; Ndx: integer; S: StrTyp );
+}
+procedure StrToBA;
+var I: integer;
+begin
+  Ndx := min( MaxLinLen, max( 1, Ndx ) );
+  for I := 1 to length( S ) do
+    B[I+Ndx-1] := CnvIB(ord( S[I] ));
+end;
+
+{
+procedure LongStrToBA( var B: BA; Ndx: integer; S: TXTString);
+}
+procedure LongStrToBA;
+var I: integer;
+begin
+  FillChar(B,MaxLinLen,' ');
+  Ndx := min( MaxLinLen, max( 1, Ndx ) );
+  for I := 1 to length( S ) do
+    B[I+Ndx-1] := CnvIB(ord( S[I] ));
+end;
+
+{
+procedure BAToStr( var B: BA; Ndx: integer; var S: StrTyp );
+}
+procedure BAToStr;
+
+Var
+  I : Integer;
+
+begin
+  I := 1;
+  S := '';
+  while (I<MaxLinLen) and (I+Ndx<MaxLinLen) and (B[Ndx+I-1]<>ord(' ')) do begin
+    S := concat( S, ' ' );
+    S[I] := chr(B[Ndx+I-1]);
+    I := I + 1
+    end
+end;
+
+{
+procedure SpecBAToStr( var B: BA; Ndx: integer; var S: TxtString );
+}
+procedure SpecBAToStr;
+
+Var
+  pDest,
+  pSource  : pByte;
+
+begin
+  pDest := Pointer(Ord4(@S)+1);          { eAPointere@ eAtoe@ eAdestinatione@ }
+  pSource := Pointer(Ord4(@B));          { eAPointere@ eAtoe@ eAsourcee@ }
+  MoveLeft(pSource^,pDest^,Ndx);
+  S[0] := Chr(Ndx)                       { eASete@ eAstringe@ eAlengthe@ eAbytee@ }
+end;
+
+
+{
+procedure ClrBA( var B:BA; Ndx: integer );
+}
+procedure ClrBA;
+begin
+  while Ndx<=MaxLinLen do begin
+    if B[Ndx]<>ord(' ') then begin
+      B[Ndx] := ord(' ');
+      Ndx := Ndx + 1;
+    end else begin
+      Ndx := MaxLinLen + 1;
+    end;
+  end;
+end;
+
+{
+function BAMatch( var B:BA; Ndx: integer; S:StrTyp ): boolean;
+}
+function BAMatch;
+var I: integer;
+
+begin
+  if (1<=Ndx) and (Ndx+length(S)-1<=MaxLinLen) then begin
+    BAMatch := true;
+    for I := 1 to length(S) do
+      if UpperCase(S[I])<>UpperCase(chr(B[I+Ndx-1])) then
+        BAMatch := false;
+  end else begin
+    BAMatch := false;
+  end;
+end;
+
+procedure WriteInt( x: integer );
+begin
+  write( chr(x div 256), chr(x mod 256) );
+end;
+
+
+Procedure BKSlash;
+
+Var
+  Num, Len,
+  J, i : Integer;
+
+Begin
+  j := 1;
+  I := 1;
+  Len := max( 1, BKSpanNE( B, MaxLinLen, ' ' ) );
+  while i <= len do begin
+    if (b[i] = ord('\\')) and Not(progFlg)  then begin { eAChecke@ eAfore@ eAimbeddede@ eAcommandse@ }
+      if BAMatch( B, i+1, 'pause' ) then begin
+        If PrtDest=Local Then Begin
+          PrtPause := true;
+          Bell( BelAck );
+          TellUsr( Msg(MGPRNT,48) );               { Tell user how to restart printer }
+          i := i + 5;
+          BADelByt( B, 1, i );
+          PBufLen := LastNB( B );
+          i := len + 1
+          end
+        end
+      else if (chr(B[i+1]) in ['0'..'9']) then begin
+        Num := 0;
+        i := i + 1;
+        while (Num<26) and (i<MaxLinLen) and (chr(B[i]) in ['0'..'9']) do begin
+          Num := Num * 10 + ord(B[i]) - ord('0');
+          i := i + 1
+          end;
+        Num := Num mod 256;
+        if Num>127 then Tmp1[j] := Num - 256
+        else Tmp1[j] := Num;
+        j := j + 1
+        end
+      else begin
+        Tmp1[j] := B[i+1];
+        i := i + 2;
+        j := j + 1
+        end
+      end                                        { eABackslashe@ eAprocessinge@ }
+    else begin
+      Tmp1[j] := B[i];
+      i := i + 1;
+      j := j + 1
+      end
+  end;
+  L1 := j-1                    { eALengthe@ eAofe@ eAnewe@ eAstringe@ }
+end;
+
+
+procedure SpitLine( var B: BA );
+
+{ eAThise@ eAroutinee@ eAise@ eAcallede@ eAbye@ eAthee@ eAtimere@ eAdrivere@ eAtoe@ eAoutpute@ eAanye@ eAtexte@ eAine@ eAthee@ }
+{ eAPrinte@ eAworkpade@ eAtoe@ eAthee@ eAprintere@ }
+
+var Tmp1   : ba;
+    Ans    : char;
+    i, j, Num,
+    Len    : integer;
+    EL     : Array[1..4] of byte;
+    Counter: Integer;
+    p      : LongInt;
+
+begin
+  PBufLen := -1;
+  Len := max( 1, BKSpanNE( B, MaxLinLen, ' ' ) );
+  if BAMatch( B, 1, '.CF' ) or BAMatch( B, 1, '.cf' ) then begin   { eACont.e@ eAfeede@ }
+    SglShtOpt := false;
+    exit( SpitLine )
+    end else
+  if BAMatch( B, 1, '.SF' ) or BAMatch( B, 1, '.sf' ) then begin   { eASinglee@ eAsheete@ }
+    SglShtOpt := true;
+    exit( SpitLine )
+    end else
+  if BAMatch( B, 1, '.PG' ) or BAMatch( B, 1, '.pg' ) then begin  { eAForme@ eAfeede@ }
+
+ (* Tmp1[1] := 12;
+    unitwrite( PrUnit, Tmp1[1], 1 );
+    exit(SpitLine) *)
+
+    fillchar( B, MaxLinLen, ' ' );
+    StrToBA( B, 1, '\\12' );
+    Len := 3;
+    i := 1
+    end else
+  if BAMatch( B, 1, '\1BP' ) then begin          { eAMicrospacinge@ eAone@ }
+    unitwrite( PrUnit, B[1], 4 );
+    i := 5;
+  end else begin
+    i := 1
+    end;
+
+  BKSlash(b,Tmp1,J);
+  unitwrite( PrUnit, Tmp1[1], j );   { eASende@ eAlinee@ eAtoe@ eAprintere@ }
+  if Tmp1[1]=12 then begin
+    if SglShtOpt then begin
+      PrtPause := true;
+      Bell( BelAck );
+      TellUsr( Msg(MGPRNT, 49) );      { eA"Inserte@ eApaper..."e@ }
+    end;
+  end;
+  if not PrtPause then begin
+    EL[1] := 13;
+    EL[2] := 27;
+    EL[3] := Ord('e');
+    El[4] := $40;
+    unitwrite( Prunit, EL,4 )    { eATurne@ eAoffe@ eAenhancementse@ eAate@ eAende@ eAofe@ eAeache@ eAlinee@ }
+  end
+end;
+
+
+{
+procedure Indicate( Siz, Lim: integer );
+
+Writes out a horizontal indicator gauge that shows what fraction
+of Lim is occupied by Siz.
+}
+procedure Indicate( Siz, Lim: integer );
+begin
+  write( '\1Bo\0\0\0\0\3' );
+  write( '\1Bf\0\0\0\4\0\5\0\64\1' );
+  write( '\1Bf' );
+  writeint( ((ord4(Siz)*98) div Lim) + 1 );
+  write( '\0\5\0\3' );
+  writeint( (ord4(Lim-Siz) * 98) div Lim );
+  write( '\0' );
+end;
+
+
+procedure LocalPrint;
+var i,j: integer;
+begin
+  if PrintEnable and not PrtPause then begin  { eAHavee@ eAae@ eAprintere@ eAande@ eAnote@ eApaused...e@ }
+    if PrtFid.Loc<>TxtFid.Loc then begin      { eAWe'ree@ eAnote@ eAeditinge@ eAthee@ eAprintere@ eAbufere@ }
+      if PBufLen<0 then begin
+        if FilNumRecs( PrtFid, I ) then begin
+          DoIdle := false;
+          if I>0 then begin
+            fillchar( PBuf, MaxLinLen, ' ' );
+            if RecPop( PrtFid, PBufLen, PBuf[1] ) then begin end;
+            PBufPtr := 1;
+          end;
+        end;
+      end;
+      if PBufLen>=0 then begin
+        DoIdle := false;
+        unitstatus( PrUnit, j, 0 ); { PrtrBufAvail }
+        if j>PBufLen+5 then begin
+          SpitLine( PBuf );
+        end;
+      end;
+    end;
+  end;
+end;
+
+
+procedure UpdtWsInd;
+var WSiz, WLim, Siz, Fil, Free: integer;
+    p: pStrTyp;
+begin
+   if WkPdSiz( TxtFid, WSiz,WLim) and
+      WkSpSpace(Siz,Fil,Free)
+   then BEGIN
+      PushWindow( CmdWin );
+      gotoxy( 60, 0 );
+      if TxtFid.Loc=DirFid.Loc then begin
+        p := Msg( MGWKSP, 54 );
+        write( p^, ' ' );
+        Indicate( Siz-Free, Siz );
+      end else begin
+        p := Msg( MGWKSP, 55 );
+        write( p^, ' ' );
+        Indicate( WSiz, WLim );
+      end;
+      if Free<40 then begin
+        Bell( BelWrn );
+        TellUsr( Msg( MGWKSP, 53 ) );
+      end;
+      PopWindow;
+   end;
+end;
+
+
+procedure UpdtCmdWin;
+var p: pStrTyp;
+begin
+  UpdtGauge( CurLin, LstLin );
+  PushWindow( CmdWin );
+  gotoxy( 15, 0 );
+  p := Msg( MGGENL, 7 );
+  write( p^, ' ', CurLin:1,'/',LstLin:1, ' ':8 );
+  gotoxy( 33, 0 );
+  p := Msg( MGGENL, 8 );
+  writeln( p^, ' ', CurCol:1, ' ':7  );
+  PopWindow;
+end;
+
+
+procedure BackGround;
+begin
+   if IdlTim>5 then LocalPrint;
+   if TimeTrap(5) then UpdtCmdWin;
+   if (IdlTim>10) and RdwRqd then begin
+      PushWindow( CurWin );
+      write( C_CsrOff );
+      ReDraw( WinTop );
+      write( C_CsrOn );
+      PutCursor( CurLin, CurCol );
+      PopWindow;
+   end;
+   if TimeTrap(40) then UpdtWsInd;
+   if TimeTrap(100) and WkSpDrty then WkSpDrty := not WkSpPost;
+end;
+
+
+function SpanNE{ var B: BA; I: integer; C: char ): integer};
+begin
+  if (I>=1) and (I<=MaxLinLen) then
+    SpanNE := scanne( MaxLinLen-I+1, C, B[I] ) + I
+  else
+    SpanNE := MaxLinLen + 1;
+end;
+
+
+function SpanEQ{ var B: BA; I: integer; C: char ): integer};
+begin
+  if (I>=1) and (I<=MaxLinLen) then
+    SpanEQ := scaneq( MaxLinLen-I+1, C, B[I] ) + I
+  else
+    SpanEQ := MaxLinLen + 1;
+end;
+
+
+function BkSpanNE{ var B: BA; I: integer; C: char ): integer};
+begin
+  if (I>=1) and (I<=MaxLinLen) then
+    BkSpanNE := scanne( -I, C, B[I] ) + I
+  else
+    BkSpanNE := 0;
+end;
+
+
+function BkSpanEQ{ var B: BA; I: integer; C: char ): integer};
+begin
+  if (I>=1) and (I<=MaxLinLen) then
+    BkSpanEQ := scaneq( -I, C, B[I] ) + I
+  else
+    BkSpanEQ := 0;
+end;
+
+{
+function FirstNB( var B: BA ): integer;
+
+Returns the column of the first non-blank character in the
+byte array B.  If the line is blank, the column is 1.
+}
+function FirstNB{ var B: BA ): integer};
+begin
+  FirstNB := ((SpanNE( B, 1, ' ' )-1) mod MaxLinLen) + 1;
+end;
+
+{
+function LastNB( var B: BA ): integer;
+
+Returns the column of the last non-blank character in the byte
+array B.  If the line is blank, the column is 1.
+}
+function LastNB;
+var I: integer;
+begin
+  I := BkSpanNE( B, MaxLinLen, ' ' );
+  while BAMatch( B, I-2, EnhCod ) do
+    I := BkSpanNE( B, I-3, ' ' );
+  if BAMatch( B, I-3, '\1BO' ) then
+    I := I - 3;
+  LastNB := max(1,BANdxToCol( I, B ));
+end;
+
+
+procedure FlushL{ var Buf: BA; Dst: integer };
+var Lft, Len: integer;
+    Tmp: BA;
+begin
+  if (Dst>=1) and (Dst<=MaxLinLen) then begin
+    Lft := FirstNB( Buf );
+    Len := BkSpanNE( Buf, MaxLinLen, ' ' ) - Lft + 1;
+    fillchar( Tmp, MaxLinLen, ' ' );
+    moveleft( Buf[Lft], Tmp[Dst], Min( Len, MaxLinLen-Dst+1 ) );
+    moveleft( Tmp, Buf, MaxLinLen );
+  end;
+end;
+
+
+procedure FlushR( var Buf: BA; Dst: integer );
+begin
+  FlushL( Buf, Dst - BkSpanNE(Buf,MaxLinLen,' ') + FirstNB(Buf) );
+end;
+
+
+
+PROCEDURE UPSHIFT{ VAR STR: StrTyp };
+VAR
+  I: INTEGER;
+BEGIN
+  FOR I := 1 TO LENGTH( STR ) DO
+    IF STR[ I ] IN ['a'..'z'] THEN
+      STR[ I ] := CHR( ORD( STR[ I ] ) - 32 );
+END;
+
+{
+procedure Warn( M: pStrTyp );
+}
+procedure Warn;
+begin
+  if Confirm( M, true ) then begin
+    if WkSpClose then begin end;
+    TellUsr( Msg( MGEDWD, 3 ) );
+    UserIOTerm;
+    Halt;
+  end;
+end;
+
+{
+procedure ScrInsDelLin( InsDelLin: StrTyp; InsDelRow, Cnt: integer );
+}
+procedure ScrInsDelLin;
+var
+  I,J: integer;
+begin
+  GotoXY( 0, InsDelRow );
+  while Cnt>0 do begin
+    write( InsDelLin );
+    Cnt := Cnt - 1;
+  end;
+end;
+
+{
+procedure PrntWkSpErr;
+}
+procedure PrntWkSpErr;
+var M: StrTyp;
+begin
+  if WkSpErr<>0 then begin
+    GetErrMsg( M );
+    Warn( @M );
+  end;
+end;
+
+{
+procedure CodeAvail;
+Writes out the number of bytes of code space available between
+the code top of stack and the driver top of stack.
+}
+procedure CodeAvail;
+const
+  CodeTos = $10C;
+  DvrTos = $108;
+begin
+  PushWindow( GaugeWin );
+  GotoXY( 30, 0 );
+  note( 1, 1 );
+  write(  ' avail: ',
+          abs(PeekL(CodeTos)-PeekL(DvrTos)), ' code, ',
+          memavail, ' data ' );
+  PopWindow;
+end;
+
+{
+function IsWrdBnd( var Buf: BA; I: integer ): boolean;
+}
+function IsWrdBnd;
+begin
+  IsWrdBnd := true;
+  if (I>0) and (I<MaxLinLen) then begin
+    if (chr(Buf[I]) in WrdChr) and (chr(Buf[I+1]) in WrdChr) then
+      IsWrdBnd := false;
+  end;
+end;
+
+{
+Function FileExists(FN: StrTyp): Boolean;
+Checks for existence of TEXT file
+}
+Function FileExists;
+
+Var
+  TFID : Text;
+
+Begin
+  {$I-}
+  ReSet(TFID,concat(fn,'.text'));
+  {$I+}
+  If IORESULT = 0 Then Begin
+                         FileExists := True;
+                         Close(TFID)
+                         End
+                  Else FileExists := False
+End;
+
+
+{$S KERNEL}
+{
+procedure LockKernel(procedure P );
+}
+procedure LockKernel;
+begin
+   P;
+end;
+
+
+procedure UpdtRngDpy;
+var Hi, Lo, Scale: longint;
+begin
+  Scale := max( 1, LstLin );
+  Hi := min( 100, max( 0, (ord4(WinTop-1)*100) div Scale ));
+  Lo := min( 100, max( 0, (ord4(WinBot)*100) div Scale ));
+  if Hi=Lo then begin
+    if Hi>0 then Hi := Hi - 1 else Lo := Lo + 1;
+  end;
+  PushWindow( GaugeWin );
+  DrawRange( Lo, Hi );
+  PopWindow;
+end;
+
+{
+procedure GotoLine( L: integer );
+}
+procedure GotoLine;
+begin
+  if not RecSeek( TxtFid, L - CurLin ) then
+    PrntWkSpErr;
+end;
+
+
+procedure DrawColHdr;
+
+{ Draws the ruler line at the top of the screen }
+
+var
+  i      : integer;
+  ColLin : BA;
+
+begin
+  fillchar( ColHdr, MaxLinLen, '.' );
+  for i := 1 to MaxLinLen do begin
+    if i mod 5=0 then ColHdr[i] := ord(',');
+    if i mod 10=0 then ColHdr[i] := ( ord('0') + (i div 10) mod 10 )
+    end;
+  GhstCsr := 0;
+  For I := 1 To MaxLinLen Do ColLin[i] := ColHdr[i];
+  For I := 1 To MaxLinLen Do If TabAra[i] <> 12 Then ColLin[i] := TabAra[i];
+  ColLin[LftMar] := SymMar;
+  If RhtMar > 0 Then ColLin[RhtMar] := SymMar;
+
+(*
+  If RhtMar > 0 Then ColHdr[ RhtMar ] := SymMar;
+  ColHdr[ LftMar ] := SymMar;
+  write( NrmVid );
+  gotoxy( 0, 1 );
+  unitwrite( 1, ColHdr[ScrLft], ScrWid );
+  gotoxy( 0, TxtTop-1);
+  unitwrite( 1, TabAra[ScrLft], ScrWid );
+  write( InvVid );
+*)
+  Write(NrmVid);
+  GotoXY(0,1);
+  UnitWrite(1,ColLin[ScrLft],ScrWid);
+  Write(InvVid)
+end;
+
+{$S }
+{
+procedure GetLine( var Txt: BA; Lin: integer );
+}
+procedure GetLine;
+var
+  L: integer;
+  Tmp: BA;
+begin
+  Txt := BlkStr;
+  if (1<=Lin) and (Lin<=LstLin) then begin
+    if RecGet( TxtFid, Lin, L, Tmp[1] ) then begin
+      if (L>0) then begin
+        if (Tmp[1]=$10) then begin
+          if L>2 then
+            moveleft( Tmp[3], Txt[Tmp[2]-31], L-2 )
+        end else begin
+          moveleft( Tmp[1], Txt[1], L );
+        end;
+      end;
+    end;
+  end;
+end;
+
+{$S KERNEL}
+procedure HighLight( Row, Lft, Rht: integer );
+var L, R: integer;
+begin
+  L := max( ScrLft, Lft );
+  R := min( ScrLft+ScrWid, Rht+1 );
+  if L<R then begin
+    gotoxy( L-ScrLft, Row );
+    write( '\1BZ', chr( R-L ) );
+  end;
+end;
+
+
+procedure HiLitPat( Row: integer; var LinImg: BA; Pat: StrTyp );
+var i,j: integer;
+    Upr,Lwr: char;
+begin
+  if Pat<>'' then begin
+    Upr := UpperCase(Pat[1]);
+    if Upr in ['A'..'Z'] then begin
+       Lwr := chr( ord(Upr) + 32 );
+    end else begin
+       Lwr := Upr;
+    end;
+    i := min( SpanEQ( LinImg, 1, Upr ), SpanEQ( LinImg, 1, Lwr ) );
+    while i<BkSpanNE( LinImg, MaxLinlen, ' ' ) do begin
+      if BAMatch( LinImg, i, Pat ) and
+         ( not TokFnd or
+           ( IsWrdBnd( LinImg, i-1 ) and
+             IsWrdBnd( LinImg, i+length(Pat)-1 )
+           )
+         )
+      then begin
+        J := BANdxToCol( i, LinImg );
+        HighLight( Row, j, j+length(Pat)-1 );
+        i := i + length( Pat ) - 1;
+      end;
+      i := min( SpanEQ(LinImg,i+1,Upr), SpanEQ(LinImg,i+1,Lwr) );
+    end;
+  end;
+end;
+
+
+Procedure PlaceLine(Lin : Integer);
+
+Var
+  LinImg : BA;
+  A,B,I  : Integer;
+  Col,Row: Integer;
+
+begin
+  if (WinTop<=Lin) and (Lin<=WinBot) then begin         { eALegale@ eAlinee@ eA#?e@ }
+    PrepLine(Lin,LinImg,A,B,Col,Row);
+    GotoXY(Col,Row);
+    If SpanNE(LinImg,1,' ') > MaxLinLen Then Exit(PlaceLine)  { eABlanke@ eAlinee@ }
+    Else Begin
+      UnitWrite(1,LinImg[A],B-A);
+      if ShwBnd and (MarkTop<=Lin) and (Lin<=MarkBot) then
+        HighLight( Row, MarkLft, MarkRht );
+      if ShwPat then HiLitPat( Row,LinImg, Pat )
+    End
+  End
+End;
+
+
+{
+procedure ShowLine( Lin: integer );
+}
+procedure ShowLine;
+
+var LinImg: BA;
+    CF   : Boolean;
+    A,B,
+    Temp,
+    Col,Row : integer;
+    Crsr : Packed Record
+            X : Integer;
+            Y : Integer
+            End;
+
+begin
+  CF := False;
+  if (WinTop<=Lin) and (Lin<=WinBot) then begin         { eALegale@ eAlinee@ eA#?e@ }
+    Row := TxtTop + Lin - WinTop;                       { eAComputee@ eAscreene@ eAlinee@ }
+    PrepLine(Lin,LinImg,A,B,Col,Row);
+    GotoXY(0,Row);
+
+    Temp := BANdxToCol(B,LinImg);
+    If Temp > (ScrWid - 4) Then B := BAColToNdx(ScrLft+ScrWid,LinImg)
+      Else CF := True;
+    If ScrLft = 1 Then A := 1;
+    If SpanNE(LinImg,1,' ') > MaxLinLen Then Write(C_ClrEOL)  { eABlanke@ eAlinee@ }
+      else UnitWrite(1,LinImg[A],B-A);
+    If CF Then Write(C_ClrEOL);
+
+    if ShwBnd and (MarkTop<=Lin) and (Lin<=MarkBot) then
+        HighLight( Row, MarkLft, MarkRht );
+    if ShwPat then HiLitPat( Row,LinImg, Pat )
+  End
+end;
+
+{
+procedure ReDraw( Lin: integer );
+}
+procedure ReDraw;
+var
+  OCurLin: integer;
+  I: integer;
+begin
+  OCurLin := Curlin;
+  WinTop := max( 1, Lin );
+  WinBot := WinTop + WinRws - 1;
+  UpdtRngDpy;
+
+  If CSFlg Then Begin
+    GotoXY(0,TxtTop);
+    Write(C_ClrEOW);
+    End;
+  If FastFlg Then For I := WinTop to WinBot Do PlaceLine(i)
+    else for i := WinTop to WinBot do ShowLine( i );
+  GotoLine( OCurLin );
+  RdwRqd := false;
+  CSFlg := False;
+  FastFlg := False;
+end;
+
+{
+function FindDE(Fil:FilId;Pat:StrTyp;Col:integer;
+                var DE:BA;var Rec:integer):boolean;
+}
+function FindDE;
+var Len: integer;
+begin
+  FindDE := false;
+  Rec := DEParent;
+  fillchar( DE, MaxLinLen, ' ' );
+  while RecGet( Fil, Rec, Len, DE[1] ) do begin
+    if BAMatch( DE, Col, Pat ) then begin
+      FindDE := true;
+      exit( FindDE );
+    end;
+    fillchar( DE, MaxLinLen, ' ' );
+    Rec := Rec + 1;
+  end;
+end;
+
+
+{Function InSubDir : Boolean}
+Function InSubDir;
+
+Var
+  Tmp : StrTyp;
+  Clin,
+  X,Y : Integer;
+  Len : Integer;
+  Buf : BA;
+  G   : Boolean;
+
+Begin
+  Clin := CurLin;                      { eASavee@ eAcurrente@ eAlinee@ }
+  G := RecGet(DirFid,DEParent,Len,Buf[1]);
+  BAToStr(Buf,DEFid,Tmp);
+  Tmp := Copy(Tmp,1,4);
+  X := AsLong(Tmp);
+  G := RecGet(DirFid,DESelf,Len,Buf[1]);
+  BAToStr(Buf,DEFid,Tmp);
+  Tmp := Copy(Tmp,1,4);
+  Y := AsLong(Tmp);
+  InSubDir := (X <> Y);
+  G := RecGet(TxtFid,CLin,Len,Buf[1])  { eARestoree@ eAcurrente@ eAlinee@ }
+End;
+
+{
+function GetParentOf( var Dir: FilId ):boolean;
+}
+function GetParentOf;
+var Tmp: StrTyp;
+    Len: integer;
+    Buf: BA;
+begin
+  GetParentOf := false;
+  Buf := BlkStr;
+  if RecGet( Dir, DEParent, Len, Buf[1] ) then begin
+    BAToStr( Buf, DEFid, Tmp );
+    GetParentOf := Dir.Loc<>AsLong(Tmp);
+    Dir.Loc := AsLong( Tmp );
+  end;
+end;
+
+{
+function GetFID(PNam:StrTyp;var Dir,Fil:FilId;var DENum:integer):boolean;
+}
+function GetFID;
+var Name: array[1..10] of string[15];
+    Tmp: StrTyp;
+    Found: boolean;
+    Top: FilId;
+    DE: BA;
+    i,j,k: integer;
+
+begin
+  (* break up pathname into separate names *)
+  Upshift( PNam );
+  PNam := concat( PNam, ':' );
+  j := 0;
+  repeat
+    k := pos( ':', PNam );
+    j := j + 1;
+    Name[j] := concat( copy( PNam, 1, k-1 ), ' ');
+    delete( PNam, 1, k );
+  until length(PNam)=0;
+
+  (* force search from ROOT: if necessary *)
+
+  Top := DirFid;
+  if Name[1]='ROOT ' then begin
+    while GetParentOf( Top ) do begin end;
+    Name[1] := 'CURDIR ';
+  end;
+
+  repeat (* search from directory Top *)
+    Dir := Top;
+    i := 0;
+    repeat (* match pathname *)
+      Found :=  false;
+      i := i + 1;
+      if FindDE( Dir, Name[i], DENam, DE, DENum ) then begin
+        BAToStr( DE, DEFid, Tmp );
+        Fil.Loc := AsLong( Tmp );
+        if BAMatch( DE, DETyp, 'DIR' ) then begin
+          Dir.Loc := Fil.Loc;
+          If Not DirFlg Then DENum := DESelf
+          end;
+        Found := (i>=j) or BAMatch( DE, DETyp, 'DIR' );
+      end;
+    until not Found or (i>=j);
+  until Found or not GetParentOf( Top );
+
+  GetFid := Found;
+end;
+
+{
+procedure GetPathName( var PNam: StrTyp );
+}
+procedure GetPathName;
+var Parent, Child: FilId;
+    DE: BA;
+    Dum: boolean;
+    DENum: integer;
+    p: pStrTyp;
+    Nam, Tmp: StrTyp;
+begin
+  Child := TxtFid;
+  Parent := DirFid;
+  if Parent.Loc=Child.Loc then
+    Dum := GetParentOf( Parent );
+  PNam := '';
+  repeat
+    Nam := '';
+    p := AsStr( Child.Loc, 10 );
+    Tmp := concat( p^, ' ' );
+    if FindDE( Parent, Tmp, DEFid, DE, DENum ) then
+      BAtoStr( DE, 1, Nam );
+    PNam := concat( Nam, ':', PNam );
+    Child := Parent;
+  until not GetParentOf( Parent );
+  delete( PNam, length(PNam), 1 ); (* remove trailing ':' *)
+end;
+
+
+{ Procedure TitleBar (T: StrTyp); }
+Procedure TitleBar;
+
+Begin
+  GotoXY((ScrWid DIV 2) - (Length(T) DIV 2),0);
+  Write(C_SetInvrs);
+  Write(T);
+  Write(C_SetNorm)
+End;
+
+procedure ReFresh;
+var PNam: StrTyp;
+begin
+
+  GetPathName( PNam );
+
+  PushWindow( CmdWin );
+  write( ClrScr );
+  PopWindow;
+  LabelFrame;                  { eARestoree@ eAframee@ eAnamee@ }
+
+  PushWindow( GaugeWin );
+  write( '\1Bb\1BJ\1BG4\1BK\D\1BK\1BG0\1Bc' );
+  DrawGauge(4, 105);
+  PopWindow;
+
+  write( NrmVid,C_CsrOff);
+  GotoXY( 0, 0 );
+  write( concat(WkSpNam,':',PNam):ScrWid );
+  GotoXY( 0, 0 );
+  write(CurVrs);
+  TitleBar(CurMode);
+  Gotoxy( (ScrWid div 2)-4, 0 );
+  write( InvVid );
+  DrawColHdr;
+  FastFlg := True;
+  ReDraw( WinTop );
+
+end;
+
+{
+procedure SCROLL( CNT: INTEGER );
+}
+procedure SCROLL;
+VAR
+  OCurLin: integer;
+  Limit,
+  I: INTEGER;
+
+BEGIN
+  RdwRqd := false;
+  Cnt := max(min(Cnt,LstLin-WinTop),1-WinTop);
+  OCurLin := CurLin;
+  WinTop := WinTop + Cnt;
+  WinBot := WinTop + WinRws - 1;
+
+  if Cnt<0 then begin      { eAScrolle@ eAbackwardse@ }
+    Cnt := - Cnt;
+    if (WinBot-WinTop>4) and (Cnt=1) then begin         { eAScrolle@ eAonee@ eAlinee@ }
+      GotoXY(0,TxtTop);
+      Write(C_InsrtLn);
+      PlaceLine(WinTop)
+      end
+    else begin                                          { eAScrolle@ eAmultiplee@ eAlinese@ }
+      for I := WinTop to WinTop+Cnt-1 do begin
+        GotoXY( 0, TxtTop + I - WinTop );
+        write( C_ClrEOL );
+        end;
+      for I := WinTop+Cnt to WinBot do ShowLine( I );
+      for I := WinTop to WinTop+Cnt-1 do PlaceLine( I )
+      end
+    end
+
+  else begin               { eAScrolle@ eAforwardse@ }
+    if (WinBot-WinTop>4) and (Cnt=1) then begin
+       gotoxy( 0, TxtTop );
+       write( C_DelLin );
+       PlaceLine( WinBot );
+       end
+     else begin
+       Limit := Cnt;
+       If Limit > WinRws Then Limit := WinRws;
+       GotoXY(0,TxtTop+WinRws-Limit);
+       Write(C_ClrEOW);
+
+{
+       for I := WinBot downto WinBot-Cnt+1 do begin
+         Limit := TxtTop + I - WinTop;
+         If Limit >= TxtTop Then Begin
+           GotoXY( 0, TxtTop + I - WinTop );
+           write( ScrClrLin )   (* Clobber last CNT lines of display *)
+           end
+         End;
+       }
+
+       for I := WinBot-Cnt downto WinTop do ShowLine( I );
+       for I := WinBot downto WinBot-Cnt+1 do PlaceLine( I )
+       end;
+     end;
+  GotoLine( OCurLin );
+  UpdtRngDpy;
+end;
+
+{
+procedure SHOW( LIN: INTEGER );
+}
+procedure SHOW;
+BEGIN
+  IF (LIN<=WINTOP-CtrRow) OR (LIN>=WINBOT+CtrRow) THEN begin
+    CSFlg := True;
+    FastFlg := True;
+    ReDraw( Lin-CtrRow )
+    End
+  ELSE IF (LIN<WINTOP) THEN
+    SCROLL( -min( WinRws-1,SclHgt) )
+  ELSE IF (LIN>WINBOT) THEN
+    SCROLL( min( WinRws-1,SclHgt) );
+END;
+
+{
+procedure PUTCURSOR( TXTLIN, TXTCOL: INTEGER );
+}
+procedure PUTCURSOR;
+begin
+  IF TXTCOL<SCRLFT THEN BEGIN
+    ScrLft := max( 1, TxtCol - 15 );
+    Refresh;
+  end else if TxtCol>=SCRLFT+SCRWID then begin
+    ScrLft := min( MaxLinLen-ScrWid, ScrLft + 15 );
+    Refresh;
+  end;
+  SHOW( TXTLIN );
+  if GhstCsr<>TxtCol then begin
+    if (ScrLft<=GhstCsr) and (GhstCsr<ScrLft+ScrWid) then begin
+      gotoxy( GhstCsr - ScrLft, 1 );
+      write( '\1BZ\1' );
+    end;
+    GhstCsr := TxtCol;
+    gotoxy( GhstCsr - ScrLft, 1 );
+    write( '\1BZ\1' );
+  end;
+  gotoxy( TxtCol - ScrLft, TxtLin-WinTop+TxtTop);
+end;
+
+{
+procedure UpdtDE( DE, Col: integer; S: StrTyp );
+}
+procedure UpdtDE;
+var Tmp: BA;
+    Len: integer;
+begin
+  fillchar( Tmp, MaxLinLen, ' ' );
+  if RecGet( DirFid, DE, Len, Tmp[1] ) then begin
+    ClrBA( Tmp, Col );
+    StrToBA( Tmp, Col, S );
+    Len := BkSpanNE( Tmp, MaxLinLen, ' ' );
+    WkSpDrty := true;
+    if RecPut( DirFid, DE, Len, Tmp[1] ) then begin
+      if DirFid.Loc=TxtFid.Loc then
+        ShowLine( DE );
+    end else TellUsr( Msg( MGWKSP, 56 ) );
+  end else TellUsr( Msg( MGWKSP, 56 ) );
+end;
+
+
+procedure WinInsDelLin( LIN, CNT: INTEGER );
+var OCurLin, i: integer;
+BEGIN
+  IF LIN<WINTOP THEN BEGIN
+    WINTOP := WINTOP + CNT;
+    WINBOT := WINBOT + CNT;
+    UpdtRngDpy;
+  END;
+
+  IF (LIN>=WINTOP) AND (LIN<=WINBOT) THEN BEGIN
+    if ShwPagBnd and (TxtFid.Loc<>PrtFid.Loc) then begin
+      for i := Lin to min(LstLin,WinBot) do begin
+        if (i mod ScrPagLen = 0) or ((i+Cnt) mod ScrPagLen = 0 )
+        then begin
+          gotoxy( 0, TxtTop + i - WinTop );
+          write( '\1Bo\0\0\0\0\3' );
+          drawline( 0, 1, RhtMar*7, 1, -1 );
+        end;
+      end;
+    end;
+    if Cnt>0 then begin
+      ScrInsDelLin( C_InsrtLn, TxtTop+Lin-WinTop, 1 );
+      ShowLine( Lin );
+    end else begin
+      ScrInsDelLin( C_DelLin, TxtTop+Lin-WinTop, 1 );
+      write( chr(27), 'b' );
+      GotoXY( 0, BotRow );
+      OCurLin := CurLin;
+      ShowLine( WinBot );
+      GotoLine( OCurLin );
+      write( chr(27), 'c' );
+    end;
+  END;
+END;
+
+{
+procedure Log( C: char; Lin: integer; var Buf: BA; Len: integer );
+
+This is the heart of UNDO/REDO, folks
+}
+procedure Log( C: char; Lin: integer; var Buf: BA; Len: integer );
+
+var
+  Raskin : Boolean;
+  Tmp: BA;
+  p: pStrTyp;
+
+begin
+  if not UndoRedo and not RedoMty then begin
+    RedoMty := true;                   { User switched workpads, clear UNDO/REDO }
+    if Not FilClear( RedoFid ) then
+      warn( Msg(MGWKSP,57) );
+    LogUndo := true
+    end;
+  WkSpDrty := true;
+  if Saved then begin
+    UpShift( FNam );
+    UpdtDE( CurDE, DESav, FNam );
+    Saved := false
+    end;
+  fillchar( Tmp, MaxLinLen, ' ' );
+  Tmp[1] := ord(C);
+  p := AsStr( Lin, 10 );
+  StrToBA( Tmp, 2, p^ );
+  Len := min( MaxLinLen, Len+7 );
+  moveleft( Buf[1], Tmp[8], Len-7 );
+  if LogUndo then
+    if not RecPush( UndoFid, Len, Tmp[1] ) then begin
+      If Not(UndoFullFlg) Then begin
+        Warn(Msg(MGWksp,58));
+        UndoFullFlg := True
+        End;
+      Repeat                              { UNDO full, make room for new changes }
+        Raskin := RecTail(UndoFid);
+        Raskin := RecDel(UndoFid,0)       { Drop bottom record off UNDO }
+      Until RecPush( UndoFid, Len, Tmp[1]);
+      end
+    else
+  else begin
+    RedoMty := false;
+    if not RecPush( RedoFid, Len, Tmp[1] ) then warn( Msg(MGWKSP,59) )
+    end;
+  PrntWkSpErr;
+end;
+
+{
+procedure InsertLine( Lin: integer; var Buf:BA );
+}
+procedure InsertLine;
+var
+  L,
+  Quan : integer;
+  Junk : Boolean;
+
+begin
+  SysErr := 0;
+  IF (LIN<1) OR (LIN>LSTLIN+1) THEN BEGIN
+    WARN( Msg(MGEDIT,2) );
+  end else begin
+    L := BkSpanNE( Buf, MaxLinLen, ' ' );
+    if not RecIns( TxtFid, Lin, L, Buf[1] ) then Begin
+      Bell(BelErr);
+      Junk := FilNumBlks(TxtFid,Quan);
+      SysErr := 1;
+      If Quan > 249 Then TellUsr(Msg(MGWKSP,95))   { eA"Noe@ eAmoree@ eAspacee@ eAfore@ eAtext!"e@ }
+        else PrntWkspErr;
+      End;
+    IF LIN<=LINNEWTXT THEN LINNEWTXT := LINNEWTXT + 1;
+    if DpyChg then begin
+      if (WinTop<=Lin) and (Lin <= WinBot) then begin
+        WinInsDelLin( LIN, 1 );
+      end else begin
+        SHOW( LIN );
+      end;
+    end;
+    Log( 'I', Lin, Buf, 0 );
+  end;
+END;
+
+{
+procedure AppendLine( Lin: integer; var Buf:BA );
+}
+procedure AppendLine;
+begin
+  InsertLine( LIN+1, BUF );
+end;
+
+{
+procedure ReplaceLine( Cmd: XCMDTYP; Lin: integer; var Buf: BA );
+}
+procedure ReplaceLine;
+var Len: integer;
+    OldLen: integer;
+    Old: BA;
+begin
+  if RecGet( TxtFid, Lin, OldLen, Old[1] ) then begin
+    Log( 'R', Lin, Old, OldLen );
+    Len := BkSpanNE( Buf, MaxLinLen, ' ' );
+    if RecPut( TxtFid, Lin, Len, Buf[1] ) then begin
+      if Cmd=XRAB then begin
+        AppendLine( Lin, BlkStr );
+      end;
+      if DpyChg then begin
+        if (Lin>=WinTop) and (Lin<=WinBot) then begin
+          GoToXY( 0, Lin-WinTop+TxtTop );
+          ShowLine( Lin );
+        end else
+          Show( Lin );
+      end;
+    end;
+  end;
+  PrntWkSpErr;
+end;
+
+{
+procedure DeleteLine( Lin: integer );
+}
+procedure DeleteLine;
+var Buf: BA;
+    Len: integer;
+begin
+  IF (LSTLIN=1) AND (LIN=1) THEN BEGIN
+    ReplaceLine( XREP, LIN, BlkStr );
+  END ELSE BEGIN
+    IF (LIN<1) OR (LIN>LSTLIN) THEN BEGIN
+      WARN( Msg(MGEDIT,3) );
+    END ELSE BEGIN
+      IF LIN=LINNEWTXT THEN BEGIN
+        NEWTXTMTY := TRUE;
+        LINNEWTXT := 0;
+      END;
+      IF LIN<LINNEWTXT THEN LINNEWTXT := LINNEWTXT - 1;
+      if RecGet( TxtFid, Lin, Len, Buf[1] ) then begin end;
+      if not RecDel( TxtFid, Lin ) then PrntWkSpErr;
+      if (CurLin>LstLin) and (LstLin>0) then
+        if RecTail( TxtFid ) then begin end;
+      if DpyChg then begin
+        if (WinTop<=Lin) and (Lin<=WinBot) then begin
+          WinInsDelLin( LIN, -1 );
+        end else begin
+          SHOW( LIN );
+        end;
+      end;
+      Log( 'D', Lin, Buf, Len );
+    end;
+  end;
+end;
+
+{$S }
+procedure FlushNewTxt;
+begin
+  if not NewTxtMty then begin
+     ReplaceLine( XREP, LinNewTxt, NewTxt );
+     NewTxtMty := true;
+  end;
+end;
+
+{
+procedure SetUpNewTxt( Lin: integer );
+}
+procedure SetUpNewTxt;
+begin
+  FlushNewTxt;
+  Lin := max( 1, min( Lin, LstLin ) );
+  GetLine( NewTxt, Lin );
+  LinNewTxt := CurLin;
+end;
+
+{$S KERNEL}
+
+procedure NextCmd;
+var I: integer;
+begin
+  CntBlkRd := 0;
+  CntBlkWrt := 0;
+
+  if not DpyChg then begin
+    DpyChg := true;
+    Redraw( WinTop );
+  end;
+
+  PutCursor( CurLin, CurCol );
+
+  if BrkPress then begin
+     unitclear(1);
+     TellUsr( Msg( MGGENL, 6 ) );
+  end;
+
+  Key := GetKey( false, Cmd );
+
+  if not (Cmd in [KTEXT,KBS]) then begin
+     CntrTxt := false;
+     TabMod := 0;
+  end;
+
+  if (not (Cmd in [KCSRU,KCSRD,KCSRR,KCSRL,KHOME,KTAB,KBTAB,KTEXT,KCR,KBS,
+                   KSCRR,KSCRL,KSCRU,KSCRD])) and
+          Not((CurFrm = 1) and ((Cmd = KF5) or (Cmd = KF1) or (Cmd = Kf2)))
+    then begin
+      InsMod := false;
+      write( '\1Bv' )
+      end;
+end;
+
+
+procedure BeginEvent;
+var Buf: BA;
+begin
+  Log( 'B', 0, Buf, 0 );
+end;
+
+
+procedure EndEvent;
+var Buf: BA;
+begin
+  Log( 'E', 0, Buf, 0 );
+end;
+
+{
+.PG
+function BlankLine( Lin: integer ): boolean;
+}
+function BlankLine;
+var Tmp: BA;
+begin
+  GetLine( Tmp, Lin );
+  BlankLine := (SpanNE( Tmp, 1, ' ' )>MaxLinLen) or
+               (Tmp[1]=ord('.'));
+end;
+
+{
+function AddDE(Nam,Typ:StrTyp;Fid:FilId;Title:StrTyp ):boolean;
+}
+function AddDE;
+var Len: integer;
+    p: pStrTyp;
+    DirEntry: BA;
+begin
+  AddDE := false;
+  fillchar( DirEntry, MaxLinLen, ' ' );
+  UpShift( Nam );
+  StrToBA( DirEntry, DENam, Nam );
+  UpShift( Typ );
+  StrToBA( DirEntry, DETyp, Typ );
+  if pos( 'TXT', Typ )>0 then
+    StrToBA( DirEntry, DESav, concat( CurVol, '/', Nam ) );
+  StrToBA( DirEntry, DETtl, Title );
+  p := AsStr( Fid.Loc, 10 );
+  StrToBA( DirEntry, DEFid, p^);
+  Len := BkSpanNE( DirEntry, MaxLinLen, ' ' );
+  if RecQ( DirFid, Len, DirEntry[1] ) then begin
+    if DirFid.Loc=TxtFid.Loc then
+      ShowLine( LstLin );
+    AddDE := true;
+  end;
+end;
+
+{
+function InitDir( Self, Parent:FilId ): boolean;
+}
+function InitDir;
+var Len: integer;
+    TmpFid: FilId;
+    Tmp: BA;
+begin
+  InitDir := false;
+  if FilClear( Self ) then begin
+    if RecQ( Self, 0, BlkStr[1] ) then begin
+      fillchar( Tmp, MaxLinLen, ' ' );
+      StrToBA( Tmp, 29, 'D I R E C T O R Y' );
+      Len := BkSpanNE( Tmp, MaxLinLen, ' ' );
+      if RecQ( Self, Len, Tmp[1] ) then begin
+        if RecQ( Self, 0, Tmp[1] ) then begin
+          fillchar( Tmp, MaxLinLen, ' ' );
+          StrToBA( Tmp, DESav, 'Save' );
+          StrToBA( Tmp, DETyp, 'Typ' );
+          StrToBA( Tmp, DENam, 'Name' );
+          StrToBA( Tmp, DETtl, 'Title' );
+          StrToBA( Tmp, DEFid, 'Fid' );
+          StrToBA( Tmp, DELen, 'Lines' );
+          Len := BkSpanNE( Tmp, MaxLinLen, ' ' );
+          if RecQ( Self, Len, Tmp[1] ) then begin
+            fillchar( Tmp, Len, '-' );
+            if RecQ( Self, Len, Tmp[1] ) then begin
+              TmpFid := DirFid;
+              DirFid := Self;
+              if AddDE( 'MomDir', 'DIR', Parent, '' ) and
+                 AddDE( 'CurDir', 'DIR', Self, '' ) then
+                InitDir := true;
+              DirFid := TmpFid;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+end;
+
+
+procedure InitTxtFid;
+var OCurLin,Len: integer;
+    Tmp: BA;
+begin
+  MarkTop := 1;
+  MarkLft := 1;
+  CurCol := 1;
+  WkSpDrty := true; {force post}
+  if LstLin=0 then begin
+    if RecQ( TxtFid, 0, BlkStr[1] ) then begin end;
+  end;
+  Saved := true;
+  fillchar( Tmp, MaxLinLen, ' ' );
+  OCurLin := CurLin;
+  if RecGet( DirFid, CurDE, Len, Tmp[1]) then begin end;
+  BAToStr( Tmp, DESav, FNam );
+  SetUpNewTxt( min( LstLin, OCurLin) );
+  WinTop := CurLin - CtrRow;
+  if NamStor( 'Text', ord( TxtFid.Loc ) ) then begin end;
+end;
+
+{
+procedure View( PNam: StrTyp );
+}
+procedure View;
+var DENum: integer;
+    Dir, Fil: FilId;
+    p: pStrTyp;
+    Tmp: BA;
+    Lin: integer;
+    Dum: boolean;
+begin
+   FlushNewTxt;                      { eAWritee@ eAbuffere@ eAtoe@ eAworkpade@ }
+   p := AsStr( LstLin, 10 );         { eAGete@ eA#e@ eAofe@ eAlinese@ eAine@ eAfile,e@ eAand...e@ }
+   Lin := CurDE;
+   UpdtDE( CurDE, DELen, p^ );       { eAUpdatee@ eAteAhee@ eAdirecteAory eAentrye@ eAfeAor thee@ eAfile.e@ }
+   if TxtFid.Loc=PrtFid.Loc then begin     { eADoese@ eAusere@ eAwante@ eAtoe@ eAprint?e@ }
+      if not Confirm( Msg(MGPRNT,46), false ) then begin
+         Dum := FilClear( PrtFid ); end;
+   end;
+
+   if DirFid.Loc<>TxtFid.Loc then GetPathName( PrevTxtPad );
+   if GetFID( PNam, Dir, Fil, DENum ) then begin
+      FIDFound := True;
+      Dum := FilClear( UndoFid );
+      Dum := FilClear( RedoFid );
+      UndoFullFlg := False;
+      if NamStor( 'CurDir', Dir.Loc ) and
+         NamStor( 'CurDE', DENum ) and
+         NamStor( 'Text', Fil.Loc )
+      then begin
+         CurDE := DENum;
+         TxtFid := Fil;
+         DirFid := Dir;
+         InitTxtFid;
+         if TxtFid.Loc=DirFid.Loc then begin { eALookinge@ eAate@ eAae@ dire@ }
+            WinTop := Lin - CtrRow;
+            Refresh;
+            SetUpNewTxt( Lin );
+            end
+         else begin                          { eALookinge@ eAate@ eAae@ eAfilee@ }
+            Refresh;
+            end
+         end
+      end
+    else begin
+      FIDFound := False;
+      TellUsr( Subst(@PNam,Msg(MGWKSP,60)) );  { eA"Unablee@ eAtoe@ eAfinde@ eAworkpad..."e@ }
+      end;
+end;
+
+{
+function WrtOK: boolean;
+}
+function WrtOK;
+begin
+  if (DirFid.Loc<>TxtFid.Loc) then begin
+    WrtOK := true;
+  end else begin
+    WrtOK := false;
+    TellUsr( Msg(MGGENL,9) );
+  end;
+end;
+
+{
+function BAColToNdx( Col: integer; var B: BA ): integer;
+
+Takes a column number and and a byte array.  Returns the index
+of the byte array element that corresponds with that column
+number.  Column numbers are usually the same as index numbers,
+except when the byte array has embedded codes.  If the column
+requested is outside the bounds of the byte array, the index
+returned is the maximum (minimum) index possible.
+}
+
+function BAColToNdx;
+var Ndx, Delta, Need, NxtEsc: integer;
+begin
+  Need := Col-1;
+  Ndx := 1;
+  Delta := SpanEQ( B, 1, chr(27) ) - 1;
+  while Delta<Need do begin
+    Ndx := Ndx + Delta;
+    while BAMatch( B, Ndx, '\1B' ) do begin {skip esc seqs}
+      Ndx := Ndx + 3;
+    end;
+    Ndx := Ndx + 1;
+    Need := Need - Delta - 1;
+    NxtEsc := SpanEQ( B, Ndx, chr(27) );
+    if NxtEsc>MaxLinLen then
+      Delta := Need + 1
+    else
+      Delta := NxtEsc - Ndx;
+  end;
+  BAColToNdx := max( 1, min( MaxLinLen, Ndx+Need ));
+end;
+
+{
+function BANdxToCol( Ndx: integer; var B: BA ): integer;
+
+Takes an index into a byte array and a byte array.  Returns
+the text column corresponding to the byte array element.
+Column numbers are identical with indices except when the byte
+array has embedded codes.
+}
+function BANdxToCol;
+var N, NumEsc: integer;
+begin
+  NumEsc := 0;
+  N := BkSpanEQ( B, Ndx-1, chr(27) );
+  while N>0 do begin
+    NumEsc := NumEsc + 1;
+    N := BkSpanEQ( B, N-1, chr(27) );
+  end;
+  BANdxToCol := Ndx - NumEsc*3; { eAAssumee@ eAthee@ eAESCe@ eAsequencee@ eAise@ eAthreee@ eAbytese@ }
+end;
+
+{
+procedure EnhAtCol( var B:BA;Col:integer;var EnhSet:EnhSetTyp );
+
+Takes a byte array and a column in that byte array.  Returns
+the set of enhancements active for that column in the byte
+array.
+}
+procedure EnhAtCol;
+var Ndx, I: integer;
+begin
+  Ndx := BAColToNdx( Col, B );
+  EnhSet := [];
+  if BAMatch( B, Ndx, EnhCod) or (Ndx<>Col) then begin
+    {byte at Ndx is enhanced}
+    I := Ndx+1;
+    repeat
+      I := BkSpanEQ( B, I-1, EnhCod[1] );
+    until BAMatch( B, I, EnhCod) or (I<1);
+    if I>0 then begin {found enhancement}
+      CnvBytEnh( B[I+2], EnhSet );
+    end;
+  end;
+end;
+
+{
+procedure BADelByt( var B: BA; Ndx, Cnt: integer );
+
+Deletes Cnt bytes from byte array B at index Ndx.  Blank fills
+from right to make up for deleted bytes.  Ndx is an index
+into B and is not a column.
+}
+procedure BADelByt;
+begin
+  Cnt := max( 0, min( Cnt, MaxLinLen-Ndx+1 ) );
+  if (Cnt>0) and (1<=Ndx) and (Ndx<=MaxLinLen) then begin
+    if Ndx+Cnt<=MaxLinLen then begin
+      moveleft( B[Ndx+Cnt], B[Ndx], MaxLinLen-Ndx-Cnt+1 );
+    end;
+    fillchar( B[MaxLinLen-Cnt+1], Cnt, ' ' );
+  end;
+end;
+
+{
+procedure BAInsByt( var Dst: BA; Ndx, Cnt: integer; var Src: byte );
+
+Inserts Cnt bytes from Src into Dst starting at Ndx.  Bytes in
+Dst to the right of Ndx, inclusive, are moved to the right to
+make room for the inserted bytes.  Ndx is an index into the
+byte array and is not a column.
+}
+procedure BAInsByt;
+begin
+  if (1<=Ndx) and (Ndx<=MaxLinLen) then begin
+    Cnt := max( 0, min( Cnt, MaxLinLen-Ndx+1 ) );
+    if Ndx+Cnt<=MaxLinLen then begin
+      moveright( Dst[Ndx], Dst[Ndx+Cnt], MaxLinLen-Ndx-Cnt+1 );
+    end;
+    moveleft( Src, Dst[Ndx], Cnt );
+  end;
+end;
+
+{
+procedure CnvEnhByt( EnhSet: EnhSetTyp; var EnhByt: byte );
+
+Takes an enhancement set and returns the corresponding
+enhancement byte recognized by the system.  The enhancement byte
+is used with ESC 'e' to print or display enhancements.
+}
+procedure CnvEnhByt;
+var I: integer;
+begin
+  I := $40;
+  if Bold     in EnhSet then I := BitSet( I, 0 );
+  if StrkOut  in EnhSet then I := BitSet( I, 1 );
+  if Inverse  in EnhSet then I := BitSet( I, 2 );
+  if ULine    in EnhSet then I := BitSet( I, 3 );
+  if Super    in EnhSet then I := BitSet( I, 4 );
+  if Sub      in EnhSet then I := BitSet( I, 5 );
+  if DblULine in EnhSet then I := BitSet( I, 7 );
+  EnhByt := CnvIB( I );
+end;
+
+{
+procedure CnvBytEnh( EnhByt: byte; var EnhSet: EnhSetTyp );
+
+Takes an enhancement byte as used by the system in the ESC 'e'
+display and print sequences, and returns the associated
+enhancement set.
+}
+procedure CnvBytEnh;
+var I: integer;
+begin
+  EnhSet := [];
+  I := CnvBI( EnhByt );
+  if BitTest( I, 0 ) then EnhSet := EnhSet + [Bold];
+  if BitTest( I, 1 ) then EnhSet := EnhSet + [StrkOut];
+  if BitTest( I, 2 ) then EnhSet := EnhSet + [Inverse];
+  if BitTest( I, 3 ) then EnhSet := EnhSet + [ULine];
+  if BitTest( I, 4 ) then EnhSet := EnhSet + [Super];
+  if BitTest( I, 5 ) then EnhSet := EnhSet + [Sub];
+  if BitTest( I, 7 ) then EnhSet := EnhSet + [DblUline];
+end;
+
+{
+procedure BADelChr( var B:BA; Ndx, Cnt: integer );
+}
+procedure BADelChr;
+begin
+  if (Cnt>0) then begin
+    if BAMatch( B, Ndx, '\1B' ) then begin
+      if BAMatch( B, Ndx+1, 'O' ) then begin {overstrike}
+        BADelByt( B, Ndx, 4 );
+        BADelChr( B, Ndx, Cnt-1 );
+      end else begin
+        BADelChr( B, Ndx+3, Cnt );
+      end;
+    end else begin
+      BADelByt( B, Ndx, 1 );
+      BADelChr( B, Ndx, Cnt-1 );
+    end;
+    if BAMatch( B, Ndx, EnhCod ) then begin
+      if BAMatch( B, Ndx+3, EnhCod ) then
+        BADelByt( B, Ndx, 3 ); {redundant enhancement}
+      {assert: there is still an enh cod at Ndx}
+      if BAMatch( B, Ndx-3, EnhCod ) then
+        BADelByt( B, Ndx-3, 3 ); {redundant enhancement}
+    end;
+  end;
+end;
+
+{
+procedure SplitNewTxt( Brk, Ind: integer );
+
+Splits the line in NewTxt.  Text at and after index BRK is moved
+to a new line with indent of Ind chars.
+}
+procedure SplitNewTxt;
+var Txt: BA;
+    NewEnh: EnhSetTyp;
+    Enh: array [1..3] of byte;
+    Col: integer;
+begin
+  Col := BANdxToCol( Brk, NewTxt );
+  EnhAtCol( NewTxt, Col, NewEnh );
+
+  fillchar( Txt, MaxLinLen, ' ' );
+  moveleft( NewTxt[Brk], Txt[Ind+1], MaxLinLen-max(Ind,Brk-1) );
+  fillchar( NewTxt[Brk], MaxLinLen-Brk+1, ' ' );
+  NewTxtMty := false;
+  if (NewEnh<>[]) and not BAMatch(Txt,Ind+1,EnhCod) then begin
+    Enh[1] := 27;
+    Enh[2] := ord('e');
+    CnvEnhByt( NewEnh, Enh[3] );
+    BAInsByt( Txt, Ind+1, 3, Enh[1] );
+    CnvEnhByt( [], Enh[3] );
+    BAInsByt( NewTxt, Brk, 3, Enh[1] );
+  end;
+
+  FlushNewTxt;
+  AppendLine( LinNewTxt, TXT );
+  SetUpNewTxt( LinNewTxt );
+end;
+
+{
+procedure StripEnhance(Var PS: TxtString);
+}
+Procedure StripEnhance;
+
+const ESe = '\1Be';
+      ESo = '\1BO';
+      ESp = '\1BP';
+var
+  EF : Boolean;
+  EL : Integer;
+
+begin
+  repeat
+    EF := False;
+    EL := Pos(ESe,PS);         { Esc-e enhancements }
+    if EL <> 0 then begin
+      EF := True;
+      Delete(PS,EL,3)
+      end;
+    EL := Pos(ESo,PS);         { Esc-o overstrikes  }
+    if EL <> 0 then begin
+      EF := True;
+      Delete(PS,EL,4)
+      end;
+    EL := Pos(ESp,PS);         { Esc-p proportional printing }
+    if EL <> 0 then begin
+      EF := True;
+      Delete(PS,EL,4)
+      end
+  until EF = False
+end;
+
+{
+procedure ForEachLine( Top, Bot, Lft, Rht: integer;
+                       procedure Op( Lft, Rht: integer ) );
+}
+procedure ForEachLine;
+var Lns, i : integer;
+begin
+  if WrtOk then begin
+    Lns := Bot - Top + 1;
+    if Lns>1 then begin
+      BeginEvent;
+      DpyChg := false;
+    end;
+
+    for i := 1 to Lns do begin
+      SetUpNewTxt( Top+i-1 );
+      UpdtGauge( i, Lns );
+      Op( BAColToNdx(Lft,NewTxt), BAColToNdx(Rht,NewTxt) );
+    end;
+
+    SetUpNewTxt( Bot+1 );
+    if Lns>1 then begin
+      EndEvent
+    end;
+  end;
+end;
+
+end.

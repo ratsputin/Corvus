@@ -1,0 +1,438 @@
+program ChkPrinter;
+
+{keith ball printer experiment on NEC 7710}
+{October 27 1982}
+
+ const kbrd = 35; {keyboard unit number}
+       printer = 6; {printer unit number}
+       ControlZ = $1A;
+       ControlA = $01;
+       ControlB = $02;
+       ControlC = $03;
+       ControlD = $04;
+       ControlE = $05;
+       ControlF = $06;
+       ControlP = $10;
+       bs = $08; {back space}
+       lf = $0A; {line feed}
+       ff = $0C; {form feed}
+       cr = $0D; {carriage return}
+       tab = $09; {tab}
+       esc = $1B; {escape}
+       bell = $07; {bell}
+       space = $20; {ascii blank char}
+       RubberSP = $A0; {Alt space}
+       NoLf = 1;
+       ShdwON = $2B; {+}
+       ShdwOFF = $2C; {,}
+       USon = $2D; {-}
+       USoff = $27; {'}
+       HalfLF = $3A; {:}
+       NHalfLF = $3B; {;}
+       RevrsLF = $39; {9}
+       NoEntry = -1;
+
+       NormFAdv = '\1B]W'; {normal form advance distance}
+       SubSupFAdv = '\1B]Q'; {used for Subscript and Superscript}
+
+ type byte = -128..127;
+      str3 = string[3];
+      str5 = string[5];
+
+ var ch,strikechar : byte;
+     i,SendRaw,chcount,pspNumCh : integer;
+     spNChfirst,spNChsecond,ich : integer;
+     pspseq1,pspseq2 : str3;
+     US,Shdw,SC,Super,Sub,PropSP,Alt : boolean;
+
+     AltIndexTbl : array[1..96] of byte;
+     AltCharSeq : array[1..96] of str5;
+
+     prntr : interactive;
+
+ function cnv( b : byte) : integer;
+   Begin
+     if b < 0 then cnv := 256 + b
+              else cnv := b;
+   End; {cnv}
+
+ procedure display(ch: byte);
+  var ch1 : byte;
+
+  Begin
+    if (ch>=0) and (ch<=$1F) and (NOT(ch in [bell,bs,lf,cr])) then
+      {control character}
+      if ch=esc then write('|Esc|')
+      else if ch=tab then write('           ')  {tab=10 spaces}
+           else write('^',chr(ch+$40))
+    else if ch<0 then begin
+            ch1 := ch+128;
+            if (ch1>=0) and (ch1<=$1F) then write('|alt-^',chr(ch1+$40),'|')
+                                     else write('|alt-',chr(ch1),'|');
+         end else write(chr(ch));
+  End; {display}
+
+  procedure SendPrinter(ch : byte);
+  begin
+    write( prntr, chr(ch) );
+  end; {SendPrinter}
+
+  procedure SendSeq(s : str3);
+  Begin
+    write(prntr,s);
+  End; {SendSeq}
+
+  procedure Overstrike;
+  const olen = 3;
+
+  var ch : array[1..4] of byte;
+
+  Begin
+    ch[2] := bs;
+
+    unitread(kbrd,ch[1],1);
+    write('|over|');
+    display(ch[1]);
+    unitread(kbrd,ch[3],1);
+    write(',');
+    display(ch[3]);
+    write('|');
+    unitwrite(printer,ch,olen,0,NoLF);
+    chcount := chcount + 1;
+
+  End; {Overstrike}
+
+  procedure getsoc;
+  var soc : char;
+  Begin
+    write('Enter strike out char: ');
+    read(soc); writeln;
+    strikechar := ord(soc);
+  End;{getsoc}
+
+  procedure PrSO;
+  Begin
+    SC := NOT SC;
+    write(' *Strikeout ');
+    if SC then
+        begin
+        write('ON* ');
+        getsoc;
+        end
+    else
+        begin
+        SC := FALSE;
+        write('OFF* ');
+        strikechar:= space;
+        end;
+  End; {PrSO}
+
+  procedure Underline;
+  Begin
+    US := NOT US;
+    SendPrinter(esc);
+    write(' *Underline ');
+    if US then
+        begin
+        SendPrinter(USon);
+        write('ON* ');
+        end
+    else
+        begin
+        SendPrinter(USoff);
+        write('OFF* ');
+        end;
+  End; {Underline}
+
+  procedure Shadow;
+  Begin
+    Shdw := NOT Shdw;
+    SendPrinter(esc);
+    write(' *Shadow ');
+    if Shdw then
+        begin
+        SendPrinter(ShdwON);
+        write('ON* ');
+        end
+    else
+        begin
+        SendPrinter(ShdwOFF);
+        write('OFF* ');
+        end;
+  End; {Shadow}
+
+  procedure Superscript;
+  Begin
+    if Sub then
+       begin
+       writeln('Doing Subscript');
+       exit(Superscript);
+       end;
+    Super := NOT Super;
+    {change LF length}
+    SendSeq(SubSupFAdv);
+    write(' *Superscript ');
+    if Super then           {do neg 1/2 LF}
+        begin
+        SendPrinter(esc);
+        SendPrinter(RevrsLF);
+        write('ON* ');
+        end
+    else
+        begin          {return to line}
+        SendPrinter(lf);
+        write('OFF* ');
+        end;
+    {change LF length back}
+    SendSeq(NormFAdv);
+  End;{Superscript}
+
+  procedure Subscript;
+  Begin
+    if Super then
+       begin
+       writeln('Doing Superscript');
+       exit(Subscript);
+       end;
+    Sub := NOT Sub;
+    {change LF length}
+    SendSeq(SubSupFAdv);
+    write(' *Subscript ');
+    if Sub then
+        begin
+        SendPrinter(lf);
+        write('ON* ');
+        end
+    else
+        begin          {return to line}
+        SendPrinter(esc);
+        SendPrinter(RevrsLF);
+        write('OFF* ');
+        end;
+    {change LF length back}
+    SendSeq(NormFAdv);
+  End;{Subscript}
+
+  procedure Strikeout;
+  var SvSub,SvSuper : boolean;
+  Begin
+    SvSub := Sub;      {use minus sign}
+    SvSuper := Super;
+    if SvSub then Subscript;
+    if SvSuper then Superscript;
+    SendPrinter(bs);
+    SendPrinter(strikechar);
+    if SvSub then Subscript;
+    if SvSuper then Superscript;
+  End; {Strikeout}
+
+  procedure PropSPOn;
+  var NumCh,NumPads,NumExtras : integer;
+  Begin
+    if PropSP then
+        begin
+        writeln('already doing proportional spacing.');
+        exit(PropSPOn);
+        end;
+
+    pspNumCh := 0;
+    spNChfirst := 0;
+    spNchsecond := 0;
+
+    write('Enter number of chars on line :  ');
+    readln(NumCh);
+    write('Enter number of chars to pad :  ');
+    readln(NumPads);
+    if (NumPads <= 0) then
+       begin
+       if (NumPads < 0) then writeln('invalid number');
+       exit(PropSPOn);
+       end;
+
+    {calc number of extras needed for each char}
+    NumExtras := NumPads * 12; {number of 120th" for 10 pitch}
+
+    Numch := NumCh - 1; {must have even right margin}
+
+    {do case to figure out value of first and second}
+    if ((3*NumCh) < NumExtras) then
+       begin
+       writeln('To many pads.');
+       exit(PropSPOn);
+       end;
+
+    if (NumExtras <= NumCh) then
+       begin
+       spNChfirst := NumExtras;
+       pspseq1 := '\1B]M';{13/120"}
+       pspseq2 := '';
+       {normal for rest}
+       end
+    else if (NumExtras <= (2 * NumCh)) then
+       begin
+       spNChfirst := NumExtras - NumCh;
+       pspseq1 := '\1B]N';{14/120"}
+       spNChsecond := NumCh - spNCHfirst;
+       pspseq2 := '\1B]M';{13/120"}
+       end
+    else if (NumExtras <= (3 * NumCh)) then
+       begin
+       spNChfirst := NumExtras - (2 * NumCh);
+       pspseq1 := '\1B]O';{15/120"}
+       spNChsecond := NumCh - spNCHfirst;
+       pspseq2 := '\1B]N';{14/120"}
+       end;
+
+    {send sequence for first if any}
+    SendSeq(pspseq1);
+    PropSP := TRUE;
+    pspNumCh := spNChfirst;
+  End; {PropSpOn}
+
+  procedure PropSPOff;
+  Begin
+    if (spNChsecond <> 0) then
+         begin
+         pspNumCh := spNChsecond;
+         spNChsecond := 0;
+         {send 2nd sequence for spacing}
+         SendSeq(pspseq2);
+         end
+    else
+         begin
+         PropSP := FALSE;
+         {send restore sequence}
+         SendSeq('\1B]L' {12/120"});   {10 pitch}
+         end;
+  End; {PropSpOff}
+
+  procedure InitAltTbls;
+  const
+       ALTucA    =  $C1; {alternate upper case A}
+       ALTlca    =  $E1; {alternate lower case a}
+  var i : integer;
+
+  Begin
+    for i := 1 to 96 do AltIndexTbl[i] := NoEntry;
+    for i := 1 to 96 do AltCharSeq[i] := '';
+
+    AltIndexTbl[ (ALTucA - RubberSP) + 1 ] := 1;
+    AltCharSeq[1] := 'A\08"';
+
+    AltIndexTbl[ (ALTlca - RubberSP) + 1 ] := 2;
+    AltCharSeq[2] := 'a\08"';
+  End; {InitAltTbls}
+
+  procedure AltChar( altch : byte );
+  var i,k,m : integer;
+
+    procedure DoAltCtl;
+    {what about alternate control characters}
+    Begin
+      altch := i - 128; {remove hi bit}
+      SendPrinter(altch);   {send as control char}
+    End; {DoAltCtl}
+
+  Begin
+    i := cnv(altch);
+    if (i<RubberSp) then DoAltCtl
+    else
+       begin
+       {calc index into table}
+       m := i;
+       i := (i - RubberSp) + 1;
+       {get char seq from table}
+       if AltIndexTbl[i] = NoEntry then
+          begin
+          altch := m - 128; {remove hi bit}
+          SendPrinter(altch);
+          end
+       else write(prntr,AltCharSeq[AltIndexTbl[i]]);
+       end;
+
+     if (SC) then Strikeout;
+     if (PropSP) then
+          begin
+          pspNumCh := pspNumCh - 1;
+          if pspNumCh = 0 then PropSPoff;
+          end;
+     chcount := chcount+1;
+  End; {AltChar}
+
+BEGIN
+ SendRaw := 1;
+ unitstatus(kbrd,SendRaw,0); {change send raw}
+ InitAltTbls;
+
+ {$I-} reset(prntr,'/printer'); {$I+}
+ if ioresult <> 0 then begin
+      writeln('Cannot open /printer.');
+      exit(ChkPrinter);
+      end;
+
+ writeln;
+ writeln('Echo character input from keyboard to printer and screen.');
+ writeln('Press CONTROL-Z to stop.');
+ writeln('Press CONTROL-A to do 1 overstrike.');
+ writeln('Press CONTROL-B to toggle strikeout.');
+ writeln('Press CONTROL-C to toggle Shadow.');
+ writeln('Press CONTROL-D to toggle Underscore.');
+ writeln('Press CONTROL-E to toggle Superscript.');
+ writeln('Press CONTROL-F to toggle Subscript.');
+ writeln('Press CONTROL-P to turn-on Proportional Spacing for 1 line');
+ writeln;
+ Shdw := FALSE;
+ US := FALSE;
+ SC := FALSE;
+ Super := FALSE;
+ Sub := FALSE;
+ PropSP := FALSE;
+ chcount := 0;
+ strikechar := space;
+
+ repeat
+    unitread(kbrd,ch,1);
+    if ch<0 then ich := 256+ch else ich := ch;
+    CASE ich OF
+       ControlA : Overstrike;          {normally build state machine   }
+       ControlB : PrSO;                {to parse character stream.  For}
+       ControlC : Shadow;              {Alt chars just alter source of }
+       ControlD : Underline;           {input stream.                  }
+       ControlE : Superscript;
+       ControlF : Subscript;
+       ControlP : PropSPOn;
+       RubberSP : display(ch); {show to user}
+       Otherwise: begin
+                  display(ch);
+                  if (ch=cr) or (ch =ControlZ) then
+                      begin
+                      SendPrinter(cr);  {always send cr}
+
+                      {turn back on enhancements printer turns off}
+                      if Shdw then write(prntr,chr(esc),chr(ShdwON));
+                      if US then write(prntr,chr(esc),chr(USon));
+
+                      spNChsecond := 0; {force it off}
+                      if PropSP then PropSPoff;
+                      chcount := 0;         {last in cr processing}
+                      end
+                  else
+                      begin
+                      if ch < 0 then AltChar(ich)
+                      else
+                         begin
+                         chcount := chcount+1;
+                         SendPrinter(ch);
+                         if (SC) then Strikeout;
+                         if (PropSP) then
+                              begin
+                              pspNumCh := pspNumCh - 1;
+                              if pspNumCh = 0 then PropSPoff;
+                              end;
+                         end;
+                      end;
+                  end;
+       end;{case}
+ until(ch=ControlZ);
+ writeln;
+END.

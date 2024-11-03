@@ -1,0 +1,9 @@
+Corvus Concept w/typed model/serial/rev plate
+  serial B-7
+  model Drawer
+  revision 01
+
+Contains:
+  Corvus Systems Processor board
+  Corvus Systems Corvus Concept Memory 8051 REV. daughterboard 
+     w/512KB installed (full board)

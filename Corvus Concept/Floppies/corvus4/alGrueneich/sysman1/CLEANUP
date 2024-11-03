@@ -1,0 +1,53 @@
+;
+; File ID: /SYSMAN/CLEANUP
+;
+; CLEANUP assumes volumes /ZZSYS, /ZZUTIL, /ZSYS, /ZHARSET, and
+; /STDVOL all exist and have read/write access
+;
+pause Continue
+;
+setvol /STDVOL
+delfil -q /STDVOL/*
+setvol /ZZSYS
+cpyfil -vSTDVOL -q /ZZSYS/*
+delfil -q /ZZSYS/*
+setvol /STDVOL
+cpyfil -vZZSYS -q /STDVOL/*
+;
+; Volume /ZZSYS done
+;
+setvol /STDVOL
+delfil -q /STDVOL/*
+setvol /ZZUTIL
+cpyfil -vSTDVOL -q /ZZUTIL/*
+delfil -q /ZZUTIL/*
+setvol /STDVOL
+cpyfil -vZZUTIL -q /STDVOL/*
+;
+; Volume /ZZUTIL done
+;
+setvol /STDVOL
+delfil -q /STDVOL/*
+setvol /ZSYS
+cpyfil -vSTDVOL -q /ZSYS/*
+delfil -q /ZSYS/*
+setvol /STDVOL
+cpyfil -vZSYS -q /STDVOL/*
+;
+; Volume /ZSYS done
+;
+setvol /STDVOL
+delfil -q /STDVOL/*
+setvol /ZHARSET
+cpyfil -vSTDVOL -q /ZHARSET/*
+delfil -q /ZHARSET/*
+setvol /STDVOL
+cpyfil -vZHARSET -q /STDVOL/*
+;
+; Volume /ZHARSET done
+;
+setvol /STDVOL
+delfil -q /STDVOL/*
+;
+; CLEANUP complete
+;

@@ -1,0 +1,27 @@
+
+Directory of UCSD disk image file 'c2lib.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume C2LIB.1 has 19 files,  0 to 6 (6), eov 500, size 0, free 19
+
+ 1: CONTYPES.TEXT   Text 21-May-82    6-  18(  12),  6144+512=  6656 bytes
+ 2: CVSYSTAB.TEXT   Text 28-May-82   18-  34(  16),  8192+512=  8704 bytes
+ 3: CVSYSTAB.OBJ    Data 28-May-82   34-  49(  15),  7680+512=  8192 bytes
+ 4: UIUTILS.TEXT    Text 28-May-82   49- 101(  52), 26624+512= 27136 bytes
+ 5: UIUTILS.OBJ     Data 28-May-82  101- 117(  16),  8192+512=  8704 bytes
+ 6: CVTABLES.TEXT   Text 11-Jun-82  117- 137(  20), 10240+512= 10752 bytes
+ 7: CVTABLES.OBJ    Data 11-Jun-82  137- 156(  19),  9728+512= 10240 bytes
+ 8: CCTBLRTN.TEXT   Text 11-Jun-82  156- 256( 100), 51200+512= 51712 bytes
+ 9: CCTBLRTN.OBJ    Data 11-Jun-82  256- 282(  26), 13312+512= 13824 bytes
+10: SYSDEFS.TEXT    Text 11-Jun-82  282- 312(  30), 15360+512= 15872 bytes
+11: SYSDEFS.OBJ     Data 11-Jun-82  312- 330(  18),  9216+512=  9728 bytes
+12: UNITCOPY.TEXT   Text 20-Jun-82  330- 334(   4),  2048+512=  2560 bytes
+13: ERRORS.OBJ      Ux2005 25-Jun-82  334- 353(  19),  9728+512= 10240 bytes
+14: CVCRYPT.TEXT    Text 20-Jun-82  353- 385(  32), 16384+512= 16896 bytes
+15: CVCRYPT.OBJ     Data 20-Jun-82  385- 393(   8),  4096+512=  4608 bytes
+16: NIUTIL.TEXT     Text 20-Jun-82  393- 429(  36), 18432+512= 18944 bytes
+17: NIUTIL.OBJ      Data 20-Jun-82  429- 436(   7),  3584+512=  4096 bytes
+18: GNOSCOPY.TEXT   Text 20-Jun-82  436- 458(  22), 11264+512= 11776 bytes
+19: 1CVTUTILS.TEXT  Text 20-Jun-82  458- 500(  42), 21504+512= 22016 bytes

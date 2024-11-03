@@ -1,0 +1,107 @@
+-
+-     PROGRAM MOUNT  (* MOUNT/UNMOUNT MANAGER *)
+-
+
+MOUNT MANAGER [Vx.x] : D(rives online   L(ist volumes   M(ount volume
+                       U(nmount volume  P(rotect        S(ecure
+                       R(emove volume   Q(uit
+
+
+MOUNT MANAGER - DRIVES ON LINE FUNCTION
+
+(same as DRIVE MANAGER)
+
+
+MOUNT MANAGER - LIST VOLUMES FUNCTION
+
+List user volume table
+
+  The default listing device is <default device>.
+  Enter the device to send the listing to. <enter response>
+
+  ERROR***
+    Listing device <name> cannot be accessed.  Reenter.
+
+Volume table for user <user name> on system <system name>.
+<date if available>
+
+  Prot Sec Mount Volume      Block address  Length   Drive
+  RO       #4    APPLE3         nnnnn       nnnnn      1
+       S         PRIVATE        nnnnn       nnnnn      4
+
+  Prot: RO read-only, NA non accessible, blank is read-write
+  Sec: S secured, blank is released
+
+
+MOUNT MANAGER - MOUNT VOLUME FUNCTION
+
+Mount volume
+
+  Enter the name of the volume to be mounted: <enter response>
+
+  ERROR***
+    Volume <name> was not found.  Reenter.
+    Volume <name> is currently not accessible.  Reenter.
+
+  Enter unit to mount volume on. <cpu specific entry>
+
+  ERROR***
+    Invalid unit. Re-enter.
+
+  <volume name> has been mounted on unit <unit mounted on> with
+  <type of access> access.
+
+To mount a volume from another system in the network, specify volume
+name as <volume name@system name>.  To mount a released volume from
+another user, specify volume name as <volume name (user name)>.  System
+name may also be specified if necessary.
+Volumes from another system, and volumes not in your access table,
+may not be permanently mounted.
+
+
+MOUNT MANAGER - UNMOUNT FUNCTION
+
+Unmount volume
+
+  Enter the unit to be unmounted. <enter response>
+
+  ERROR***
+    Invalid unit number. Reenter.
+
+  Unit <unit number> unmounted.
+
+
+MOUNT MANAGER - PROTECT
+
+Write protect/unprotect at the user level.
+
+  Enter the name of the volume to be protected: <enter response>
+
+  ERROR***
+    Volume <name> was not found.  Reenter.
+    You have read-only access to volume <name>.
+    Volume <name> is currently not accessible.
+
+  Volume <name> is currently (read-only/read-write).
+  Enter protection code: <enter response>
+
+
+MOUNT MANAGER - SECURE
+
+Sets secured/released flag.
+
+  Enter the name of the volume to be secured: <enter response>
+
+  ERROR***
+    Volume <name> was not found.  Reenter.
+
+  Volume <name> is currently (secured/released).
+  Enter security code:  <enter response>
+
+
+MOUNT MANAGER - QUIT
+
+  Do you wish to make these changes permanent? (y/n) <enter response>
+
+  Mount table saved.
+

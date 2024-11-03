@@ -1,0 +1,7 @@
+
+To : Lynn Franklin
+From : Keith Ball
+Date : November 29, 1982
+
+The NULL driver has its command code in the heading set at 15.  This
+causes it to reject unitstatus commands.  It should be set to 31.

@@ -1,0 +1,670 @@
+;
+; file : timer.drv.text
+; date : 04-January-1984  kb
+;
+; INCLUDE FILES USED :
+;       timer.clk.text                          ;HAS CALANDER CLOCK CODE
+;       /ccos/os.gbl.asm.text                   ;OS GLOBAL EQUATES
+;
+; 04-06-82  kb  Added version date before TIMERDRV - entry point
+; 04-23-82  kb  Changed IORESULT definitions to use the global file definitions
+; 04-23-82  kb  Removed volume name from timer.clk.text include
+; 06-07-82  kb  Changed for new rev. 4 processor board changes, will find the
+;                  correct address to use (either $30FE1 or $30F81)
+;                  added storage loc to save correct address
+; 07-07-82  kb  Added Header to driver
+; 07-07-82  kb  Fixed error in equates for different rev board address equates
+; 09-20-82  lf  Changed write clock to stop/start clock in order to zero
+;                  seconds and tenths fields (in TIMER.CLK.TEXT)
+; 08-02-83  kb  Added test for skip first flag in interrupt routine.  Stream lined
+;                  timer unitstatus routines.
+; 11-07-83  kb  changed clock read/write for uniplex.
+; 11-28-83  kb  added timer tick counter in Static Ram ($7DA - long).
+; 01-04-84  kb  changed the VIA counter value to correct value for system clock.
+; 01-05-84  kb  chang to clock read code.
+;
+; INCLUDE OS GLOBALS HERE
+;
+            LIST       OFF
+            INCLUDE    '/CCOS/OS.GBL.ASM.TEXT'
+            LIST       ON
+;
+  page
+; EQUATES FOR ALL TIMER DRIVER SOFTWARE
+;
+; BIT NUMBER DEFINITIONS
+;
+BITD0       EQU        0                         ;BIT 0
+BITD1       EQU        1                         ;BIT 1
+BITD2       EQU        2                         ;BIT 2
+BITD3       EQU        3                         ;BIT 3
+BITD4       EQU        4                         ;BIT 4
+BITD5       EQU        5                         ;BIT 5
+BITD6       EQU        6                         ;BIT 6
+BITD7       EQU        7                         ;BIT 7
+;
+; TIMER INTERRUPT VECTOR ADDRESS
+;
+VECTOR      EQU        $000074                   ;INTERRUPT VECTOR #5
+;
+; TIMER TABLE INDICES
+;
+TFLAGS      EQU        0                         ;TIMER TABLE FLAGS
+PTRUSRTN    EQU        2                         ;POINTER TO USER SERVICE ROUTINE
+TCOUNT      EQU        6                         ;# OF 50 MS. TICKS BEFORE CALL
+TDWNCNT     EQU        8                         ;WORKING DOWN COUNTER
+REGA4       EQU        TDWNCNT+2                 ;REGISTER A4 SAVE AREA
+REGA5       EQU        REGA4+4                   ;REGISTER A5 SAVE AREA
+;
+; TIMER TABLE FLAGS BIT DEFINITIONS
+;
+VALIDENT    EQU        BITD0                     ;VALID ENTRY FLAG
+CONT1SHT    EQU        BITD1                     ;CONTINUOUS/1-SHOT MODE FLAG
+SKIP1ST     EQU        BITD2                     ;SKIP FIRST CALL FLAG
+ENBLDSBL    EQU        BITD3                     ;ENABLE/DISABLE FLAG
+;
+; BELL PARAMETER BLOCK INDICES
+;
+FREQ        EQU        0                         ;FREQUENCY OF BELL
+PATTERN     EQU        2                         ;PATTERN OF SPEAKER ON AND OFFS
+DURATN      EQU        4                         ;DURATION OF BELL
+;
+; INTERNAL FLAG BIT DEFINITIONS
+;
+SHUTOFF     EQU        BITD0                     ;SHUTOFF BELL FLAG
+;
+; VIA ADDRESSES
+;
+ACR         EQU        $30F77                    ;AUXILLARY CONTROL REGISTER
+IER         EQU        $30F7D                    ;INTERRUPT ENABLE REGISTER
+IFR         EQU        $30F7B                    ;INTERRUPT FLAGS REGISTER
+T1LL        EQU        $30F6D                    ;TIMER 1 LATCH LOW
+T1LH        EQU        $30F6F                    ;TIMER 1 LATCH HIGH
+T1CL        EQU        $30F69                    ;TIMER 1 COUNTER LOW - READ ONLY
+T1CH        EQU        $30F6B                    ;TIMER 1 COUNTER HIGH
+T2LL        EQU        $30F71                    ;TIMER 2 LATCH LOW
+T2CH        EQU        $30F73                    ;TIMER 2 COUNTER HIGH
+SHIFTREG    EQU        $30F75                    ;SHIFT REGISTER
+;
+; VIA REGISTER VALUES
+;
+ACRBYTE     EQU        $40                       ;ACR DATA - T1 FREE RUN DISABLE PB7
+RUNT2       EQU        $10                       ;MASK TO COUNT DOWN T2
+STOPT2      EQU        $EF                       ;COMPLEMENTED RUNT2 TO STOP T2
+DISABL      EQU        $7F                       ;DISABLE ALL INTERRUPTS
+ENBLT1      EQU        $C0                       ;ENABLE IRQ FOR T1
+CLEAR       EQU        $FF                       ;CLEAR ALL IFR STAT BITS
+T2INT       EQU        $20                       ;TIMER #2 INTERRUPT FLAG BIT
+;*1/4/83 kb*
+; change counter value because system clock is not 16 meg but 16.364 megherz
+TIME        EQU        51137                     ;50,000 MICRO SECONDS
+;*1/4/83 kb*
+TIMEH       EQU        TIME/256                  ;HI ORDER BYTE OF TIME VALUE
+TIMEL       EQU        TIME-(TIMEH*256)          ;LOW ORDER BYTE OF TIME VALUE
+;
+; CONTEXT SWITCHING DEFINITIONS
+;
+SPNDFLG     EQU        SCsusreq                  ;SUSPEND FLAG
+SPWAITC     EQU        SCsusinh                  ;WAIT SUSPEND COUNTED SEMAPHORE
+CURPROC     EQU        SCprocno                  ;CURRENT PROCESS # INDEX
+PPTBL       EQU        $BB                       ;PTR TO PROCESS TABLE
+SCHEDPTR    EQU        $BB                       ;PTR TO ENTRY OF SCHEDULER
+SCHDA4      EQU        $BB                       ;REG. A4 VALUE FOR SCHEDULER
+SCHDA5      EQU        $BB                       ;REG. A5 VALUE FOR SCHEDULER
+;
+PTLEN       EQU        $CC                       ;LENGTH OF PROCESS TABLE ENTRY
+NUMREGS     EQU        15                        ;NUMBER OF REGISTERS SSAVED IN PTBL
+PTPC        EQU        NUMREGS*4                 ;PROCESS TABLE-PC FIELD
+PTSR        EQU        PTPC+4                    ;PROCESS TABLE-SR FIELD
+;
+SCHEDSR     EQU        $2700                     ;SCHEDULER SR-NO INTERRUPTS
+;
+; IORESULT ERROR CODES
+;
+INVPRM      EQU         IOEuiopm                 ;INVALID UNIT I/O PARAMETER
+NOTLEGIT    EQU         IOEioreq                 ;NOT LEGITIMATE CALL
+INVTBLID    EQU         IOEtblid                 ;INVALID TABLE ENTRY ID
+TBLFULL     EQU         IOEtblfl                 ;TIMER TABLE FULL
+INVFNC      EQU         IOEfnccd                 ;invalid function code
+;
+; MISCELLANEOUS EQUATES
+;
+CPticks     EQU        $7DA                      ;timer tick counter *kb 11/28/83*
+
+UNMCMD      EQU        6                         ;UNMOUNT COMMAND CODE
+ENABLEC     EQU        4                         ;ENABLE FUNCTION CODE
+CARRYST     EQU        $01                       ;CARRY SET IN CCR
+ON          EQU        1
+OFF         EQU        0
+  page
+; TIMER INTERRUPT SERVICE ROUTINE
+; INTERNAL REGISTER USEAGE :
+;           A0 - TEMP
+;           A1 - TEMP
+;           A2 - TIMER TABLE ADDRESS
+;           A3 - ADDRESS OF CURRENT ENTRY'S FLAG'S LOW ORDER BYTE
+;
+;           D0 - TEMP
+;           D1 - TEMP
+;           D2 - INDEX TO CURRENT ENTRY IN TIMER TABLE
+;
+  page
+;
+; TIMER INTERRUPT SERVICE ROUTINE
+; THIS ROUTINE IS INVOKED WHEN THE 50 MILLISECOND INTERVAL TIMER INTERRUPT
+; OCCURS.  IT CHECKS EACH ENTRY OF THE TIMER TABLE TO SEE IF IT'S USER SERVICE
+; ROUTINE SHOULD BE CALLED.
+;
+TIMINT
+            MOVEM.L    D0-D7/A0-A6,-(SP)         ;SAVE USER'S REGISTERS
+            MOVE.B     T1CL.L,D0                 ;RESET VIA IFR T2 BIT
+            ADDQ.L     #1, CPticks.W             ;count ints *kb 11/28/83*
+;
+; for i := 1 to NUMENTS do
+;
+            LEA        TIMERTBL,A2               ;ADDRESS OF TIMER TABLE
+            CLR.L      D2                        ;START WITH FIRST ENTRY
+;
+; IF HAVE VALID ENTRY THAT IS NOT DISABLE THEN SEE IF SHOULD CALL USER SERVICE ROUTINE
+;
+TINEXT      LEA        TFLAGS+1(A2,D2.W),A3      ;ADDRESS OF CURRENT FLAGS + 1
+            BTST       #VALIDENT,(A3)            ;VALID ENTRY?
+            BOFF.S     TICHKNXT                  ;NO, SEE IF ANOTHER ENTRY *kb 8/2/83*
+            BTST       #ENBLDSBL,(A3)            ;IS ENTRY ENABLED?
+            BON.S      TICHKNXT                  ;NO, SEE IF ANOTHER ENTRY *kb 8/2/83*
+;
+; GOT VALID ENTRY - TEST IF SHOULD CALL USER SERVICE ROUTINE
+;
+            SUBQ.W     #1,TDWNCNT(A2,D2.W)       ;DOWN COUNT               *kb 8/2/83*
+            BNE.S      TICHKNXT                  ;NOT DONE, SEE IF ANOTHER ENTRY
+            BCLR       #SKIP1ST, (A3)            ;should Skip first? *kb 8/2/83*
+            BON.S      TICHKNXT                  ;yes, see if another entry *kb 8/2/83*
+;
+            MOVEM.L    D2/A2-A3,-(SP)            ;SAVE WORKING REGISTERS
+            MOVEA.L    REGA4(A2,D2.W),A4         ;SETUP USERS A4 AND A5
+            MOVEA.L    REGA5(A2,D2.W),A5         ;REGISTERS
+            MOVEA.L    PTRUSRTN(A2,D2.W),A0      ;ADDRESS USER SERVICE ROUTINE
+            JSR        (A0)                      ;CALL USER SERVICE ROUTINE
+            MOVEM.L    (SP)+,D2/A2-A3            ;RESTORE REGISTERS
+;
+; RESET DOWN COUNTER - ASSUME CONTINUOUS MODE
+;
+            MOVE.W     TCOUNT(A2,D2.W),TDWNCNT(A2,D2.W)
+;
+; IF ENTRY IS IN 1 SHOT MODE THEN DELETE THE ENTRY.
+;
+            BTST       #CONT1SHT,(A3)            ;1 SHOT MODE?
+            BEQ.S      TICHKNXT                  ;NO, SEE IF ANOTHER ENTRY
+            BCLR       #VALIDENT,(A3)            ;YES, DELETE ENTRY
+;
+; INCREMENT INDEX - IF NOT PAST END OF TABLE THEN DO NEXT ENTRY
+;
+TICHKNXT    ADDI.W     #TIMTLEN,D2               ;INDEX TO NEXT ENTRY
+            CMPI.W     #TABLELN,D2               ;PAST END OF TABLE?
+            BNE.S      TINEXT                    ;NO, DO NEXT ENTRY
+;
+; SEE IF SHOULD DO CONTEXT SWITCH
+;
+;           BSR.S      CHKCS                     ;RETURNS (A0) PTR TO SYSCOM
+;           BEQ.S      DOCS                      ;DOES OWN EXIT(RTE)
+;
+            MOVEM.L    (SP)+,D0-D7/A0-A6         ;RESTORE USER REGISTERS
+TUNRTE      RTE                                  ;used by unitunmount
+  page
+;
+; DOCS - DO CONTEXT SWITCH
+;           ENTRY : MUST BE A GOTO CALL VIA A JUMP OR BRA NOT A SUBROUTINE
+;                   CALL. NO EXTRA STUFF ON STACK.
+;                   THE TOP OF STACK MUST BE THE USER'S REGISTERS
+;                   (A0) = POINTER TO SYSCOM
+;
+DOCS        CLR.B      SPNDFLG(A0)               ;CLEAR SUSPEND FLAG
+;
+; SAVE EXISTING PROCESSES CONTEXT (PARTIAL, SCHEDULER DOES REST)
+;
+            MOVE.W     CURPROC(A0),D0            ;GET CURRENT PROCESS #
+            MULU       #PTLEN,D0                 ;CALC INDEX TO PROCESS TABLE ENTRY
+            MOVEA.L    PPTBL(A0),A1              ;ADDRESS OF PROCESS TABLE
+            LEA        0(A1,D0.W),A2             ;ADDRESS OF ENTRY
+            MOVEQ      #NUMREGS-1,D1             ;COUNT OF POPS
+;
+DCSMOVR     MOVE.L     (SP)+,(A2)+               ;SAVE REGISTERS IN ENTRY
+            DBF        D1,DCSMOVR                ;IN ORDER D0-A6
+;
+            MOVE.W     (SP)+,PTSR(A2)            ;SAVE SR AND PC OF CURRENT
+            MOVE.W     (SP)+,PTPC(A2)            ;PROCESS
+;
+; CALL SCHEDULER VIA A FAKED RTE
+;
+            MOVE.L     SCHEDPTR(A0),-(SP)        ;ENTRY POINT TO SCHEDULER
+            MOVE.W     #SCHEDSR,-(SP)            ;SR FOR SCHEDULER
+;
+            MOVE.L     SCHDA4(A0),A4             ;SCHEDULER IS A PASCAL GLOBAL SUBROUTINE
+            MOVE.L     SCHDA5(A0),A5             ;NEEDS ITS VALUES FOR A4 & A5
+            RTE
+  page
+;
+; CHKCS - SEE IF SHOULD DO A CONTEXT SWITCH
+;           EXIT : (NE) - DON'T DO CONTEXT SWITCH
+;                  (EQ) - DO SWITCH
+;                  (A0) = POINTER TO SYSCOM
+; IF (SUSPEND FLAG IS CLEAR) THEN DON'T DO SWITCH
+;
+CHKCS       MOVE.L     PSYSCOM.W,A0              ;ADDRESS OF SYSCOM
+            TST.B      SPNDFLG(A0)               ;FLAG CLEAR?
+            BEQ.S      CCSDONT                   ;YES
+;
+; IF (SUSPEND WAIT COUNTED SEMAPHORE = 0) THEN DO CONTEXT SWITCH
+;
+            TST.B      SPWAITC(A0)
+            BRA.S      CCSEXIT
+;
+CCSDONT     MOVEQ      #1,D0                     ;FORCE DONT (NE)
+CCSEXIT     RTS
+  page
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.W            D5.W     D7.W
+; 2 - WRITE       D0.W   D1.L   D2.W            D5.W     D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W        D6.W
+; 5 - STATUS      D0.W   D1.L   D2.W                     D7.W
+; 6 - UNMOUNT     D0.W                                   D7.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D6 & D7.
+; INTERNAL REGISTER USEAGE :
+;           A0 - TEMP  (GLOBAL)
+;           A1 - TEMP  (GLOBAL)
+;           A2 - ADDRESS OF TIMER TABLE (GLOBAL)
+;           A3 - ADDRESS OF USER'S BUFFER ADDRESS (GLOBAL)
+;           A4 - ADDRESS OF INTERNAL FLAGS BYTE (BELL)
+;           A5 - ADDRESS OF VIA SHIFT REGISTER (BELL)
+;           A6 - ADDRESS OF VIA INTERRUPT ENABLE REGISTER (INSTALL)
+;
+;           D0 - TEMP
+;           D1 - TEMP
+;           D2 - COUNT OR CONTROL
+;           D3 - TABLE ENTRY INDEX
+;           D4 - PATTERN FOR BELL
+;
+  page
+;
+            GLOBAL     TIMERDRV
+;
+; TIMER DRIVER
+;
+TIMERDRV
+            BRA.S      TIMR001                   ;*070782* JUMP AROUND HEADER
+            DATA.B     0                         ;DEVICE NOT BLOCKED
+            DATA.B     31                        ;VALID CMDS - NOT UNITSTATUS
+            DATA.B     84,01,05,0                ;DATE January 05, 1984
+            DATA.B     hmlen                     ;HEADER MSG LENGTH
+xxx010      DATA.B     'TIMER driver'            ;HEADER MSG
+hmlen       EQU        %-xxx010
+;
+TIMR001     CMPI.W     #UNMCMD,D4                ;VALID COMMAND
+            BHI.S      TIMDERR                   ;NO
+            movem.l    D1-D6/A0-A6,-(SP)         ;*** temp* for busy return in D0
+            CLR.L      D7                        ;CLEAR IORESULT
+            MOVEA.L    D1,A3                     ;ADDRESS OF USERS BUFFER
+            LEA        TIMDTBL,A1                ;TURN THE COMMAND INTO A
+            LSL.W      #1,D4                     ;INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D4.W),D4
+            JSR        0(A1,D4.W)                ;DO FUNCTION
+            movem.l    (SP)+,D1-D6/A0-A6         ;*** temp* for busy return in D0
+            RTS
+;
+; Invalid Command Error
+;
+TIMDERR     MOVE.W     #NOTLEGIT,D7
+            RTS
+;
+; THE TIMER DRIVER JUMP TABLE
+;
+TIMDTBL     DATA.W     TIMINST-TIMDTBL           ;UNITINISTALL
+            DATA.W     TIMRD-TIMDTBL             ;UNITREAD
+            DATA.W     TIMWR-TIMDTBL             ;UNITWRITE
+            DATA.W     TIMCLR-TIMDTBL            ;UNITCLEAR
+            DATA.W     TIMBSY-TIMDTBL            ;UNITBUSY
+            DATA.W     TIMST-TIMDTBL             ;UNITSTATUS
+            DATA.W     TIMUNMT-TIMDTBL           ;UNITUNMOUNT
+  page
+;
+; TIMBSY - UNITRBUSY
+; BUSY FROM THE TIMER IS CURRENTLY UNDEFINED.
+;
+TIMBSY      MOVE.W     #NOTLEGIT,D7
+            RTS
+;
+; TIMCLR - UNITCLEAR
+; CLEAR THE TIMER IS CURRENTLY UNDEFINED.
+;
+TIMCLR      MOVE.W     #NOTLEGIT,D7
+            RTS
+  page
+;
+; TIMWR - UNITWRITE
+; TIMRD - UNITREAD
+;
+; CODE FOR CALANDER CLOCK : IN INCLUDE FILE timer.clk.text
+;
+            INCLUDE    'TIMER.CLK.TEXT'
+  page
+;
+; TIMINST - UNITINSTALL
+; INSTALL THE TIMER INTERRUPT ROUTINE AND SET UP THE VIA
+;
+TIMINST     CLR.L      CPticks.W                 ;clear tick cntr *kb 11/28/83*
+;
+            LEA        IER.L,A6
+            MOVE.B     #DISABL,(A6)              ;TURN OFF ALL INTERUPTS ON VIA
+;
+; INITIALIZE TIMER TABLE
+;
+            LEA        TIMERTBL,A0               ;ADDRESS OF TIMER TABLE
+            LEA        TIMERTBL+(TIMTLEN*NUMENTS),A1 ;1ST BYTE AFTER TABLE
+;
+TINST10     MOVE.W     #0,(A0)                   ;CLEAR FLAGS OF EACH ENTRY
+            ADDA.W     #TIMTLEN,A0               ;POINT AT NEXT ENTRY
+            CMPA.L     A0,A1                     ;AT END OF TABLE
+            BNE.S      TINST10                   ;NO
+;
+; PUT ADDRESS OF INTERRUPT ROUTINE IN VECTOR
+;
+            LEA        TIMINT,A0
+            MOVE.L     A0,VECTOR.W
+;
+; SETUP VIA
+;
+            MOVE.B     #ACRBYTE,ACR.L            ;FREE RUN MODE PB7 OUTPUT DISABLED
+            MOVE.B     #TIMEL,T1LL.L             ;TIMER #1 LATCH LOW
+            MOVE.B     #TIMEH,T1LH.L             ;TIMER #1 LATCH HIGH
+            MOVE.B     #TIMEH,T1CH.L             ;TIMER #1 COUNTER HIGH - FORCE LOAD
+            MOVE.B     #CLEAR,IFR.L              ;CLEAR IFR
+;
+; ENABLE TIMER #2
+;
+            MOVE.B     #ENBLT1,(A6)              ;TURN INTERUPTS ON FOR T1
+;
+; INITIALIZE CLOCK - SOURCE IN TIMER.CLK.TEXT INCLUDE FILE
+;
+            BRA        INITCLK                   ;DOES RETURN WHEN INITCLK DOES
+  page
+;
+; TIMUNMT - UNITUNMOUNT
+; TURN OFF THE VIA INTERRUPTS AND POINT THE TIMER INTERRUPT VECTOR AT A RTE.
+;
+TIMUNMT
+            MOVE.B     #DISABL,IER.L             ;TURN OFF ALL INTERUPTS ON VIA
+            LEA        TUNRTE,A0                 ;WITH TIMER INTERRUPT CODE
+            MOVE.L     A0,VECTOR.W               ;POINT VECTOR AT RTE
+            RTS
+  page
+;
+; TIMST - UNITSTATUS
+; THIS PPROCEDURE CONTAINS THE BELL ROUTINE AND THE 4 TIMER TABLE MANIPULATION
+; PROCEDURES, CREATE, DELETE, DISABLE, AND ENABLE.
+;
+;           ENTRY :    D2 - CONTROL CODE USED TO SELECT FUNCTIONS
+;                      A3 - BUFFER ADDRESS = PTR TO PARAMETER BLOCK
+;
+TIMST       CMPI.W     #ENABLEC,D2               ;VALID FUNCTION CODE
+            BHI.S      TSTERR                    ;NO
+;
+            LEA        TIMERTBL,A2               ;ADDRESS OF TIMER TABLE
+            LEA        TSTTBL,A1                 ;TURN THE CONTROL CODE INTO A
+            LSL.W      #1,D2                     ;INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D2.W),D2
+            JMP        0(A1,D2.W)                ;DO FUNCTION
+;
+; Invalid Function Code Error
+;
+TSTERR      MOVEQ      #INVFNC,D7                ;*kb 8/2/83*
+            RTS
+;
+; THE TIMER DRIVER JUMP TABLE
+;
+TSTTBL      DATA.W     TSTBELL-TSTTBL            ;BELL
+            DATA.W     TSTCRE8-TSTTBL            ;CREATE TABLE ENTRY
+            DATA.W     TSTDELT-TSTTBL            ;DELETE TABLE ENTRY
+            DATA.W     TSTDSBL-TSTTBL            ;DISABLE TABLE ENTRY
+            DATA.W     TSTENBL-TSTTBL            ;ENABLE TABLE ENTRY
+  page
+;
+; TSTCRE8 - CREATE TABLE ENTRY
+;           ENTRY : A3 = ADDRESS OF PARAMETER BLOCK
+;                   A2 = ADDRESS OF TIMER TABLE
+;                   A4 = VALUE WHEN TIMER DRIVER CALLED
+;                   A5 = VALUE WHEN TIMER DRIVER CALLED
+;           PARAMETER BLOCK :
+;              1) ADDRESS OF USER SERVICE ROUTINE TO INSTALL IN ENTRY (LONGWORD)
+;              2) COUNT OF 50 MILLISECOND PERIODS TO WAIT (WORD)
+;              3) FLAGS (WORD) -
+;                        bit D1 = CONTINUOUS/1SHOT MODE FLAG
+;                        bit D2 = SKIP FIRST CALL FLAG
+;              4) RETURN SPACE FOR TABLE ENTRY ID, THE ENTRY NUMBER (WORD)
+;
+TSTCRE8     CLR.L      D0                        ;ENTRY #
+            CLR.L      D3                        ;ENTRY INDEX
+;
+; FIND AN UNUSED ENTRY IF ONE AVAILABLE
+;
+TCRCKNXT    BTST       #VALIDENT,TFLAGS+1(A2,D3.W)
+            BEQ.S      TCRFOUND                  ;FOUND ONE
+            ADDI.W     #TIMTLEN,D3               ;ELSE SEE IF AT END OF TABLE
+            ADDQ.W     #1,D0                     ;NEXT ENTRY NUMBER
+            CMPI.W     #NUMENTS,D0               ;IN TABLE?
+            BNE.S      TCRCKNXT                  ;YES
+;
+; ERROR TABLE FULL
+;
+            MOVEQ      #TBLFULL,D7               ;*kb 8/2/83*
+            BRA.S      TCREXIT
+;
+; FOUND UNUSED ENTRY - SET IT UP
+;
+TCRFOUND    MOVE.L     (A3)+,PTRUSRTN(A2,D3.W)   ;PUT IN USER SERVICE RTN ADDRES
+            MOVE.W     (A3),TCOUNT(A2,D3.W)      ;COUNT OF 50 MS. TICKS
+            MOVE.W     (A3)+,TDWNCNT(A2,D3.W)    ;SET DOWN COUNTER
+            MOVE.W     (A3)+,D1                  ;GET FLAGS
+            BSET       #VALIDENT,D1              ;SHOW ENTRY IN USE
+            BCLR       #ENBLDSBL,D1              ;SHOW ENABLED
+            MOVE.L     A4,REGA4(A2,D3.W)         ;SAVE USERS A4 AND A5 REGISTERS
+            MOVE.L     A5,REGA5(A2,D3.W)
+;
+; RETURN TO USER TABLE ENTRY ID (THE ENTRY NUMBER)
+;
+            MOVE.W     D0,(A3)
+            MOVE.W     D1,TFLAGS(A2,D3.W)        ;last, set flags in entry *kb 8/2/83*
+TCREXIT     RTS
+  page
+; *kb 8/2/83*
+; TSTDELT - DELETE TABLE ENTRY
+;           ENTRY : A3 = ADDRESS OF PARAMETER BLOCK
+;                   A2 = ADDRESS OF TIMER TABLE
+;           PARAMETER BLOCK :
+;              1) TABLE ENTRY ID, ENTRY # TO ENTRY (WORD)
+;
+TSTDELT     BSR.S      VALIDID                   ;IS ID VALID? *kb 8/2/83*
+            BNE.S      TDELEXIT                  ;INVALID-ERROR EXIT *kb 8/2/83*
+;
+; VALID ENTRY INDEX - DELETE ENTRY
+;
+            BCLR       #VALIDENT,TFLAGS+1(A2,D3.W)
+TDELEXIT    RTS
+; *kb 8/2/83*
+;
+; TSTDSBL - DISABLE TABLE ENTRY
+;           ENTRY : A3 = ADDRESS OF PARAMETER BLOCK
+;                   A2 = ADDRESS OF TIMER TABLE
+;           PARAMETER BLOCK :
+;              1) TABLE ENTRY ID, ENTRY # TO ENTRY (WORD)
+;
+TSTDSBL     BSR.S      VALIDID                   ;IS ID VALID? *kb 8/2/83*
+            BNE.S      TDSBEXIT                  ;INVALID-ERROR EXIT *kb 8/2/83*
+;
+; VALID ENTRY INDEX - DISABLE ENTRY
+;
+            BSET       #ENBLDSBL,TFLAGS+1(A2,D3.W)
+TDSBEXIT    RTS
+  page
+; *kb 8/2/83*
+; TSTENBL - ENABLE TABLE ENTRY
+;           ENTRY : A3 = ADDRESS OF PARAMETER BLOCK
+;                   A2 = ADDRESS OF TIMER TABLE
+;           PARAMETER BLOCK :
+;              1) TABLE ENTRY ID, ENTRY # TO ENTRY (WORD)
+;
+TSTENBL     BSR.S      VALIDID                   ;IS ID VALID? *kb 8/2/83*
+            BNE.S      TENBEXIT                  ;INVALID-ERROR EXIT *kb 8/2/83*
+;
+; VALID ENTRY INDEX - ENABLE ENTRY AND RESTART DOWN COUNTER
+;
+            MOVE.W     TCOUNT(A2,D3.W),TDWNCNT(A2,D3.W)
+            BCLR       #ENBLDSBL,TFLAGS+1(A2,D3.W)
+TENBEXIT    RTS
+;
+; *kb 8/2/83*
+; VALIDID - VALIDATE TABLE ENTRY ID IN PARAMETER
+;           ENTRY : A3 = ADDRESS OF PARAMETER BLOCK
+;           EXIT  : D3 = TABLE INDEX
+;                   (NE) = INVALID TABLE ENTRY ID   *kb 8/2/83*
+;                   (EQ) = VALID TABLE ENTRY ID     *kb 8/2/83*
+;
+VALIDID     MOVE.W     (A3),D3                   ;GET TABLE ENTRY ID
+;
+; TABLE ENTRY ID IS THE ENTRY NUMBER - MAKE SURE LESS THAN NUMBER OF ENTRIES IN TABLE
+;
+            CMPI.W     #NUMENTS-1,D3             ;IS INDEX LESS THAN TABLELN?
+            BLS.S      VALCALC                   ;YES, CALCULATE INDEX
+;
+VALERR      MOVEQ      #INVTBLID,D7              ;*kb 8/2/83*
+            BRA.S      VALEXIT
+;
+; HAVE VALID TABLE ENTRY
+;
+VALCALC     MULU       #TIMTLEN,D3               ;CALCULATE INDEX
+            CLR.L      D0                        ;CLEAR CARRY
+VALEXIT     RTS
+  page
+; TSTBELL - BELL ROUTINE
+;           ENTRY : A3 = ADDRESS OF PARAMETER BLOCK
+;           PARAMETER BLOCK :
+;             1) FREQUENCY (WORD)
+;             2) SPEAKER ON/OFF PATTERN (BYTE)
+;             3) FILLER (BYTE)
+;             4) DURATION IN 50 MILLISECOND PERIODS (WORD)
+; INIT VIA FOR FREQUENCY W/O DISTURBING TIMER #1
+;
+TSTBELL     LEA        SHIFTREG.L,A5
+            MOVE.B     #0,(A5)                   ;TURNOFF BELL FOR SURE
+            ORI.B      #RUNT2,ACR.L              ;SET TIMER #2 AS COUNT DOWWN
+            BSR.S      SETT2                     ;PUT FREQUENCY IN TIMER
+            LEA        IFLAGS,A4
+            BCLR       #SHUTOFF,(A4)             ;PUT TIMER ON
+;
+; CALL CREATE TO SETUP ONE SHOT INTERVAL TIMER CALL
+;
+            LEA        IPRMBLK,A1                ;ADDR OF INTERNAL PARM BLOCK
+            MOVE.L     A3,-(SP)                  ;SAVE PARAMETER BLOCK ADDRESS
+            MOVE.W     DURATN(A3),D0             ;SAVE THE COUNT
+            MOVEA.L    A1,A3                     ;CREATE EXPECTS PRM BLK ADR IN A3
+            LEA        BELSRVR,A0                ;BELL SERVICE ROUTINE ADDRESS
+            MOVE.L     A0,(A1)+                  ;PUT IN PARAMETER BLOCK
+            MOVE.W     D0,(A1)                   ;PUT IN COUNT
+            BSR        TSTCRE8                   ;CALL CREATE
+            MOVE.L     (SP)+,A3                  ;BELL PARAMETER BLOCK ADDRESS
+;
+            MOVE.B     PATTERN(A3),(A5)          ;TURN ON BELL
+;
+; WAIT FOR SHUT OFF
+;
+TBELWAIT    BTST       #SHUTOFF,(A4)             ;DONE?
+            BEQ.S      TBELWAIT                  ;NO
+;
+; DONE SHUT OFF TIMER #2 AND BELL
+;
+TBELDONE    MOVE.B     #0,(A5)                   ;CLEAR SHIFT REG TO SHUT OFF BELL
+            ANDI.B     #STOPT2,ACR.L
+TBELEXIT    RTS
+  page
+;
+; SETT2 - SET TIMER #2 TO FREQUENCY IN PARAMETER BLOCK
+;
+SETT2       MOVE.B     1(A3),T2LL.L              ;SET LATCH
+            MOVE.B     (A3),T2CH.L               ;SET COUNTER AND CLEAR IFR T2 FLAG
+            RTS
+;
+; BELL TIMER SERVICE ROUTINE
+;
+BELSRVR     LEA        IFLAGS,A0                 ;TELL BELL ROUTINE DONE
+            BSET       #SHUTOFF,(A0)             ;& TO SHUT OFF SPEAKER AND
+            RTS                                  ;TIMER #2
+  page
+;
+;
+; DATA AREA
+; CONSTANTS FOR CALANDER CLOCK
+; CONVERSION ARRAYS BCD TO BINARY/REGISTER TO PARAMETER BLOCK CONVERSION
+;
+DETAIL      DATA.B     9,11,10,8,7,6,5,4,3,2,1,0 ;REGISTERS WHICH MAKE THE PARAMETERS
+NUMBER      DATA.B     1,2,2,2,2,2,1             ;# OF REGISTERS FOR PARAMEETER
+            DATA.B     0                         ;**** FILL *****
+;
+; CONVERSION ARRAYS FOR PARAMETER BLOCK TO REGISTER ARRAY CONVERSION
+;
+INREGB      DATA.B     6,5,5,4,4,3,3,2,2,0,1,1,7 ;WHICH PARAM IN REG[i] (BINARY)
+NIBBLE      DATA.B     0,0,1,0,1,0,1,0,1,0,0,1,0 ;WHICH NIBBLE- 1=HI
+;
+; RANGE VALUES FOR CLOCK PARAMTER BLOCK FIELDS, 1 BYTE LOW, 1 BYTE HI FOR EACH
+;  OF 8 PARAMTER BLOCK FIELDS
+;
+RANGES      DATA.B     1,7,1,12,1,31,0,23,0,59,0,59,0,9,0,3
+;
+; VARIABLE DATA AREA
+;
+; THE TIMER TABLE - 10 ENTRIES
+;
+TIMERTBL    DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 0
+TIMTLEN     EQU        %-TIMERTBL                ;length of entry
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 1
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 2
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 3
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 4
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 5
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 6
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 7
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 8
+            DATA.W     0,0,0,0,0,0,0,0,0         ; ENTRY # 9
+TABLELN     EQU        %-TIMERTBL                ;length of table in bytes
+NUMENTS     EQU        TABLELN/TIMTLEN           ;# of entries in table
+;
+; INTERNAL FLAGS AND PARAMETER BLOCK
+;
+IFLAGS      DATA.W     0                         ;USE ONLY 1ST BYTE
+IPRMBLK     DATA.W     0,0,0,2,0                 ;BELL USES FOR CREATE CALL
+; THE ADDRESS AND COUNT ARE SET IN THE BELL ROUTINE - FLAGS ARE ALWAYS
+; ONE-SHOT MODE ONLY.
+;
+; CLOCK DATA AREA
+; CLOCK ADDRESS AND SELECT LATCH ADDRESS SAVE AREA
+;
+ADDRREG     DATA.L      0                       ;{CHANGE 6/7}
+
+; REGISTER ARRAY HOLD
+;
+REGARRAY    DATA.B     0,0,0,0,0,0,0,0,0,0,0,0
+RARDLEN     EQU        %-REGARRAY                ;NUMBER OF REGISTERS READ
+            DATA.B     0
+RAWRLEN     EQU        %-REGARRAY                ;NUMBER OF REGISTERS WRITTEN
+            DATA.B     0                         ;FILL
+;
+; NIBBLE HOLD FOR PARAMETER TO REGISTER CONVERSION
+;
+HI          DATA.B     0,0,0,0,0,0,0,0
+LOW         DATA.B     0,0,0,0,0,0,0,0
+;
+            END        TIMERDRV

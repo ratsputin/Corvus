@@ -1,0 +1,11 @@
+Corvus Concept w/printed model/serial/rev plate
+  serial 293-E0442-R
+  model WSB-2
+  revision A
+
+Contains:
+  Corvus Systems Processor board
+  Corvus Systems Corvus Concept Memory 8051 REV. daughterboard 
+     w/512KB installed (full board)
+  Corvus Systems Floppy Controller in slot 2
+  Corvus Systems Apple Interface Card in slot 3

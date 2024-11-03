@@ -1,0 +1,17 @@
+;
+; peek - look at one byte of memory.
+;  function peek(address:longint):integer;
+;
+                global  peek
+;
+peek            CLR.L   D0
+                MOVE.L  (SP)+,A1                ;RETURN ADDRESS
+                MOVE.L  (SP)+,A0                ;POINTER TO BYTE
+;
+                TST.W   (SP)+                   ;REMOVE INTEGER SPACE FROM STACK
+;
+                MOVE.B  (A0),D0                 ;GET BYTE
+                MOVE.W  D0,-(SP)                ;PUSH RESULT
+;
+                JMP     (A1)                    ;EXIT
+                END

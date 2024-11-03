@@ -1,0 +1,95 @@
+Program Animate;
+  const
+    KYBD       =   35;         { Keyboard unit number }
+    IMAGESIZE  =   3360;
+  type
+    ApplePicture = Record
+      element: array [1..IMAGESIZE] of integer
+    end;
+    picptr = ^ApplePicture;
+  var
+    picturefile   : file of ApplePicture;
+    picture       : Applepicture;
+    pickey        : array [1..32] of picptr;
+    i,d,num,
+    rep,r,
+    f,t,
+    picnum,
+    numberpics,
+    delay,d1,p    : integer;
+    line,vbyte,
+    inc,pic       : array [1..6] of integer;
+    filename      : string[20];
+    ch2           : packed array [0..1] of char;
+
+
+ Procedure LoadPic  (addr:picptr; line,vbyte:integer);    External;
+ Procedure StorePic (addr:picptr; line,vbyte:integer);    External;
+
+ Procedure GetPictures;
+   var i:  integer;
+   begin
+       Write ('Filename:');
+       Readln (filename);
+       filename := Concat ('AS.',filename);
+       Reset (picturefile,filename);
+       i := 1;
+       numberpics := 0;
+       While not Eof (picturefile) do
+         begin
+           picture := picturefile^;
+           if MemAvail > IMAGESIZE*2 then
+             begin
+               New (pickey[i]);
+               pickey[i]^ := picturefile^;
+               Write ('.');
+               numberpics := numberpics+1;
+               Get (picturefile);
+               Write (Chr(8));
+               i := i+1
+             end
+           else
+             begin
+               WriteLn ('Out of Memory.');
+               Exit (Getpictures);
+             end
+         end;
+       Close (picturefile) end;
+
+
+
+  begin
+    for i:= 1 to 32 do pickey[i] := nil;
+    GetPictures;
+
+    picnum :=4;
+    line[1] := 414;  vbyte[1] := 10;  inc[1] :=1;  pic[1] := 1;
+    line[2] := 286;  vbyte[2] := 36;  inc[2] :=-1; pic[2] := 6;
+    line[3] := 414;  vbyte[3] := 62;  inc[3] :=3;  pic[3] := 1;
+    line[4] := 532;  vbyte[4] := 36;  inc[4] :=-2; pic[4] := 4;
+
+
+      Write ('Run [delay] :');
+      ReadLn (delay);
+      Repeat
+        for p := 1 to picnum do
+          begin
+            LoadPic (pickey[pic[p]],line[p],vbyte[p]);
+            pic[p] := pic[p] + inc[p];
+            if pic[p] > numberpics then pic[p] := pic[p]-numberpics;
+            if pic[p] < 1 then          pic[p] := numberpics+pic[p]-1;
+            for d:= 1 to delay do for d1:= 1 to 20  do
+         end;
+      Until UnitBusy(2)
+  end.
+
+
+
+
+
+
+
+
+
+
+

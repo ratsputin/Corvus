@@ -1,0 +1,164 @@
+{----------------------------------------------------------------------}
+{ Unit:       CVDefn                                                   }
+{                                                                      }
+{ Purpose:    The unit contains minimal declarations for Constel-      }
+{             lation II tables.                                        }
+{                                                                      }
+{ Updates:    31-Mar-82  Unit created  (CMC)                           }
+{----------------------------------------------------------------------}
+
+
+UNIT CVDefn;
+
+INTERFACE
+
+USES    {CVDefn public}
+{!BT} {$U /CCOS/OS.GLOBALS.OBJ } globals;
+
+CONST   {CVDefn public}
+   NameLen      = 10;
+   PswLen       = 8;
+   CrvSema4     = 'CRVSEMA4';   { Constellation II semaphore }
+
+   DIOffset     = 8;      { Block # of DRIVE.INFO                             }
+
+   DriveInfo    = 0;      { File code for DRIVE.INFO table                    }
+   SystemBoot   = 1;      { File code for SYSTEM.BOOT table                   }
+   NetworkUser  = 2;      { File code for NETWORK.USER table                  }
+   DriveVolume  = 3;      { File code for DRIVE.VOLUME table                  }
+   DriveUser    = 4;      { File code for DRIVE.USER table                    }
+   DriveAccess  = 5;      { File code for DRIVE.ACCESS table                  }
+   Bootfile     = 6;      { File code for corvus boot code files              }
+   NetworkActive= 8;      { File code for NETWORK.ACTIVE table                }
+
+                          {  Directory types                   }
+
+   DI_UCSD      =  1;     { UCSD II.0                          }
+   DI_CPM       =  2;     { Control Program for Microcomputers }
+   DI_MDOS      =  3;     { MDOS                               }
+   DI_PET       =  4;     { Commodore PET                      }
+   DI_APDOS33   =  5;     { Apple DOS 3.3                      }
+   DI_ATARI     =  6;     { Atari DOS 2.0                      }
+   DI_RT11      =  7;     { RT-11                              }
+   DI_RSX11     =  8;     { RSX-11                             }
+   DI_NEWDOS    =  9;     { TRS-80 NewDOS                      }
+   DI_NEW80     = 10;     { TRS-80 NewDOS - 80                 }
+   DI_UNIX      = 11;     { UNIX                               }
+   DI_A3SOS     = 12;     { Apple III SOS                      }
+   DI_IBMDOS    = 13;     { IBM Personal Computer DOS          }
+   DI_CONCEPT   = 14;     { Corvus Concept OS                  }
+   DI_CPM86     = 15;     { CP/M 86                            }
+
+
+                          { OPERATING SYSTEM TYPES             }
+
+   OS_APUCSD    =  1;     { Apple Pascal                       }
+   OS_APDOS33   =  2;     { Apple DOS 3.3                      }
+   OS_UCSDII    =  3;     { UCSD II.0                          }
+   OS_IBMDOS    =  4;     { IBM Personal Computer DOS          }
+   OS_A3SOS     =  5;     { Apple III SOS                      }
+   OS_APRT      =  6;     { Apple Run-Time                     }
+   OS_CPM       =  7;     { Control Program for Microcomputers }
+   OS_RT11      =  8;     { RT-11                              }
+   OS_RSX11     =  9;     { RSX-11                             }
+   OS_PET       = 10;     { Commodore PET                      }
+   OS_NEWDOS    = 11;     { TRS-80 NewDOS                      }
+   OS_NEW80     = 12;     { TRS-80 NewDOS - 80                 }
+   OS_ATARI     = 13;     { Atari DOS 2.0                      }
+   OS_UNIX      = 14;     { UNIX                               }
+   OS_UCSD40    = 15;     { UCSD IV.0                          }
+   OS_CONCEPT   = 16;     { Corvus Concept OS                  }
+   OS_CPM86     = 17;     { CP/M 86                            }
+
+
+                          { BOOT FILE indices                  }
+
+   BT_oApl2     =  1;     { Apple Pascal Omninet               }
+   BT_fApl2     =  3;     { Apple Pascal Flat Cable            }
+   BT_oLSI11    = 41;     { RT-11 Omninet                      }
+   BT_fLSI11    = 43;     { RT-11 FlatCable                    }
+   BT_oIBMPC    =  9;     { IBM Personal Computer Omninet      }
+   BT_fIBMPC    = 11;     { IBM Personal Computer Flat Cable   }
+   BT_oX820     = 13;     { Xerox  Omninet                     }
+   BT_fX820     = 15;     { Xerox Flat Cable                   }
+   BT_oConcept  =  5;     { Corvus Concept OS Omninet          }
+   BT_fConcept  =  7;     { Corvus Concept OS Flat Cable       }
+
+
+
+TYPE    {CVDefn public}
+   name         = PACKED ARRAY [1..NameLen] OF CHAR;
+   psw          = PACKED ARRAY [1..PswLen] OF CHAR;
+   absorder     = ( Extnd, Hi, Mid, Lo);
+   relorder     = ( Msb, Lsb );
+
+
+
+{!BT}   AbsInt       = LONGINT;
+{!BT}   RelInt       = INTEGER;
+
+   Absdiskaddr  = AbsInt;
+   Reldiskaddr  = RelInt;
+
+{$P}
+
+   {-------------------------------------------------------}
+   { Record:     DITYPE                                    }
+   {                                                       }
+   { Purpose:    Drive information table...                }
+   {                                                       }
+   { Updates:    03/09/82 -  Record creation (CMC)         }
+   {             03/19/82 -  New disk addr  length (CMC)   }
+   {             04/05/82 -  name/password redef   (DSO)   }
+   {             03/08/82 -  New record field      (CMC)   }
+   {-------------------------------------------------------}
+
+   DItype     = PACKED RECORD
+                drive:          name;           { drive name (unencrypted)           0  }
+                drivepass:      psw;            { drive password  (encrypted)       10  }
+
+                server:         name;           { server name (unencrypted)         18  }
+                serverpass:     psw;            { server password (encrypted)       28  }
+
+                crvsaddr:       absdiskaddr;    { absolute addr. of corvus volume   36  }
+                size:           absdiskaddr;    { size of corvus volume (blocks)    40  }
+                bootaddr:       absdiskaddr;    { absolute addr. of cold boot blk   44  }
+                activeaddr:     absdiskaddr;    { absolute addr. of NA tables       48  }
+
+                driveinit:      byte;           { drive initialized flag            52  }
+                unused1:        byte;           { left over                         52.5}
+                driveno:        RelInt;         { drive number...                   53  }
+                online:         byte;           { drive online indicator            55  }
+                unused2:        byte;           { left over                         55.5}
+
+                NUblks:         RelInt;         { Network.User table size (blocks)  56  }
+                DVblks:         RelInt;         { Drive.Volume table size (blocks)  60  }
+                DUblks:         RelInt;         { Drive.Name table size (blocks)    62  }
+                DAblks:         RelInt;         { Drive.Access table size (blocks)  64  }
+                SBblks:         RelInt;         { System.Boot table size (blocks)   66  }
+
+                special:        RelInt;         { version code                      68  }
+
+                NUaddr:         absdiskaddr;    { Network.User table addr (blocks)  70  }
+                DVaddr:         absdiskaddr;    { Drive.Volume table addr (blocks)  74  }
+                DUaddr:         absdiskaddr;    { Drive.Name table addr (blocks)    78  }
+                DAaddr:         absdiskaddr;    { Drive.Access table addr (blocks)  82  }
+                SBaddr:         absdiskaddr;    { System.Boot table addr (blocks)   86  }
+
+                DIversion:      byte;           { DRIVE.INFO version                90  }
+
+                reserved:       PACKED ARRAY[1..419] OF CHAR;
+
+                END;
+
+
+{$P}
+IMPLEMENTATION
+
+END.    {UNIT CVDefn}
+
+
+
+
+
+

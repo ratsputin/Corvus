@@ -1,0 +1,22 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 655360, 1280 blocks of 512 bytes each
+
+Volume BACKUP3 has 15 files,  0 to 6 (6), eov 1280, size 292, free 15
+
+ 1: 3CC.FILMGR      Ux7dc5 11-Nov-85    6-  16(  10),  5120+512=  5632 bytes
+ 2: DRV.OMNINET     Ux7dc5 10-Jan-86   16-  20(   4),  2048+512=  2560 bytes
+ 3: DRV.TIMER       Ux7dc5 11-Nov-85   20-  24(   4),  2048+512=  2560 bytes
+ 4: KEYCODE.KYBD    Data 15-Feb-85   24-  30(   6),  3072+512=  3584 bytes
+ 5: VSIUTL          Ux5c5 15-Feb-85   30- 168( 138), 70656+512= 71168 bytes
+ 6: CSK.SCORPION    Ux5c5 15-Feb-85  168- 170(   2),  1024+512=  1536 bytes
+ 7: DRV.SYSTRM      Ux7dc5 11-Nov-85  170- 177(   7),  3584+512=  4096 bytes
+ 8: BASIC           Ux5c5 26-Oct-83  177- 357( 180), 92160+512= 92672 bytes
+ 9: C               Ux5c5 26-Oct-83  357- 508( 151), 77312+512= 77824 bytes
+10: CC.KERNEL       Ux7dc5 11-Nov-85  508- 556(  48), 24576+512= 25088 bytes
+11: PASCAL          Ux7e95 10-Sep-85  556- 743( 187), 95744+512= 96256 bytes
+12: FORTRAN         Ux7e95 10-Sep-85  743- 938( 195), 99840+512= 100352 bytes
+13: CC.SETUP        Ux7dc5 11-Nov-85  938- 972(  34), 17408+512= 17920 bytes
+14: DRV.RDISK       Ux7dc5 22-Nov-85  972- 974(   2),  1024+512=  1536 bytes
+15: ASSIGN          Ux7dc5 22-Nov-85  974- 988(  14),  7168+512=  7680 bytes

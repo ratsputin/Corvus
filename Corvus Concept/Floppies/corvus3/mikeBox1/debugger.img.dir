@@ -1,0 +1,10 @@
+
+Directory of UCSD disk image file 'debugger.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 2 files,  0 to 6 (6), eov 500, size 479, free 2
+
+ 1: DEBUGGER.OBJ    Data 12-Dec-83    6-  13(   7),  3584+512=  4096 bytes
+ 2: HELLO.TEXT      Text 14-May-84   13-  21(   8),  4096+512=  4608 bytes

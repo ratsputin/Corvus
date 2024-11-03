@@ -1,0 +1,11 @@
+
+Directory of UCSD disk image file 'dreen_2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume DREEN.2 has 3 files,  0 to 6 (6), eov 500, size 0, free 3
+
+ 1: 2IBM.BUGS       Data  9-Apr-84    6- 205( 199), 101888+490= 102378 bytes
+ 2: BACKUP.HPIC     Data  8-Aug-85  205- 288(  83), 42496+512= 43008 bytes
+ 3: 2CCOS.BUGS      Data  6-Apr-84  288- 500( 212), 108544+276= 108820 bytes

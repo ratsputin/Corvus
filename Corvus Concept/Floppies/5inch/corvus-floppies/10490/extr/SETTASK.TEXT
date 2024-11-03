@@ -1,0 +1,330 @@
+{$S SETTASK}
+procedure SetTask;
+var
+  Done: boolean;
+
+procedure SetPagLen;
+
+var
+  Dum: boolean;
+
+begin
+   ShwPagBnd := Confirm( Msg(MGSET,2), ShwPagBnd );
+   if ShwPagBnd then begin
+      if NamStor( 'ShwPagBnd', 1 ) then begin end;
+      Dum := PmtInt( Msg(MGSET,3), ScrPagLen );
+   end else begin
+      if NamStor( 'ShwPagBnd', 0 ) then begin end;
+   end;
+   Redraw( WinTop );
+end;
+
+
+procedure SetBell;
+
+begin
+   BelTone := Confirm( Msg(MGSET,4), BelTone );
+   if BelTone then begin
+      if NamStor( 'BelTone', 1 ) then begin end;
+   end else begin
+      if NamStor( 'BelTone', 0 ) then begin end;
+   end;
+end;
+
+
+procedure SetRMar;
+
+var
+  Done : Boolean;
+
+begin
+  LoadLabels(TabFrame);
+  TellUsr(Msg(MGSet,5));                { eA"Usee@ eAcursore@ eAkeyse@ eAtoe@ eAmovee@ eAmargin"e@ }
+  Done := False;
+  If RhtMar = (MaxLinLen-3) Then RhtMar := 80;  { eAChoosee@ eAdefaulte@ eAfore@ eAcleare@ eAmargine@ }
+  DrawColHdr;
+  While Not Done Do Begin
+    NextCmd;
+    Case Cmd of
+          KF2 : Begin
+                  If RhtMar = MaxLinLen Then Bell(BelWrn)
+                    Else Begin
+                      RhtMar := RhtMar + 1;
+                      DrawColHdr
+                      End
+                  End;
+          KF1 : Begin
+                  If (RhtMar = (LftMar + 1)) Or (RhtMar = 1) Then Bell(BelWrn)
+                    Else Begin
+                      RhtMar := RhtMar - 1;
+                      DrawColHdr
+                      End
+                  End;
+          KF5 : Begin
+                  RhtMar := RhtMar + 8;
+                  If RhtMar > MaxLinLen Then Begin
+                    Bell(BelWrn);
+                    RhtMar := MaxLinLen
+                    End;
+                  DrawColHdr
+                  End;
+          KF4 : Begin
+                  RhtMar := RhtMar - 8;
+                  If RhtMar < (LftMar+1) Then Begin
+                    Bell(BelWrn);
+                    RhtMar := LftMar + 1
+                    End;
+                  DrawColHdr
+                  End;
+          KF10: Done := True;
+        Otherwise : Bell(BelErr)
+        End
+    End;
+  LoadLabels(SetFrame);
+  Bell(BelAck)
+end;
+
+
+procedure SetLMar;
+
+var
+  Done : Boolean;
+
+begin
+  LoadLabels(TabFrame);
+  If RhtMar = 0 Then Begin
+    Bell(BelErr);
+    TellUsr(Msg(MGSet,6));              { eA"Youe@ eAmuste@ eAsete@ eAthee@ eArighte@ eAmargine@ eAfirst"e@ }
+    Exit(SetLMar)
+    End;
+  TellUsr(Msg(MGSet,5));                { eA"Usee@ eAcursore@ eAkeyse@ eAtoe@ eAmovee@ eAmargin"e@ }
+  Done := False;
+  While Not Done Do Begin
+    NextCmd;
+    Case Cmd of
+          KF2 : Begin
+                  If LftMar = (RhtMar-1) Then Bell(BelWrn)
+                    Else Begin
+                      LftMar := LftMar + 1;
+                      DrawColHdr
+                      End
+                  End;
+          KF1 : Begin
+                  If LftMar = 1 Then Bell(BelWrn)
+                    Else Begin
+                      LftMar := LftMar - 1;
+                      DrawColHdr
+                      End
+                  End;
+          KF5 : Begin
+                  LftMar := LftMar + 8;
+                  If LftMar > (RhtMar - 1) Then Begin
+                    Bell(BelWrn);
+                    LftMar := RhtMar -1
+                    End;
+                  DrawColHdr
+                  End;
+          KF4 : Begin
+                  LftMar := LftMar - 8;
+                  If LftMar < 1 Then Begin
+                    Bell(BelWrn);
+                    LftMar := 1
+                    End;
+                  DrawColHdr
+                  End;
+          KF10: Done := True;
+        Otherwise : Bell(BelErr)
+        End
+    End;
+  LoadLabels(SetFrame);
+  Bell(BelAck)
+end;
+
+
+procedure ClrMar;
+begin
+   if Confirm( Msg(MGSET,12), false ) then begin
+      RhtMar := MaxLinLen - 3;
+      LftMar := 1;
+      DrawColHdr;
+   end;
+end;
+
+
+procedure SetScrl;
+var Dum: boolean;
+begin
+   if PmtInt( Msg(MGSET,7), SclHgt ) then begin
+      Dum := NamStor( 'SclHgt', SclHgt );
+   end;
+end;
+
+
+procedure SetTabs;
+var I, TabSep: integer;
+    TabTyp: char;
+begin
+  TabSep := 8;
+  if PmtInt( Msg(MGSET,8), TabSep ) then begin
+     TabSep := max( 1, TabSep );
+     I := CurCol;
+     TabTyp := '1';
+     if PmtChr( Msg(MGSET,9), True, TabTyp ) then begin
+        while I<=MaxLinlen do begin
+           case TabTyp of
+              '2': TabAra[i] := SymDTab;
+              '3': TabAra[i] := SymCTab;
+              '4': TabAra[i] := SymRTab;
+              otherwise: TabAra[i] := SymLTab;
+           end;
+           I := I + TabSep;
+        end;
+        DrawColHdr;
+     end;
+  end;
+end;
+
+
+procedure ClrTabs;
+begin
+   if Confirm( Msg(MGSET,13), false ) then begin
+      fillchar( TabAra, MaxLinLen, chr(12) );
+      DrawColHdr;
+   end;
+end;
+
+
+procedure SetTab;
+var Col: integer;
+    TabTyp: char;
+begin
+  Col := CurCol;
+  if PmtInt( Msg(MGSET,10), Col ) then begin
+     if (1<=Col) and (Col<=MaxLinLen) then begin
+        TabTyp := '1';
+        if PmtChr( Msg(MGSET,9), True, TabTyp ) then begin
+           case TabTyp of
+              '2': TabAra[Col] := SymDTab;
+              '3': TabAra[Col] := SymCTab;
+              '4': TabAra[Col] := SymRTab;
+              otherwise: TabAra[Col] := SymLTab;
+           end;
+           DrawColHdr;
+        end;
+     end else begin
+        TellUsr( Msg(MGGENL,12) );
+     end;
+  end;
+end;
+
+
+procedure ClrTab;
+var Col: integer;
+begin
+  Col := CurCol;
+  if PmtInt( Msg(MGSET,11), Col ) then begin
+     if (1<=Col) and (Col<=MaxLinLen) then begin
+        TabAra[Col] := 12;
+        DrawColHdr;
+     end else begin
+        TellUsr( Msg(MGGENL,12) );
+     end;
+  end;
+end;
+
+
+procedure StoreTabs( TabNam: Str255 );
+var i: integer;
+    TR: str255;
+begin
+   TR := '';
+   for i := 1 to MaxLinLen-15 do begin
+      TR := concat( TR, ' ' );
+      TR[length(TR)] := chr(TabAra[i]);
+   end;
+   TR := concat( TR, ' ' );
+   TR[length(TR)] := chr(CnvIB(LftMar));
+   TR := concat( TR, ' ' );
+   TR[length(TR)] := chr(CnvIB(RhtMar));
+   DictSave( TabNam, TR );
+end;
+
+
+procedure SaveTabs;
+var S: StrTyp;
+begin
+   S := 'TabAra';
+   if PmtStr( Msg(MGSET,14), S ) then begin
+      StoreTabs( S );
+      TellUsr( Msg(MGSET,16) );
+   end;
+end;
+
+
+procedure LoadTabs;
+var S: StrTyp;
+    TRKey, TR: Str255;
+    i,L,R: integer;
+begin
+   S := 'TabAra';
+   if PmtStr( Msg(MGSET,15), S ) then begin
+      TRKey := S;
+      if DictFind( TRKey, TR ) then begin
+         for i := 1 to min(MaxLinLen, length(TR)-2 ) do
+            TabAra[i] := CnvIB(ord(TR[i]));
+         L := CnvBI(ord(TR[length(TR)-1]));
+         R := CnvBI(ord(TR[length(TR)]));
+         if ((R=0) or (L<R)) and (0<L) and (R<MaxLinLen) then begin
+            LftMar := L;
+            RhtMar := R;
+         end;
+         DrawColHdr;
+         TellUsr( Msg(MGSET,17) );
+      end else begin
+         TellUsr( Subst(@S,Msg(MGSET,18)) );
+      end;
+   end;
+end;
+
+{
+procedure SetTask *MAIN*
+}
+begin
+   if debug then CodeAvail;
+   LoadLabels( SetFrame );
+
+   Done := false;
+   while not Done do begin
+      NextCmd;
+      case Cmd of
+         KF1: SetScrl;
+         KF3: Begin
+                CommFlg := Not CommFlg;
+                If CommFlg Then CurMode := 'Communications mode'
+                  Else If ProgFlg Then CurMode := 'Programming mode'
+                    else CurMode := '                    ';
+                TitleBar(CurMode)
+                End;
+         KF4: SetLMar;
+         KF5: SetRMar;
+         KF6: SetTab;
+         KF7: ClrTab;
+         KF8: LoadTabs;
+         KF9: Begin
+                ProgFlg := Confirm(Msg(MGSET,20), not ProgFlg);
+                If ProgFlg Then CurMode := 'Programming Mode'
+                  Else CurMode := '                    ';
+                TitleBar(CurMode)
+                End;
+         KF12:SetBell;
+         KF15:ClrMar;
+         KF16:SetTabs;
+         KF17:ClrTabs;
+         KF18:SaveTabs;
+         KBAD:Bell(BelErr);
+         otherwise: Done := not LocalEdit;
+     end;
+   end;
+
+   StoreTabs( 'TabAra' );
+end;

@@ -1,0 +1,142 @@
+
+This is a description of the procedures and data structures necessary to initialize and
+maintain the 68000 exception vectors on the Star.
+
+file :  /kb/excepdsgn.text
+date :  25-Jan-1982
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Initialization of Exception Vectors
+
+On COLDSTART all interrupts are turned off.
+   1) set 68000 interrupt status to 7 to prevent any possible interrupt.
+   2) turn off all interrupt capabilities of the processor external hardware
+                a) all UARTS
+                   - Keyboard
+                   - Datacom 0
+                   - Datacom 1
+                b) VIA
+                c) Omninet
+
+The vectors are then initialized to the defined default values.
+  The initial vector values are kept in an array of pointers with a 1 to 1
+  correspondence to the 68000 vector locations.
+The default drivers are then initialized by a call to their UnitInstall routine.
+  If any of the drivers are interrupt driven, then during the UnitInstall call
+  they should install their interrupt routine entry point in the appropriate
+  vector.
+Then all the interrupts are allowed.
+   1) set 68000 interrupt status to 0 or the lowest interrupt level wanted.
+
+---------------------------------------------------------------------------
+
+Default states of each Exception vector
+
+For default states simple solutions to errors is the goal.  For some of the
+exceptions no viable action can be defined except restarting the system.  Others
+must be flexible so a low level user can redefine them easily without disturbing
+the functioning of the system.
+
+Any time the system does something unexpected by the user it should display a
+message, no matter how terse, informing the user what is happening.  This should
+happen when the system does a WARMSTART or a COLDSTART.
+
+WARMSTART means re-initialize the entire system but do not reboot.  COLDSTART
+means restart the system as if the user turned the machine off then back on.
+WARMSTART is done whenever the system can be reasonably sure that the basic
+system integrity has been maintained.  When integrity can not be reasonably
+assured a COLDSTART must be performed.
+
+Assumes that :
+   1) The Debugger/Monitor is not available in end user systems, but only in
+      Development Workstations.
+
+---------------------------------------------------------------------------
+
+1) Reset vector - points to valid coldstart entry to system.  This is in ROm
+   and points to ROM.
+2) Bus Error -
+     a) print the fatal system error message :  " SYS ERR = 0001"
+     b) do a COLDSTART by going through the Reset vector.
+3) Address Error -
+     a) print the fatal system error message : "SYS ERR = 0002"
+     b) if the Debugger/Monitor is available then GOTO it
+        else do a WARMSTART.
+4) Illegal instruction Exception, Line 1010 Emulator, and Line 1111 Emulator -
+     a) print the fatal system error message : "SYS ERR = 0003"
+     b) if the Debugger/Monitor is available then GOTO it
+        else do a COLDSTART.
+5) Zero Divide, CHK instruction, TRAPV instruction Exception -
+     a) do RTE only
+     b) these are Internal Interface user resetable.
+6) Privilege Violation Exception -
+     a) print the fatal system error message : "SYS ERR = 0004"
+     b) if the Debugger/Monitor is available then GOTO it
+        else do a WARMSTART.
+  OR
+     a) change the Status Register of the user (it's on the stack) to system
+        mode.  Therefore, set bit D13 of the SR.
+     b) do RTE
+7) Trace -
+     a) if the Debugger/Monitor is available then GOTO it
+     b) if no Debugger/Monitor then
+              - Reset the T bit in the user's Status Register on the stack
+              - do RTE
+8) Spurrious Interrupt Exception -
+     a) print the fatal system error message : "SYS ERR = 0005"
+     b) do a WARMSTART ( or a COLDSTART - ?).
+9) Interrupt  Vectors (interrupts 1 through 7) -
+     a) default value points to a RTE instruction only.
+10) Trap instruction
+     a) default value points to a RTE instruction only.
+     b) these are user resetable through an Internal interface.
+     c) trap number 1 is used by the system (OS,Loader - ?) and can point t
+        the FTRAP function of the OS.  OS uses SETTRAP routine to set the trap
+        wanted.  This can then be used as a fatal system exit where,
+               -  print the fatal system error message : "SYS ERR = 0006"
+               -  if the Debugger/Monitor is available then GOTO it
+                  else do a WARMSTART.
+
+---------------------------------------------------------------------------
+
+How to display error message
+
+The error message is displayed by calling the Display driver directly.  A problem
+occurs when the code causing an error is in the Display driver.  To solve this,
+when a message is being displayed and the displaying function is reentered,
+it will do an immediate COLDSTART.  Following is a simple description of the
+process :
+
+   1) Test Reentry flag. if it is set do a COLDSTART
+    else
+   2) set the Reentry flag.
+   3) call Display driver to display the system error message.
+   4) clear the Reentry flag.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Utilities needed to support the Exception vectors
+
+   1) A procedure accessable through an internal interface only to redefine
+      the vector addresses for the TRAP, CHK, TRAPV, and Zero Divide exceptions.
+
+   2) A polling interrupt handler for interrupt #1 to create and maintain a
+      table of interrupt service routine addresses for the Apple slots and
+      Datacom Control hardware.  This routine will determine which device caused
+      the interrupt #1 and if there is a valid entry for that device in the
+      table it will call the corresponding routine to service the interrupt.
+      It should prioritize the devices interrupting at that level.  It must
+      be accessable through an internal interface only to allow low level users
+      to redefine the table entries.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Information needed :
+
+  1) Must define and support a WARMSTART entry point into the system.
+     This entry point should cleanly re-initialize the system if possible.
+     Therefore, if it can be done, currently opened files should not be lost.
+     It should clear out and re-initialize ALL system data structures and
+     call all default driers (UnitInstall) to allow them to do the same.
+

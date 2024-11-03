@@ -1,0 +1,40 @@
+UNIT util_dcl;
+
+{$%+}
+
+INTERFACE
+
+CONST
+      r_min_exp = -127;
+      r_max_exp = 127;
+      d_min_exp = -1023;
+      d_max_exp = 1023;
+ {??ck min/max exp}
+
+TYPE TYPES = 1..5;
+     ERROR_TYPE=(none, underflow, overflow, domain_error, 
+                 not_a_number, infeasible); 
+     SNGL = RECORD
+       CASE BOOLEAN OF
+         TRUE: (REEL: REAL);
+         FALSE: (INT: LONGINT)
+     END;
+     FAKE_REAL = LONGINT;
+     DBLE = ARRAY [1..2] OF LONGINT;
+     COMPLEX = RECORD
+       RE: REAL;
+       IM: REAL
+     END;
+     UNP_REAL = RECORD
+       UPPER: LONGINT;
+       LOWER: LONGINT;
+       EXP: INTEGER;
+       SGN: -128..127;
+       KND: TYPES 
+     END;
+     SIX_CHAR_NAME = PACKED ARRAY[1..6] OF CHAR;
+
+IMPLEMENTATION
+
+END.
+

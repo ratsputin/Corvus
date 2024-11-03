@@ -1,0 +1,153 @@
+ 
+                                                                     Page   1
+                                                                     01-12-84 
+                                                                     00:12:41 
+ JG IC  Line#   Source Line       IBM Personal Computer Pascal Compiler V1.00 
+    00      1   program diskx;
+            2   {MSDOS 2.0 link check}
+            3    
+    10      4   const nblk  = 40;
+    10      5         fname = 'C:JUNKDATA';
+            6    
+    10      7   type  buffer= array [0..511] of byte;
+            8    
+    10      9   var   f: file of buffer;
+    10     10         terminalin: file of char;
+    10     11         pass,err,i,k: word;
+    10     12         buf1,buf2: buffer;
+           13    
+    20     14   function keypress: boolean;
+           15       {returns true if key read }
+           16       {        false if no key available}
+    20     17       begin
+  / 21     18       get(terminalin);
+  = 21     19       keypress := terminalin^ <> chr(0);
+    10     20       end;
+
+ Symtab    20   Offset Length   Variable - KEYPRESS                       
+                -    0      6   Return offset, Frame length
+                -    4      1   (function return)  :            Boolean
+
+           21    
+    10     22   procedure chkIO;
+    20     23       var ch: char;
+    20     24       begin
+    21     25       if f.errs <> 0 then begin
+    22     26           writeln;
+           26   --------------^Warning 238 Assumed OUTPUT
+    22     27           write ('**** I/O error ',i:1,', continue? [Y/N]: ');
+           27   --------------^Warning 238 Assumed OUTPUT
+    22     28           read(ch); writeln;
+           28   ------------^Warning 237 Assumed INPUT
+           28   ------------------------^Warning 238 Assumed OUTPUT
+    22     29           if (ch = 'N') or (ch = 'n') then begin
+  / 22     30               discard(f); endxqq; end;
+           30   -----------------------------^303 Unknown Identifier Skip State
+           30   ment
+           30   -----------------187 End Skip^
+    21     31           end;
+    10     32       end;
+
+ Symtab    32   Offset Length   Variable - CHKIO                          
+
+ CHKIO
+ 
+                                                                     Page   2
+                                                                     01-12-84 
+                                                                     00:12:46 
+ JG IC  Line#   Source Line       IBM Personal Computer Pascal Compiler V1.00 
+                -    0      6   Return offset, Frame length
+                -    4      1   CH                             :Char    
+
+           33    
+    20     34   procedure fillbuff (p,b: word);
+    20     35       var i,n: word;
+    20     36       begin
+    21     37       n := p+b;
+    21     38       for i := 0 to 511 do begin
+  = 21     39           buf1[i] := n mod 256; n := n+1; end;
+           39   --------------^Warning 199 Integer Type Not Compatible With Wor
+           39   d Type
+    10     40       end;
+
+ Symtab    40   Offset Length   Variable - FILLBUFF                       
+                -    4     12   Return offset, Frame length
+                -    0      2   P                              :Word    ValueP 
+                -    2      2   B                              :Word    ValueP 
+                -    8      2   I                              :Word    
+                -   10      2   N                              :Word    
+
+           41    
+    10     42   begin { diskx }
+           43   {for keypress}
+    11     44   terminalin.mode := terminal;
+    11     45   assign(terminalin,'USER'); reset(terminalin);
+           46    
+    11     47   assign(f,fname);
+    11     48   pass := 0; err := 0;
+    11     49   repeat
+    12     50       write('O'); f.trap := true;
+           50   ---------^Warning 238 Assumed OUTPUT
+    12     51       rewrite(f); f.trap := true; chkIO;
+    12     52       for i := 0 to nblk-1 do begin
+    13     53           fillbuff(pass,i);
+    13     54           write('W');
+           54   -------------^Warning 238 Assumed OUTPUT
+    13     55           f^ := buf1; put(f); chkIO;
+    12     56           end;
+           57    
+    12     58       write('C');
+           58   ---------^Warning 238 Assumed OUTPUT
+    12     59       close(f); f.trap := true; chkIO;
+    12     60       write('o');
+           60   ---------^Warning 238 Assumed OUTPUT
+    12     61       reset(f); f.trap := true; chkIO;
+
+ DISKX
+ 
+                                                                     Page   3
+                                                                     01-12-84 
+                                                                     00:13:25 
+ JG IC  Line#   Source Line       IBM Personal Computer Pascal Compiler V1.00 
+    12     62       for i := 0 to nblk-1 do begin
+    13     63           fillbuff(pass,i);
+    13     64           write('r');
+           64   -------------^Warning 238 Assumed OUTPUT
+    13     65           get(f); chkIO; f^ := buf1;
+    13     66           if (buf1 <> buf2) then begin
+           66   -----------------------^191 Invalid Value Type For Operator Or 
+           66   Function
+    14     67               err := err+1; writeln;
+           67   ------Warning 238 Assumed OUTPUT^
+    13     68               writeln('Error on block: ',i:1); end;
+           68   -------------------^Warning 238 Assumed OUTPUT
+    12     69           end;
+           70    
+    12     71       write('c');
+           71   ---------^Warning 238 Assumed OUTPUT
+    12     72       close(f); f.trap := true; chkIO;
+    12     73       writeln;
+           73   ----------^Warning 238 Assumed OUTPUT
+    12     74       pass := pass+1;
+    12     75       writeln('pass = ',pass:1,'  error = ',err:1);
+           75   -----------^Warning 238 Assumed OUTPUT
+    11     76       until(keypress);
+    11     77   writeln;
+           77   ------^Warning 238 Assumed OUTPUT
+    11     78   reset(f); f.trap := true; discard(f);
+    00     79   end.
+
+ Symtab    79   Offset Length   Variable 
+                     0   2816   Return offset, Frame length
+                     2   1146   F                              :File    Static 
+                  1786      2   ERR                            :Word    Static 
+                  1788      2   I                              :Word    Static 
+                  1790      2   K                              :Word    Static 
+                  1792    512   BUF1                           :Array   Static 
+                  2304    512   BUF2                           :Array   Static 
+                  1784      2   PASS                           :Word    Static 
+                  1148    636   TERMINALIN                     :File    Static 
+
+                 
+                Errors  Warns  In Pass One 
+                     3     16   

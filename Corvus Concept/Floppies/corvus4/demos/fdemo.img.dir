@@ -1,0 +1,9 @@
+
+Directory of UCSD disk image file 'fdemo.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 1 files,  0 to 6 (6), eov 500, size 493, free 1
+
+ 1: PAT.EPSONMX     Data 22-Jan-83    6-   7(   1),   512+144=   656 bytes

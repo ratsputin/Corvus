@@ -1,0 +1,14 @@
+lnkmap.text[65]
+
+CC.WP
+userio
+util
+wksp
+kernel
+main
+/wpspec/cs.vsiutxt
+/ccutil/c2lib
+cc.vsixdbm
+/ccutil/cclib
+!paslib
+

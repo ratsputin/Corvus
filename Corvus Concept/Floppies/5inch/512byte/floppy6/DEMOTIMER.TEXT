@@ -1,0 +1,5 @@
+nullvec
+assign timer.drv 16 -b timer 34
+ls /
+setsr 2400
+timer1

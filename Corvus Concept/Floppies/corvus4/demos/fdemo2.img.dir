@@ -1,0 +1,16 @@
+
+Directory of UCSD disk image file 'fdemo2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FDEMO2 has 8 files,  0 to 6 (6), eov 500, size 5, free 8
+
+ 1: DRIVE.HPIC      Data  2-Dec-82    6-  13(   7),  3584+512=  4096 bytes
+ 2: ED1.16.HPIC     Data  2-Dec-82   13- 110(  97), 49664+512= 50176 bytes
+ 3: ED2.16.HPIC     Data  2-Dec-82  110- 206(  96), 49152+512= 49664 bytes
+ 4: ED3.16.HPIC     Data 24-Nov-82  206- 302(  96), 49152+512= 49664 bytes
+ 5: FLYER.HPIC      Data 26-Nov-82  302- 403( 101), 51712+512= 52224 bytes
+ 6: GRAPH.HPIC      Data 23-Nov-82  403- 456(  53), 27136+512= 27648 bytes
+ 7: GRLOGO.HPIC     Data 23-Nov-82  456- 466(  10),  5120+512=  5632 bytes
+ 8: LOGO2.HPIC      Data  7-Aug-82  466- 495(  29), 14848+512= 15360 bytes

@@ -1,0 +1,340 @@
+
+-----------------------------------------------------------------
+
+
+
+                     GENERAL INFORMATION
+                     -------------------
+
+
+How To Enter Data
+-----------------
+
+To put data into LogiCalc, first move the cursor, using the
+cursor arrow keys, to the cell where data is to be entered.
+Next, type the information you desire to enter.  Then press
+[RETURN] or [ENTER].
+
+
+To enter expressions or formulas, move the cursor to the
+cell where the result is to appear.  Enter the expression
+and press [RETURN].  For example, to add cell A1 to cell A2
+and put the result in cell A3:
+
+       Move the cursor to cell A3.
+
+       Type (A1+A2)
+
+       Press [RETURN]
+
+The result will appear in cell A3.
+
+
+The  >  is used to specify a range of cells.  A1>A3 means
+the cells A1, A2 and A3.  A1>C1 means cells A1, B1 and C1.
+
+
+Function Keys
+-------------
+
+Ten function key labels are displayed along the bottom of
+the screen.  These are associated with the ten function
+keys, [F1] - [F10], on the top of the keyboard.
+
+
+Each label displays one or two functions.  The lower
+function is performed when the function key is pressed.  If
+the [SHIFT] key is held down, the upper function is
+performed when the function key is pressed.  For example:
+
+                        [F1]  =  Replicate
+                [SHIFT] [F1]  =  Delete Cell
+
+
+A second set of labels apear when the [COMMAND] key is held
+down.  Again, each label displays one or two functions.
+The upper function is performed if the shift key is held
+down.  For example:
+
+              [COMMAND] [F6]  =  Round
+      [SHIFT] [COMMAND] [F6]  =  Round Cell
+
+
+Data Types
+----------
+
+The general data types within LogiCalc are numeric data
+and text data.  LogiCalc tries to determine what type of
+data you are entering by the first character you type.  If
+the first character is a numeric digit, +, -, (, or ), then
+the data is assumed to be numeric;  otherwise, the data is
+assumed to be text.  If you want to change the data type
+while entering data, press the [CellType] function key
+after entering one or more characters.
+
+
+Arithmetic Operators
+--------------------
+
+**             Exponentiation -- where x**y is x to the y
+               power.
+
+*              Multiplication -- where x*y is x times y.
+
+/              Division -- where x/y is x divided by y.
+
+%              Percent -- where y%x is y percentage of the
+               number x.
+
++              Addition -- where x+y is x plus y.
+
+-              Subtraction -- where x-y is x minus y.
+
+
+
+
+-----------------------------------------------------------------
+
+
+
+                   FUNCTIONS AND COMMANDS
+                   ----------------------
+
+
+Label          Description
+--------       -----------
+
+
+AutoForm       Initiates Forms Mode (See DefForm).
+
+ChngType       Changes the entry data type from numeric to
+               text and vice-versa.
+
+ColWidth       Defines current column width.
+
+Copy           Copies a Cell, a Row, a Column, or a Block
+               from one location to another.  Source and
+               destination must be the same size.
+
+Defaults       Sets the default flags of ColWidth, Precsion,
+               Round, Protect, Order, AutoCalc and Advance.
+
+DefForm        Sets cell as an element of a form for use
+               with AutoForm.
+
+Del Cell       Deletes the current cell.
+
+Delete         Displays labels that allow you to delete a
+               cell, a column, a row, all unprotected
+               cells, or all cells.
+
+Dump           Dumps the contents of the current model to
+               the screen, a printer, or a file.
+
+Edit           Allows you to edit the contents of the
+               current cell.
+
+Exit           Returns you to CCOS Dispatcher Level.
+
+GoTo           Moves cursor to specified location.
+
+Help           To exit Help press the [ESC] key.
+
+Insert         Inserts Row or Column at the cursor location.
+
+ListVol        Lists files from a volume directory.
+
+Load           Loads the specified LogiCalc file into the
+               spreadsheet.
+
+Lock           Keeps specified rows and columns form beign
+               scrolled off the screen.
+
+Merge          Merges a specified LogiCalc file with the
+               currently displayed spreadsheet not deleting
+               existing cells.
+
+MoveDisp       Shifts the display so that the current cell
+               becomes the top left corner of the window.
+
+Precsion       Sets decimal precision for column or cell.
+
+Print          Formats the model into a report and writes it to
+               the screen, a printer, or a text file.
+
+ProtCell       Changes the protection attributes of the
+               current cell.
+
+Protect        Displays labels that allow you to change
+               protection on a column, a cell, or all cells.
+
+Recalc         Recalculates a cell or the complete
+               spreadsheet.
+
+Round          Displays labels that allow you to set or
+               clear rounding for a column or cell.
+
+RoundCel       Changes the rounding attributes of the
+               current cell.
+
+Replcate       Replicates a cell, column, or row into
+               multiple cells, columns, or rows.
+
+Save           Saves the currently displayed spreadsheet to
+               a file.
+
+
+
+Slash Commands  (must be first 2 characters entered)
+--------------
+
+/C             Centers entry in column.
+
+/L             Left justifies entry in column.
+
+/R             Right justifies entry in column.
+
+/P             Page break command.
+
+/T             Title command -- allows text to cross column
+               boundaries.
+
+/=             Repeat characters -- repeats character string
+               across the width of a column.
+
+
+
+
+Miscellaneous Functions
+-----------------------
+
+
+~              Comment function -- allows a text comment to be
+               linked to a numeric data entry, but not displayed.
+
+
+
+System Functions
+----------------
+
+The system function use the following form:
+
+   +NAME(cell, cellStart>cellEnd, expression, ... )
+
+
+AVG            Returns the average of the given range.
+
+               Example:   +AVG(A1>A5)
+
+CNT            Returns the number of cells containing numeric
+               entries in the given range.
+
+               Example:   +CNT(A1>A5)
+
+MAX            Returns the maximum value of the specified
+               cells.
+
+               Example:   +MAX(A1>A5,B6,12,C2>F2)
+
+MIN            Returns the minimum value of the specified
+               cells.
+
+               Example:   +MIN(A1>A5,B1>B3,C2)
+
+SUM            Returns the numeric sum of the given ranges.
+
+               Example:   +SUM(A1>A3,C1>E1)
+
+
+
+
+Mathematical Functions
+----------------------
+
+
+SQRT           Square root -- SQRT(x) gives square root of x.
+
+               Example:   12 + SQRT(4)
+
+LN             Natural logarithm -- LN(x) computes the
+               natural logarithm of X.
+
+EXP            Exponential -- EXP(x) computes the exponential
+               of x, i.e. e**x.
+
+ABS            Absolute value -- ABS(X) gives absolute value of
+               x.
+
+               Example:   +ABS(C3)
+
+SIN            Sine value -- SIN(x) gives the sine of x in
+               radians.
+
+               Example:   +SIN(3.1415)
+
+COS            Cosine value -- COS(x) gives the cosine of x
+               in radians.
+
+ATAN           Arctangent value --  ATAN(x) gives the arctangent
+               of x in radians.
+
+TRUNC          Truncate value -- TRUNC(x) tuncates x to
+               largest whole integer.
+
+               Example:   +TRUNC(3.76)
+
+
+Linear Regression Functions
+---------------------------
+
+REGR           Computes the equation for the straight line in a
+               linear regression, and returns the computed mean
+               for the dependent variable.
+
+PROJ           Computes the dependent value for a specified
+               independent value.
+
+DEPD           Computes the independent value for a specified
+               dependent value.
+
+SLOPE          Computes the slope of the straight line of the
+               linear regression equation.
+
+
+
+Calculator Function
+-------------------
+
+The Calculator function is activated by entering an
+expression followed by a question mark instead of [RETURN].
+For example:
+
+       Type 2+2?
+
+The Command window displays the expression and the result.
+
+
+
+User-Defined Expressions
+------------------------
+
+!(!)           User-defined expressions are expressions that
+               have a single variable represented by an
+               exclamation point, e.g. !(!*!*!) is
+               equivalent to x cubed.  An initial
+               exclamation point declares the expression as
+               user-defined.
+
+
+
+Conditional Expressions
+-----------------------
+
+Conditional statements of the IF...THEN...ELSE form, e.g.
+(A1>0):B1:"negative" would be interpreted:  if value of cell
+A1 is greater than 0, enter the value of cell B1, else enter
+the string "negative."
+
+
+
+-----------------------------------------------------------------

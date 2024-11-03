@@ -1,0 +1,848 @@
+
+{$S VT100SEG}
+PROCEDURE DoVT100;
+
+LABEL 10,20;
+
+CONST
+      CONS   = 1;     { CONSOLE  CRT }
+      DCOM   = 31;    { DATACOMM UNIT }
+      KBRD   = 35;    { KEYBOARD UNIT }
+
+      Cmax   = 30;    { MAX NUMBER of CHARACTERS ALLOWED in ESCAPE SEQUENCE}
+
+      UNDR   = 72;    { UNDERSCORE BIT ENCODED for ESC e}
+      BOLD   = 65;    { BOLD FACE BIT ENCODED}
+      ATOFF  = 64;    { ATTRIBUTES OFF}
+      BLNK   = 64;    { NO BLINK}
+      INVRS  = 68;    { REVERSE VIDEO}
+
+
+      LFch   = '\0A';
+      CRch   = '\0D';
+      CANch  = '\18';
+      SUBch  = '\1A';
+      ESCch  = '\1B';
+      MONch  = '\1D'; {set MONITOR MODE CTRL ]}
+      USch   = '\1F';
+      SHRPch = '#';   { $23 }
+      LPRNch = '(';   { $28 }
+      RPRNch = ')';   { $29 }
+      DOTch  = '.';   { $2E }
+      SEMIch = ';';   { $3B }
+      EQUch  = '=';   { $3D }
+      Och    = 'O';   { $4F }
+      LBRKch = '[';   { $5B }
+      SMLEch = 'e';   { $65 }
+
+TYPE
+      { Types of escape sequences:                         }
+      {     csi  = standard control seq initialiser  ESC [ }
+      {     aux  = auxiliary keypad mode             ESC O }
+      {     decp = dec private mode                  ESC # }
+      {     g0c  = character select mode             ESC ( }
+      {     g1c  = character select mode             ESC ) }
+      {     smpl = simple escape sequence            ESC   }
+      {     null = no escape sequence found                }
+      SEQ = (CSI,AUX,DECP,G0C,G1C,SMPL,NULL);
+
+      SeqTrm = set of char;
+      SeqBuf = packed array [0..Cmax] of char;
+      str16  = string[16];
+
+VAR
+      ReplayFile:  interactive;
+      ReplayName:  string80;
+      ReplayMode:  boolean;
+      finished:    boolean;
+      haverem:     boolean;
+
+      MonitorMode: boolean;
+      CSItrm:      SeqTrm;
+      AUXtrm:      SeqTrm;
+      DECtrm:      SeqTrm;
+      G0Ctrm:      SeqTrm;
+      G1Ctrm:      SeqTrm;
+      CmdID:       SeqTrm;
+    { C: char;  }
+      i:           integer;
+      inESCseq:    boolean;  {TRUE if AN ESCAPE CODE IS FOUND in STREAM FROM HOST}
+      CurSeq:      SEQ;      { A GIANT SWITCH VARIABLE}
+
+      { VT100 modes         Set (TRUE)           Reset (FALSE)         }
+      MDnewline: boolean; { new line             line feed             }
+      MDcurkey:  boolean; { application          cursor                }
+      MDvt100:   boolean; { ANSI                 VT52                  }
+      MD132col:  boolean; { 132 column           80 column             }
+      MDscroll:  boolean; { smooth               jump                  }
+      MDscreen:  boolean; { reverse              normal                }
+      MDorigin:  boolean; { relative             absolute              }
+      MDwrap:    boolean; { on                   off                   }
+      MDautorep: boolean; { on                   off                   }
+      MDintlace: boolean; { on                   off                   }
+      MDgraphic: boolean; { on                   off                   }
+      MDkeypad:  boolean; { application          numeric               }
+
+      RawHost: SeqBuf;  { raw HOST to TERMINAL escape sequence         }
+      TrnHost: SeqBuf;  { translated HOST to TERMINAL escape sequence  }
+      RawKybd: SeqBuf;  { raw KEYBOARD to HOST escape sequence         }
+      TrnKybd: SeqBuf;  { translated KEYBOARD to HOST escape sequence  }
+      RHidx,THidx,RKidx,TKidx: 0..Cmax;  { escape seq buffer indexes   }
+
+{$P}
+{ CanESC --------------------------------------------------------------}
+{ Cancels a host to terminal ESCAPE sequence
+{----------------------------------------------------------------------}
+PROCEDURE CanESC;
+      begin
+      CurSeq := NULL; inESCseq := FALSE;
+      RHidx := 0; THidx := 0;
+      end;
+
+{ WrCONS --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE WrCONS (ln: integer);
+      begin UnitWrite (CONS,TrnHost,ln); end;
+
+{ WrDCOM --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE WrDCOM (ln: integer);
+      begin UnitWrite (DCOM,TrnKybd,ln); end;
+
+{ DumpRaw -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DumpRaw (st: str16);
+      var i: integer;
+      begin
+      write (crtInvVdo,st:8,':  ');
+      for i := 0 to RHidx-1 do begin
+          PutHexByte (ord(RawHost[i])); write (' '); end;
+      writeln (crtEraEOL);
+      write (' ':8,': ');
+      for i := 1 to RHidx-1 do write (RawHost[i]);
+      writeln (crtEraEOL,crtNorVdo);
+      end;
+
+{ CharEnhance ---------------------------------------------------------}
+{ Convert a character at position x in RawHost to Concept character
+{ enhancement
+{----------------------------------------------------------------------}
+FUNCTION CharEnhance (i: integer): char;
+      begin
+      case RawHost[i] of
+                '0': CharEnhance := chr (ATOFF);
+                '1': CharEnhance := chr (BOLD);
+                '4': CharEnhance := chr (UNDR);
+                '5': CharEnhance := chr (BLNK);
+                '7': CharEnhance := chr (INVRS);
+          otherwise: CharEnhance := chr (ATOFF);
+          end; {case}
+      end;
+
+{ FindNxt -------------------------------------------------------------}
+{ starting at c1 search for ch in SeqBuf until c2 is reached and
+{ return position
+{----------------------------------------------------------------------}
+FUNCTION FindNxt (cb: SeqBuf; ch: char; c1,c2: integer): integer;
+      var i: integer;
+      begin
+      FindNxt := -1;
+      for i := c1 to c2 do
+          if cb[i] = ch then begin FindNxt := i; exit (FindNxt); end;
+      end;
+
+{ ConvStr -------------------------------------------------------------}
+{ Convert a string (in SeqBuf between c1 and c2) of 3 chars or less to
+{ decimal equivalent
+{----------------------------------------------------------------------}
+FUNCTION ConvStr (c1,c2: integer; cb: SeqBuf): integer;
+      var i,j,k: integer;
+      begin
+      i := c2-c1;
+      case i of
+              0: k := 1;
+              1: k := 10;
+              2: k := 100;
+      otherwise: begin
+                 writeln;
+                 StatMsg ('Invalid conversion value'); write (pbeep);
+                 DumpRaw ('');
+                 ConvStr := -1;
+                 exit (ConvStr);
+                 end;
+            end; {case}
+      i := 0;
+      for j := c1 to c2 do begin
+          i := i + ((ord(cb[j]) - ord('0')) * k);
+          k := k DIV 10;
+          end; {for}
+      ConvStr := i;
+      end;
+
+{ PutScreen -----------------------------------------------------------}
+{ Put a character out to screen
+{----------------------------------------------------------------------}
+PROCEDURE PutScreen (c: char);
+      begin write (c); end;
+
+{ cursmov -------------------------------------------------------------}
+{ set up escape buffer for cursor moving and move cursor
+{----------------------------------------------------------------------}
+PROCEDURE cursmov (c: char);
+      var i,j: integer;
+      begin
+      TrnHost[0] := ESCch; TrnHost[1] := c;
+      if RHidx <= 3
+          then i := 1
+          else i := ConvStr (2,RHidx-2,RawHost);
+      for j := 1 to i do WrCONS (2);
+      end;
+
+{$P}
+{ CSIproc -------------------------------------------------------------}
+{ Process CSI escape sequences
+{----------------------------------------------------------------------}
+PROCEDURE CSIproc (c: char);
+      label 10;
+      var i,j,k,l,m: integer; ch: char;
+      begin
+      TrnHost[0] := ESCch;
+      case c of  { based on last character of escape sequence }
+
+{ move cursor up ------------------------------------------- ESC [ n A }
+{----------------------------------------------------------------------}
+'A': cursmov ('A'); { cursor up       }
+
+{ move cursor down ----------------------------------------- ESC [ n B }
+{----------------------------------------------------------------------}
+'B': cursmov ('B'); { cursor down     }
+
+{ move cursor forward -------------------------------------- ESC [ n C }
+{----------------------------------------------------------------------}
+'C': cursmov ('C'); { cursor forward  }
+
+{ move cursor backward ------------------------------------- ESC [ n D }
+{----------------------------------------------------------------------}
+'D': cursmov ('D'); { cursor backward }
+
+{ position cursor ---------------------------------- ESC [ row ; col H }
+{----------------------------------------------------------------------}
+'H': begin
+ 10: TrnHost[1] := EQUch; TrnHost[2] := '\00'; TrnHost[3] := '\00';
+     i := FindNxt (RawHost,SEMIch,2,RHidx-1);
+     if (i > 2) then begin
+         TrnHost[2] := chr (ConvStr (i+1,RHidx-2,RawHost) - 1);
+         TrnHost[3] := chr (ConvStr (2,i-1,RawHost) - 1);
+         if TrnHost[2] = '\FF' then TrnHost[2] := '\00';
+         if TrnHost[3] = '\FF' then TrnHost[3] := '\00';
+         end;
+     WrCONS (4);
+     end;
+
+{ erase screen --------------------------------------------- ESC [ n J }
+{ where n = 0   erase to end of screen
+{       n = 1   erase from beginning of screen
+{       n = 2   erase entire screen
+{----------------------------------------------------------------------}
+'J': begin
+     if ReplayMode then CrtPause (ch);
+     case RawHost[2] of
+           '0': begin {erase to end of screen }
+                TrnHost[1] := 'Y';
+                WrCONS (2);
+                end;
+           '1': begin {erase from beginning of screen}
+                DumpRaw ('ESC [1J'); { --- to be done --- };
+                end;
+           '2': begin {erase entire screen }
+                TrnHost[1] := 'J';
+                WrCONS (2);
+                end;
+           end; {case}
+     end;
+
+{ erase line ----------------------------------------------- ESC [ n K }
+{ where n = 0   erase to end of line
+{       n = 1   erase from beginning of line
+{       n = 2   erase line
+{----------------------------------------------------------------------}
+'K': begin
+     case RawHost[2] of
+         '0': begin
+              TrnHost[1] := 'K';
+              WrCONS (2);
+              end;
+         '1': DumpRaw ('ESC [1K'); { --- to be done --- };
+         '2': DumpRaw ('ESC [2K'); { --- to be done --- };
+         end; {case}
+     end;
+
+{ report device attributes --------------------------------- ESC [ n c }
+{ Send  ESC [ ? 1 ; 0 c  to host (VT100 with no options)
+{----------------------------------------------------------------------}
+'c': begin
+     TrnKybd[0] := ESC;
+     TrnKybd[1] := '[';
+     TrnKybd[2] := '?';
+     TrnKybd[3] := '1';
+     TrnKybd[4] := ';';
+     TrnKybd[5] := '0';
+     TrnKybd[6] := 'c';
+     if NOT ReplayMode then WrDCOM (7);
+     end;
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'f': { for current purposes, same as H above }
+     goto 10;
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'g': begin end;       {tab clear modes ---eventually have to simulate}
+
+{ set internal mode ----------------------------------- ESC [ ? mode h }
+{----------------------------------------------------------------------}
+'h': if RHidx > 3 then begin
+     case RawHost[RHidx-2] of
+         '0': MDnewline := TRUE;  { new line    }
+         '1': MDcurkey  := TRUE;  { application }
+         '2': MDvt100   := TRUE;  { ANSI        }
+         '3': MD132col  := TRUE;  { 132 column  }
+         '4': MDscroll  := TRUE;  { smooth      }
+         '5': MDscreen  := TRUE;  { reverse     }
+         '6': MDorigin  := TRUE;  { relative    }
+         '7': MDwrap    := TRUE;  { on          }
+         '8': MDautorep := TRUE;  { on          }
+         '9': MDintlace := TRUE;  { on          }
+         end; {case}
+     end;
+
+{ reset internal mode --------------------------------- ESC [ ? mode l }
+{----------------------------------------------------------------------}
+'l': if RHidx > 3 then begin
+     case RawHost[RHidx-2] of
+         '0': MDnewline := FALSE; { line feed   }
+         '1': MDcurkey  := FALSE; { cursor      }
+         '2': MDvt100   := FALSE; { VT52        }
+         '3': MD132col  := FALSE; { 80 column   }
+         '4': MDscroll  := FALSE; { jump        }
+         '5': MDscreen  := FALSE; { normal      }
+         '6': MDorigin  := FALSE; { absolute    }
+         '7': MDwrap    := FALSE; { off         }
+         '8': MDautorep := FALSE; { off         }
+         '9': MDintlace := FALSE; { off         }
+         end; {case}
+     end;
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'m': { select graphic rendition        }
+     { ESC [ #;..;# m   or   ESC [ # m }
+     begin
+     TrnHost[1] := SMLEch;
+     j := 2;
+     while j < RHidx do begin
+         TrnHost[2] := CharEnhance (j);
+         WrCONS (3);
+         j := j+2;
+         end;
+     end;
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'n': { device status report: ESC [ 0 n   or   ESC [ 3 n }
+     { * = 6 then report status as ESC [ row; col R     }
+     begin end;
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'q': begin end;       {load led displays - not implemented }
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'r': begin {dumpraw ('ESC [ r')}; end;      {???????????}
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'x': begin end;       {request to sent terminal parameters --- to be done}
+
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+'y': begin end;       {invoke confidence tests??? - not implemented}
+
+{ unknown command -----------------------------------------------------}
+{----------------------------------------------------------------------}
+otherwise: DumpRaw ('CSIproc');
+
+           end; {case}
+      CanESC;
+      end;
+
+{$P}
+{ AUXproc -------------------------------------------------------------}
+{ Process an AUX escape sequence
+{----------------------------------------------------------------------}
+PROCEDURE AUXproc (c: char);
+      begin
+      TrnHost[0] := ESCch;
+      case c of
+
+{ move cursor up ------------------------------------------- ESC O n A }
+{----------------------------------------------------------------------}
+'A': cursmov ('A'); { cursor up       }
+
+{ move cursor down ----------------------------------------- ESC O n B }
+{----------------------------------------------------------------------}
+'B': cursmov ('B'); { cursor down     }
+
+{ move cursor forward -------------------------------------- ESC O n C }
+{----------------------------------------------------------------------}
+'C': cursmov ('C'); { cursor forward  }
+
+{ move cursor backward ------------------------------------- ESC O n D }
+{----------------------------------------------------------------------}
+'D': cursmov ('D'); { cursor backward }
+
+{ unknown command -----------------------------------------------------}
+{----------------------------------------------------------------------}
+otherwise: DumpRaw ('AUXproc');
+
+           end; {case}
+      CanESC;
+      end;
+
+{$P}
+{ DECproc -------------------------------------------------------------}
+{ Process a DEC escape sequence
+{----------------------------------------------------------------------}
+PROCEDURE DECproc (c: char);
+      begin
+      TrnHost[0] := ESCch;
+      case c of
+
+{ change line to double high - top half ---------------------- ESC # 3 }
+{----------------------------------------------------------------------}
+'3': begin { --- fix --- }; end;
+
+{ change line to double high - bottom half ------------------- ESC # 4 }
+{----------------------------------------------------------------------}
+'4': begin { --- fix --- }; end;
+
+{ change line to single width single height ------------------ ESC # 5 }
+{----------------------------------------------------------------------}
+'5': begin { --- fix --- }; end;
+
+{ change line to double width single height ------------------ ESC # 6 }
+{----------------------------------------------------------------------}
+'6': begin { --- fix --- }; end;
+
+{ unknown command -----------------------------------------------------}
+{----------------------------------------------------------------------}
+otherwise: DumpRaw ('DECproc');
+
+           end; {case}
+      CanESC;
+      end;
+
+{$P}
+{ G0Cproc -------------------------------------------------------------}
+{ Process a G0C escape sequence
+{----------------------------------------------------------------------}
+PROCEDURE G0Cproc (c: char);
+      begin
+      DumpRaw ('G0Cproc');
+      CanESC;
+      end;
+
+{ G1Cproc -------------------------------------------------------------}
+{ Process a G1C escape sequence
+{----------------------------------------------------------------------}
+PROCEDURE G1Cproc (c: char);
+      begin
+      DumpRaw ('G1Cproc');
+      CanESC;
+      end;
+
+{$P}
+{ SMPproc -------------------------------------------------------------}
+{ Process a SMP escape sequence
+{----------------------------------------------------------------------}
+PROCEDURE SMPproc (c: char);
+      begin
+      TrnHost[0] := ESCch;
+      case RawHost[1] of
+
+{ move cursor up ----------------------------------------------- ESC A }
+{----------------------------------------------------------------------}
+'A': begin TrnHost[1] := 'A'; WrCONS (2); end;
+
+{ move cursor down --------------------------------------------- ESC B }
+{----------------------------------------------------------------------}
+'B': begin TrnHost[1] := 'B'; WrCONS (2); end;
+
+{ move cursor forward ------------------------------------------ ESC C }
+{----------------------------------------------------------------------}
+'C': begin TrnHost[1] := 'C'; WrCONS (2); end;
+
+{ move cursor backward ----------------------------------------- ESC D }
+{----------------------------------------------------------------------}
+'D': begin TrnHost[1] := 'D'; WrCONS (2); end;
+
+{ enter graphics mode ------------------------------------------ ESC F }
+{----------------------------------------------------------------------}
+'F': begin
+     DumpRaw ('ESC F'); { --- to be done --- };
+     end;
+
+{ exit graphics mode ------------------------------------------- ESC G }
+{----------------------------------------------------------------------}
+'G': begin
+     DumpRaw ('ESC G'); { --- to be done --- };
+     end;
+
+{ home cursor -------------------------------------------------- ESC H }
+{----------------------------------------------------------------------}
+'H': begin TrnHost[1] := 'H'; WrCONS (2); end;
+
+{ reverse line feed -------------------------------------------- ESC I }
+{----------------------------------------------------------------------}
+'I': begin TrnHost[1] := 'A'; WrCONS (2); end;
+
+{ erase to end of screen --------------------------------------- ESC J }
+{----------------------------------------------------------------------}
+'J': begin TrnHost[1] := 'Y'; WrCONS (2); end;
+
+{ erase to end of line ----------------------------------------- ESC K }
+{----------------------------------------------------------------------}
+'K': begin TrnHost[1] := 'K'; WrCONS (2); end;
+
+{ cursor addressing ------------------------------------ ESC Y lin col }
+{----------------------------------------------------------------------}
+'Y': if RHidx = 4 then begin
+     TrnHost[1] := EQUch;
+     TrnHost[2] := chr(ord(RawHost[3]) - ord(USch)); {COLUMN}
+     TrnHost[3] := chr(ord(RawHost[2]) - ord(USch)); {ROW}
+     WrCONS (4);
+     end;
+
+{ send ID sequence --------------------------------------------- ESC Z }
+{----------------------------------------------------------------------}
+'Z': begin
+     TrnKybd[0] := ESC; TrnKybd[1] := '/'; TrnKybd[2] := 'Z';
+     WrDCOM (3);
+     end;
+
+{ graphic processing option on --------------------------------- ESC 1 }
+{----------------------------------------------------------------------}
+'1': MDgraphic := TRUE;
+
+{ graphic processing option off -------------------------------- ESC 2 }
+{----------------------------------------------------------------------}
+'2': MDgraphic := FALSE;
+
+{ enter alternate keypad mode ---------------------------------- ESC = }
+{----------------------------------------------------------------------}
+'=': MDkeypad := TRUE;
+
+{ exit alternate keypad mode ----------------------------------- ESC > }
+{----------------------------------------------------------------------}
+'>': MDkeypad := FALSE;
+
+{ enter VT100 mode --------------------------------------------- ESC < }
+{----------------------------------------------------------------------}
+'<': MDvt100 := TRUE;
+
+{ unknown command -----------------------------------------------------}
+{----------------------------------------------------------------------}
+otherwise: DumpRaw ('SMPproc');
+
+           end; {case}
+      CanESC;
+      end;
+
+{$P}
+{ Look100 -------------------------------------------------------------}
+{ Look for a VT100 escape sequence
+{----------------------------------------------------------------------}
+PROCEDURE Look100 (c: char);
+      var cc: char;
+      begin
+      if RHidx < 2 then exit (Look100);
+      case CurSeq of
+
+NULL: { usually only entered the very first time in an ESC seq   }
+      begin
+      cc := RawHost[1]; { in an ESCAPE sequence this character   }
+                        { is the discriminator -- eg. RawHost[0] }
+                        { "ESC" and cc is what makes a unique    }
+                        { discriminator                          }
+      case cc of
+         LBRKch: CurSeq := CSI;  {CSI ESCAPE SEQUENCE}
+            Och: CurSeq := AUX;  {AUXILIARY KEYPAD ESCAPE SEQUENCE}
+         SHRPch: CurSeq := DECP; {DEC PRIVATE ESCAPE SEQUENCE}
+         LPRNch: CurSeq := G0C;  {CHANGE CHARACTER set MODE 0}
+         RPRNch: CurSeq := G1C;  {CHANGE CHARACTER set MODE 1}
+      otherwise: CurSeq := SMPL; {ASSUME A SIMPLE ESCAPE SEQUENCE}
+            end; {case cc of}
+      end;
+
+CSI:  { CSI seq - see if it is completely input yet }
+      if c in CSItrm then CSIproc (c)
+                     else if RHidx >= Cmax then DumpRaw ('CSIseq');
+
+AUX:  { AUX seq - see if it is completely input yet }
+      if c in AUXtrm then AUXproc (c)
+                     else if RHidx >= Cmax then DumpRaw ('AUXseq');
+
+DECP: { DEC seq - see if it is completely input yet }
+      if c in DECtrm then DECproc (c)
+                     else if RHidx >= Cmax then DumpRaw ('DECseq');
+
+G0C:  { G0C seq - see if it is completely input yet }
+      if c in G0Ctrm then G0Cproc (c)
+                     else if RHidx >= Cmax then DumpRaw ('G0Cseq');
+
+G1C:  { G1C seq - see if it is completely input yet }
+      if c in G1Ctrm then G1Cproc (c)
+                     else if RHidx >= Cmax then DumpRaw ('G1Cseq');
+
+      end; {case}
+
+      if CurSeq = SMPL then begin
+            if RawHost[1] = 'Y'
+                then begin if RHidx = 4 then SMPproc (c); end
+                else SMPproc (c);
+            end;
+      end;
+
+{$P}
+{ PutESC --------------------------------------------------------------}
+{ PUT ESCAPE "SEQUENCE" INTO HOLDING PEN until SEQUENCE IS COMPLETE
+{----------------------------------------------------------------------}
+PROCEDURE PutESC (c: char);
+      begin
+      RawHost[RHidx] := c; RHidx := RHidx+1;
+      Look100 (c);
+      end;
+
+{ monitor -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MONITOR (var c: char);
+      begin if c = ESCch then c := '\7F' end;
+
+{ CvtANSIapp ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE CvtANSIapp;
+      begin
+      TrnKybd[0] := RawKybd[0]; TKidx := 1;
+      case RawKybd[0] of
+          '\08': TrnKybd[0] := '\7F';
+          '\1B': begin
+                 case RawKybd[1] of
+         'A','B','C','D': begin
+                          TrnKybd[1] := RawKybd[1]; TKidx := 2;
+                          end;
+                   '\1B': begin { send 1 ESC }; end;
+               otherwise: TKidx := 0;
+                     end; {case}
+                 end;
+            end; {case}
+      end;
+
+{ CvtANSIapp ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE CvtANSInum;
+      begin
+      TrnKybd[0] := RawKybd[0]; TKidx := 1;
+      case RawKybd[0] of
+          '\08': TrnKybd[0] := '\7F';
+          '\1B': begin
+                 case RawKybd[1] of
+         'A','B','C','D': begin
+                          TrnKybd[1] := RawKybd[1]; TKidx := 2;
+                          end;
+                   '\1B': begin { send 1 ESC }; end;
+               otherwise: TKidx := 0;
+                     end; {case}
+                 end;
+            end; {case}
+      end;
+
+{ CvtANSIapp ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE CvtVT52app;
+      begin
+      TrnKybd[0] := RawKybd[0]; TKidx := 1;
+      case RawKybd[0] of
+          '\08': TrnKybd[0] := '\7F';
+          '\1B': begin
+                 case RawKybd[1] of
+         'A','B','C','D': begin
+                          TrnKybd[1] := RawKybd[1]; TKidx := 2;
+                          end;
+                   '\1B': begin { send 1 ESC }; end;
+               otherwise: TKidx := 0;
+                     end; {case}
+                 end;
+            end; {case}
+      end;
+
+{ CvtANSIapp ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE CvtVT52num;
+      begin
+      TrnKybd[0] := RawKybd[0]; TKidx := 1;
+      case RawKybd[0] of
+          '\08': TrnKybd[0] := '\7F';
+          '\1B': begin
+                 case RawKybd[1] of
+         'A','B','C','D': begin
+                          TrnKybd[1] := RawKybd[1]; TKidx := 2;
+                          end;
+                   '\1B': begin { send 1 ESC }; end;
+               otherwise: TKidx := 0;
+                     end; {case}
+                 end;
+            end; {case}
+      end;
+
+{$P}
+{ DoVT100 -------------------------------------------------------------}
+{ VT52/100 emulator
+{----------------------------------------------------------------------}
+      begin
+      { first the codes that terminate the various escape sequences }
+
+      CSItrm := ['A','B','C','D','H','J','K','c','f','g','h','l','m',
+                 'n','q','r','x','y'];
+      AUXtrm := ['M','P','Q','R','S','l','m','n','p','q','r','s','t',
+                 'u','v','w','x','y','z'];
+      DECtrm := ['3','4','5','6','8'];
+      G0Ctrm := ['A','B','0','1','2'];
+      G1Ctrm := ['A','B','0','1','2'];
+
+      {STARTING CHARS for ESCAPE SEQ (AFTER ESC)}
+      CmdID  := [LBRKch,Och,SHRPch,LPRNch,RPRNch];
+
+      MDnewline := FALSE;  { line feed }
+      MDcurkey  := FALSE;  { cursor    }
+      MDvt100   := TRUE;   { VT100     }
+      MD132col  := FALSE;  { 80 column }
+      MDscroll  := FALSE;  { jump      }
+      MDscreen  := FALSE;  { normal    }
+      MDorigin  := FALSE;  { absolute  }
+      MDwrap    := FALSE;  { off       }
+      MDautorep := FALSE;  { off       }
+      MDintlace := FALSE;  { off       }
+      MDgraphic := FALSE;  { off       }
+      MDkeypad  := FALSE;  { numeric   }
+
+      finished := brkpress; finished := FALSE;
+      MonitorMode := FALSE;
+      ReplayMode := FALSE;
+      CanESC;
+
+{$P}
+      if argc <> 0 then begin
+          ReplayName := argv[1]^;
+          for i := 1 to length(ReplayName) do
+              ReplayName[i] := Uppercase (ReplayName[i]);
+          StatMsg (concat('Replaying file ',ReplayName));
+          reset (ReplayFile,ReplayName);
+          if ioresult <> 0
+              then begin
+                  StatMsg (concat('Unable to open file ',ReplayName));
+                  StatMsg (''); write (pbeep);
+                  halt;
+                  end
+              else ReplayMode := TRUE;
+          end;
+
+      while TRUE do begin
+
+10:   if CurrTerm <> VT100 then exit (DoVT100);
+
+      if CR_KBSTAT then begin          { keybd --> remout }
+          keychar := CR_GETKB;
+          if keychar = FUNCPFX then begin
+              service; goto 20; end;
+          if keychar = MONch then begin
+              MonitorMode := NOT MonitorMode; goto 20; end;
+
+          RawKybd[0] := keychar; RKidx := 1;
+          if keychar = ESC then begin
+              RawKybd[1] := CR_GETKB; RKidx := 2;
+              end;
+
+          if MDvt100
+              then begin { VT100 keyboard mode }
+                  if MDkeypad
+                      then CvtANSIapp  { VT100 application mode }
+                      else CvtANSInum; { VT100 numeric mode     }
+                  end
+              else begin { VT52 keyboard mode }
+                  if MDkeypad
+                      then CvtVT52app  { VT52 application mode  }
+                      else CvtVT52num; { VT52 numeric mode      }
+                  end;
+
+          for i := 0 to TKidx-1 do begin
+              if CR_CLEARTOSEND then CR_PUTREM (TrnKybd[i]);
+              if echo then begin
+                  write (TrnKybd[i]);
+                  if RcordFlag then write (RcordFile,TrnKybd[i]);
+                  if PrintFlag then write (PrintFile,TrnKybd[i]);
+                  end;
+              end;
+
+          end;
+
+20:   if ReplayMode
+          then begin
+              if eof (ReplayFile)
+                  then begin
+                      close (ReplayFile);
+                      StatMsg ('End of replay file ....');
+                      ReplayMode := FALSE;
+                      haverem := FALSE;
+                      end
+                  else begin
+                      read (ReplayFile,remchar);
+                      if eoln (ReplayFile) then remchar := CR;
+                      haverem := TRUE;
+                      end;
+              end
+          else begin
+              haverem := CR_REMSTAT;
+              if haverem then remchar := CR_GETREM;
+              end;
+
+      if haverem then begin           { remin --> CRT / rcdfile }
+          remchar := chr(ord(remchar) AND $7F);
+          if (CRFLAG) and (remchar = LF) then begin
+              CRFLAG := FALSE; haverem := FALSE; end;
+          if remchar = '\00' then haverem := FALSE;
+          if remchar = '\7F' then haverem := FALSE;
+          end;
+      if haverem then begin
+          if remchar = CR then CRFLAG := TRUE else CRFLAG := FALSE;
+          if MonitorMode then MONITOR (remchar);
+
+          if (remchar = CANch) OR (remchar = SUBch)
+              then CanESC
+              else if inESCseq
+                 then PutESC (remchar)
+                 else if remchar = ESCch
+                     then begin
+                         inESCseq := TRUE;
+                         PutESC (remchar)
+                         end
+                     else PutScreen (remchar);
+          if RcordFlag then write (RcordFile,remchar);
+          if PrintFlag then write (PrintFile,remchar);
+          end;
+
+      end; {while TRUE do}
+
+      end;
+{$S}

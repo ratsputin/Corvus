@@ -1,0 +1,19 @@
+;
+; File ID: SYSTEM.UPDATE
+;
+; SYSTEM.UPDATE assumes volumes /CCSYS and /CCUTIL exist
+; and have read/write access
+;
+pause Continue
+;
+setvol /FSYSDEV
+krunch -q /CCSYS
+cpyfil -q -vCCSYS code paslib.obj
+krunch -q /CCSYS
+krunch -q /CCUTIL
+cpyfil -q -vCCUTIL cclib.obj cflib.obj c2lib.obj
+krunch -q /CCUTIL
+setvol /CCSYS
+;
+; SYSTEM.UPDATE complete
+;

@@ -1,0 +1,28 @@
+
+Directory of UCSD disk image file 'macsbug.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 20 files,  0 to 6 (6), eov 500, size 13, free 20
+
+ 1: PASINIT.TEXT    Text 15-May-81    6-  12(   6),  3072+512=  3584 bytes
+ 2: PASMATH.TEXT    Text 15-Dec-80   12-  22(  10),  5120+512=  5632 bytes
+ 3: PASMOVE.TEXT    Text 15-Dec-80   22-  32(  10),  5120+512=  5632 bytes
+ 4: PASPWR10.TEXT   Text  7-Dec-81   32-  40(   8),  4096+512=  4608 bytes
+ 5: DUMPSCR         Data 29-Dec-82   40-  45(   5),  2560+512=  3072 bytes
+ 6: DUMPSCR.TEXT    Text 30-Dec-82   45-  55(  10),  5120+512=  5632 bytes
+ 7: DUMPSCR.OBJ     Data 30-Dec-82   55-  59(   4),  2048+512=  2560 bytes
+ 8: PASRIO.TEXT     Text  7-Dec-81   72-  88(  16),  8192+512=  8704 bytes
+ 9: PASSCOMP.TEXT   Text 15-Dec-80   88-  98(  10),  5120+512=  5632 bytes
+10: PASSET.TEXT     Text  7-Dec-81   98- 128(  30), 15360+512= 15872 bytes
+11: PASTRING.TEXT   Text  8-Apr-81  128- 144(  16),  8192+512=  8704 bytes
+12: REAL8.TEXT      Text 22-Apr-82  144- 154(  10),  5120+512=  5632 bytes
+13: SCANFMT.TEXT    Text 22-Apr-82  154- 178(  24), 12288+512= 12800 bytes
+14: SUBRS.TEXT      Text 22-Apr-82  178- 202(  24), 12288+512= 12800 bytes
+15: URDWR.TEXT      Text 22-Apr-82  202- 220(  18),  9216+512=  9728 bytes
+16: BUILDIMAGE.TEXT Text 19-Jul-82  220- 244(  24), 12288+512= 12800 bytes
+17: CCDRVHDR.TEXT   Text  2-Sep-82  244- 256(  12),  6144+512=  6656 bytes
+18: MBUG.CCPT.TEXT  Text 17-Aug-82  256- 480( 224), 114688+512= 115200 bytes
+19: MBUG.NEW.PROM   Data 21-Aug-82  480- 496(  16),  8192+512=  8704 bytes
+20: RANDOM.TEXT     Text 15-Mar-82  496- 500(   4),  2048+512=  2560 bytes

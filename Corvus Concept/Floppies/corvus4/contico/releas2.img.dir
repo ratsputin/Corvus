@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'releas2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume RELEAS2 has 13 files,  0 to 6 (6), eov 500, size 0, free 13
+
+ 1: Z9PCO.TEXT      Text 24-Aug-82    6-  16(  10),  5120+512=  5632 bytes
+ 2: ROBINPCO.TEXT   Text 24-Aug-82   16-  26(  10),  5120+512=  5632 bytes
+ 3: ZNPCO.TEXT      Text 24-Aug-82   26-  40(  14),  7168+512=  7680 bytes
+ 4: SBPCO.TEXT      Text 24-Aug-82   40-  58(  18),  9216+512=  9728 bytes
+ 5: NECPCO.TEXT     Text 24-Aug-82   58-  68(  10),  5120+512=  5632 bytes
+ 6: REL8111.TEXT    Text 24-Aug-82   68-  86(  18),  9216+512=  9728 bytes
+ 7: ACPMPCO.TEXT    Text 24-Aug-82   86-  94(   8),  4096+512=  4608 bytes
+ 8: T3PCO.TEXT      Text 24-Aug-82   94- 106(  12),  6144+512=  6656 bytes
+ 9: IBPCO.TEXT      Text 24-Aug-82  106- 116(  10),  5120+512=  5632 bytes
+10: LSI-11PCO.TEXT  Text 23-Jun-82  116- 120(   4),  2048+512=  2560 bytes
+11: OASHRPCO.TEXT   Text 14-Sep-82  120- 128(   8),  4096+512=  4608 bytes
+12: W               Data  2-Oct-89  128- 228( 100), 51200+512= 51712 bytes
+13: 2FLOP1.DATA     Data  2-Sep-82  228- 500( 272), 139264+512= 139776 bytes

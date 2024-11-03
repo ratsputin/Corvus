@@ -1,0 +1,32 @@
+
+Directory of UCSD disk image file 'fboot.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FBOOT has 24 files,  0 to 6 (6), eov 500, size 32, free 24
+
+ 1: CC.KERNEL       Data  8-Feb-83    6-  57(  51), 26112+512= 26624 bytes
+ 2: CC.SETUP        Data  4-Feb-83   57- 106(  49), 25088+512= 25600 bytes
+ 3: CC.DISPAT       Data  4-Feb-83  106- 133(  27), 13824+512= 14336 bytes
+ 4: CC.EXEC         Data  4-Feb-83  133- 148(  15),  7680+512=  8192 bytes
+ 5: CC.FILMGR       Data  4-Feb-83  148- 198(  50), 25600+512= 26112 bytes
+ 6: CC.SYSMGR       Data  4-Feb-83  198- 220(  22), 11264+512= 11776 bytes
+ 7: CC.WNDMGR       Data  4-Feb-83  220- 255(  35), 17920+512= 18432 bytes
+ 8: DRV.DISPHZ      Data  4-Feb-83  255- 264(   9),  4608+512=  5120 bytes
+ 9: DRV.DISPVT      Data  4-Feb-83  264- 274(  10),  5120+512=  5632 bytes
+10: DRV.DTACOM      Data  8-Feb-83  274- 282(   8),  4096+512=  4608 bytes
+11: DRV.EPRNT       Data  4-Feb-83  282- 287(   5),  2560+512=  3072 bytes
+12: DRV.KYBD        Data  4-Feb-83  287- 292(   5),  2560+512=  3072 bytes
+13: DRV.SYSTRM      Data  4-Feb-83  292- 299(   7),  3584+512=  4096 bytes
+14: DRV.TIMER       Data  4-Feb-83  299- 303(   4),  2048+512=  2560 bytes
+15: DRV.ADISK       Data  4-Feb-83  303- 309(   6),  3072+512=  3584 bytes
+16: DRV.FDISK       Data  4-Feb-83  309- 313(   4),  2048+512=  2560 bytes
+17: CSD.DEFAULT     Data  4-Feb-83  313- 315(   2),  1024+512=  1536 bytes
+18: CSK.DEFAULT     Data  4-Feb-83  315- 317(   2),  1024+512=  1536 bytes
+19: ASSIGN          Data  4-Feb-83  317- 327(  10),  5120+512=  5632 bytes
+20: DDIAG           Data  4-Feb-83  327- 417(  90), 46080+512= 46592 bytes
+21: DIAG.DATA       Data  4-Feb-83  417- 418(   1),   512+512=  1024 bytes
+22: CF18.4AP.DATA   Data  4-Feb-83  418- 458(  40), 20480+512= 20992 bytes
+23: PURGE.1.0C.TEXT Text  4-Feb-83  458- 464(   6),  3072+512=  3584 bytes
+24: SYSTEM.UPDATE   Text  4-Feb-83  464- 468(   4),  2048+512=  2560 bytes

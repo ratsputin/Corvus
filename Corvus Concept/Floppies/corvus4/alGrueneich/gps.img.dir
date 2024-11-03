@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'gps.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume GPS has 13 files,  0 to 6 (6), eov 500, size 68, free 13
+
+ 1: SYSTEM.INTERP   Data  4-Feb-83    6-  30(  24), 12288+512= 12800 bytes
+ 2: SYSTEM.LIBRARY  Data 17-Mar-83   30- 130( 100), 51200+512= 51712 bytes
+ 3: SYSTEM.MISCINFO Data 20-May-83  130- 131(   1),   512+512=  1024 bytes
+ 4: SYSTEM.PASCAL   Data 13-May-83  131- 256( 125), 64000+512= 64512 bytes
+ 5: USRMNT.CODE     Code 25-Jan-83  256- 304(  48), 24576+512= 25088 bytes
+ 6: INITPTR.CODE    Code 10-Jan-83  304- 335(  31), 15872+512= 16384 bytes
+ 7: UPDATE.CODE     Code 18-May-83  335- 354(  19),  9728+512= 10240 bytes
+ 8: MENU.CODE       Code 22-Apr-83  354- 379(  25), 12800+512= 13312 bytes
+ 9: BACKUP.CODE     Code 23-Aug-82  379- 390(  11),  5632+512=  6144 bytes
+10: RESTORE.CODE    Code 23-Aug-82  390- 397(   7),  3584+512=  4096 bytes
+11: GRTPLN.DATA     Data 22-May-83  397- 400(   3),  1536+512=  2048 bytes
+12: SYSTEM.STARTUP  Code 24-Jan-83  400- 426(  26), 13312+512= 13824 bytes
+13: BLANKDIR.DATA   Ux00 22-May-83  426- 432(   6),  3072+512=  3584 bytes

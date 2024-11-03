@@ -1,0 +1,502 @@
+
+{$S desk}
+procedure calculator;
+
+const systerm=2; esc=$1b; plus=$0d; neg=$2d; mult=$2a; divd=$2f;
+      maxdigits=12; maxdisp=12; deffix=2; rnd=false; multkey=44; MGCALC=65;
+
+type opstr=string[4];
+     optyp = (noop, opeq, opdiv, opmul, opadd, opsub );
+
+var fix,len,digits:integer;
+    number:string80;
+    firstnumber: boolean;
+    input,total,memory:double;
+    pendop: optyp;
+    converted:boolean;
+    calcwnd:wndrcd;
+    tapewnd:wndrcd;
+    list:array[1..72] of record
+                           disp:boolean;
+                           val:double;
+                           oper:opstr;
+                         end;
+
+
+{
+.PG
+}
+procedure newnumber;
+var i:integer;
+begin
+  number:='';
+  digits:=0;
+  gotoxy(0,len);
+  write( '\1BG4' );
+  write(input:maxdisp:fix);
+  write( '\1BG0' );
+end;
+
+{
+.PG
+}
+procedure doerror;
+begin
+  gotoxy( 0, len );
+  write( '\1BG4', 'ERROR':maxdisp, '\1BG0' );
+end;
+
+{
+.PG
+}
+procedure roundoff(var num:double);
+var s:double;
+    i:integer;
+begin
+  if rnd then begin
+     s:=num*pwroften(fix);
+     s:=trunc(s+0.5);
+     num:=s/pwroften(fix);
+  end;
+end;
+
+{
+.PG
+}
+procedure convert;
+var pwr,i:integer;
+    num, frac:double;
+    dofrac :boolean;
+begin
+  if not converted then begin
+     converted:=true;
+     num:=0;
+     frac := 1;
+     dofrac := false;
+     pwr:=0;
+     for i := 1 to digits do begin
+       if number[i]='.' then begin
+          dofrac := true;
+       end else begin
+          num := num * 10.0 + ord(number[i]) - $30;
+          if dofrac then frac := frac / 10.0;
+       end;
+     end;
+     num := num * frac;
+     roundoff(num);
+     input:=num;
+  end;
+end;
+
+{
+.PG
+}
+procedure scroll(lines:integer);
+var i:integer;
+begin
+  for i:=len-lines downto 1 do
+    list[i+lines]:=list[i];
+end;
+
+{
+.PG
+}
+procedure tally( S: opstr );
+var i: integer;
+begin
+  PushWindow( tapewnd );
+  writeln;
+  scroll(1);
+  with list[1] do begin
+    oper := S;
+    disp := true;
+    val := input;
+  end;
+  with list[1] do
+    write( val:maxdisp:fix, ' ', oper );
+  PopWindow;
+end;
+
+{
+.PG
+}
+procedure print;
+var i:integer;
+begin
+  gotoxy(0,2);
+  writeln( memory:maxdisp:fix,' M' );
+  writeln;
+end;
+
+{
+.PG
+}
+procedure domathop(nxtop:optyp);
+var i, iost: integer;
+begin
+  convert;
+  case nxtop of
+    opeq:  begin
+             tally( ' ' );
+             PushWindow( tapewnd );
+             writeln;
+             for i := 1 to maxdisp do write( '-' );
+             PopWindow;
+           end;
+    opdiv: tally( '/' );
+    opmul: tally( '*' );
+    opadd: tally( '+' );
+    opsub: tally( '-' );
+  end;
+
+  case pendop of
+    opeq:  total := input;
+    opdiv: total := total / input;
+    opmul: total := total * input;
+    opadd: total := total + input;
+    opsub: total := total - input;
+  end;
+
+  roundoff( total );
+  input := total;
+  if nxtop=opeq then begin
+    tally( '=' );
+    PushWindow( tapewnd );
+    writeln;
+    PopWindow;
+  end;
+  print;
+  converted := true;
+  newnumber;
+  pendop := nxtop;
+end;
+
+{
+.PG
+}
+procedure setdecimal;
+begin
+  while PmtInt(Msg(MGCALC,2),fix) and ((fix<0) or (fix>MaxDigits)) do
+     begin end;
+end;
+
+{
+.PG
+}
+procedure clearentry;
+begin
+  input:=0;
+  converted:=true;
+end;
+
+{
+.PG
+}
+procedure clearall;
+var iost: integer;
+begin
+  total:=0;
+  input := 0;
+  pendop := opeq;
+  PushWindow(tapewnd);
+  writeln;
+  write( 'AC':maxdisp+3 );
+  PopWindow;
+  memory := 0;
+  converted := true;
+  print;
+end;
+
+{
+.PG
+}
+procedure memadd;
+begin
+  convert;
+  tally('M+');
+  memory:=memory+input;
+  print;
+end;
+
+{
+.PG
+}
+procedure memsub;
+begin
+  convert;
+  tally( 'M-' );
+  memory:=memory-input;
+  print;
+end;
+
+{
+.PG
+}
+procedure memstore;
+begin
+  convert;
+  tally( 'STM' );
+  memory := input;
+  print;
+end;
+
+{
+.PG
+}
+procedure memrecall;
+begin
+  input:=memory;
+  converted:=true;
+  tally( 'MRC' );
+  print;
+end;
+
+{
+.PG
+}
+procedure memclear;
+begin
+  memory:=0;
+  print;
+end;
+
+{
+.PG
+}
+procedure dosin;
+begin
+  convert;
+  tally( 'SIN' );
+  input := sin( input  );
+  print;
+end;
+
+{
+.PG
+}
+procedure docos;
+begin
+  convert;
+  tally( 'COS' );
+  input := cos( input  );
+  print;
+end;
+
+{
+.PG
+}
+procedure dotan;
+begin
+  convert;
+  tally( 'TAN' );
+  if cos( input )<>0.0 then begin
+    input := sin( input  )/cos( input );
+  end;
+  print;
+end;
+
+{
+.PG
+}
+procedure dolog;
+begin
+  convert;
+  tally( 'LOG' );
+  input := ln( input  );
+  print;
+end;
+
+{
+.PG
+}
+procedure doexp;
+begin
+  convert;
+  tally( 'EXP' );
+  input := exp( input  );
+  print;
+end;
+
+{
+.PG
+}
+procedure doatan;
+begin
+  convert;
+  tally( 'ATAN' );
+  input := arctan( input  );
+  print;
+end;
+
+{
+.PG
+}
+procedure dosqrt;
+begin
+  convert;
+  tally( 'SQRT' );
+  input := sqrt( input  );
+  print;
+end;
+
+{
+.PG
+}
+procedure dispatch;
+var DoNewNum, Done: boolean;
+begin
+  Done := false;
+  while not Done do begin
+     if BrkPress then begin
+        Cmd := KTEXT;
+        Key := '=';
+     end else begin
+        NextCmd;
+     end;
+     DoNewNum := true;
+     case Cmd of
+        KHOME:     domathop( opdiv );
+        KF1:       dosin;
+        KF2:       docos;
+        KF3:       dotan;
+        KF4:       dolog;
+        KF5:       dosqrt;
+        KF6:       memadd;
+        KF7:       memsub;
+        KF8:       setdecimal;
+        KF9:       domathop( opeq );
+        KF13:      doatan;
+        KF14:      doexp;
+        KF20:      begin Done := true; Cmd := KF10; end;
+        KCSRU:     clearall;
+        KCSRD:     clearentry;
+        KCSRL:     memrecall;
+        KCSRR:     memstore;
+        KCR:       domathop( opadd );
+        KTEXT:  case Key of
+              '/': domathop( opdiv );
+              ',': domathop( opmul );
+              '*': domathop( opmul );
+              '+': domathop( opadd );
+              '=': domathop( opeq  );
+              '-': domathop( opsub );
+              '.','0','1','2','3','4','5','6','7','8','9': begin
+                    converted:=false;
+                    if digits<maxdigits then begin
+                       number:=concat(number,' ');
+                       number[length(number)] := key;
+                       gotoxy(0,len);
+                       write('\1BG4',number:maxdisp,'\1BG0');
+                       digits:=digits+1;
+                       DoNewNum := false;
+                    end;
+                 end;
+              otherwise: Bell(BelErr);
+           end;
+        otherwise: Done := true;
+     end;
+     if DoNewNum then newnumber;
+  end;
+  PopWindow;
+  write( '\1Bb' );
+  ReDraw( WinTop );
+end;
+
+{
+.PG
+}
+procedure drawcalc;
+type str=string[20];
+
+   procedure blip( s: str );
+   begin
+     write( '\1BG4', S, '\1BG0 ' );
+   end;
+
+begin
+  writeln;
+  writeln( '  \1BG4                \1BG0');
+  writeln;
+  writeln( '---------------------');
+  writeln;
+  write( '       ' ); blip( 'AC ' ); blip( '   ' ); blip( '   ' );
+  writeln; writeln;
+  write( '   ' );
+  blip( 'MRC' ); blip( 'CE ' ); blip( 'STM' ); blip( ' / ' );
+  writeln; writeln;
+  write( '   ' );
+  blip( ' 7 ' ); blip( ' 8 ' ); blip( ' 9 ' ); blip( ' * ' );
+  writeln; writeln;
+  write( '   ' );
+  blip( ' 4 ' ); blip( ' 5 ' ); blip( ' 6 ' ); blip( ' - ' );
+  writeln; writeln;
+  write( '   ' );
+  blip( ' 1 ' ); blip( ' 2 ' ); blip( ' 3 ' ); blip( '   ' );
+  writeln;
+  writeln( '               \1BG4 + \1BG0');
+  write( ' ' );
+  blip( '  0  ' ); blip( '00 ' ); blip( ' . ' ); blip( '   ' );
+end;
+
+{
+.PG
+}
+procedure init;
+var i,j,x,y,w,l,cx,cy:integer;
+    TmpWnd: wndrcd;
+begin
+  i:=winstatus(x,y,w,l,cx,cy);
+  if (w<30) or (l<25) then begin
+     TellUsr( Msg(MGGENL,23) );
+     Bell(BelErr);
+     exit( Calculator );
+  end;
+  i:=wincreate(Tmpwnd,w-24,l-19,20,18,wfgclrpg+wfgscroff );
+  PushWindow(TmpWnd);
+(*boxwin( tmpwnd, 1 );*)
+  write( '\1BJ' );
+  drawcalc;
+  firstnumber := true;
+  x:=w-maxdisp-9;
+  y:=0;
+  w:=maxdisp+5;
+  len:=l-18;
+  PopWindow;
+  i:=wincreate(calcwnd,x-1,y,w,len+1,wfgclrpg+wfgscroff);
+  i:=wincreate(tapewnd,x-1,3,w,len-4,0);
+
+  PushWindow(calcwnd);
+  write( '\1Bb' );
+  PushWindow(tapewnd);
+  writeln( '\1BG4\1BJ\1Bb' );
+  for i := 1 to len-5 do writeln;
+  WrtMsg( MGCALC, 1 );
+  for j := 1 to 8 do begin
+     for i := 1 to 7000 do begin end;
+     writeln;
+  end;
+  PopWindow;
+
+  LoadLabels( CalcFrame );
+  fix:=deffix;
+  converted:=true;
+  input:=0;
+  total:=0;
+  pendop := opeq;
+  memory:=0;
+  newnumber;
+  for i:=1 to len do
+    list[i].disp:=false;
+  CsrWid := 0;
+end;
+
+begin
+  init;
+  dispatch;
+  CsrWid := 1;
+end;
+
+
+
+
+

@@ -1,0 +1,14 @@
+          Code  host type
+          ----  ---------------
+             0  Workstation
+             1  Disk server
+             2  Printer server
+             3  Communication server
+             4  Mirror server
+
+            32  Workstation
+
+           128  Gateway
+
+           255  all devices
+

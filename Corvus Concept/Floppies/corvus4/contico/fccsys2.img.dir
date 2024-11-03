@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'fccsys2.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCSYS2 has 7 files,  0 to 6 (6), eov 500, size 4, free 7
+
+ 1: PARMGR          Data  4-Feb-83    6- 108( 102), 52224+512= 52736 bytes
+ 2: USERMGR         Data  4-Feb-83  108- 212( 104), 53248+512= 53760 bytes
+ 3: MIRROR          Data  4-Feb-83  212- 336( 124), 63488+512= 64000 bytes
+ 4: MBACKUP         Data  4-Feb-83  336- 418(  82), 41984+512= 42496 bytes
+ 5: MOVE            Data  4-Feb-83  418- 449(  31), 15872+512= 16384 bytes
+ 6: ZAP             Data  4-Feb-83  449- 492(  43), 22016+512= 22528 bytes
+ 7: SYSTEM.UPDATE   Text  4-Feb-83  492- 496(   4),  2048+512=  2560 bytes

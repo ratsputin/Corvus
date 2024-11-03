@@ -1,0 +1,945 @@
+;
+; file :  prnt.drv.text
+; date :  07-JULY-1982  kb
+;
+; This is the Printer driver source
+;
+; ADDED  version date before PRNTRDRV : 4-6-82  kb
+;
+; Added GetTable function to unitstatus to return the current state of the printer control table.
+;  returns the table in the values user sends to the change table functions : 4-7-82  kb
+; Changed IORESULT definitions to use the global file definitions :  4-23-82  kb
+; Added include of /ccos/os.gbl.asm.text : 4-23-82  kb
+;
+; Added Header, removed version date : 7-7-82 kb
+;
+; INCLUDE FILES USED :
+;       /ccos/os.gbl.asm.text                    ;OS GLOBAL EQUATES
+;
+; INCLUDE OS GLOBALS HERE
+;
+            LIST       OFF
+            INCLUDE    '/CCOS/OS.GBL.ASM.TEXT'
+            LIST       ON
+;
+            PAGE       59
+;
+  page
+; EQUATES FOR ALL PRINTER DRIVER SOFTWARE
+; BIT NUMBER DEFINITIONS
+;
+BITD0       EQU        0                         ;BIT 0
+BITD1       EQU        1                         ;BIT 1
+BITD2       EQU        2                         ;BIT 2
+BITD3       EQU        3                         ;BIT 3
+BITD4       EQU        4                         ;BIT 4
+BITD5       EQU        5                         ;BIT 5
+BITD6       EQU        6                         ;BIT 6
+BITD7       EQU        7                         ;BIT 7
+;
+; Internal Flag word bit definitions
+; Low order byte
+;
+SAVSR       EQU        BITD0                     ;SET=SAVED ENTRY SR
+BUFMTY      EQU        BITD1                     ;BUFFER EMPTY FLAG
+BUFFUL      EQU        BITD2                     ;BUFFER FULL FLAG
+BUSY        EQU        BITD3                     ;PRINTER BUSY
+ENQFLG      EQU        BITD4                     ;SENT ENQ WAITING FOR ACK
+SENDLF      EQU        BITD5                     ;SEND LF CHAR NEXT
+;
+; Internal Flag masks
+;
+BUFFLGM     EQU        1                         ;CLEAR ALL BUT SAVSR
+;
+; Printer Control Table Flag's flag bit definitions
+;
+LINE        EQU        BITD0                     ;LINE TYPE HANDSHAKE
+XONXOFF     EQU        BITD1                     ;XON/XOFF HANDSHAKE
+ENQACK      EQU        BITD2                     ;ENQ/ACK HANDSHAKE
+CTSLIN      EQU        BITD3                     ;LINE IS CTS
+DSRLIN      EQU        BITD4                     ;LINE IS DSR
+DCDLIN      EQU        BITD5                     ;LINE IS DCD
+INVBUSY     EQU        BITD6                     ;1=LINE IS INVERTED(0) WHEN BUSY
+DATACOM     EQU        BITD7                     ;DATACOM 1 WHEN SET ELSE DC0
+;
+; Table flag's masks
+;
+DCMFLGM     EQU        $80                       ;LEAVE DATACOM UNTOUCHED
+;
+; 68000 Interrupt Auto Vector Addresses
+;
+VEC1        EQU        $64                       ;AUTO VECTOR #1-DATA COM CONTROL
+VEC2        EQU        $68                       ;AUTO VECTOR #2-DC 1
+VEC4        EQU        $70                       ;AUTO VECTOR #4-DC 0
+;
+; Unit I/O Command codes
+;
+READCMD     EQU        1                         ; read command
+WRCMD       EQU        2                         ; write command
+BUSYCMD     EQU        4                         ; busy command
+UNMCMD      EQU        6                         ; unmount command
+;
+TBLSTATE    EQU        6                         ;RETURN TABLE STATE FUNCTION CODE
+;
+; Status Register values
+;
+DISINT4     EQU        $2400                     ; Disable all DataCom device ints
+DISINT1     EQU        $2100                     ; Disable DataCom Control int
+CARRYST     EQU        $0001                     ; CCR with carry set
+;
+; VIA Addresses
+;
+ORA         EQU        $30F63                    ; PORT A
+DDRA        EQU        $30F67                    ; PORT A DATA DIRECTION REG.
+NHIRA       EQU        $30F7F                    ; PORT A W/O HANDSHAKE(IGNORE DDRA)
+;
+; VIA register values
+;
+IODDRA      EQU        $80                       ; PORT A BIT CONFIGURATION
+;
+; UART register definitions
+;
+UARTDC0     EQU        $30F20                    ;BASE ADDRESS OF DATACOM 0 UART
+DC1OFF      EQU        $20                       ;OFFSET FROM DC0 BASE TO DC1 BASE
+DATAREG     EQU          1                       ;DATA PORT REGISTER INDEX
+STATRI      EQU          3                       ;STATUS REGISTER INDEX
+RCVBF       EQU        BITD3                     ;RECEIVE BUFFER FULL FLAG (SR)
+XMITBE      EQU        BITD4                     ;XMIT BUFFER EMPTY FLAG(SR)
+CMDREGI     EQU        5                         ;COMMAND REGISTER INDEX
+CTLREGI     EQU        7                         ;CONTROL REGISTER INDEX
+;
+; UART Register constants for setup of UART
+;
+CTLRC       EQU        $10                       ;1 STOP BIT,BAUD RATE GENERATOR
+CMDRC       EQU        $09                       ;NORMAL,NO XMIT INT,RCV INT, ENABLE DTR
+TURNOFF     EQU        $02                       ;TURNOFF UART(CMD REG)
+CLRD3D2     EQU        $F3                       ;CLEAR BITS D3 & D2
+XMITENB     EQU        $04                       ;ENABLE XMIT INTERRUPT
+XMITDIS     EQU        $08                       ;DISABLE XMIT INTERRUPT
+;
+; ASCII Control characters for printer control
+;
+XON         EQU        $11                       ;CAN XMIT (CTL-Q)
+XOFF        EQU        $13                       ;STOP XMIT (CTL-S)
+ENQ         EQU        $05                       ;READY FOR MORE? (CTL-E)
+ACK         EQU        $06                       ;YES, I'M READY (CTL-F)
+NULL        EQU        $00                       ;NULL CHARACTER-DO NOTHING
+CR          EQU        $0D                       ;CARRIAGE RETURN
+LF          EQU        $0A                       ;LINE FEED
+;
+; Maximum Parameter values for Unitstatus Set table entry functions
+;
+MAXBAUD     EQU        6                         ;FOR SET BAUD RATE
+MAXPRTY     EQU        4                         ;FOR SET PARITY
+MAXWRDS     EQU        1                         ;FOR SET WORD SIZE
+MAXDTCM     EQU        1                         ;FOR SET DATACOM
+MAXHNDS     EQU        7                         ;FOR SET HANDSHAKE TYPE
+;
+; error codes (IORESULT)
+;
+INVCMD      EQU        IOEioreq                  ;invalid cmd-(invalid I/O request)
+INVTBLID    EQU        IOEtblid                  ;invalid table id
+INVPRM      EQU        IOEuiopm                  ;invalid parameter
+INVFNC      EQU        IOEfnccd                  ;invalid function code
+;
+; Miscellaneous definitions
+;
+TRUE        EQU        1                         ; Pascal true boolean value
+ON          EQU        1                         ;LISTING CONTROL - START LISTING
+OFF         EQU        0                         ;LISTING CONTROL - STOP LISTING
+  page
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.W                     D7.W
+; 2 - WRITE       D0.W   D1.L   D2.W            D5.W     D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W       D0.W
+; 5 - STATUS      D0.W   D1.L   D2.W <--FUNCTION CODE    D7.W
+; 6 - UNMOUNT     D0.W                                   D7.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D0 & D7
+; INTERNAL REGISTER USEAGE :
+  page
+;
+            GLOBAL     PRNTRDRV
+;
+; PRINTER DRIVER
+;
+PRNTRDRV
+            BRA.S      PRNT001                   ;*070782* JUMP AROUND HEADER
+            DATA.B     0                         ;DEVICE NOT BLOCKED
+            DATA.B     29                        ;VALID CMDS - NOT UNITWRITE
+            DATA.B     82,07,07                  ;DATE JULY 7 1982
+            DATA.B     hmlen                     ;HEADER MSG LENGTH
+xxx010      DATA.B     'PRINTER driver'          ;HEADER MSG
+hmlen       EQU        %-xxx010
+;
+PRNT001     CMPI.W     #UNMCMD,D4                ;VALID COMMAND
+            BHI.S      PRNDERR                   ;NO
+            MOVEM.L    D1-D6/A0-A6,-(SP)         ;SAVE REGISTERS
+            CLR.L      D7                        ;CLEAR IORESULT
+            MOVEA.L    D1,A3                     ;ADDRESS OF USERS BUFFER
+            LEA        PRNDTBL,A1                ;TURN THE COMMAND INTO A
+            LSL.W      #1,D4                     ;INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D4.W),D4
+            JSR        0(A1,D4.W)                ;DO FUNCTION
+            MOVEM.L    (SP)+,D1-D6/A0-A6         ;*** temp* for busy return in D0
+            RTS
+;
+; Invalid Command Error
+;
+PRNDERR     MOVE.W     #INVCMD,D7
+            RTS
+;
+; THE PRINTER DRIVER JUMP TABLE
+;
+PRNDTBL     DATA.W     PRNINST-PRNDTBL           ;UNITINSTALL
+            DATA.W     PRNRD-PRNDTBL             ;UNITREAD
+            DATA.W     PRNWR-PRNDTBL             ;UNITWRITE
+            DATA.W     PRNCLR-PRNDTBL            ;UNITCLEAR
+            DATA.W     PRNBSY-PRNDTBL            ;UNITBUSY
+            DATA.W     PRNST-PRNDTBL             ;UNITSTATUS
+            DATA.W     PRNUNMT-PRNDTBL           ;UNITUNMOUNT
+  page
+;
+; PRNRD - UNITREAD
+; READ FROM THE PRINTER IS ILLEGAL
+;
+PRNRD       MOVE.W     #INVCMD,D7
+            RTS
+  page
+;
+; PRNINST - UNITINSTALL ==> SETUP THE DRIVER FOR THE DEFAULT PRINTER
+;   Assumes that a spurrious DataCom Control interrupt is benign and will
+;   be handled by the DataCom Control interrupt service routine correctly.
+;
+PRNINST     BSR.S      DISINTS                   ;DISABLE DATACOM INTERRUPTS
+;
+            LEA        PCTLTBL,A0                ;SETUP PRINTER CONTROL TABLE
+            MOVE.B     DEFPCT,(A0)+              ;FROM DEFAULTS (5 BYTES)
+            MOVE.L     DEFPCT+1,(A0)
+;
+; Initialize UART from constants and Printer Control Table & Initialize VIA
+;
+            MOVE.B     #IODDRA,DDRA.L            ;INITIALIZE DATA DIRECTION REG FOR PORT A
+            BSR.S      SETUART
+;
+            LEA        FLAGS+1,A0
+            BTST       #SAVSR,(A0)               ;ONLY RESET STATUS REG. IF
+            BEQ.S      PINNOSR                   ;SAVED SR IN SAVESR1
+            MOVE.W     #DISINT1,SR               ;ALLOW ALL BUT DC CONTROL
+;
+; Initialize Buffer, Buffer variables, and Control variables
+;
+PINNOSR     BSR.S      INITBUF
+;
+; Setup interrupt vectors
+;
+            BSR.S      SETVECS
+;
+; If saved SR then restore it
+;
+            BSR.S      ENBINTS
+            RTS
+  page
+;
+; DISINTS - disable level 4 interrupts if current level is less than 4
+;
+DISINTS     LEA        FLAGS+1,A0
+            BCLR       #SAVSR,(A0)               ;ASSUME NOT SAVED STATUS REG
+            MOVE.W     SR,D0
+            CMPI.W     #DISINT4,D0               ;IF CURRENT STATE IS >= DON'T SAVE
+            BCC.S      DITEXIT                   ;DON'T SAVE
+            BSET       #SAVSR,(A0)               ;MARK SAVED SR
+            LEA        SAVESR1,A0                ;SAVE THE CURRENT INT STATUS
+            MOVE.W     D0,(A0)
+            MOVE.W     #DISINT4,SR               ;PREVENT ALL DATACOM INTERUPTS
+DITEXIT     RTS
+;
+; ENBINTS - Restore saved SR if saved it
+;
+ENBINTS     LEA        FLAGS+1,A0                ;IF SAVED SR FLAG SET
+            BTST       #SAVSR,(A0)               ;THEN RESTORE SR
+            BEQ.S      EITEXIT                   ;DIDN'T SAVE SO EXIT
+            MOVE.W     SAVESR1,SR
+EITEXIT     RTS
+;
+; SETVECS - Put interrupt routine's entry addresses into the interrupt vectors
+SETVECS     LEA        DCTLINT,A0                ;PUT DATA COM CONTROL
+            MOVE.L     A0,VEC1.W                 ;INT ROUTINE IN VEC 1
+            BSR.S      SETDCVEC                  ;PUT IN DATA COM XMIT/RCV RTN
+            RTS
+  page
+;
+; INITBUF - Initialize Buffer variables to EMPTY Buffer also ENQ, BUSY and
+;           SENDLF are cleared to false.
+;
+INITBUF     LEA        FRONT,A0
+            LEA        BUFFER,A1
+            MOVE.L     A1,(A0)+                  ;FRONT := @BUFFER
+            MOVE.L     A1,(A0)+                  ;REAR := @BUFFER
+            CLR.W      (A0)+                     ;COUNT := 0
+            MOVE.W     #BUFLEN,(A0)+             ;FREE SPACE := BUFFER LENGTH
+;
+            ANDI.W     #BUFFLGM,(A0)             ;CLEAR ALL BUFFER FLAGS
+            ADDQ.L     #1,A0
+            BSET       #BUFMTY,(A0)              ;BUFFER_EMPTY := TRUE
+            RTS
+  page
+;
+; SETUART - Initialize UART from constants and Printer Control Table
+;
+; Get UART Register Base address
+;
+SETUART     BSR.S      GETBASE                   ;RETURNS BASE IN A0
+;
+; Setup UART's Control register - index = 7  from Base
+;
+            MOVEQ      #CTLRC,D0                 ;1 STOP BIT,BAUD RATE GEN
+            MOVE.B     WORDSIZ,D1                ;ADD WORD SIZE-7 OR 8 BITS
+            LSL.B      #5,D1                     ;MOVE INTO HI ORDER BITS
+            OR.B       D1,D0                     ;00=8 BITS,01=7 BITS
+            OR.B       BAUDR,D0                  ;ADD BAUD RATE FROM TABLE
+            MOVE.B     D0,CTLREGI(A0)            ;PUT IN CONTROL REGISTER
+;
+; Setup UART's Command register - index = 5 from Base
+;
+            MOVEQ      #CMDRC,D0                 ;CMD CONSTANTS
+            MOVE.B     PARITY,D1                 ;GET TABLE PARITY
+            LSL.B      #5,D1                     ;PUT IN CORRECT BIT POSITION
+            OR.B       D1,D0
+            MOVE.B     D0,CMDREGI(A0)            ;PUT IN COMMAND REGISTER
+;
+; Read the Data Port and Status Register to clear all Status flags
+;
+            MOVE.B     DATAREG(A0),D0            ;DATA PORT AT INDEX = 1
+            MOVE.B     #0,DATAREG(A0)            ;CLEAR XMIT INT
+            MOVE.B     STATRI(A0),D0             ;STATUS REG AT INDEX = 3
+            RTS
+;
+; GETBASE - Get address of UART's register Base address in memory
+;           EXIT : (A0) = Base address
+;
+GETBASE     LEA        UARTDC0.L,A0              ;ASSUME USING DATACOM 0
+            CLR.L      D0
+            LEA        PTFLAGS+1,A1              ;IF FLAG IS SET THEN MAKE
+            BTST       #DATACOM,(A1)             ;D0 = THE ADDRESS OFFSET TO
+            SNE        D0                        ;UART 1'S REGISTERS ELSE
+            ANDI.B     #DC1OFF,D0                ;MAKE D0 = 0
+            ADDA.L     D0,A0                     ;BASE := OFFSET+UART DC0 BSE ADDR
+            RTS
+  page
+;
+; SETDCVEC - Depending on which DataCom printer is connected to, place the
+;            address of the Xmit/Rcv DataCom int routine's entry address in
+;            the interrupt vector for that DataCom.  Put a pointer to a RTE
+;            instruction into the vector not being used.
+;
+SETDCVEC    LEA        VEC4.W,A0                 ;ASSUME DC0 (VECTOR 4)
+            LEA        VEC2.W,A1                 ;DC1 IS VECTOR 2
+            LEA        PTFLAGS+1,A2
+            BTST       #DATACOM,(A2)             ;IS IT DC0
+            BEQ.S      SDVUSE0                   ;YES
+            EXG        A0,A1                     ;NO,USE DC1 (VECTOR 2)
+;
+SDVUSE0     LEA        DCOMINT,A2                ;ADDR OF XMIT/RCV INT ROUTINE
+            LEA        PTRRTE,A3
+            MOVE.L     A2,(A0)                   ;INTERRUPT ROUTINE
+            MOVE.L     A3,(A1)                   ;PTR TO RTE
+            RTS
+  page
+; PRNWR - UNITWRITE
+;           Setup the printer driver and place the user' characters
+;           into it.  Start up the Printer interrupt routines if the buffer
+;           was previously empty.
+;           Uses D5 (Mode flag).  If (D5) = 1 then doesn't do Auto Linefeed.
+;
+PRNWR       TST.W      D2                        ;IS USER COUNT DONE?
+            BEQ.S      PWREXIT                   ;YES
+            SUBQ.W     #1,D2                     ;ELSE PUT CHAR IN BUFFER
+;
+            LEA        FLAGS+1,A0                ;IF BUFFER IS FULL THEN
+PWRWAIT     BTST       #BUFFUL,(A0)              ;WAIT TIL IT IS NOT FULL
+            BNE.S      PWRWAIT                   ;IS FULL
+;
+; Get next character and do pre-disable preparation
+;
+            BSR.S      GETNXTC                   ;GET NEXT CHAR INTO D1
+            BSR.S      CHKCR                     ;SEE IF CR FOR AUTO LINE FEED
+            LEA        REAR,A5
+            MOVEA.L    (A5),A1                   ;REAR OF QUEUE POINTER
+            LEA        BUFFER+BUFLEN,A2          ;IF AFTER INC REAR IT POINTS
+            MOVEA.L    A1,A4                     ;BEYOND THE BUFFER THEN PTR
+            ADDQ.L     #1,A4                     ;MUST WRAP BACK TO THE BEGIN
+            CMPA.L     A4,A2                     ;BUFFER ADDRESS SPACE
+            BNE.S      PWRNOWR                   ;NO WRAP-A4 IS THE UPDATEDREAR PTR
+            LEA        BUFFER,A4
+;
+; Disable interrupt - put character in buffer
+;
+PWRNOWR     BSR        DISINTS                   ;DISABLE INTS/CLOBBERS D0
+            LEA        FLAGS+1,A0
+            MOVE.B     D1,(A1)                   ;PUT CHAR IN PRINTER BUFFER
+            CMPA.L     FRONT,A4                  ;IF FRONT=(UPDATED REAR) THEN
+            BNE.S      PWRNOTF                   ;FULL-- BRANCH NOT FULL
+            BSET       #BUFFUL,(A0)              ;BUFFER FULL
+PWRNOTF     MOVE.L     A4,(A5)                   ;SAVE UPDATED REAR PTR
+            LEA        FREESPC,A1
+            SUBI.W     #1,(A1)                   ;1 BYTE LESS OF FREE SPACE
+;
+; If Buffer was empty then start Transmissino Process
+;
+            BCLR       #BUFMTY,(A0)              ;TEST & CLEAR--BUFFER NOT EMPTY
+            BEQ.S      PWRWNE                    ;WASN'T EMPTY BEFORE CLEAR
+            BSR.S      STRTXMIT                  ;START XMIT PROCESS
+;
+; Restore interrupts
+;
+PWRWNE      BSR        ENBINTS
+            LEA        FLAGS+1,A0
+            BTST       #SENDLF,(A0)
+            BNE.S      PWRWAIT                   ;SEND OUT LF CHAR
+            BRA.S      PRNWR                     ;SEE IF ANOTHER USER CHAR
+  page
+;
+; GETNXTC - Get the next character to send out.  If LF flag set, next char is
+;           a LF character ($0A).
+;           ENTRY : (A0) = address of FLAGS+1
+;                   (A3) = address of next char in user's buffer
+;           EXIT  : (D1) = the next character to send to printer
+;
+GETNXTC     BTST       #SENDLF,(A0)              ;IN AUTO LINE FEED MODE?
+            BEQ.S      GNCNALF                   ;NO, GIVE NEXT CHAR
+;
+            MOVEQ      #LF,D1                    ;YES, SEND A LF
+            BCLR       #SENDLF,(A0)              ;DID OPERATION
+            BRA.S      GNCEXIT
+;
+GNCNALF     MOVE.B     (A3)+,D1                  ;GET NEXT FROM USER BUFFER
+PWREXIT                                          ;USED BY PRNWR ALSO
+GNCEXIT     RTS
+;
+; CHKCR -   Check next character to be sent.  If it is a CR ($0D) and Mode flag
+;           specifies Auto Line Feed then set the SENDLF flag.
+;           ENTRY : (A0) = address of FLAGS+1
+;                   (D1) = Next character to send
+;                   (D5) = Mode flag
+;
+CHKCR       TST.W      D5                        ;MODE FLAG IN AUTO LINEFEED MODE
+            BNE.S      CCREXIT                   ;NO
+;
+            CMPI.B     #CR,D1                    ;NEXT CHAR A CARRIAGE RETURN
+            BNE.S      CCREXIT                   ;NO
+;
+            BSET       #SENDLF,(A0)
+CCREXIT     RTS
+  page
+;
+; STRTXMIT - start xmit interrupt process by enabling UART to interrupt
+;            on transmit buffer empty.
+; STOPXMIT - stop xmit interrupt process by disabling UART to interrupt
+;            on transmit buffer empty.
+;
+STRTXMIT
+            MOVEQ      #XMITENB,D1               ;ENABLE XMIT INT
+            BRA.S      SXTGETB
+STOPXMIT
+            MOVEQ      #XMITDIS,D1               ;DISABLE XMIT INT
+;
+SXTGETB     BSR        GETBASE                   ;GET UART BASE ADDRESS
+            MOVE.B     CMDREGI(A0),D0            ;GET CURRENT CMD REG
+            ANDI.B     #CLRD3D2,D0               ;CLEAR BITS D3 & D2
+            OR.B       D1,D0                     ;DON'T CHANGE OTHER BITS
+            MOVE.B     D0,CMDREGI(A0)            ;SAVE CHANGED CMD REG
+            RTS
+  page
+; DCOMINT - DataCom Interrupt routine for XMIT/RCV interrupts.
+;
+DCOMINT     MOVEM.L    D0-A6,-(SP)               ;SAVE ALL REGISTERS
+            BSR        GETBASE                   ;GET UART BASE ADDRESS
+;
+; If Receive interrupt then see if should process character.
+;
+            MOVE.B     STATRI(A0),D0             ;GET STATUS OF UART
+            BTST       #RCVBF,D0                 ;TEST FOR RECEIVE BUFFER FULL
+            BNE.S      DCIRCVC                   ;PROCESS RECEIVED CHAR
+;
+; Not Receive, if Transmit interrupt then see if can send character
+;
+            BTST       #XMITBE,D0                ;XMIT BUFFER EMPTY?
+            BEQ.S      DCIEXIT                   ;NO, UNKNOWN INTERRUPT - EXIT
+DCIPX       BSR.S      PRXMIT                    ;YES, PROCESS XMIT
+DCIEXIT     MOVEM.L    (SP)+,D0-A6               ;EXIT-RESTORE REGISTERS
+PTRRTE      RTE                                  ;EXIT INTERRUPT
+;
+; process received character
+;
+DCIRCVC     MOVE.B     DATAREG(A0),D0            ;GET CHAR/CLEARS INTERRUPT
+            BCLR       #BITD7,D0                 ;CLEAR D7 OF CHAR JUST IN CASE
+            LEA        PTFLAGS+1,A1              ;IF LINE TYPE OF HANDSHAKE
+            BTST       #LINE,(A1)                ;BETWEEN PRINTER & DRIVER
+            BNE.S      DCIEXIT                   ;THEN IGNORE CHARACTER
+;
+            LEA        FLAGS+1,A2                ;SAVE COPY OF BUSY FLAG
+            MOVE.B     (A2),D1
+;
+; If XON/XOFF handshake then see if Char is a XON or a XOFF
+;
+            BTST       #XONXOFF,(A1)
+            BEQ.S      DCICHKA                   ;NOT XON/XOFF, SEE IF ENQ/ACK
+            CMPI.B     #XON,D0                   ;IS IT XON?
+            BNE.S      DCIXOFF                   ;NO
+            BCLR       #BUSY,(A2)                ;YES, BUSY := FALSE
+            BRA.S      DCITSTB                   ;SEE IF SHOULD START XMIT
+DCIXOFF     CMPI.B     #XOFF,D0                  ;IS IT XOFF CHAR?
+            BNE.S      DCIEXIT                   ;NO, IGNORE CHAR
+            BSET       #BUSY,(A2)                ;YES, BUSY := TRUE
+            BRA.S      DCIEXIT                   ;EXIT - STOPPED XMIT
+;
+; must be ENQ/ACK handshake check for ACK
+;
+DCICHKA     CMPI.B     #ACK,D0                   ;IS IT ACK?
+            BNE.S      DCIEXIT                   ;NO,IGNORE CHARACTER
+            BCLR       #BUSY,(A2)                ;YES, BUSY := FALSE
+;
+; If was Busy before then try to start up XMIT process
+
+DCITSTB     BTST       #BUSY,D1                  ;CHECK SAVED BUSY
+            BEQ.S      DCIEXIT                   ;WASN'T BUSY BEFORE
+            BSR        STRTXMIT                  ;ELSE START XMIT PROCESS
+            BRA.S      DCIEXIT
+  page
+; PRXMIT - process transmission interrupt
+;           ENTRY : (A0) = UART Base address
+;
+PRXMIT      LEA        FLAGS+1,A1
+            BTST       #ENQFLG,(A1)              ;SEE IF SHOULD SEND A ENQ
+            BEQ.S      PXTNENQ                   ;NO
+            BCLR       #ENQFLG,(A1)              ;SEND THE ENQ CHAR
+            MOVE.B     #ENQ,DATAREG(A0)          ;CLEARS INTERRUPT
+            BRA.S      PXTEXIT                   ;DONE
+;
+; If (NOT Busy) and (NOT BufferEmpty) then send next char from buffer to printer
+;
+PXTNENQ     BTST       #BUSY,(A1)
+            BNE.S      PXTCLRI                   ;IF WAS BUSY OF BUFFER EMPTY
+            BTST       #BUFMTY,(A1)              ;THEN CLEAR INTERRUPT & EXIT
+            BNE.S      PXTCLRI
+;
+            LEA        FRONT,A5
+            MOVEA.L    (A5),A2                   ;FRONT OF QUEUE PTR
+            LEA        BUFFER+BUFLEN,A4
+            MOVE.B     (A2)+,DATAREG(A0)         ;SEND NEXT CHAR
+;
+            CMPA.L     A2,A4                     ;IF FRONT POINTS BEYOND THE
+            BNE.S      PXTNOWR                   ;BUFFER WRAP PTR BACK TO
+            LEA        BUFFER,A2                 ;BEGINNING OF BUFFER
+PXTNOWR     MOVE.L     A2,(A5)                   ;SAVE UPDATED FRONT PTR
+            CMPA.L     REAR,A2                   ;IF FRONT=REAR THEN BUFFER
+            BNE.S      PXTNE                     ;EMPTY := TRUE
+            BSET       #BUFMTY,(A1)
+PXTNE       BCLR       #BUFFUL,(A1)              ;BUFFER FULL ALWAYS FALSE
+            LEA        FREESPC,A0
+            ADDI.W     #1,(A0)                   ;1 BYTE MORE OF FREE SPACE
+;
+; if handshake method is ENQ/ACK then see if should send ENQ next time
+;
+            LEA        PTFLAGS+1,A4
+            BTST       #ENQACK,(A4)
+            BEQ.S      PXTEXIT                   ;NOT ENQ/ACK HANDSHAKE
+;
+            LEA        COUNT,A4                  ;COUNT := COUNT + 1
+            MOVE.W     (A4),D0
+            ADDQ.W     #1,D0
+            CMP.W      #80,D0                    ;IF SENT 80 CHARS THEN SEND A ENQ
+            BNE.S      PXTSCNT                   ;NO, SAVE CURRENT COUNT
+            CLR.L      D0                        ;COUNT := 0
+            BSET       #ENQFLG,(A1)              ;SHOW SEND ENQ STATE
+            BSET       #BUSY,(A1)                ;BUSY UNTIL RECEIVE ACK
+PXTSCNT     MOVE.W     D0,(A4)                   ;SAVE COUNT
+PXTEXIT     RTS
+;
+; Can't send characters to Printer, stop xmit buffer empty interrupt
+;
+PXTCLRI     BRA        STOPXMIT                  ;STOP XMIT INT & EXIT
+  page
+;
+; DCTLINT - Data Com Control interrupt service routine.
+;           Ignores the interrupt if wasn't a DataCom Control interrupt,
+;           therefore an Apple slot interrupt, or if NOT Line type
+;           handshake method.  Always clears the interrupt.
+;
+DCTLINT     MOVEM.L    D0-A6,-(SP)               ;SAVE REGISTERS
+            BSR.S      INITDCC                   ;CLEAR INTERRUPT/(D0) = PORT A
+;
+; If (type of handshake <> Line) then exit
+;
+            LEA        PTFLAGS+1,A1
+            BTST       #LINE,(A1)
+            BEQ.S      DCLEXIT                   ;NOT LINE HANDSHAKE, EXIT
+;
+; Determine which Line is used as Busy line Port A
+;
+            BSR.S      FINDLIN                   ;NEEDS A1 = PTR TO PTFLAGS+1
+;
+;set or clear Busy depending on state of line and whether it's Busy inverted or not
+;
+            LEA        FLAGS+1,A2
+            MOVE.B     (A2),D1                   ;SAVE BUSY FLAG
+            MOVE.W     #DISINT4,SR               ;DISABLE INTS
+            BSET       #BUSY,(A2)                ;ASSUME LINE IS BUSY = TRUE
+            BSR.S      TSTLINE                   ;TEST LINE & INVERTED FLAG
+            BNE.S      DCLEXIT                   ;IS BUSY
+            BCLR       #BUSY,(A2)
+;
+; if wasn't Busy before then start up transmission process
+;
+            BTST       #BUSY,D1                  ;TEST SAVED BUSY STATE
+            BEQ.S      DCLEXIT                   ;WASN'T BUSY
+            BSR        STRTXMIT                  ;START XMIT IF BUFFER NOT EMPTY
+;
+DCLEXIT     MOVEM.L    (SP)+,D0-A6               ;EXIT-RESTORE REGISTERS
+            RTE
+  page
+;
+; INITDCC - Turnoff DataCom Control interrupt by toggling IOX.  Will also
+;           stop interrupt if unknown Apple slot device is interrupting.
+;           ASSUMES :  DDR for Port A is untampered and set at $80
+;           Exit : (D0) = Port A with IOX toggled
+;                  (A0) = address of Port A
+;
+INITDCC     LEA        NHIRA.L,A0
+            MOVE.B     (A0),D0                   ;READ PORTA W/O HANDSHAKE
+            BCHG       #7,D0                     ;TOGGLE IOX
+            MOVE.B     D0,(A0)                   ;WRITE OUT CHANGED IOX
+            RTS
+;
+; CALLIDCC - Call INITDCC when driver unmounted and get a DataCom Control
+;            interrupt.  Toggles IOX to clear level 1 interrupt.
+;
+CALLIDCC    MOVEM.L    D0/A0,-(SP)               ;SAVE REGS USED BY INITDCC
+            BSR.S      INITDCC
+            MOVEM.L    (SP)+,D0/A0               ;RESTORE REGS
+            RTE
+  page
+;
+; FINDLIN - Find which Line is used for Handshaking in Port A
+;           ENTRY : (A1) = address of PTRFLAGS+1
+;           EXIT  : (D3) = Bit # in Port A specifying line used for Busy
+;
+FINDLIN     MOVEQ      #1,D3                     ;BIT NUMBER IN PORT A CORRESPONDING TO
+            MOVEQ      #CTSLIN,D4                ;FLAG BIT NUMBER
+;
+; Assumes that it will always find a line flag set
+;
+FLNLOOK     BTST       D4,(A1)                   ;IS BIT SET?
+            BNE.S      FLNGOT                    ;YES, D3 PORT A BIT FOR DC 0
+            ADDQ.B     #2,D3
+            ADDQ.B     #1,D4                     ;TRY NEXT BIT FLAG
+            CMPI.B     #DCDLIN+1,D4              ;DID LAST FLAG
+            BNE.S      FLNLOOK                   ;NO
+;
+; if (DataCom flag is set) then bit# := bit# + 1 - DC 1 bits in Port A are next bit up
+;
+FLNGOT      BTST       #DATACOM,(A1)
+            BEQ.S      FLNEXIT
+            ADDQ.B     #1,D3
+FLNEXIT     RTS
+;
+; TSTLINE - test Port A line used for Busy and the inverted flag to show if
+;           Busy or NOT Busy.
+;           ENTRY : (A1) = address of PTRFLAGS+1
+;                   (D0) = Port A
+;                   (D3) = bit number in Port A of Line used by Busy
+;           EXIT  : (NE) = Busy
+;                   (EQ) = NOT Busy
+;
+TSTLINE     BTST       D3,D0                     ;Create Line Boolean
+            SNE        D4
+            BTST       #INVBUSY,(A1)             ;Create Inverted Boolean
+            SNE        D5
+            EOR.B      D4,D5                     ;IF RESULT IS $FF THEN BUSY
+            RTS
+  page
+;
+; PRNCLR - UNITCLEAR
+;           Initialize Buffer to empty.  Initialize Communications control
+;           variables.  Initialize UART from Printer Control Table.
+;
+PRNCLR      BSR        DISINTS                   ;DISABLE INTERRUPTS
+            BSR        INITBUF                   ;INIT BUFFER & CONTROL VARIABLES
+            BSR        SETUART                   ;INIT UART FROM CONSTANTS & TABLE
+            BSR        ENBINTS                   ;ENABLE INTERRUPTS
+            RTS
+;
+; PRNBSY - UNITBUSY
+;           Return the state of the Printer, the Busy flag.
+;           True means printer will not except characters.
+;
+PRNBSY      LEA        FLAGS+1,A0                ;UNITBUSY
+            BTST       #BUSY,(A0)
+            SNE        D0                        ;MAKE BOOLEAN
+            ANDI.B     #1,D0                     ;MAKE PASCAL BOOLEAN
+            RTS
+  page
+;
+; PRNUNMT - UNITUNMOUNT
+;           Turnoff interrupt capabilities of Printer driver & current DataCom
+;
+PRNUNMT     BSR        DISINTS                   ;DISABLE INTERRUPTS
+;
+            BSR        GETBASE                   ;GET UART BASE
+            MOVE.B     #TURNOFF,CMDREGI(A0)      ;TURNOFF UART
+;
+; have vectors point to a RTe instruction
+;
+            LEA        CALLIDCC,A0               ;HAVE DATA COM CONTROL INT
+            MOVE.L     A0,VEC1.W                 ;RESET IOX TO CLEAR THE INT
+            LEA        VEC4.W,A1                 ;ASSUME DC0 (VECTOR 4)
+            LEA        PTFLAGS+1,A2
+            BTST       #DATACOM,(A2)             ;IS IT DC0
+            BEQ.S      PUNUSE0                   ;YES
+            LEA        VEC2.W,A1                 ;DC1 IS VECTOR 2
+PUNUSE0     MOVE.L     A0,(A1)                   ;PTR TO RTE IN CURRENT DC VECTOR
+;
+; Restore Interrupts
+;
+            BSR        ENBINTS
+            RTS
+  page
+;
+; PRNST - UNITSTATUS
+; call the Table change or buffer free Functions
+;
+PRNST       CMPI.W     #TBLSTATE,D2              ;VALID FUNCTION CODE
+            BHI.S      PSTERR                    ;NO
+            MOVE.W     (A3),D0                   ;GET PARAMETER
+            LEA        PSTTBL,A1                 ;TURN THE FUNCTION CODE INTO
+            LSL.W      #1,D2                     ;AN INDEX TO THE FUNCTION
+            MOVE.W     0(A1,D2.W),D2
+            JMP        0(A1,D2.W)                ;DO FUNCTION
+;
+; Invalid Function Code Error
+;
+PSTERR      MOVE.W     #INVFNC,D7
+            RTS
+;
+; THE PRINTER DRIVER JUMP TABLE
+;
+PSTTBL      DATA.W     STBUFFR-PSTTBL            ;BUFFER FREE SPACE
+            DATA.W     STBAUD-PSTTBL             ;SET BAUD RATE
+            DATA.W     STPRITY-PSTTBL            ;SET PARITY
+            DATA.W     STDTACOM-PSTTBL           ;SET DATA COM
+            DATA.W     STWRDSZ-PSTTBL            ;SET WORD SIZE
+            DATA.W     STHNDSK-PSTTBL            ;SET HANDSHAKE METHOD
+            DATA.W     STTBLST-PSTTBL            ;GET TABLE STATE
+  page
+;
+; STBUFFR - Return to the user the Free space in the Queue (Buffer).
+;
+STBUFFR     BSR        DISINTS                   ;DISABLE INTERRUPTS
+            MOVE.W     FREESPC,(A3)              ;GIVE USER FREE SPACE
+            BSR        ENBINTS                   ;ENABLE INTERRUPTS
+            RTS
+  page
+;
+; STBAUD - Set the Baud Rate
+;
+STBAUD
+            CMPI.W     #MAXBAUD,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        BAUDR,A0                  ;WHERE TO PUT VALUE
+            LEA        BAUDCNV,A1                ;CONVERSION ARRAY
+            BRA.S      SAVPARM                   ;SAVE CONVERTED PARAMETER
+;
+; STPRITY - Set the Parity
+;
+STPRITY
+            CMPI.W     #MAXPRTY,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        PARITY,A0                 ;WHERE TO PUT VALUE
+            LEA        PRTYCNV,A1                ;CONVERSION ARRAY
+            BRA.S      SAVPARM                   ;SAVE CONVERTED PARAMETER
+;
+; STWRDSZ - Set the word size to transmit (7 or 8)
+;
+STWRDSZ
+            CMPI.W     #MAXWRDS,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        WORDSIZ,A0                ;WHERE TO PUT VALUE
+            MOVE.B     D0,(A0)                   ;PUT IN WORD SIZE VALUE
+            BRA.S      RSTUART                   ;RESET UART FROM TABLE
+  page
+;
+; common code to STBAUDR, STPRITY, STWRDSZ, STDTACOM, & STHNDSK
+;
+SAVPARM     MOVE.B     0(A1,D0.W),(A0)           ;SAVE CONVERTED PARAMETER
+;
+RSTUART     BSR        DISINTS                   ;DISABLE INTERRUPTS
+RSTUART1    BSR        SETUART                   ;SETUP UART FROM TABLE
+            BSR        ENBINTS                   ;ENABLE INTERRUPTS
+            RTS
+;
+; Invalid Parameter error
+;
+SETERR      MOVE.W     #INVPRM,D7
+            RTS
+  page
+;
+; STDTACOM  - Change the DataCom being used.  Either DataCom 0 or 1.
+;
+STDTACOM
+            CMPI.W     #MAXDTCM,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+; change Table Flags
+;
+            LEA        PTFLAGS+1,A0              ;FLAGS
+            BSET       #DATACOM,(A0)             ;ASSUME PARAMETER=1
+            TST.B      D0
+            BNE.S      SDCCNGV                   ;IS DC 1, CHANGE VECTORS
+            BCLR       #DATACOM,(A0)
+;
+; Change interrupt vectors.  The old vector point at a RTE instruction.
+;
+SDCCNGV     BSR        DISINTS                   ;DISABLE INTERRUPTS
+            BSR        SETDCVEC                  ;SET VECTORS
+            BRA.S      RSTUART1
+  page
+;
+; STHNDSK - Set Handshake type.  Convert parameter into the flags and put these
+;           flag values into the Printer Control Table.  Don't need to reset
+;           UART.
+;
+STHNDSK
+            CMPI.W     #MAXHNDS,D0               ;IS IT A VALID PARAMETER
+            BHI.S      SETERR                    ;NO
+;
+            LEA        HNDSCNV,A1                ;CONVERSION ARRAY
+            LEA        PTFLAGS+1,A0              ;FLAGS
+            MOVE.B     0(A1,D0.W),D1             ;CONVERTED VALUE
+            MOVE.B     (A0),D2                   ;GET FLAG BYTE
+            ANDI.B     #DCMFLGM,D2               ;REMOVE CURRENT HANDSHAKE FLAGS
+            OR.B       D1,D2                     ;PUT IN NEW FLAGS
+            MOVE.B     D2,(A0)                   ;RESTORE FLAGS
+            RTS
+  page
+;
+; STTBLST - Return to the user in the parameter block the state of the Printer Control Table.
+;       ParameterBlock = record
+;                          BaudRate  : integer; {range = 0..6}
+;                          Parity    : integer; {range = 0..4}
+;                          DataCom   : integer; {range = 0..1}
+;                          WordSize  : integer; {range = 0..1}
+;                          HandShake : integer; {range = 0..7}
+;                        end;
+;
+STTBLST     CLR.L      D1                        ;MAKE SURE NO GARBAGE IN REGISTER
+;
+; GET BAUD RATE
+;
+            MOVE.W     #MAXBAUD,D0               ;MAX BAUD RATE PARAMETER VALUE
+            MOVE.B     BAUDR,D1                  ;CURRENT TABLE VALUE
+            LEA        BAUDCNV,A0                ;CONVERT TO INTEGER RANGE
+            BSR.S      GETVAL
+;
+; GET PARITY
+;
+            MOVE.W     #MAXPRTY,D0               ;MAX PARITY PARAMETER VALUE
+            MOVE.B     PARITY,D1                 ;CURRENT TABLE VALUE
+            LEA        PRTYCNV,A0                ;CONVERT TO INTEGER RANGE
+            BSR.S      GETVAL
+;
+; GET DATACOM
+;
+            MOVE.B     PTFLAGS+1,D1              ;GET FLAG BYTE WITH DATACOM FLAG IN IT
+            LSR.B      #7,D1                     ;TURN FLAG INTO A 0 OR A 1 INTEGER
+            MOVE.W     D1,(A3)+
+;
+; GET WORD SIZE
+;
+            MOVE.B     WORDSIZ,D1
+            MOVE.W     D1,(A3)+
+;
+; GET HANDSHAKE
+;
+            MOVE.W     #MAXHNDS,D0               ;MAX HANDSHAKE PARAMETER VALUE
+            MOVE.B     PTFLAGS+1,D1              ;CURRENT TABLE VALUE
+            BCLR       #DATACOM,D1               ;REMOVE DATACOM FLAG
+            LEA        HNDSCNV,A0                ;CONVERT TO INTEGER RANGE
+;
+; GET PARAMETER VALUE AN PUT IN PARAMETER BLOCK
+;
+GETVAL      CMP.B      0(A0,D0.W),D1             ;SEE WHICH CONVERSION VALUE = CURRENT VALUE
+            DBEQ       D0,GETVAL                 ;THE INDEX OF ONE = IS THE PARAMETER VALUE TO
+            MOVE.W     D0,(A3)+                  ;RETURN TO USER IN PARAMETER BLOCK
+            RTS
+  page
+;
+;
+; constant data area
+;
+; Conversion arrays for Set functions of Unitstatus
+;
+BAUDCNV     DATA.B     6,7,8,$A,$C,$E,$F         ;BAUD RATE
+; 6=300,7=600,8=1200,A=2400,C=4800,E=9600,F=19200
+;
+PRTYCNV     DATA.B     0,1,3,5,7                 ;PARITY
+; 0=DISABLED,1=ODD,3=EVEN,5=MARK XMIT/NO RCV,7=SPACE XMIT/NO RCV
+;
+HNDSCNV     DATA.B     $49                       ;LINE/CTS/INV
+            DATA.B     $09                       ;LINE/CTS/NOT INV
+            DATA.B     $51                       ;LINE/DSR/INV
+            DATA.B     $11                       ;LINE/DSR/NOT INV
+            DATA.B     $61                       ;LINE/DCD/INV
+            DATA.B     $21                       ;LINE/DCD/NOT INV
+            DATA.B     $02                       ;XON/XOFF
+            DATA.B     $04                       ;ENQ/ACK
+;
+; default Printer Control Table
+;           values for the Epson MX-100 printer with serial interface
+;
+            DATA.B     0                         ;FILL
+DEFPCT      DATA.B     $0C                       ;BAUD RATE-4800
+            DATA.B       0                       ;PARITY-DISABLED
+            DATA.B       0                       ;WORD SIZE = 8 BITS (1=7 BITS)
+            DATA.W     $91                       ;LINE/DSR/NOT INV/DATACOM 1
+  page
+;
+; Variable data area
+;
+; Printer Control Table
+;
+            DATA.B     0                         ;FILL
+PCTLTBL
+BAUDR       DATA.B     0                         ;BAUD RATE
+PARITY      DATA.B     0                         ;PARITY
+WORDSIZ     DATA.B     0                         ;WORD SIZE
+PTFLAGS     DATA.W     0                         ;FLAGS-HANDSHAKE TYPE & DATACOM
+;
+; save areas for current SR
+;
+SAVESR1     DATA.W     0
+;
+; buffer variables
+;
+FRONT       DATA.L     0                         ;BUFFER QUEUE FRONT POINTER
+REAR        DATA.L     0                         ;BUFFER QUEUE REAR POINTER
+COUNT       DATA.W     0                         ;COUNT OF CHARS BETWEEN ENQ'S
+FREESPC     DATA.W     0                         ;COUNT IN BYTES OF BUFFER FREE SPACE
+FLAGS       DATA.W     0                         ;INTERNAL FLAGS
+;
+; The Printer Driver Output Buffer - 256 bytes
+;
+BUFFER      DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+            DATA.L     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+BUFLEN      EQU        %-BUFFER                  ;BUFFER LENGTH
+            END        PRNTRDRV

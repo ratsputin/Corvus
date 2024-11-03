@@ -1,0 +1,1718 @@
+;
+;       11/12/81
+;
+;       edited 6/8/82 by W. DuBois
+;
+;       edited 8/18/82 by K. Ball
+;         divided file into 2 parts mbug.prom1.text and mbug.prom2.text.
+;         Changed program for Concept prom environment.
+;         all changes marked by *KB 8/18/82*
+;
+;       edited 8/23/ by K. Ball
+;         Changed interface to boot proms.  Have Init and Entry vectors.
+;
+;MACSBUG  IDNT  1,32 KDM MACSBUG (03/25/81)
+;  SEQUENTIAL FILE FORMAT
+;  DATE: 10/29/81 WPF
+;******************************************************************
+;                                                                *
+;       THESE MACROS ARE USED TO FORCE THE STRUCTURED RESIDENT  *
+;       ASSEMBLER TO GENERATE THE SAME CODE THAT THE CROSS        *
+;       ASSEMBLER PRODUCED. THE OBJECT BEING TO GET THE SOURCE  *
+;       IN A CONDITION THAT IT GENERATES EXACTLY WHAT WAS RELEASED  *
+;       AS MACSBUG 1.3.                                         *
+;       NOTE: UPON RELEASING ANY NEW VERSIONS, THE OPTIMIZATION  *
+;       CAN INSTANTLY BE "RE-AQUIRED" BY A SIMPLE CHANGE TO THESE       *
+;       MACROS...CHANGE ADDA TO ADD, AND SUBA TO SUB.           *
+;                                                                *
+;       ALSO NOTE THAT EACH MODIFICATION TO THE SOURCE FOR      *
+;       PURPOSES OF COMPATABILITY ARE MARKED BY THE CHARS.      *OPT*  *
+;       (FUTURE ASSEMBLIES CAN BE OPTIMIZED BY REMOVING THESE   *
+;       CHANGES AND MODIFYING THE TWO MACROS).
+;**********************************************************************
+; C O P Y R I G H T E D 1 9 8 1 B Y     M O T O R O L A ,       I N C . *
+;**********************************************************************
+;**********************************************************************
+;       MACSBUG 1.32 CORRECTS THE FOLLOWING:                            *
+;                                                                       *
+;       When the BREAK key was pressed at baud rates less than  *
+;       9600 and greater than 150, the firmware would enter an  *
+;       infinite loop printing :*:*:*:*:*:*:* etc.                      *
+;       The time spent in an existing delay loop, (INITACIA), was       *
+;       increased to prevent the problem.                               *
+;                                                                       *
+;       NOTE: This modification was made with a minimum amount    *
+;               of object code changes to allow patches to MACSbug 1.31 *
+;               firmware.                                                *
+;                                                                       *
+  PAGE
+ROM     EQU $20000     ;START OF ROM (USED AS OFFSET)
+;ACIA1   EQU $30F01      ;TERMINAL
+;ACIA2   EQU $30F21      ;HOST ACIA ADDRESS
+;  THE FOLLOWING NOT CURRENTLY USED - JLH
+;
+;  DS.L 1       ;RESTART STACK
+;  DS.L 1       ;RESTART VECTOR
+;  DS.L 1       ;BUSS ERROR
+;  DS.L 1       ;ILL ADDRESS
+;  DS.L 1       ;ILL INSTRUCTION
+;  DS.L 1       ;DIVIDE BY ZERO
+;  DS.L 1       ;CHECK TRAP
+;  DS.L 1       ;TRAP V
+;  DS.L 1       ;PRIVLIDGE VIOLATION
+;  DS.L 1       ;TRACE 
+;  DS.L 1       ;1010 LINE EMULATION
+;  DS.L 1       ;1010 LINE EMULATION
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;-NOT USED
+;  DS.L 1       ;
+;  DS.L 1       ;
+;  DS.L 1       ;
+;  DS.L 1       ;
+;  DS.L 1       ;
+;  DS.L 1       ;
+;  DS.L 1       ;
+;  DS.L 1       ;ABORT BUTTON
+;  DS.L 1       ;TRAP  0
+;  DS.L 1       ;TRAP  1
+;  DS.L 1       ;TRAP  2
+;  DS.L 1       ;TRAP  3
+;  DS.L 1       ;TRAP  4
+;  DS.L 1       ;TRAP  5
+;  DS.L 1       ;TRAP  6
+;  DS.L 1       ;TRAP  7
+;  DS.L 1       ;TRAP  8
+;  DS.L 1       ;TRAP  9
+;  DS.L 1       ;TRAP 10
+;  DS.L 1       ;TRAP 11
+;  DS.L 1       ;TRAP 12
+;  DS.L 1       ;TRAP 13
+;  DS.L 1       ;TRAP 14
+;  DS.L 1       ;TRAP 15
+         PAGE
+;*********************************************************************
+;       NOTE THE OFFSET DIRECTIVE IS BEING...
+;       "USED TO DEFINE A TABLE OF OFFSETS VIA THE DEFINE STORAGE (DS)
+;       DIRECTIVE WITHOUT PASSING THESE STORAGE DEFINITIONS ON TO THE   *
+;        LINKAGE EDITOR, IN EFFECT CREATING (A) DUMMY SECTION..."       *
+;       (SEE THE "RESIDENT STRUCTURED ASSEMBLER REF MANUAL... 3.2.4").  *
+;**********************************************************************
+REGPC   EQU $400        ;USERS PROGRAM COUNTER
+REGSR   EQU $404        ;USERS CONDITION CODES
+REGS    EQU $408        ;4BYTES*3SECTIONS*8REG(OR MEM)
+REGA7   EQU REGS+60     ;WHERE A7 REG IS
+REGUS   EQU $448        ;USER STACK
+OFFSET  EQU $44C        ;ASSUMED OFFSET
+FORMAT  EQU $450        ;TRACE DISPLAY FORMATS
+ADALL   EQU $474        ;SPECIAL FORMAT FLAGS
+WINDOWS  EQU $478       ;WINDOW PARAMETERS
+LOOPR1  EQU $4B8        ;LOW RANGE FOR LOOP CMD
+LOOPR2  EQU $4BC        ;HIGH RANGE
+BPADD   EQU $4C0        ;BREAKPOINT ADDRESSES
+BPTILL  EQU $4E0        ;TEMPORARY BREAKPOINT
+BPCNT   EQU $4E4        ;BREAKPOINT COUNTS
+BPDATA  EQU $508        ;HOLD USER WORDS REPLACED BY TRAP IN SET BP
+SAVETRAP EQU $51A       ;HOLDS USER'S TRAP7 VECTOR (WE USE FOR BP)
+NULLPADS EQU $51E       ;CHARACTER NULL PADS
+CRPADS  EQU $520        ;CARRIAGE RETURN NULL PADS
+SBIT    EQU $522        ;STOP BITS (ACIA PROGRAM)
+OUTTO   EQU $524        ;HOLDS ADDRESS OF OUTPUT ROUTINE
+INFROM  EQU $528        ;HOLDS ADDRESS OF INPUT ROUTINE
+ALTACIA1 EQU $52C       ;ALTERNATE ACIA PORT#1
+ALTACIA2 EQU $530       ;ALTERNATE ACIA PORT#2
+INPORT1  EQU $534       ;INPUT ROUTINE ADDRESS
+OUTPORT1 EQU $538       ;ADDRESS FOR OUPUT ROUTINE
+INPORT2  EQU $53C       ;ADDRESS FOR INPUT ROUTINE
+OUTPORT2 EQU $540       ;FOR OUTPURT ROUTINE
+INPORT3  EQU $544       ;THIS MIGHT BE FOR TAPE
+OUTPORT3 EQU $548       ;THIS MIGHT BE FOR PRINTER
+TRACECNT EQU $54C       ;TRACE COUNTER
+TRACEON  EQU $550       ;FLAG FOR TRACE ON
+RUN     EQU $552        ;1=SAVE USER REGISTERS 0=NOT
+BPSTATUS EQU $554       ;1=PB ARE IN  0=ARE OUT OF MEMORY
+SCREEN1  EQU $556       ;PRINT THIS BEFORE TRACE DISPLAY
+SCREEN2  EQU $55A       ;PRINT THIS AFTER
+BASE    EQU $55E        ;WORK VARIABLE
+SIGN    EQU $560
+VECTOR  EQU $562        ;WORK VARIABLE
+TEMP    EQU $564        ;WORK SPACE
+WORK1   EQU $568        ;WORK SPACE
+WORK2   EQU $56C        ;WORK SPACE
+STRSYM  EQU $570        ;START OF SYMBOL TABLE
+ENDSYM  EQU $574        ;END OF SYMBOL TABLE
+CMDTABLE EQU $578       ;START OF COMMAND TABLE
+BUFFER  EQU $57C        ;WORKING STORAGE BUFFER
+;
+SYSTACK  EQU $6B8       ;START OF STACK (GOES DOWN)
+;                                                       6/8/82 START
+COMM1   EQU $06BB
+CON1    EQU $06BA
+COMM2   EQU $06BD
+CON2    EQU $06BC
+;                                                       6/8/82 END
+         PAGE
+;
+;       INITIALIZATION ROUTINE
+;
+; BY CONVENTION THIS "PROM" IS ADDRESSED AT $000000 UPON RESTART.
+; WHEN A) THE ADDRESS FOR THE STACK POINTER (LOCATED AT $000000), AND
+;       B) THE ADDRESS FOR RESTART      (LOCATED AT $000004), HAVE
+; BEEN EXTRACTED, THE NORMAL ADDRESSING MODE RESUMES AND THIS "PROM"
+; WILL BE ADDRESSED AT $20000.
+;
+;
+;
+ZERO    DATA.L  0               ;USED AS A LABEL FOR A "BRA" IN SOURCE
+                                ;STACK ADDRESS (FOR RESTART)
+; Init vector for boot proms                                    *KB 8/23/82*
+        DATA.L  START+ROM       ; ADDRESS OF INIT RTN           *KB 8/23/82*
+; Entry vector for boot proms                                   *KB 8/23/82*
+        DATA.L  PromEntry+ROM   ; Address to start up MacsBug   *KB 8/23/82*
+
+; Performed by Boot Proms - interferes                          *KB 8/18/82*
+;                                                               *KB 8/18/82*
+;START   MOVE.W #$2700,SR        ;MASK OFF INTERRUPTS           *KB 8/18/82*
+;                                              *KB 8/18/82*     6/8/82 START
+;       MOVE.L #$00030F00,A0    ;GENERAL IO INITIALIZATION      *KB 8/18/82*
+;       MOVE.B #$17,$07(A0)     ;KYBD CTRL, 600 BAUD, 8 BIT WD  *KB 8/18/82*
+;       MOVE.B #$0B,$05(A0)     ;KYBD CMD, NO PARITY, NO INTS   *KB 8/18/82*
+;       MOVE.B #$3E,$27(A0)     ;DCOM0 CTRL, 9600 BAUD, 7 BIT   *KB 8/18/82*
+;       MOVE.B #$AB,$25(A0)     ;DCOM0 COMMAND                  *KB 8/18/82*
+;       MOVE.B #$3E,$47(A0)     ;DCOM1 CTRL, 9600 BAUD, 7 BIT   *KB 8/18/82*
+;       MOVE.B #$AB,$45(A0)     ;CMD                            *KB 8/18/82*
+;       MOVE.B #$00,$7F(A0)     ;VIA PORT A                     *KB 8/18/82*
+;       MOVE.B #$00,$61(A0)     ;VIA PORT B                     *KB 8/18/82*
+;       MOVE.B #$80,$67(A0)     ;DATA DIRECTION A INWARDS       *KB 8/18/82*
+;       MOVE.B #$37,$65(A0)     ;DATA DIRECTION B INWARDS       *KB 8/18/82*
+;       MOVE.B #$10,$77(A0)     ;FREE RUN SHIFT REGISTER, COUNTE*KB 8/18/82*
+;       MOVE.B #$FF,$75(A0)     ;SYMMETRICAL WAVE SHAPE         *KB 8/18/82*
+;       MOVE.B #$A0,$71(A0)     ;FAIRLY LOW INITIAL FREQUENCY   *KB 8/18/82*
+;       TST.B $C1(A0)           ;TURN OFF POSSIBLE OMNINET INT  *KB 8/18/82*
+;       MOVE.B $01(A0),D0       ;CLEAR KYBD DATA BUFFER         *KB 8/18/82*
+;       MOVE.B $21(A0),D0       ;CLEAR DCOM0 PORT               *KB 8/18/82*
+;       MOVE.B $41(A0),D0       ;CLEAR DCOM1 PORT               *KB 8/18/82*
+;                                                               *KB 8/18/82*
+;                                                               *KB 8/18/82*
+;Boot Prom Entry Point For Initialization of MacsBug            *KB 8/18/82*
+;                                                               *KB 8/18/82*
+START                                                          ;*KB 8/18/82*
+        SUBA.L A0,A0            ;CLEAR A0...ADDRESS POINTERS
+        MOVE.L #ROM+ABORTE-ZERO,D1      ;ABORT ERROR
+INIT0   MOVE.L D1,(A0)+         ;INITIALIZE VECTOR
+        CMPA.L #$400,A0         ;SEE IF DONE
+        BMI.S INIT0
+;                         SET UP SOME INDIVIDUAL VECTORS
+        MOVE.L #ROM+TRACE-ZERO,$24.W
+        MOVE.L #ROM+ABORTB-ZERO,$7C.W   ;ABORT BUTTON
+        MOVE.L #ROM+TRAP15-ZERO,$BC.W   ;FOR USER I/O
+;Performed by Boot Prom                                            *KB 8/18/82*
+;       MOVE.L #REGPC,A0        ;START OF WORK RAM (PAST REGISTERS)*KB 8/18/82*
+;       MOVE.L #(SYSTACK-REGPC)/2,D0    ;WORDS TO ZERO             *KB 8/18/82*
+;INIT    CLR.W (A0)+                                               *KB 8/18/82*
+;       SUBQ.L #1,D0    ;                                          *KB 8/18/82*
+;       BNE.S INIT                                                 *KB 8/18/82*
+;Intereferes with Boot Prom                                        *KB 8/18/82*
+;       MOVE.L #SYSTACK,A7      ;SET UP SUPER STACK                *KB 8/18/82*
+;                                                               6/8/82 START
+        MOVE.W #$1E0B,CON1.W    ;INITIALIZES BOTH CONx and COMMx   *KB 8/18/82*
+        MOVE.W #$1C0B,CON2.W    ;4800 baud                         *KB 8/18/82*
+;                                                               6/8/82 END
+        MOVE.L #$20002000,REGSR.W       ;DEFAULT STATUS REGISTER
+        MOVE.L #$0FFC,REGA7.W   ;SUPERVISOR STACK                  *KB 8/18/82*
+        MOVE.L #$7F00,REGUS.W   ;points to empty area              *KB 8/18/82*
+        MOVE.L #SYSTACK+2,STRSYM.W      ;INITIALIZE SYMBOL TABLE POINTERS
+        MOVE.L #SYSTACK+2,ENDSYM.W
+        MOVE.L #ROM+SYSCMDS-ZERO,CMDTABLE.W     ;POINTER TO COMMAND TABLE
+        MOVE.L #ROM+OUT1CR0-ZERO,OUTPORT1.W     ;INITIALIZE I/O ROUTINES
+        MOVE.L #ROM+OUTPUT20-ZERO,OUTPORT2.W
+        MOVE.L #ROM+OUT1CR0-ZERO,OUTPORT3.W     ;(PORT 3 SAME AS PORT 1)
+        MOVE.L #ROM+PORTIN10-ZERO,INPORT1.W
+        MOVE.L #ROM+PORTIN20-ZERO,INPORT2.W
+        MOVE.L #ROM+PORTIN10-ZERO,INPORT3.W
+        MOVE.L #'----',ADALL.W  ;INITIALIZE THE TRACE DISPALY
+        MOVE.W #$0302,FORMAT.W  ;PC & SR
+        MOVE.W #$0404,FORMAT+18.W       ;SS US
+
+        MOVE.W  #1,RUN.W                ;SAY TO SAVE REGISTERS  *KB 8/18/82*
+
+;;      BRA.S INIT3                                             *KB 8/18/82*
+        RTS             ;return to boot proms after init        *KB 8/18/82*
+
+INIT2   MOVE.L #$1FFFF,D0       ;DELAY LOOP
+INIT21  SUBQ.L #1,D0
+        BNE.S INIT21
+
+PromEntry                       ;Main entry by Proms to MacsBug *KB 8/18/82*
+        BSR     INITACIA        ;Make sure terminal ACIA is setup*KB 8/18/82*
+INIT3   BSR FIXBUF              ;                               *KB 8/18/82*
+        MOVE.W #$0D0A,(A6)+     ;GET A FRESH LINE
+        MOVE.L #'MACS',(A6)+
+        MOVE.L #'BUG ',(A6)+    ;MACSBUG 2.0
+        MOVE.L #'2.0 ',(A6)+     ;*6/8/82*      *KB 8/18/82*
+MSG     BSR OUT1CR      ;GO PRINT MESSAGE AND ENTER MACSBUG
+;
+;
+;       ***MACSBUG***  ENTRY    ;POINT
+;
+MACSBUG MOVE.W #$2700,SR        ;MASK OFF INTERRUPTS
+        MOVE.L #SYSTACK,A7      ;RESTORE SYSTEM STACK
+        BSR SWAPOUT     ;GET BP OUT OF USER MEMORY
+        CLR.L BPTILL.W  ;GET RID OF 'TILL' BREAKPOINT
+        CLR.L OUTTO.W   ;INITIALIZE I/O TO DEFAULT
+        CLR.L INFROM.W  ;INITIALIZE I/O TO DEFAULT
+        CLR.L WORK2.W   ;NO ECHO
+        BSR FIXBUF      ;A5&A6=#BUFFER
+        TST.W TRACEON.W ;SEE IF IN TRACE MODE
+        BEQ.S MACSBUG1  ;*
+        MOVE.B #':',(A6)+       ;Trace mode prompt = :*
+MACSBUG1 MOVE.B #'*',(A6)+      ;Normal prompt = *
+        BSR OUTPUT      ;GO PRINT IT
+        BSR FIXBUF      ;GET READY FOR INPUT
+        CLR.L (A6)      ;CLEAR PART OF THE BUFFER
+        BSR PORTIN1     ;GET A COMMAND
+MACSBUG2 MOVE.B #' ',(A6)       ;BLANK OUT END+1
+        CLR.L D7        ;DO NOT PRINT WHAT IF ERROR
+;
+;  DECODE A COMMAND
+;
+DECODE0  CMPA.L A6,A5   ;SEE IF ANYTHING ENTERED
+        BMI.S DECODE1
+        TST.W TRACEON.W ;SEE IF IN TRACE MODE
+        BEQ.S MACSBUG
+        MOVE.L #'T 1 ',(A6)+    ;PHONY UP COMMAND
+        BRA.S MACSBUG2
+DECODE1  CMPA.L A6,A5   ;SEE IF AT END OF BUFFER
+        BHI WHAT        ;GO TO 'WHAT' IF CONFUSED
+        MOVE.B (A5),D0  ;GRAB FIRST CHARACTER
+        BEQ.S DECODE11  ;IGNORE NULLS
+        CMPI.B #'*',D0  ;SEND LINE COMMAND
+        BNE.S DECODE10
+        ADDA.L #1,A5    ;GET PAST PHOENY PROMPT
+        BSR OUTPUT2     ;SEND LINE+CR
+        BRA.S MACSBUG   ;REENTER COMMAND MODE
+DECODE10 CMPI.B #$20,D0 ;IGNORE LEADING SPACES
+        BNE.S DECODE2   ;WHERE TO GO IF NOT A SPACE
+DECODE11 ADDA.L #1,A5   ;BUMP START OF BUFFER
+        BRA.S DECODE1   ;TRY NEXT CHARACTER
+;
+DECODE2  MOVE.B (A5),D1 ;GET 2 LETTERS OF COMMAND
+        LSL.W #8,D1     ;MAKE ROOM FOR NEXT CHAR
+        MOVE.B 1(A5),D1 ;GET NEXT CHAR
+;                                                       6/8/82 START
+        MOVE.L CMDTABLE.W,A0      ;START OF COMMAND TABLE
+;                                                       6/8/82 END
+DECODE4  MOVE.W (A0)+,D0        ;GET 2 LETTERS FROM TABLE
+        MOVE.L (A0)+,D7 ;GET ROUTINE VECTOR
+        CMPI.W #$FFFF,D0        ;SEE IF END OF TABLE
+        BEQ     WHAT    ;
+        CMPI.B #'*',D0  ;SEE IF DONT CARE CHARACTER
+        BNE.S DECODE5
+        MOVE.B D1,D0    ;DEFAULT
+        BRA.S DECODE3
+DECODE5  CMPI.B #'@',D0 ;SEE IF MUST-BE-NUMBER
+        BNE.S DECODE3
+        MOVE.B D1,D0    ;GET THE ALLEGED DIGIT
+        CMPI.B #'0',D0  ;SEE IF LESS THAN ZERO
+        BMI.S DECODE4
+        CMPI.B #'8',D0  ;SEE IF GT NINE
+        BPL.S DECODE4
+DECODE3  CMP.W D1,D0    ;? CMD=INPUT ?
+        BNE.S DECODE4
+        CLR.W TRACEON.W ;TURN OFF TRACE MODE
+        MOVE.L D7,-(A7) ;SET UP TO GO TO CMD
+RETURN  RTS
+;
+WHAT    BSR FIXBUF      ;PRINT OUT 'WHAT'
+        CLR.L TRACEON.W ;MAKE SURE TRACE IS OFF
+        MOVE.L #'WHAT',(A6)+
+        MOVE.L #$3F0D0A00,(A6)+ ;'?'+CR+LF+EOT
+        BSR OUTPUT
+        BRA MACSBUG
+        PAGE
+;
+;  SYSTEM COMMAND TABLE
+;
+;
+SYSCMDS DATA.W 'DM'     ;DISPLAY MEMORY (SAME AS PRINT)
+        DATA.L ROM+PRINT-ZERO
+        DATA.W 'SM'     ;SET MEMORY
+        DATA.L ROM+SMCMD-ZERO
+        DATA.W 'D@'     ;SET OR PRINT A DATA REGISTER
+        DATA.L ROM+SETD-ZERO
+        DATA.W 'A7'     ;SET A7 REG (SPECIAL)
+        DATA.L ROM+SETA7-ZERO
+        DATA.W 'A@'     ;SET OR PRINT AN ADDRESS REGISTER
+        DATA.L ROM+SETA-ZERO
+        DATA.W 'SR'     ;SET STATUS REGISTER
+        DATA.L ROM+SETSR-ZERO
+        DATA.W 'PC'     ;SET PROGRAM COUNTER
+        DATA.L ROM+SETPC-ZERO
+        DATA.W 'US'     ;SET USER STACK
+        DATA.L ROM+SETUS-ZERO
+        DATA.W 'SS'     ;SET SUPERVISOR STACK
+        DATA.L ROM+SETSS-ZERO
+        DATA.W 'BR'     ;SET BREAKPOINT
+        DATA.L ROM+BCMD-ZERO
+        DATA.W 'W@'     ;DEFINE A WINDOW
+        DATA.L ROM+SETW-ZERO
+        DATA.W 'M@'     ;SET MEMORY THROUGH WINDOW
+        DATA.L ROM+SETMW-ZERO
+        DATA.W 'OF'     ;SET OFFSET
+        DATA.L ROM+SETO-ZERO
+        DATA.W 'A:'     ;SEQUENCE THROUGH A CLASS
+        DATA.L ROM+SEQCLSA-ZERO
+        DATA.W 'D:'     ;SEQUENCE THROUGH A CLASS
+        DATA.L ROM+SEQCLSD-ZERO
+        DATA.W 'A '     ;PRINT CLASS
+        DATA.L ROM+PNTCLSA-ZERO
+        DATA.W 'D '     ;PRINT CLASS
+        DATA.L ROM+PNTCLSD-ZERO
+        DATA.W 'TD'     ;SET AND PRINT TRACE DISPLAY
+        DATA.L ROM+RCMD-ZERO
+        DATA.W 'CV'     ;NUMBER CONVERSION
+        DATA.L ROM+NUMCON0-ZERO
+        DATA.W 'CA'     ;CALL AN ALIEN ROUTINE (BSR)
+        DATA.L ROM+USERCALL-ZERO
+        DATA.W 'G*'     ;GO COMMAND
+        DATA.L ROM+GOCMD-ZERO
+        DATA.W 'RE'     ;READ (DOWNLOAD) COMMAND
+        DATA.L ROM+READ-ZERO
+        DATA.W 'VE'     ;VERIFY COMMAND
+        DATA.L ROM+VERIFY-ZERO
+        DATA.W 'P2'     ;ENTER TRANSPARENT MODE
+        DATA.L ROM+P2CMD-ZERO
+        DATA.W 'SY'     ;SYMBOLICS
+        DATA.L ROM+SYCMD-ZERO
+        DATA.W 'TE'     ;TERMINAL NULL CONTROL
+        DATA.L ROM+SPCMD-ZERO
+        DATA.W 'T*'     ;TRACE COMMAND
+        DATA.L ROM+TCMD-ZERO
+        DATA.W 'FO'     ;FORMAT (HOW TO PROGRAM ACIA)
+        DATA.L ROM+FOCMD-ZERO
+        DATA.W 'CR'     ;CR PADD COMMAND
+        DATA.L ROM+CRCMD-ZERO
+        DATA.W 'NU'     ;NULL PADD COMMAND
+        DATA.L ROM+NUCMD-ZERO
+        DATA.W 'PU'     ;PUNCH COMMAND
+        DATA.L ROM+PUNCH-ZERO
+        DATA.W 'OP'     ;OPEN MEMORY
+        DATA.L ROM+OPENCMD-ZERO
+;
+        DATA.W $FFFF    ;END OF LIST
+          PAGE
+;       ***PRINT***  PRINT (CORE DUMP) MACSBUG ENTRY POINT
+;       FORMAT:  PRINT[S] ADDRESS COUNT
+;       OR      PRINT ADDRESS ADDRESS
+;       IF SECOND PARAMETER IS LESS THAN STARTING ADDRESS
+;       THEN IT IS ASSUMED TO BE A COUNT-ELSE ENDING ADD.
+;       IF 'S' USED IN COMMAND THEN IT WILL PRINT 16 LINES
+;       AND PROMPT-ENTER CR FOR 16 MORE LINES ETC OR
+;       ANY MACSBUG COMMAND.
+;
+PRINT   BSR SCANPORT    ;WHERE TO SEND OUTPUT
+        MOVEQ.L #-1,D6  ;HOW MANY PER PAGE
+        MOVEQ.L #2,D0   ;INDEX PAST COMMAND
+        MOVE.B #' ',(A6)        ;LANK OUT LAST LETTER
+PRINT1  MOVE.B 0(A5,D0),D1      ;GET COMMAND LETTER
+        CMPI.B #' ',D1          ;SEE IF SPACE
+        BEQ.S PRINT5    ;NOT 'PRINTS'
+        CMPI.B #'S',D1  ;SEE IF LETTER S
+        BEQ.S PRINT4
+        ADDQ.L #1,D0    ;CHECK NEXT CHAR
+        BRA.S PRINT1
+PRINT4  MOVEQ.L #16,D6  ;DO 16 LINES AT A TIME
+        MOVE.L INPORT1.W,INFROM.W       ;MUST BE CONSOLE WITH THIS OPTION
+        MOVE.L OUTPORT1.W,OUTTO.W
+PRINT5  MOVE.L #0,A3    ;DEFAULT ZERO  START & END ADDRESS
+        MOVE.L #0,A4
+        MOVE.L #ROM+PUTADR-ZERO,A0      ;WHERE TO GO IF NO PARAMETERS
+        BSR GRABNUM     ;GET NUMBER
+        MOVE.L D0,A3
+        MOVE.L D0,A4    ;DEFAULT IS END
+        BSR GRABNUM
+        CMP.L A3,D0     ;SEE IF GREATER
+        BHI.S PRINT2
+        ADD.L A3,D0     ;END=START+COUNT-1
+        SUBQ.L #1,D0    ;BACK OFF ONE
+        MOVE.L D0,A4
+        BRA.S PUTADR
+PRINT2  MOVE.L D0,A4    ;ENDING ADDRESS=INPUT
+        MOVE.L A3,D0    ;GET READY FOR AND
+        ANDI.L #$00FFFFF0,D0     ;ROUND FOR EVEN DISPLAY
+        MOVE.L D0,A3    ;ROUNDED START ADDRESS
+; START A NEW 'DUMP' LINE
+PUTADR  BSR FIXBUF      ;SET UP OUTPUT BUFFER
+        MOVE.L A3,D0    ;CURRENT LINE ADDRESS
+        BSR PNT6HX      ;PRINT THE ADDRESS
+        MOVE.W #$2020,(A6)+     ;PRINT 2 SPACES
+        MOVE.L A3,A0    ;A0 IS SCANNING ADDRESS
+        MOVE.W #$10,D3  ;SET UP COUNTER FOR LOOP
+NXTBP   MOVE.B (A0)+,D0 ;GET BYTE TO PRINT
+        BSR PNT2HX      ;PRINT IT
+        MOVE.B #$20,(A6)+       ;SPACE BETWEEN EACH HEX
+        SUBQ.L #1,D3    ;LOOP TILL D3 IS ZERO
+        BNE.S NXTBP
+        MOVE.W #$2020,(A6)+     ;MOVE A COUPLE OF SPACES
+        MOVE.L A3,A0    ;RELOAD SCANNER FOR ASCII PRINTS
+        MOVE.W #$10,D3  ;RELOAD COUNTER
+NXTCHR  MOVE.B (A0)+,D0 ;GRAB BYTE
+        CMPI.B #$20,D0  ;SEE IF IT IS CONTROL CHAR
+        BLE.S NOTCHR    ;WHERE TO GO IF LESS THAN SPACE
+        CMPI.B #'Z',D0  ;IF .LE. Z THEN PRINT
+        BLE.S PUTCHR
+        CMPI.B #$61,D0  ;FILTER OUT $5B TO $60
+        BLT.S NOTCHR
+        CMPI.B #$7A,D0  ;SEE IF ABOVE LITTLE Z
+        BLE.S PUTCHR
+NOTCHR  MOVE.B #$2E,D0  ;CHANGE UNPRINTABLE TO PERIOD
+PUTCHR  MOVE.B D0,(A6)+ ;MOVE PRINT CHAR TO PRINT BUFFER
+        SUBQ.L #1,D3    ;LOOP AROUND FOR NEXT CHAR
+        BNE.S NXTCHR
+        BSR OUT1CR      ;AT END OF LINE...PRINT IT
+        ADDA.L #$10,A3  ;UPDATE STARTING ADDRESS OF NEXT ADDRESS
+        CMPA.L A4,A3    ;DOES NEW LINE START PAST END ADDR
+        BGT MACSBUG     ;DONE WITH PRINTING
+        SUBQ.L #1,D6    ;KNOCK DOWN COUNTER
+        BNE.S PUTADR    ;DO ANOTHER LINE
+        BSR FIXBUF      ;SET UP FOR PROMPT
+        MOVE.B #'*',(A6)+       ;PROMPT SAME AS MACSBUG
+        BSR OUTPUT      ;PRINT IT
+        BSR FIXBUF      ;RESET BUFFER
+        BSR PORTIN1     ;TAKE IN INPUT
+        CMPA.L A6,A5    ;SEE IF ANYTHING ENTERED
+        BNE MACSBUG2    ;GO DECODE A COMMAND
+        MOVE.B #16,D6   ;DO ANOTHER 16 LINES
+        BRA PUTADR
+        PAGE
+;
+;       ***SM***        SET MEMORY
+;       FORMAT: SM ADDRESS HEX HEX,HEX,'ASCII'  ETC.
+;       COMMAS OR SPACES BETWEEN FIELDS
+;       FIELDS ARE SIZE ADJUSTED (STORES UP TO 4 BYTES)
+;       ASCII ENCLOSED IN SINGLE QUOTES-ANY LENGTH
+;
+SMCMD   MOVE.L #ROM+SYNTAX-ZERO,A0      ;IF NO PARAMETERS
+        BSR GRABNUM     ;GET PARAMETER
+        MOVE.L D0,A1    ;A1=START (OPEN) ADDRESS
+SETM1   MOVE.L #ROM+MACSBUG-ZERO,A0     ;IF NO PARAMTER
+        BSR FINDNP
+        MOVE.L A5,A4    ;SAVE ADDRESS OF PARAMTER
+        MOVE.B (A5),D0  ;CHECK OUT NEXT CHARACTER
+        CMPI.B #$27,D0  ;SEE IF IT IS QUOTE MARK
+        BEQ.S SETM5     ;SPECIAL ROUTINE
+        CMPI.B #'N',D0  ;SEE IF NEXT LINE FEATURE
+        BEQ SETM7
+        BSR GETNUMA     ;GET THE DATA
+        MOVE.L A1,A3    ;ADDRESS
+        MOVE.L A5,D1    ;COMPUTE BYTES OF DATA
+        SUB.L A4,D1     ;LEN=END-START
+        ASR.L #1,D1     ;BYTES=CHAR/2
+        BCC.S SETM3     ;TAKE CARE OF ODD CHARACTER
+        ADDQ.L #1,D1    ;WHOLE NUMBER OF BYTES
+SETM3   MOVE.L D1,D2    ;D1 SCANS DOWN
+        SUBQ.L #1,D2    ;KNOCK IT DOWN TO INDEX
+        MOVE.B D0,0(A3,D2)      ;INDEXED BECAUSE BACKWARD
+        MOVE.B 0(A3,D2),D3      ;REREAD TO CHECK IF STORED OK
+        CMP.B D0,D3     ;ARE SAME?
+        BEQ.S SETM4
+SETME   BRA ERROR       ;DIDN'T STORE RIGHT!!
+SETM4   ASR.L #8,D0     ;SHIFT ONE BYTE
+        ADDA.L #1,A1    ;BUMP ADDRESS
+        SUBQ.L #1,D1
+        BNE.S SETM3
+        BRA.S SETM1     ;GO DO NEXT DATA
+;  DATA IN IN ASCII STRING
+SETM5   ADDA.L #1,A5    ;GET PAST QUOTE MARK
+SETM6   CMPA.L A6,A5    ;SEE IF END OF BUFFER
+        BGE MACSBUG
+        MOVE.B (A5)+,D0 ;GRAB CHARACTER
+        CMPI.B #$27,D0  ;SEE IF QUOTE MARK
+        BEQ.S SETM1     ;IF SO-END OF STRING
+        MOVE.B D0,(A1)  ;SAVE DATA
+        MOVE.B (A1)+,D1 ;REREAD FOR CHECK
+        CMP.B D1,D0     ;SEE IF SAME
+        BNE.S SETME     ;NOT EQUAL=ERROR
+        BRA.S SETM6     ;DO ANOTHER
+;
+SETM7   BSR FIXBUF      ;DISPLAY CURRENT ADDRESS
+        MOVE.L A1,D0    ;
+        BSR PNT8HX      ;PUT ADDRESS IN BUFFER
+        MOVE.L #' ? ',(A6)+     ;PROMPT
+        BSR OUTPUT      ;DUMP BUFFER WITH NO LF CR
+        BSR FIXBUF      ;GET READY FOR INPUT
+        MOVE.B #' ',(A5)+       ;ADVANCE IN BUFFER
+        MOVE.L A5,A6    ;BECAUSE OF SNAFU IN FINDNP
+        BSR PORTIN1     ;INPUT FROM CONSOLE
+        MOVE.B -(A5),D0 ;JUST BACK UP IN BUFFER
+        CMPA.L A6,A5
+        BEQ MACSBUG
+        BRA SETM1       ;DO DECODE IT
+        PAGE
+;       ***OPEN***  EXAMINE/CHANGE MEMORY
+;
+;
+OPENCMD  MOVE.L #ROM+ERROR2-ZERO,A0     ;WHERE TO GO IF NO ADDRESS
+        BSR GRABNUM     ;GET ADDRESS
+        MOVE.L D0,A4    ;SAVE ADDRESS HERE
+OPEN10  BSR FIXBUF      ;PRINT ADDRESS & CONTENT
+        MOVE.L A4,D0    ;CURRENT ADDRESS
+        BSR PNT6HX
+        MOVE.B #' ',(A6)+       ;SPACE
+        MOVE.B (A4),D0  ;GRAB CONTENT
+        BSR PNT2HX      ;PRINT IT
+        MOVE.B #' ',(A6)+       ;SPACE
+        MOVE.B #'?',(A6)+       ;PROMPT
+        BSR  OUTPUT     ;OUTPUT THE BUFFER
+;
+; TAKE IN NEW CONTENT OR COMMAND
+        BSR FIXBUF
+        BSR PORTIN1     ;GET LINE FROM USER
+        CMPA.L A5,A6    ;SEE IF NULL LINE
+        BEQ OPEN50      ;GO TO NEXT LOCATION    
+        MOVE.B (A5),D0  ;SEE IF '.' END OF COMMAND
+        CMPI.B #'.',D0
+        BEQ MACSBUG     ;END ROUTINE
+        MOVE.B (A4),D0  ;DEFAULT VALUE
+        BSR GETNUMA     ;GET NEW CONTENT
+;               PATCH 12/13/79 TO FORCE WRITE
+        NOP             ;CMP.B D0,(A4)  SEE IF CHANGE NEEDED
+        NOP             ;BEQ.S OPEN30
+        MOVE.B D0,(A4)  ;SAVE NEW DATA
+        CMP.B (A4),D0   ;SEE IF CHANGE MADE
+        BEQ.S OPEN30
+        BSR FIXBUF      ;GET READY FOR ERROR MESSAGE
+        MOVE.L #'NO C',(A6)+
+        MOVE.L #'HANG',(A6)+    ;.
+        MOVE.L #'E ',(A6)+
+        BSR OUT1CR
+        BRA.S OPEN10    ;STAY AT SAME LOCATION
+;
+; NOW FIGURE OUT UP/DOWN/SAME  ADDRESS
+;
+OPEN30  CMPA.L A6,A5    ;SEE IF AT BEGINNING OF BUFFER
+        BEQ.S OPEN50
+        MOVE.B -(A6),D0
+        CMPI.B #'.',D0  ;SEE IF CLOSE MODE
+        BEQ     MACSBUG
+        CMPI.B #'^',D0  ;GOING UP ALTERNATE CHAR
+        BEQ.S OPEN60
+        CMPI.B #'=',D0  ;SEE IF STAYING THE SAME
+        BEQ.S OPEN10
+OPEN50  ADDA.L #1,A4    ;GO LOW-TO-HIGH
+        BRA     OPEN10
+OPEN60  SUBA    #1,A4   ;GO HIGH-TO-LOW
+        BRA     OPEN10
+        PAGE 
+;
+; ***READ*** AND ***VERIFY**    'S' RECORDS
+;
+VERIFY  MOVE.L #'V ',WORK1.W    ;MARK THE MODE
+        BRA.S CHKCHKS   ;GO CHECK CHECKSUM OPTION
+;
+READ    CLR.L WORK1.W   ;READ MODE
+CHKCHKS  CLR.L TEMP.W   ;NORMALLY CHECK CHECKSUM
+        CLR.L WORK2.W   ;ECHO
+        BSR SCANPORT    ;SET UP OUTPUT P1,P2,P3 ETC                     
+; SEE IF CHECKSUM -C OPTION AND =SEND THIS OPTION
+READ01  CMPA.L A6,A5    ;SEE IF AT END OF BUFFER
+        BEQ.S READ0
+        MOVE.B (A5)+,D0 ;GET A CHARACTER
+READ03  CMPI.B #'=',D0  ;SEE IF EQUAL SIGN
+        BNE.S READ02
+        BSR OUTPUT2     ;SEND REST OF LINE TO PORT
+        BRA.S READ0
+READ02  CMPI.B #'X',D0  ;SEE IF ECHO
+        BNE.S READ021
+        MOVE.L #-1,WORK2.W      ;SET ECHO
+        BRA.S READ01
+READ021  CMPI.B #'-',D0 ;SEE IF MINUS SIGN
+        BNE.S READ01
+        CMPA.L A6,A5    ;SEE IF AT END OF BUFFER
+        BEQ.S READ0
+        MOVE.B (A5)+,D0 ;GRAB SECOND CHARACTER
+        CMPI.B #'C',D0  ;SEE IF LETTER C AS IN  -C
+        BNE.S READ03
+        MOVE.W #'CC',TEMP.W     ;MARK AS IGNORE CHECKSUM
+        BRA.S READ01
+;
+READ0   BSR FIXBUF      ;START OF INPUT BUFFER
+        BSR PORTIN2     ;GET A RECORD FROM PORT
+        CLR.L D4        ;FIRST TIME THROUGH JUST CHECK STUFF
+READ00  MOVE.L A5,A3    ;SAVE START ADDRESS OF BUFFER
+        MOVE.L A6,A4
+        MOVE.B (A3)+,D0 ;PULL FIRST CHARACTER
+        CMPI.B #'S',D0  ;SEE IF IT IS AN S
+        BEQ READ1
+        BRA.S READ0     ;GO GET ANOTHER BUFFER
+READ1   MOVE.B (A3)+,D0 ;PULL RECORD TYPE
+        CMPI.B #'0',D0  ;'S0'???
+        BEQ.S READ0     ;JUST IGNORE
+        CMPI.B #'1',D0  ;S1 ??? (2 BYTE ADDRES-DATA RECORD)
+        BEQ READS1
+        CMPI.B #'2',D0  ;S2 ???  (3 BYTE ADDRESS)
+        BEQ READS2
+        CMPI.B #'8',D0  ;S8 ??? (3 BYTE ADD-END OF FILE)
+        BEQ READS8
+        CMPI.B #'9',D0  ;S9 ??? /2 BYTE ADD-END OF FILE)
+        BEQ READS9
+        BRA.S READ0     ;IGNORE WEIRD LINE
+READS1  MOVEQ.L #4,D6   ;CHARACTERS IN ADDRESS
+READ2   CLR.L D5        ;D5 HOLDS THE CHECKSUM
+        MOVEQ.L #2,D2   ;GET THE 2 CHARACTER BYTE COUNT
+        BSR READHEX
+        MOVE.L D0,D3    ;D3 HOLDS BYTE COUNT
+        ADD.B D0,D5     ;ADD TO CHECKSUM
+        MOVE.L A3,A1    ;SAVE ADDRESS FOR A WHILE
+        MOVE.L D6,D7    ;CHAR IN ADDRESS
+        DIVU #2,D7      ;BYTES IN ADDRESS
+READ4X  MOVEQ.L #2,D2   ;READ ONE BYTE
+        BSR READHEX     ;OF THE ADDRESS
+        ADD.B D0,D5     ;CHECKSUM
+        SUBQ.L #1,D7
+        BNE.S READ4X
+        MOVE.L A1,A3    ;RESTORE ADDRESS
+        MOVE.L D6,D7    ;SET UP TO ADJUST BYTE COUNT
+        ADDQ.L #2,D7    ;ADD IN CHECK SUM & ADDRESS
+        DIVU #2,D7      ;CHANGE CHARACTERS TO BYTES
+        SUB.W D7,D3     ;ADJUST BYTE COUNT
+        MOVE.L D6,D2    ;SET CHARACTERS IN ADDRESS
+        BSR READHEX     ;GET THE ADDRESS INTO D0
+        MOVE.L D0,A0    ;SAVE ADDRESS IN A0
+        ADDA.L OFFSET.W,A0        ;ADD IN OFFSET
+        CLR.L D6        ;ZERO=MATCHED OK
+READ3   MOVEQ.L #2,D2   ;SET UP TO GET BYTE OF DATA
+        BSR READHEX
+        TST.B WORK1.W   ;SEE IF VERIFY MODE
+        BEQ.S READ301
+        MOVE.B (A0)+,D1 ;GET MEMORY
+        CMP.B D1,D0     ;SEE IF SAME
+        BEQ.S READ31
+        MOVE.B #'P',D6  ;MARK FOR PRINT
+        BRA.S READ33
+READ31  MOVE.L A3,A2    ;TRY TO BLANK OUT OK STUFF
+        SUBA.L #2,A2    ;BACK UP 2
+        MOVE.B #' ',(A2)+
+        MOVE.B #' ',(A2)+
+        BRA.S READ33
+READ301  ADD.B D0,D5    ;CHECKSUM
+        TST.L D4        ;ZERO=JUST TESTING (PASS 1)
+        BEQ.S READ33
+        MOVE.B D0,(A0)+ ;SAVE THE TAPE DATA
+READ33  SUBQ.L #1,D3    ;GO DOWN BYTE COUNT
+        BNE.S READ3
+        TST.B WORK1.W   ;SEE IF IN VERIFY MODE
+        BEQ.S READ34
+        TST.B D6        ;SEE IF PRINT IS NEEDED
+        BEQ READ0
+        MOVE.L OUTPORT1.W,OUTTO.W       ;SET UP FOR CONSOLE
+        MOVE.B #' ',(A2)+       ;BLANK OUT CHECKSUM
+        MOVE.B #' ',(A2)+       ;BLANK OUT CHECKSUM
+        BSR OUT1CR0     ;GO  PRINT IT
+        BRA READ0
+READ34  TST.L D4        ;NONZERO=END SECOND PASS
+        BNE READ0
+        MOVEQ.L #1,D4   ;FLAG NOW AS PASS2
+        TST.B TEMP.W    ;SEE IF CHKSUM IGNORED
+        BNE READ00      ;START SECOND PASS
+        MOVEQ.L #2,D2   ;GET CHECKSUM
+        BSR READHEX
+        NOT.B D0        ;REVERSE IT
+        CMP.B D5,D0     ;SEE IF SAME AS CHECKSUM
+        BEQ READ00      ;START SECOND PASS
+        MOVE.L #' CHK',(A6)+    ;ERROR TYPE
+        MOVE.L #'SUM=',(A6)+
+        MOVE.B D5,D0    ;D5=COMPUTED CHKSUM
+        NOT.B D0        ;REVERSE IT
+        BSR PNT2HX      ;PUT WHAT CHKSUM SHOULD BE
+        BSR OUT1CR0
+        BRA READ0
+READS2  MOVEQ.L #6,D6   ;CHARACTERS IN ADDRESS
+        BRA READ2
+READS8  MOVEQ.L #6,D2   ;6 CHAR IN ADDRESS
+READ8   ADDA.L #2,A3    ;GET PAST BYTE COUNT
+        BSR READHEX     ;GET ADDRESS
+        MOVE.L D0,REGPC.W       ;SAVE IT IN THE USER PREG
+        BRA MACSBUG     ;END OF ROUTINE?
+READS9  MOVEQ.L #4,D2   ;4 CHAR IN ADDRESS
+        BRA.S READ8
+READHEX  CLR.L D0       ;READ HEX FROM BUFFER
+RHEX1   MOVE.B (A3)+,D1 ;GRAB ASCII
+        CMPI.B #$30,D1  ;SEE IF LESS THAN ZERO
+        BLT RHEX3       ;
+        CMPI.B #$39,D1  ;SEE IF GT 9
+        BLE RHEX2
+        SUBQ.B #7,D1    ;NORMALIZE $A TO 10
+        CMPI.B #$40,D1  ;SEE IF TOO LARGE
+        BLT RHEX2       ;
+RHEX3   MOVE.L #' NOT',(A6)+    ;'NOT HEX=X?'  MESSAGE
+        MOVE.L #' HEX',(A6)+
+        MOVE.B #'=',(A6)+
+        MOVE.B -(A3),(A6)+      ;BAD CHARACTER
+        BSR OUT1CR
+        MOVE.L (A7)+,D0 ;POP STACK (NO RETURN FROM ROUTINE)
+        BRA READ0       ;GO TRY NEXT RECORD
+RHEX2   ANDI.B #$F,D1
+        ASL.L #4,D0     ;SHIFT PRIOR RESULT
+        OR.B D1,D0      ;INCLUDE NEX HEX CHARACTER
+        SUBQ.L #1,D2    ;LOOP AROUND
+        BNE.S RHEX1
+        RTS
+        PAGE
+;
+;       ***PUNCH***  PUNCH 'S' RECORDS
+;       FORMAT:  PU ADDRESS  ADDRESS OR COUNT
+;
+;
+PUNCH   BRA MACSBUG
+;PUNCH   BSR SCANPORT    ;SEE WHERE TO SEND OUTPUT
+;       MOVE.L #ROM+ERROR2-ZERO,A0      ;WHERE TO GO IF NO PARAMTERS
+;       BSR GRABNUM     ;GET NUMBER ELSE ERROR
+;       MOVE.L D0,A3    ;SAVE IT
+;       BSR FINDNP      ;SEARCH FOR END ADDRESS
+;       BSR GETNUMR     ;GET THE NUMBER
+;       MOVE.L D0,A4    ;SAVE IT
+;       CMPA.L A3,A4    ;SEE IF COUNT OR ABSOLUTE
+;       BHI.S PUNCH1
+;       ADDA.L A3,A4    ;IT WAS COUNT
+;       SUBA.L #1,A4    ;MOVE IT DOWN
+;PUNCH1
+;       MOVE.L #ROM+PUNCH5-ZERO,A0      ;WHERE TO GO IF NO HEADER
+;       BSR FINDNP      ;LOOK FOR HEADER
+;PUNCH5  MOVE.L A5,A0    ;START OF BUFFER
+;       MOVE.L A6,D5    ;END OF TEXT+1
+;       BSR FIXBUF      ;A5,A6=#BUFFER
+;       MOVEQ.L #2,D6   ;THE BYTE COUNT
+;       CLR.L D4        ;CLEAR THE CHECKSUM
+;       MOVE.L #'S0??',(A6)+    ;START OF S RECORD
+;       MOVE.L #'0000',(A6)+    ;DUMMY ADDRESS
+;MORES0  CMPA.L D5,A0    ;SEE IF AT END OF TEXT
+;       BGE.S ENDS0     ;WHERE TO GO WHEN ALL CHARACTERS USED
+;       ADDQ.L #1,D6    ;ANOTHER BYTE
+;       MOVE.B (A0)+,D0 ;GET ANOTHER BYTE OF TEXT
+;       ADD.L D0,D4     ;FOR CHECKSUM
+;       BSR PNT2HX      ;PUT IT IN BUFFER
+;       BRA.S MORES0
+;ENDS0   BSR PNTSREC     ;GO PRINT THE 'S' RECORD
+;       MOVE A3,A2      ;A2 WILL SCAN BETWEEN A3-A4
+;
+; DO ANOTHER    ;'S' RECORD
+;
+;MORESP  BSR FIXBUF      ;A5,A6=#BUFFER
+;       CLR.L D4        ;CLEAR CHECKSUM REGISTER
+;       MOVE.L A3,D0    ;READY TO PRINT ADDRESS
+;       SUB.L OFFSET.W,D0
+;       MOVE.L A3,D1    ;GET READY TO AND ADDRESS
+;       MOVEQ.L #$10,D3 ;MAXIMUM BYTES ON S REC LINE
+;       ADD.L D3,D1     ;INSURE END OF LINE ADDRESS IS MAX
+;       ANDI.L #$FF0000,D1       ;SEE IF 3 BYTE ADDRESS
+;       BNE S2REC       ;WHERE TO GO IF 3 BYTES NEEDED
+;       MOVE.L #'S1??',(A6)+    ;PUSH
+;       MOVE A3,D0      ;SET UP TO PRINT 2 BYTE ADDRESS
+;       SUB.L OFFSET.W,D0
+;       BSR PNT4HX      ;PRINT 4 HEX CHAR ADDRESS
+;       MOVEQ.L #2,D6   ;BYTE COUNT
+;       MOVE.W A3,D0    ;FIX UP CHECKSUM
+;       SUB.L OFFSET.W,D0
+;       ADD.B D0,D4     ;LOW BYTE
+;       ASR #8,D0       ;SHIFT IT OVER
+;       ADD.B D0,D4     ;HIGH BYTE OF ADDRESS
+;       BRA PNCA3       ;GO PUNCH A LINE
+;S2REC   MOVE.L #'S2??',(A6)+    ;PUSH
+;       BSR PNT6HX      ;PRINT 6 HEX CHAR ADDRESS
+;       MOVEQ.L #3,D6   ;BYTE COUNT
+;       MOVE.L A3,D0    ;FIX UP CHECKSUM
+;       SUB.L OFFSET.W,D0
+;       ADD.B D0,D4     ;LOW BYTE
+;       ASR #8,D0       ;SHIFT IT OVER
+;       ADD.B D0,D4     ;MIDDLE BYTE
+;       SWAP D0 ;SET UP FOR HIGH BYTE
+;       ADD.B D0,D4     ;ADD HIGH BYTE
+;PNCA3   CMPA.L A4,A3    ;SEE IF AT ENDING ADDRESS
+; END OF FILE
+;       BLE A3OUT       ;WHERE TO GO IF BELOW OR AT END ADDRESS
+;       BSR PNTSRECX    ;END IT BY PRINTING LAST RECORD
+;       BSR FIXBUF      ;A5,A6=#BUFFER
+;       MOVE.L #'S9??',(A6)+    ;MOVE TO PRINT BUFFER
+;       MOVE.L #'0000',(A6)+    ;MOVE '0000' TO PRIT BUFFER
+;       MOVEQ.L #2,D6   ;BYTE COUNT
+;       BSR PNTSREC     ;PRINT 'S9' END-OF-FILE RECORD
+;       BRA MACSBUG     ;REENTER MACSBUG
+;A3OUT   MOVE.B (A3)+,D0 ;GRAB THE BYTE FROM MEMORY
+;       ADD.W D0,D4     ;ADD TO CHECKSUM
+;       ADDQ.W #1,D6    ;BUMP THE BYTE COUNT
+;       ADDA.L #1,A1    ;ADD TO COUNT OF BYTES PROCESSED
+;       BSR PNT2HX      ;PUT THE HEX IN THE PRINT BUFFER
+;       SUBQ.L #1,D3    ;COUNT DOWN CHAR TO GO IN LINE
+;       BNE.S PNCA3
+;       BSR PNTSREC     ;END OF LINE-PUNCH IT
+;       BRA MORESP      ;GO FIX UP NEXT LINE
+;
+; FIX UP & PRINT THE 'S' RECORD/LINE
+;
+PNTSRECX CMPA.W #$0000,A1       ;SEE IF ANY CHAR MOVED
+        BNE.S PNTSREC   ;IF SO GO PRINT IT
+        RTS             ;IF NOT JUST RETURN
+PNTSREC  ADDQ #1,D6     ;ONE MORE BYTE (CHECKSUM)
+        ADD.W D6,D4     ;ADD BYTE COUNT TO CHECKSUM
+        NOT.B D4        ;COMPLIMENT THE CHECKSUM
+        MOVE.L D4,D0    ;READY FOR PRINT-HEX
+        BSR PNT2HX      ;PUT CHECKSUM IN RECORD
+        MOVE.L A6,D7    ;SAVE FOR THE MOMENT
+        MOVE.L A5,A6    ;START OF BUFFER
+        ADDA.L #2,A6    ;BYPASS RECORD TYPE (4 CHAR)
+        MOVE.B D6,D0    ;SET UP BYTE COUNT FOR PNTHEX ROUTINE
+        BSR PNT2HX      ;PUT THE BYTE COUNT IN THE PRINT BUFFER
+        MOVE.L D7,A6    ;RESTORE REAL END OF BUFFER
+        BSR OUT1CR      ;DO THE ACTUAL DISPLAY/PUNCH 
+        SUBA.L A1,A1    ;CLEAR COUNTER OF BYTES PROCESSED
+        RTS
+         PAGE
+;
+;       ***TE***        SPEED COMMAND
+;
+SPCMD   MOVE.B 2(A5),D6 ;SAVE ACIA #
+SPCMD2  MOVE.L #ROM+SYNTAX-ZERO,A0      ;WHERE TO GO IF NO PARAMTERS
+        BSR GRABNUMA    ;GET SPEED
+        CMPI.W #$110,D0 ;BAUD=110??
+        BNE.S SPCMD3
+        MOVE.B #0,D0    ;CHARACTER NULLS
+        MOVE.B #0,D1    ;CR NULLS
+        BRA.S SPCMD8
+SPCMD3  CMPI.W #$300,D0 ;BAUD=300??
+        BNE.S SPCMD4
+        MOVE.B #0,D0
+        MOVE.B #4,D1
+        BRA.S SPCMD8
+SPCMD4  CMPI.W #$1200,D0        ;BAUD=1200??
+        BNE.S SPCMD5
+        MOVE.B #3,D0
+        MOVE.B #$17,D1
+        BRA.S SPCMD8
+SPCMD5  CMPI.W #$2400,D0        ;BAUD=2400??
+        BNE WHAT
+        MOVEQ.L #$7,D0
+        MOVEQ.L #$2F,D1
+SPCMD8  CMPI.B #'2',D6  ;SEE IF PORT1 ONLY
+        BEQ.S SPCMD9
+        MOVE.B D0,NULLPADS.W    ;SET CHAR NULLS
+        MOVE.B D1,CRPADS.W      ;SET CR NULLS
+SPCMD9  CMPI.B #'1',D6  ;SEE IF PORT2 ONLY
+        BEQ INIT2
+        MOVE.B D0,NULLPADS+1.W  ;SET CHAR NULLS
+        MOVE.B D1,CRPADS+1.W    ;SET CR NULLS
+        BRA INIT2
+        PAGE
+;
+;       COMMANDS TO SET TERMINAL SPEEDS
+;                                               *KB 8/18/82*
+;Don't perform FORMAT command (FO)         *KB 8/18/82* 6/8/82 START
+;FOCMD   MOVE.L #CON1,A1 ;INDEX FOR ACIA CONTROL STUFF *KB 8/18/82*
+;                                          *KB 8/18/82* 6/8/82 END
+;       BRA.S PADCMD                       *KB 8/18/82*
+FOCMD   BRA     MACSBUG         ;          *KB 8/18/82*
+
+NUCMD   MOVE.L #NULLPADS,A1     ;INDEX FOR NULL PAD STUFF
+        BRA.S PADCMD
+;
+CRCMD   MOVE.L #CRPADS,A1       ;CARRIAGE RETURN PADS
+;
+PADCMD  MOVE.W (A5),D7  ;SAVE TEST 'NU' OR 'CR'
+        MOVE.B 2(A5),D6 ;SAVE POSSIBLE ACIA #1 OR 2
+        MOVE.L A6,D5    ;SEE IF ':' USED
+        SUB.L A5,D5     ;COMPUTE OFFSET
+        MOVE.B #':',D0  ;COMPARE WITH SLASH
+PADCMD0  CMP.B 0(A5,D5),D0      ;SEE IF BUFFER=/
+        BEQ.S PADCMD1
+        SUBQ.L #1,D5    ;LOOP AROUND
+        BNE.S PADCMD0
+PADCMD1  MOVE.L #ROM+PNTPAD-ZERO,A0
+        BSR GRABNUMA    ;GET NEXT PARAMETER IF ANY
+PADCMD11 CMPI.B #'2',D6 ;SEE IF SETING PORT1
+        BEQ.S PADCMD2
+        MOVE.B D0,(A1)  ;SAVE PARAMETER
+PADCMD2  CMPI.B #'1',D6 ;SEE IF SETING PORT2
+        BEQ.S PADCMD3
+        MOVE.B D0,1(A1)
+;
+;       PATCHED *08/14/80*
+PADCMD3  BRA PATCH3     ;CALL INITACIA AND RE-ENTER MACSBUG
+;
+PNTPAD  BSR FIXBUF      ;SET UP TO PRINT
+        CMPI.B #'1',D6  ;SEE IF ANY PARTICUALR NUMBER USED
+        BEQ.S PNTPAD2
+        CMPI.B #'2',D6
+        BEQ.S PNTPAD2
+        MOVE.B (A1),D0  ;SEE IF THE TWO ARE THE SAME
+        CMP.B 1(A1),D0
+        BNE.S PNTPAD2
+        MOVE.W D7,(A6)+ ;'NU' OR 'CR'
+        MOVE.B #'=',(A6)+       ;SET UP TO PRINT 1 NUMBER
+        BSR PNT2HX
+        BRA.S PNTPAD4
+PNTPAD2  CMPI.B #'2',D6 ;SEE IF PORT1
+        BEQ.S PNTPAD3
+        MOVE.W D7,(A6)+ ;'NU' OR 'CR'
+        MOVE.W #'1=',(A6)+
+        MOVE.B (A1),D0  ;GET VALUE TO PRINT
+        BSR PNT2HX
+        MOVE.W #' ',(A6)+               ;SPACES
+PNTPAD3  CMPI.B #'1',D6 ;SEE IF PORT2 ONLY
+        BEQ.S PNTPAD4
+        MOVE.W D7,(A6)+ ;SET IN 'NU' OR 'CR'
+        MOVE.W #'2=',(A6)+
+        MOVE.B 1(A1),D0 ;GET PAD VALUE
+        BSR PNT2HX
+PNTPAD4  BSR OUTPUT     ;GO PRINT IT
+        BSR FIXBUF
+        TST.B D5        ;SEE IF ':' USED
+        BEQ MSG
+        BSR PORTIN1     ;GO GET INPUT
+        CMPA.L A6,A5    ;SEE IF ANYTHING INPUT
+        BEQ MACSBUG
+        BSR GETNUMA     ;GO GET PARAMETER
+        BRA PADCMD11    ;GO DECODE IT
+        PAGE
+;
+;       PRINT & INPUT REGISTER ROUTINES
+;
+SETD    MOVE.L #REGS,A4 ;START OF REGISTERS
+        BRA.S SETR
+SETA    MOVE.L #REGS+32,A4      ;OFFSET IN REGISTER TABLE
+        BRA.S SETR
+SETPC   MOVE.L #REGPC,A4        ;WHERE PC IS
+        BRA.S SETR0
+SETSR   MOVE.L #REGSR,A4        ;WHERE SR IS
+        BRA.S SETR0
+SETA7   MOVE.L REGSR.W,D1 ;GET CONDITION CODES
+        ANDI #$2000,D1    ;CHECK SUPERVISOR BIT
+        BEQ.S SETUS
+SETSS   MOVE.L #REGA7,A4        ;WHERE SUPERVISOR STACK IS
+        BRA.S SETR0
+SETUS   MOVE.L #REGUS,A4        ;USER STACK
+        BRA.S SETR0
+SETO    MOVE.L #OFFSET,A4       ;WHERE OFFSET IS
+        BRA.S SETR0
+;
+;  ROUTINE TO ENTER DATA FOR A SINGLE REGISTER
+;       A5-A6 ARE COMMAND BUFFER
+;       D0 HAS REGISTER DIGIT A4 HAS CLASS OFFSET
+SETR    BSR GETHEX      ;GET REG NUMBER
+        LSL.L #2,D0     ;SHIFT LEFT...MULT BY 4
+        ADDA.L D0,A4    ;A4 NOW HAS EXACT ADDRESS
+SETR0   ADDA.L #2,A5    ;NOW FIND PARAMETERS
+        MOVE.B #':',D0  ;SEE IF SLASH IN COMMAND
+        BSR.S SCAN
+        BEQ.S SETR5
+;SEE IF ANY PARAMER (HEX)
+SETR3   MOVE.L #ROM+SETR4-ZERO,A0       ;WHERE TO GO IF NO PARAMETERS
+        BSR FINDNP      ;GO FIND NEXT PARAMETER
+SETR6   CLR.L D0        ;DEFAULT VALUE IS ZERO
+SETR7   BSR GETNUMA     ;GO GET VALUE
+        BSR.S CHECKSR   ;SEE IF SR OVERFLOW
+        MOVE.L D0,(A4)  ;SAVE NEW VALUE
+        BRA MACSBUG
+;JUST PRINT IT
+SETR4   BSR.S PRINTR    ;FIX UP TO PRINT
+        BRA MSG ;GO PRINT MESSAGE-GO TO MACSBUG
+SETR5   BSR.S PRINTR    ;FIX UP TO PRINT
+        MOVE.B #' ',(A6)+       ;SPACE
+        MOVE.B #'?',(A6)+       ;PROMPT
+        MOVE.B #' ',(A6)+       ;SPACE
+        BSR OUTPUT      ;PRINT IT
+        BSR.S GETINPUT  ;GO FILL INPUT BUFFER
+        MOVE.L (A4),D0  ;DEFAULT VALUE
+        BRA.S SETR7
+; SEE IF;CHARACTER IS IN BUFFER
+SCAN    MOVE.L A5,A0    ;A0 IS WORKING SCANNER
+SCAN2   CMPA.L A6,A0    ;SEE IF AT END OF BUFFER
+        BHI.S RETURN5
+        CMP.B (A0),D0   ;LOOK AT CHARACTER
+        BEQ.S RETURN5
+        ADDA.L #1,A0    ;GET PAST CHARACTER
+        BRA.S SCAN2
+RETURN5  RTS
+        PAGE
+; ROUTINE TO SET UP TO PRINT REG
+PRINTR  BSR FIXBUF
+        ADDA.L #2,A6    ;GET PAST REG NAME
+        MOVE.B #'=',(A6)+       ;PUT IN EQUAL SIGN
+        MOVE.L (A4),D0  ;GET VALUE
+        CMPA.L #REGSR,A4        ;SEE IF THIS IS CONDITION CODES
+        BNE.S PRINTR2
+        BSR PNT4HX      ;JUST PRINT WORD
+        RTS
+PRINTR2  BSR PNT8HX     ;PRINT THE VALUE
+        RTS
+;  TAKE IN INPUT ETC
+GETINPUT BSR FIXBUF     ;SET UP BUFFER POINTERS
+        BSR PORTIN1
+        RTS
+CHECKSR  CMPA.W #REGSR,A4       ;SEE IF STATUS REG
+        BNE RETURN      ;
+        CMPI.L #$FFFF,D0 ;SEE IF OVERFLOW
+        BLE RETURN      ;RETURN IF OK
+        BRA ERROR       ;OVERFLOW ON SR REG
+        PAGE
+;
+;       PRINT ALL REGISTERS IN A CLASS (A OR D)
+;
+PNTCLSD MOVE.B #'D',D7  ;CLASS=DATA
+        MOVE.L #REGS,A3 ;OFFSET
+        BSR.S PNTCLS
+        BRA MACSBUG
+PNTCLSA MOVE.B #'A',D7  ;CLASS=ADDRESS
+        MOVE.L #REGS+32,A3      ;OFFSET
+        BSR.S PNTCLS
+        BRA MACSBUG
+PNTCLS  BSR FIXBUF
+        CLR.L D6        ;REGISTER COUNTER
+PNTCLS1 BSR.S PNTREG    ;PRINT THE REGISTER
+        CMPI.B #4,D6    ;DISPLAY AFTER 3&7
+        BNE.S PNTCLS2
+        BSR OUT1CR
+        BSR FIXBUF
+        BRA.S PNTCLS1   ;DO SOME MORE
+PNTCLS2 CMPI.B #8,D6    ;AT END?
+        BNE.S PNTCLS1
+        BSR OUT1CR      ;PRINT IT
+        RTS                      
+;
+;       SUBROUTINE TO   ;PRINT REGISTER X#=12345678.
+PNTREG  MOVE.B D7,(A6)+ ;CLASS
+        MOVE.B D6,D0    ;REG#
+        BSR PUTHEX
+        MOVE.B #'=',(A6)+       ;EQUAL SIGN
+        MOVE.L D6,D0    ;COMPUTE ADDRESS OF REG
+        LSL.L #2,D0     ;MULT BY FOUR
+        ADD.L A3,D0     ;ADD IN OFFSET
+        MOVE.L D0,A4    ;SET UP TO GET DEFFERED
+        CMPA.L #REGA7,A4        ;SEE IF REG A7
+        BNE.S PNTREG1
+        MOVE.L REGSR.W,D0 ;GET STATUS REGISTER
+        ANDI.W #$2000,D0 ;CHECK SUPERVISOR BIT
+        BNE PNTREG1
+        MOVE.L #REGUS,A4        ;TAKE ADDRESS OF USER STACK
+PNTREG1 MOVE.L (A4),D0  ;GET REG CONTENT
+        BSR PNT8HX      ;PUT IN BUFFER
+        MOVE.B #' ',(A6)+               ;SPACE
+        ADDQ.L #1,D6    ;BUMP REG#
+        RTS
+        PAGE
+;
+;       SEQUENCE THROUGH A CLASS
+;       PRINT & INPUT ALL REG BY CLASS
+;
+SEQCLSD MOVE.B #'D',D7  ;CLASS=DATA
+        MOVE.L #REGS,A3 ;OFFSET
+        BRA.S SEQCLS
+SEQCLSA MOVE.B #'A',D7  ;CLASS=ADDRESS
+        MOVE.L #REGS+32,A3      ;OFFSET
+        BRA.S SEQCLS
+SEQCLSB MOVE.B #'B',D7  ;CLASS=BREAKPOINTS
+        MOVE.L #BPADD,A3        ;OFFSET
+SEQCLS  CLR D6          ;REG WE ARE DOING
+SEQCLS1 BSR FIXBUF      ;START A NEW LINE
+        BSR.S PNTREG
+        MOVE.W #'? ',(A6)+              ;PROMPT
+        BSR OUTPUT      ;PRINT IT
+        BSR GETINPUT
+        MOVE.L (A4),D0  ;DEFAULT VALUE
+        BSR GETNUMA
+        BSR CHECKSR     ;SEE IF SR OVERFLOW
+        MOVE.L D0,(A4)  ;SAVE NEW VALUE
+        CMPI.B #8,D6    ;AT END??
+        BNE.S SEQCLS1
+        BRA MACSBUG     ;END OF ROUTINE
+         PAGE
+;
+;       ***BR***        SET AND PRINT BREAKPOINTS
+;
+BCMD    MOVE.L #ROM+BCMD7-ZERO,A0       ;WHERE TO GO IF NO PARAMETERS
+BCMD0   BSR FINDNP      ;SEARCH FOR NEXT PARAMETER
+        LSL.L #8,D0     ;GET 4 BYTES
+        MOVE.B 2(A5),D0
+        LSL.L #8,D0
+        MOVE.B 3(A5),D0
+        CMPI.L #'CLEA',D0        ;SEE IF PART OF CLEAR
+        BNE.S BCMD02
+        MOVE.B 4(A5),D0 ;GET THE 'R'
+        LSL.W #8,D0
+        MOVE.B 5(A5),D0 ;GET THE SPACE
+        CMPI.W #'R ',D0         ;MAKE SURE ITS 'CLEAR '
+        BNE.S BCMD02
+        BSR FIXBP       ;GET POINTERS
+BCMD01  CLR.L (A0)+     ;CLEAR THE ADDRESS TABLE
+        SUBQ.L #1,D7    ;DO IT 8 TIMES
+        BNE.S BCMD01
+        BRA MACSBUG
+BCMD02  CLR.L D0        ;DEFAULT VALUE
+        BSR GETNUMR     ;PULL NUMBER
+        MOVE.L #ROM+BCMD3-ZERO,A1       ;WHERE TO JUMP TO
+        BSR FIXBP       ;SET UP COUNTER & ADDRESS
+BCMD00  CMP.L (A0),D0   ;SEE IF ALREADY IN TABLE
+        BEQ.S BCMD33    ;GO CHECK FOR COUNT
+        ADDA.L #4,A2    ;BUMP OTHER POINTER
+        ADDA.L #4,A0    ;BUMP MAIN POINTER
+        SUBQ.L #1,D7
+        BNE.S BCMD00
+        TST.L D0        ;SEE IF NEGATIVE(REMOVE BP)
+        BPL.S BCMD1
+        CLR.L D3        ;STORE A ZERO
+        NEG.L D0        ;CHANGE BACK TO POSITIVE
+        MOVE.L #ROM+BCMD4-ZERO,A1
+BCMD1   BSR     FIXBP   ;GET ADDRESS & POINTERS
+BCMD2   JMP (A1)        ;GO TO RIGHT ROUTINE
+BCMD3   TST.L (A0)      ;FIND AN EMPTY STOP
+        BNE.S BCMD5
+        CLR.L (A2)      ;CLEAR THE COUNT
+        MOVE.L D0,(A0)  ;PUT NEW ADDRESS IN TABLE
+BCMD33  MOVE.B (A5),D1  ;CHECK OUT POSSIBLE COUNT
+        CMPI.B #':',D1
+        BNE.S BCMD6     ;NO COUNT
+        ADDA.L #1,A5    ;BUMP THE BUFFER SCANNER
+        CLR.L D0        ;DEFAULT VALUE
+        BSR GETNUMA     ;GO GET THE COUNT
+        MOVE.L D0,(A2)  ;MOVE TO TABLE
+        BRA.S BCMD6
+BCMD4   CMP.L (A0),D0   ;SEE IF ALREADY IN TABLE
+        BNE.S BCMD5
+        CLR.L (A0)      ;CLEAR IT WHEN FOUND
+        BRA.S BCMD6
+BCMD5   ADDA.L #4,A0    ;BUMP TABLE POINTER
+        ADDA.L #4,A2    ;BUMP POINTER TO COUNTS
+        SUBQ.L #1,D7    ;LOOP AROUND
+        BNE.S BCMD2
+        BSR FIXBUF      ;ERROR MESSAGE
+        MOVE.L #'TABL',(A6)+
+        MOVE.L #'E FU',(A6)+
+        MOVE.L #'LL ',(A6)+
+        BRA.S BCMD77
+BCMD6   MOVE.L #ROM+MACSBUG-ZERO,A0     ;WHERE TO GO IF NO MORE PARAMETERS
+        BRA BCMD0
+;
+BCMD7   BSR FIXBUF      ;PRINT BREAKPOINTS
+BCMD77  MOVE.L #'BRKP',(A6)+    ;SET UP LEADER
+        MOVE.L #'TS= ',(A6)+
+        BSR.S FIXBP     ;SET ADDRESS & COUNTER
+        MOVE.L #BPADD,A0        ;START OF TABLE
+BCMD8   MOVE.L (A0)+,D0 ;GET ADDRESS
+        MOVE.L (A2)+,D6 ;GET COUNT
+        TST.L D0        ;SEE IF ZERO
+        BEQ.S BCMD9
+        BSR PNTZHX      ;PRINT WITH ZERO SURPRESS
+        TST.L D6        ;SEE IF COUNT IS ZERO
+        BEQ BCMD81      ;DONT PRINT ZERO COUNT
+        MOVE.L D6,D0    ;GET READY FOR PRINT
+        MOVE.B #':',(A6)+
+        BSR PNTZHX      ;PRINT WITH ZERO SURPRESS
+BCMD81  MOVE.B #' ',(A6)+               ;SPACE
+BCMD9   SUBQ.L #1,D7    ;LOOP AROUND
+        BNE.S BCMD8
+        BRA MSG         ;PRINT MESSAGE-GO TO MACSBUG
+FIXBP   MOVE.L #BPADD,A0        ;SET UP ADDRESS & COUNTER
+        MOVEQ.L #8,D7   ;COUNTER
+        MOVE.L #BPCNT,A2        ;COUNTS
+        RTS
+         PAGE
+;
+;       ***W#.L***      DEFINE A WINDOW
+;
+SETW    MOVE.B 1(A5),D0 ;GET WINDOW NUMBER
+        MOVE.B D0,D6    ;SAVE ASCII FOR A WHILE
+        BSR GETHEX
+        CMPI.B #7,D0    ;SEE IF ABOVE 7
+        BHI SYNTAX
+        MULU #8,D0      ;COMPUTE WINDOW ADDRESS
+        ADDI.W #WINDOWS,D0
+        MOVE.L D0,A1    ;INDEXED ADDRESS OF WINDOW
+        MOVE.L A5,D7    ;SAVE FOR AWHILE
+        MOVE.L #ROM+PRINTW-ZERO,A0      ;WHERE TO GO IF NO PARAMETER
+        MOVE.B 2(A5),D0 ;SEE IF LEN
+        CMPI.B #'.',D0
+        BNE.S SETW1
+        MOVE.L #ROM+SETW11-ZERO,A0      ;WHERE TO GO
+SETW1   BSR FINDNP      ;SEE IF ANOTHER PARAMETER
+SETW11  MOVE.L D7,A5    ;YES THERE WAS PARAMETER (OR LEN)
+        CLR.L (A1)      ;CLEAR IT ALL OUT
+        CLR.L 4(A1)     ;DISPLACMENT
+        MOVE.B 2(A5),D0 ;SEE IF .LEN
+        CMPI.B #'.',D0  ;CHECK FOR DECMAL POINT
+        BNE.S SETW2
+        MOVE.B 3(A5),D0 ;GET SIZE 1,2,3,4
+        BSR GETHEX
+        CMPI.B #4,D0    ;SEE IF >4
+        BHI SYNTAX      ;ERROR IF IT IS
+        MOVE.B D0,(A1)  ;SAVE SIZE
+        TST.B D0        ;SEE IF IT WAS ZERO
+        BEQ MACSBUG
+SETW2   MOVE.L #ROM+ERROR-ZERO,A0       ;WHERE TO GO IF NO PARATMER
+        BSR FINDNP      ;SET A5 TO NEXT PARAMETER
+SETW22  MOVE.B (A5),D0  ;LOOK AT NEXT CHAR
+        CMPI.B #'(',D0  ;SEE IF NO DISPLACMENT
+        BEQ.S SETW3
+        CLR.L D0        ;DEFAULT DISPLACMENT
+        BSR GETNUMA
+        MOVE.L D0,4(A1) ;SAVE DISPLACMENT
+SETW3   MOVE.B (A5),D0  ;SEE WHAT REGISTER
+        CMPI.B #'(',D0  ;SEE IF DEFERED STUFF
+        BNE MACSBUG     ;IF NOT LEFT PAREN-END
+        ADDA.L #1,A5    ;GET PAST '('
+        MOVE.B (A5)+,D0 ;GET FIRST CHAR OF POSSIBLE REGISTER
+        CMPI.B #'*',D0  ;SEE IF PC
+        BNE.S SETW4
+        MOVE.B D0,1(A1) ;FLAG AS PC
+        BRA.S SETW6
+SETW4   CMPI.B #'A',D0  ;MUST BE ADDRESS REGISTER
+        BNE SYN1        ;ERROR
+        MOVE.B (A5)+,D0 ;GET ADD REG NUMBER
+        MOVE.B D0,1(A1) ;SAVE NUMBER (ASCII)
+        BSR GETHEX      ;GET ADDRESS REG NUMBER
+        CMPI.B #7,D0    ;SEE IF IN RANGE
+        BHI SYN1        ;ERROR
+SETW6   MOVE.B (A5)+,D0 ;CHECK NEXT BYTE OF BUFFER
+        CMPI.B #',',D0  ;IF COMMA GO ON
+        BEQ.S SETW9
+        CMPI.B #')',D0  ;IF RIGHT PAREN ITS OK
+        BEQ MACSBUG
+        BRA SYN1
+SETW9   MOVE.B (A5)+,D0 ;GET FIRST CHAR OF REGISTER
+        CMPI.B #'A',D0  ;MUST BE 'A' OR 'D'
+        BEQ.S SETW8
+        CMPI.B #'D',D0
+        BNE SYN1
+SETW8   MOVE.B D0,2(A1) ;SAVE REG TYPE
+        MOVE.B (A5)+,D0
+        MOVE.B D0,3(A1) ;SAVE NUMBER
+        BSR GETHEX
+        CMPI.B #7,D0    ;SEE IF IN RANGE
+        BHI.S SYN1
+        BRA MACSBUG
+;
+SYN1    CLR.L (A1)      ;JUST CLEAR THE WHOLE THING
+        BRA SYNTAX
+        PAGE
+;
+;       PRINT A WINDOW AS W#    DEFINATION=ADDRESS
+;
+PRINTW  MOVE.B BUFFER+2.W,D5      ;SAVE POSSIBLE ':'
+        BSR FIXBUF      ;A5,A6=#BUFFER
+        MOVE.B #'W',(A6)+
+        MOVE.B D6,(A6)+ ;NUMBER
+        MOVE.B #'.',(A6)+       ;READY FOR LENGTH
+        MOVE.B (A1),D0  ;GET LENGTH
+        BSR PUTHEX      ;PRINT 1 HEX CHAR
+        MOVE.W #' ',(A6)+
+        TST.B (A1)      ;SEE IF LENGTH IS ZERO
+        BNE.S PRINTW00
+        MOVE.L #'????',(A6)+    ;SAY IT IS UNDEFINED
+        BRA PRINTW99    ;GO PRINT IT
+PRINTW00 TST.L 4(A1)    ;SEE IF ANY DISPLACMENT
+        BEQ.S PRINTW1
+        MOVE.L 4(A1),D0 ;GET HEX CONSTANT DISPLACMENT
+        BSR PNTZHX      ;PRINT WITH SIGN AND ZERO SURPRESS
+PRINTW1 MOVE.B 1(A1),D0 ;GET ADDRESS REGISTER NUMBER
+        BEQ PRINTW99    ;IF ZERO-PRINT IT ETC
+        MOVE.B #'(',(A6)+       ;SET UP FOR DEFFERED STUFF
+        CMPI.B #'*',D0  ;SEE IF PROGRAM COUNTER
+        BNE.S PRINTW3
+        MOVE.B D0,(A6)+ ;JUST PUT IN '*'
+        BRA.S PRINTW4
+PRINTW3 MOVE.B #'A',(A6)+       ;FOR ADDRESS REG
+        MOVE.B D0,(A6)+ ;FOR REG NUMBER
+PRINTW4 MOVE.B 2(A1),D0 ;SEE IF INDEX REGISTER USED
+        BEQ.S PRINTW8
+        MOVE.B #',',(A6)+       ;COMMA
+        MOVE.B D0,(A6)+ ;INDEX TYPE
+        MOVE.B 3(A1),(A6)+      ;INDEX NUMBER
+PRINTW8 MOVE.B #')',(A6)+       ;CLOSE PAREN
+PRINTW9 BSR WINDA       ;GO GET ADDRESS INTO A0,D3
+        MOVE.L D3,D0    ;GET READY FOR PRINT-HEX
+        MOVE.B #'=',(A6)+       ;PUT IN EQUAL SIGN
+        BSR PNTZHX      ;PRINT WITH ZERO SURPRESS
+PRINTW99 BSR OUTPUT     ;GO PRINT IT
+        BSR FIXBUF      ;SET UP BUFFER
+        MOVE.B #' ',(A6)+
+        CMPI.B #':',D5  ;SEE IF INPUT NEEDED
+        BNE MSG ;
+        MOVE.B #'=',(A6)+
+        MOVE.B #'?',(A6)+
+        MOVE.B #' ',(A6)+
+        BSR OUTPUT      ;PRINT PROMPT
+        BSR FIXBUF
+        BSR PORTIN1     ;GO GET NEW VALUE
+        CMPA.L A6,A5    ;SEE IF ANYTHING ENTERED
+        BEQ MACSBUG
+        BRA SETW22      ;GO DECODE INPUT
+;
+;       SUBROUTINE TO COMPUTE ADDRESS OF WINDOW
+;       A1 POINTS TO WINDOW TABLE OF PARTICULAR WINDOW
+;
+WINDA   MOVE.L 4(A1),D3 ;GET DISPLACMENT
+        CLR.L D0        ;SET UP FOR REGISTER COMPUTATION
+        MOVE.B 1(A1),D0 ;GET REGISTER NUMBER OR *
+        BEQ.S WINDA99   ;DONE IF NOTHING HERE
+        CMPI.B #'*',D0  ;SEE IF PC
+        BNE.S WINDA3
+        ADD.L REGPC.W,D3        ;ADD IN PROGRAM COUNTER
+        BRA.S WINDA6
+WINDA3  MOVE.L #REGS+32,A0      ;GET BASE OF ADD REGS
+        ANDI.W #$F,D0    ;SAVE ONLY BOTTOM NIBBLE
+        ASL #2,D0       ;MULT BY 4
+        ADD.L 0(A0,D0),D3       ;ADD IN ADDRESS REGISTER
+WINDA6  MOVE.B 2(A1),D0 ;SEE WHAT INDEX LOOKS LIKE
+        BEQ.S WINDA99   ;END IF NONE
+        MOVE.L #REGS,A0 ;BASE FOR DATA REGS
+        CMPI.B #'A',D0  ;SEE IF ADDRESS REG
+        BNE.S WINDA4
+        ADDA.W #32,A0   ;GET PAST DATA REG TO ADD REG
+WINDA4  CLR.L D0        ;SET UP INDEX
+        MOVE.B 3(A1),D0 ;INDEX NUMBER
+        ANDI.W #$F,D0    ;SAVE ONLY BOTTOM NIBBLE
+        ASL.W #2,D0     ;MULT BY 4
+        ADD.L 0(A0,D0),D3       ;ADD IN INDEX
+WINDA99 MOVE.L D3,A0    ;ALSO PUT IN ADDRESS REGISTER
+        MOVE.L D3,D0    ;ALSO SET UP TO PRINT IT
+        RTS             ;END OF ROUTINE
+        PAGE
+;
+;       GET MEMORY THROUGH WINDOW
+;       A0=MEMORY START (COMPUTED WITH WIND)
+;       A1=POINTER TO WINDOW TABLE ENTRY
+WINDM   CLR.L D1        ;USED FOR COUNTER
+        CLR.L D0        ;HOLDS RESULTS
+        MOVE.B (A1),D1  ;GET LENGTH 1,2,3,4
+        BEQ.S WINDM9    ;ZERO LENGTH=UNDEFINED
+WINDM1  ASL.L #8,D0     ;MAKE ROOM FOR NEW BYTE
+        MOVE.B (A0)+,D0 ;GRAB NEW BYTE
+        SUBQ.L #1,D1    ;LOOP AROUND
+        BNE.S WINDM1
+WINDM9  RTS
+;
+;
+;       ***M#***        SET MEMORY THROUGH WINDOW
+;
+SETMW   MOVE.W (A5),D0  ;COMPUTE WINDWOW TABLE ENTRY
+        ANDI.L #$F,D0    ;ASCII TO BINARY
+        MULU #8,D0      ;8 BYTES PER ENTRY
+        ADDI.W #WINDOWS,D0       ;ADD IN BASE
+        MOVE.L D0,A1    ;USED AS MASTER INDEX
+        TST.B (A1)      ;SEE IF DEFINED
+        BNE.S SETMW1
+        BSR FIXBUF
+        MOVE.L #'NOT ',(A6)+
+        MOVE.L #'DEFI',(A6)+
+        MOVE.L #'NED ',(A6)+
+        BRA MSG
+SETMW1  MOVE.L #ROM+SETMP-ZERO,A0       ;WHERE TO GO IF NO PARAMETER
+        BSR FINDNP      ;SEE IF DATA IS OUT THERE
+SETMW2  BSR GETNUMA     ;GO GET DATA
+        MOVE.L D0,TEMP.W        ;SAVE DATA HERE
+        BSR WINDA       ;GET ADDRESS INTO A0
+        MOVE.L #TEMP+4,A2       ;USED FOR INDEX
+        CLR.L D0        ;USED FOR COUNT
+        MOVE.B (A1),D0  ;GET LENGTH
+        ADDA.L D0,A0    ;ADD LENGTH TO ADDRESS
+SETMW3  MOVE.B -(A2),-(A0)      ;TRANSFER BYTE
+        MOVE.B (A2),D1  ;RE-READ DATA
+        CMP.B (A0),D1   ;SEE IF SAME
+        BNE ERROR
+        SUBQ.L #1,D0    ;LOOP AROUND
+        BNE.S SETMW3
+        BRA MACSBUG     ;END OF ROUTINE
+;
+;
+SETMP   MOVE.B BUFFER+2.W,D4    ;GET POSSIBLE ':'
+        BSR WINDA       ;GET EFFECTIVE ADDRESS
+;
+        BSR WINDM       ;GET MEMORY THROUGH WINDOW (ADDA.X TYPE TEQH.)
+;
+        BSR FIXBUF
+        ADDA.L #2,A6    ;GET PAST 'W#'
+        MOVE.B #'=',(A6)+       ;SET UP TO PRINT CONTENTS
+        MOVE.B (A1),D3  ;GET LENGTH
+        MOVE.L #ROM+PNT2HX-ZERO,A4      ;WHERE TO GO IF ONE BYTE
+        CMPI.B #1,D3    ;SEE IF SIZE IS ONE
+        BEQ.S SETMP5
+        MOVE.L #ROM+PNT4HX-ZERO,A4
+        CMPI.B #2,D3    ;SEE IF SIZE IS TWO
+        BEQ.S SETMP5
+        MOVE.L #ROM+PNT6HX-ZERO,A4
+        CMPI.B #3,D3    ;SEE IF SIZE IS THREE
+        BEQ.S SETMP5
+        MOVE.L #ROM+PNT8HX-ZERO,A4
+SETMP5  JSR (A4)        ;GO INDIRECT
+        BSR OUTPUT      ;GO PRINT IT
+        BSR FIXBUF      ;SET UP BUFFER
+        MOVE.B #' ',(A6)+
+        CMPI.B #':',D4  ;SEE IF INPUT NEEDED
+        BNE MSG ;
+        MOVE.B #'=',(A6)+       ;THIS IS THE PROMPT
+        MOVE.B #'?',(A6)+
+        MOVE.B #' ',(A6)+
+        BSR OUTPUT
+        BSR FIXBUF
+        BSR PORTIN1     ;GO GET INPUT
+        CMPA.L A6,A5    ;SEE IF ANYTHING INPUT
+        BEQ MACSBUG
+        BRA SETMW2      ;GO DECODE IT
+        PAGE
+;
+;       ***SY***        SET SYMBOL TABLE VALUES ETC
+;
+SYCMD   BSR SCANPORT    ;SEE WHERE TO SEND OUTPUT
+        MOVE.L #ROM+SYMPA-ZERO,A0       ;CHANGE WHEN PRINT AVAILABLE
+        BSR FINDNP      ;POINT TO NEXT PARAMETER
+        CLR.L D5        ;SET UP FOR DELETE?
+        MOVE.B (A5),D0  ;SEE IF DELETE
+        CMPI.B #'-',D0
+        BNE.S SY0
+        MOVE.B (A5)+,D5 ;FLAG AS DELETE
+SY0     BSR GETSY       ;GO GET SYMBOL INTO D6,D7
+        TST D6  ;SEE IF SYMBOL
+        BEQ SYHEX       ;NOT SYMBOL...SEE IF HEX NUMBER
+        CMPI.B #'-',D5  ;SEE IF DELETE
+        BEQ SYMOUT
+        CMPA.L A6,A5
+        BPL.S SY00
+        MOVE.B (A5)+,D0 ;SCAN FOR ':'
+        CMPI.B #':',D0
+        BEQ SY5
+SY00    MOVE.L #ROM+SY6-ZERO,A0 ;WHERE TO GO IF NO PARAMETER (SYMBOL VALUE)
+        BSR FINDNP      ;SEARCH FOR PARAMETER
+        CLR.L D0        ;DEFAULT VALUE
+        BSR GETNUMA
+        MOVE.L D0,D5    ;SAVE IT HERE FOR AWHILE
+        MOVE.L #ROM+SY4-ZERO,A0 ;WHERE TO GO IF IN TABLE
+        BSR SSYMTAB     ;SEACH IN TABLE
+        MOVE.L ENDSYM.W,A0        ;END OF SYMBOL TABLE
+        MOVE.L D6,(A0)+ ;SAVE NEW SYMBOL
+        MOVE.L D7,(A0)+
+        MOVE.L D5,(A0)+ ;SAVE VALUE
+        MOVE.L A0,ENDSYM.W      ;SAVE NEW END OF TABLE
+        BSR SYMSRT      ;MAINTAIN IN SORTED ORDER
+        BRA MACSBUG
+;
+;       DELETE A SYMBOL FROM TABLE
+;
+SYMOUT  MOVE.L STRSYM.W,A0        ;START OF TABLE
+SYMOUT1 CMPA.L ENDSYM.W,A0      ;CHECK END OF TABLE
+        BEQ NOTFOUND
+        CMP.L (A0),D6   ;CHECK 1ST 4 BYTES
+        BNE.S SYMOUT2
+        CMP.L 4(A0),D7  ;CHECK 2ND 4 BYTES
+        BEQ.S SYMOUT3
+SYMOUT2 ADDA.L #12,A0   ;BUMP POINTER
+        BRA.S SYMOUT1
+SYMOUT3 MOVE.L ENDSYM.W,D0      ;BACK UP END OF TABLE
+        SUBI.L #12,D0
+        MOVE.L D0,ENDSYM.W      ;SAVE IT
+SYMOUT4 MOVE.L 12(A0),(A0)      ;CATIPILLIAR BACK
+        MOVE.L 16(A0),4(A0)
+        MOVE.L 20(A0),8(A0)
+        ADDA.L #12,A0   ;BUMP POINTER
+        CMPA.L D0,A0
+        BLT.S SYMOUT4
+        BRA MACSBUG     ;DONE
+;
+SY4     MOVE.L D5,-(A1) ;PUT VALUE IN EXISTING ENTRY
+        BRA MACSBUG
+;
+;       SY hex ?        SEE IF USER IS ASKING FOR SYMBOL FROM HEX VALUE
+;
+SYHEX   MOVE.L #BUFFER,A5       ;RESTORE FIRST PART
+        BSR FINDNP      ;NOW POINT TO POSSIBLE hex VALUE
+        BSR GETNUMA     ;GET A VALUE OR ERROR OUT
+        BSR SNUMTAB     ;SEARCH TABLE FOR VALUE
+        BRA SY61        ;GO PRINT IT
+;
+;       ':'     PRINT AND QUE FOR INPUT
+SY5     MOVE.L #ROM+SY51-ZERO,A0
+        BSR SSYMTAB     ;SEARCH SYMBOL TABLE
+NOTFOUND BSR FIXBUF     ;
+        MOVE.L #'NOT ',(A6)+
+        MOVE.L #'FOUN',(A6)+
+        MOVE.W #'D ',(A6)+
+        BRA MSG
+SY51    BSR SYP ;PRINT THE SYMBOL
+        BSR FIXBUF      ;SET UP FOR PROMPT
+        MOVE.W #' ?',(A6)+              ;PRINT PROMPT
+        BSR OUTPUT
+        BSR FIXBUF      ;SET UP FOR INPUT
+        BSR PORTIN1     ;TAKE IN INPUT
+        CMPA.L A6,A5    ;SEE IF ANYTHING ENTERED
+        BEQ MACSBUG
+SY58    CLR.L D0        ;GO GET THE NUMBER
+        BSR GETNUMA
+        MOVE.L D0,-(A1) ;SAVE NEW DATA
+        BRA MACSBUG
+;
+;       IF YOU CAN FIND IT-PRINT IT
+SY6     MOVE.L #ROM+SY61-ZERO,A0        ;IF FOUND GO HERE
+        BSR SSYMTAB     ;SEARCH SYMBOL TABLE
+        BSR FIXBUF      ;PUT IT BACK OUT
+        MOVE.L D6,(A6)+
+        MOVE.L D7,(A6)+
+        MOVE.W #' ',(A6)+               ;PUT IN SOME SPACES
+        BSR GETNUMA     ;GET A NUMBER OUT OF IT
+        BSR SNUMTAB     ;SEARCH FOR NUMBER IN TABLE
+SY61    BSR.S SYP       ;PRINT IT
+        BSR FIXBUF      ;TERMINATE LINE
+        BRA MSG
+;
+SYP     BSR FIXBUF      ;PRINT THE SYMBOL & VALUE
+        MOVE.L D6,(A6)+ ;PUT SYMBOL IN BUFFER
+        MOVE.L D7,(A6)+
+        MOVE.B #'=',(A6)+
+        BSR PNTZHX      ;PUT IN VALUE
+        MOVE.B #$20,D0  ;SPACE
+SYP0    CMP.B (A5),D0   ;CHECK FOR LEADING SPACE
+        BNE.S SYP1
+        ADDA.L #1,A5    ;GET PAST IT
+        BRA.S SYP0
+SYP1    BSR OUTPUT
+        RTS
+;
+;       SEARCH SYMBOL TABLE FOR A SYMBOL
+;       D6 & D7 HAVE SYMBOL     RETURNS VALUE IN D0
+;
+SSYMTAB MOVE.L STRSYM.W,A1      ;START OF TABLE
+SSYMTAB1 CMPA.L ENDSYM.W,A1     ;SEE IF AT END
+        BLT.S SSYMTAB2
+        RTS                     ;NOT IN TABLE
+SSYMTAB2 MOVE.L (A1)+,D1        ;READ FROM TABLE
+        MOVE.L (A1)+,D2
+        MOVE.L (A1)+,D0
+        CMP.L D6,D1     ;SEE IF IT MATCHES
+        BNE.S SSYMTAB1
+        CMP.L D7,D2
+        BNE.S SSYMTAB1
+        JMP (A0)        ;WHERE TO GO IF FOUND IN TABLE
+;
+;       SEARCH THE SYMBOL TABLE FOR A VALUE
+;       VALUE IN D0     RETURNS D6 & D7 = SYMBOL OR
+;       8 ASCII DIGITS OF HEX VALUE IF NOT FOUND
+;
+SNUMTAB MOVEM.L D0-D2/A1/A6,-(A7)       ;SAVE SOME WORKING REGISTERS
+        MOVE.L STRSYM.W,A1      ;START OF TABLE
+SNUMTAB0 CMPA.L ENDSYM.W,A1     ;SEE IF AT END OF TABLE
+        BLT.S SNUMTAB1  ;WHERE TO GO IF NOT END
+        MOVE.L #WORK1,A6        ;FIX UP SMALL BUFFER
+        BSR PNT8HX      ;PUT IN 8 CHARACTERS OF HEX
+        MOVE.L WORK1.W,D6       ;READ ASCII INTO RETURN PLACE
+        MOVE.L WORK2.W,D7
+        BRA.S SNUMTAB9
+SNUMTAB1 MOVE.L (A1)+,D6        ;SYMBOL NAME
+        MOVE.L (A1)+,D7 ;MORE NAME
+        MOVE.L (A1)+,D2 ;SYMBOL VALUE
+        CMP.L D2,D0     ;SEE IF SAME VALUE
+        BNE.S SNUMTAB0  ;GO DO SOME MORE
+        BSR NORM1       ;LEFT JUSTIFY NAME
+SNUMTAB9 MOVEM.L (A7)+,D0-D2/A1/A6      ;RESTORE REGISTERS
+        RTS
+;
+;       PRINT THE WHOLE SYMBOL TABLE
+;
+;       (SORT IT FIRST)
+;
+SYMPA   BSR SYMSRT      ;SORT THE TABLE AGAIN
+        MOVE.L STRSYM.W,A0      ;START OF TABLE
+SYMPA1  MOVEQ.L #3,D5   ;COUNTER
+        BSR FIXBUF
+SYMPA2  CMPA.L ENDSYM.W,A0        ;AT END OF TABLE
+        BGE MSG
+        MOVE.L (A0)+,D6 ;GET SYMBOL
+        MOVE.L (A0)+,D7
+        BSR NORM1       ;RIGHT JUSTIFY
+        MOVE.L D6,(A6)+ ;PUT IN PRINT BUFFER
+        MOVE.L D7,(A6)+
+        MOVE.W #' ',(A6)+               ;SPACE
+        MOVE.L (A0)+,D0 ;GET VALUE
+        BSR PNT8HX      ;PRINT IT
+        MOVE.L #' ',(A6)+               ;SPACES
+        SUBQ.L #1,D5    ;LOOP
+        BNE.S SYMPA2
+        BSR OUT1CR      ;PRINT BUFFER
+        BRA.S SYMPA1
+;
+;       SORT THE SYMBOL TABLE
+;
+SYMSRT  MOVE.L STRSYM.W,A0      ;START OF TABLE
+SYMSRT0 CMPA.L ENDSYM.W,A0      ;SEE IF AT END
+        BLT.S SYMSRT1
+        RTS             ;END OF SORT    
+SYMSRT1 MOVE.L A0,A1    ;POINT TO NEXT ENTRY
+SYMSRT2 ADDA.L #12,A1
+        CMPA.L ENDSYM.W,A1      ;SEE IF AT END
+        BLT SYMSRT3
+        ADDA.L #12,A0   ;BUMP TOP POINTER
+        BRA.S SYMSRT0
+SYMSRT3 MOVE.L (A0),D6  ;GET TOP SYMBOL
+        MOVE.L 4(A0),D7
+        BSR NORM1       ;RIGHT JUSTIFY
+        MOVE.L D6,D1
+        MOVE.L D7,D2
+        MOVE.L (A1),D6  ;2ND SYMBOL
+        MOVE.L 4(A1),D7
+        BSR.S NORM1     ;RIGHT JUSTIFY
+        CMP.L D6,D1     ;COMPARE
+        BLT.S SYMSRT2
+        BGT.S SYMSRT4
+        CMP.L D7,D2     ;CHECK LEAST SIGNIFICANT
+        BLT.S SYMSRT2
+SYMSRT4 MOVE.L (A0),D0  ;EXCHANGE
+        MOVE.L 4(A0),D1
+        MOVE.L 8(A0),D2
+        MOVE.L (A1),(A0)
+        MOVE.L 4(A1),4(A0)
+        MOVE.L 8(A1),8(A0)
+        MOVE.L D0,(A1)
+        MOVE.L D1,4(A1)
+        MOVE.L D2,8(A1)
+        BRA.S SYMSRT2
+;
+;       NORMALIZE SYMBOL IN D6,D7
+;       SYMBOLS ARE RIGHT JUSTIFIED IN THE TABLE
+;       THIS LEFT JUSTIFIES THEM IN THE REGISTER PAIR
+;
+NORM1   CMPI.L #'    ',D6               ;SEE IF ALL SPACES
+        BNE NORM0       ;
+        CMPI.L #'    ',D7
+        BEQ RETURN
+NORM0   MOVE.L D6,D0    ;RIGHT JUSTIFY SYMBOL
+        SWAP D0
+        LSR.W #8,D0     ;SEE IF LEADING SPACE
+        CMPI.B #$20,D0
+        BEQ.S NORM2
+        RTS
+NORM2   MOVE.L D7,VECTOR.W
+        LSL.L #8,D6
+        MOVE.B VECTOR.W,D6
+        LSL.L #8,D7
+        MOVE.B #$20,D7  ;TRAILING BLANK
+        BRA.S NORM1
+        PAGE 
+;
+;
+;       ***CALL***      CALL TO USER ADDRESS
+;
+USERCALL BSR WHATNUM    ;GO GET ADDRESS OR PRINT WHAT
+        MOVE.L D0,A0    ;PUT ADDRESS IN ADDRESS REG
+        JSR (A0)        ;GO TO USER ADDRESS
+        BRA MACSBUG     ;USER RETUNS HERE-REENTER MACSBUG
+        PAGE
+
+
+        INCLUDE         'MBUG.PROM2.TEXT'               ;*KB 8/18/82 BRING 2ND HALF
+
+
+        END START

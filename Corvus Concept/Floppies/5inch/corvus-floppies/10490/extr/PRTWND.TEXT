@@ -1,0 +1,456 @@
+{ PRTWND.TEXT ---------------------------------------------------------}
+{
+{       PRTWND -- Print Current Window
+{
+{       (c) Copyright 1982 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  07-01-82  KML  Original program for MX100 printer
+{       v 1.1  10-01-82  LEF  Added IDS460 printer support
+{       v 1.2  11-22-82  LEF  Use CCLIB functions
+{       v 1.3  04-15-82  LEF  Add C. Itoh printer support (from KL)
+{       v 1.4  06-22-83  JDR  Added Toshiba P-1350 support
+{
+{----------------------------------------------------------------------}
+
+PROGRAM prtwnd;
+
+USES {$U /CCUTIL/CCLIB} CCdefn, CCwndIO;
+
+CONST esc     = 27;
+      version = '1.3';
+
+TYPE  prtrid  = (NONE, CITOH, IDS, MX100, TOSHIBA);
+
+VAR   prtype: prtrid;
+      prtr:   integer;
+      disp:   integer;
+      i,argn: integer;
+      abort:  boolean;
+      curWnd: pWndRcd;
+      pDev:   pString80;
+
+{ CCLIB external definitions     }
+
+FUNCTION  pOScurWnd: pWndRcd;   { get kybd record pointer } EXTERNAL;
+FUNCTION  pOSdevNam (n: integer): pString80;                EXTERNAL;
+FUNCTION  OSdispDv: integer;    { get display unit nmbr   } EXTERNAL;
+FUNCTION  BrkPress: boolean;    { TRUE if BREAK key       } EXTERNAL;
+
+PROCEDURE Rbytes (x,y,count: integer; pBuff: pBytes);
+
+const RDBYTES = 7;
+
+var
+  wbuf: record
+          cnt: integer;
+          ptr: pBytes
+          end;
+  obuf: record e:byte;o:byte;xx:integer;yy:integer;m:byte; end;
+begin
+  if y < 0 then begin
+      pBuff^[0] := 0; exit (Rbytes); end;
+  with obuf do begin
+     e := 27;
+     o := ord('o');
+     xx := x;
+     yy := y;
+     m := 2;
+     unitwrite( disp, obuf, 7 );
+  end;
+  wbuf.cnt := count; wbuf.ptr := pBuff;
+  unitstatus (disp,wbuf,RDBYTES)
+end;
+
+PROCEDURE spit (b: byte);
+
+begin
+  If BrkPress Then Exit(PrtWnd);  { Note: Printer left in graphics mode }
+  unitwrite (prtr, b, 1, 0, 12)
+end;
+
+{$P}
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DmpCITOH;
+      label 90;
+      var i,j,x,y: integer; b: byte;
+
+      PROCEDURE bitimage (l: integer);
+          var i: integer; A: array [1..4] of byte;
+          begin
+          spit (esc); spit (ord('S'));
+          for i := 1 to 4 do begin
+              A[i] := (l mod 10) + ord('0');
+              l := l div 10;
+              end;
+          for i := 4 downto 1 do spit (A[i]);
+          end;
+
+      FUNCTION spin (b:byte): byte;
+          var x,y: record case integer of
+                      0: (b: byte);
+                      1: (s: set of 0..7);
+                    end;
+              i: integer;
+          begin
+          x.b := b; y.s := [];
+          for i := 0 to 7 do
+              if i in x.s then y.s := y.s + [7-i];
+          spin := y.b;
+          end;
+
+      begin
+      with curWnd^ do begin
+
+          { SET LINE SPACING TO 8 DOTS }
+
+          spit (esc); spit (ord('T')); spit (ord('1')); spit (ord('6'));
+
+          { PRINT LEFT WINDOW BORDER }
+
+          bitimage (lngthy+4);
+          spit (spin(3));
+          for y := 0 to lngthy+1 do spit (spin(2));
+          spit (spin(3));
+
+          { PRINT WINDOW }
+
+          for x := 0 to lngthx div 8 do begin
+              spit (13); spit (10); bitimage (lngthy+4);
+              spit (-1); spit (0); { BOTTOM WINDOW BORDER }
+              for y := 0 to lngthy-1 do begin
+                  Rbytes (x*8, y, 1, @b); spit (spin(b)); end;
+              spit (0); spit (-1); { TOP WINDOW BORDER }
+              abort := BrkPress; if abort then goto 90;
+              end;
+
+          { PRINT RIGHT WINDOW BORDER }
+
+90:       spit (13); spit (10); bitimage (lngthy+4);
+          spit (3); for y := 0 to lngthy+1 do spit (2); spit (3);
+
+          { NORMALIZE PRINTER }
+
+          spit (13); spit (10); spit (esc); spit (ord('A'));
+          end;
+      end;
+
+{$P}
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DmpIDS;
+      label 90;
+      var i,j,x,y: integer; b: byte;
+          cell: array [0..6] of byte;
+
+      FUNCTION bit (i,j: integer): integer;
+          var b: integer;
+          begin
+          b := cell[i]; bit := 0;
+          if b < 0 then b := b+256;
+          case j of
+              0: if odd (b div 128) then bit := 1;
+              1: if odd (b div  64) then bit := 1;
+              2: if odd (b div  32) then bit := 1;
+              3: if odd (b div  16) then bit := 1;
+              4: if odd (b div   8) then bit := 1;
+              5: if odd (b div   4) then bit := 1;
+              6: if odd (b div   2) then bit := 1;
+              7: if odd (b)         then bit := 1;
+            end;
+          end;
+
+      begin
+      with curWnd^ do begin
+          spit (3);
+          y := lngthy-1;
+          repeat
+              for x := 0 to lngthx div 8 do begin
+                  for i := 0 to 6 do
+                      Rbytes (x*8, y-i, 1, @cell[i]);
+                  for j := 0 to 7 do begin
+                      b := bit (6,j) * 64 +
+                           bit (5,j) * 32 +
+                           bit (4,j) * 16 +
+                           bit (3,j) *  8 +
+                           bit (2,j) *  4 +
+                           bit (1,j) *  2 +
+                           bit (0,j);
+                      if b = 3 then spit (3);
+                      spit (b);
+                      end;
+                  end;
+              spit (3); spit (14);
+              y := y-7;
+              abort := BrkPress; if abort then goto 90;
+              until y < 0;
+90:       spit (3); spit (2);
+          end;
+      end;
+
+{$P}
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DmpMX100;
+      label 90;
+      var i,j,x,y: integer; b: byte;
+
+      PROCEDURE bitimage (l: integer);
+          begin
+          spit (esc); spit (ord('K'));
+          spit (l mod 256); spit (l div 256);
+          end;
+
+      begin
+      with curWnd^ do begin
+
+          { SET LINE SPACING TO 8 DOTS }
+
+          spit (esc); spit (ord('A')); spit (8);
+
+          { PRINT LEFT WINDOW BORDER }
+
+          bitimage (lngthy+4);
+          spit (3); for y := 0 to lngthy+1 do spit (2); spit (3);
+
+          { PRINT WINDOW }
+
+          for x := 0 to lngthx div 8 do begin
+              spit (13); spit (10); bitimage (lngthy+4);
+              spit (-1); spit (0); { BOTTOM WINDOW BORDER }
+              for y := 0 to lngthy-1 do begin
+                  Rbytes (x*8, y, 1, @b); spit (b); end;
+              spit (0); spit (-1); { TOP WINDOW BORDER }
+              abort := BrkPress; if abort then goto 90;
+              end;
+
+          { PRINT RIGHT WINDOW BORDER }
+
+90:       spit (13); spit (10); bitimage (lngthy+4);
+          spit (-64);
+          for y := 0 to lngthy+1 do spit (64);
+          spit (-64);
+
+          { NORMALIZE PRINTER }
+
+          spit (13); spit (10);
+          spit (esc); spit (ord('A')); spit (12);
+          end;
+      end;
+
+{$P}
+{----------------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DmpToshiba;
+
+{ For Toshiba 24-wire printhead printer: To select graphics, send
+
+      ESC ; C1 C2 C3 C4
+
+        where c1-c4 are ASCII decimal digits representing how many of
+        the following 4-byte sequences should be interpreted as graphics.
+        After this number of four-byte sequences has been received,
+        the printer reverts to text mode.
+
+     The least significant 6 bits of each byte control printer pins di-
+     rectly. The first byte controls the top 6 pins in the printhead, the
+     second byte controls pins 7-12, etc. Thus, 4 bytes of data are re-
+     quired to print one vertical column of dots. }
+
+  Type
+    BCell = array[0..23] of byte;
+
+  var i,j,x,y: integer; b: byte;
+      WX,WY,
+      Counter,
+      TX,TY : Integer;
+      cell  : BCell;
+      Fe    : Char;
+      H,T,O : Integer;
+
+
+
+  Procedure HitToshiba(Pixels : Integer);
+
+  { Set graphics mode for the next N pixels }
+
+  Var
+    Th,H,T,O : Integer;
+
+  Begin
+    spit (13); Spit (10);    { CR/LF }
+    spit (27); spit (59);    { ESC-; sequence }
+    Th:= Pixels DIV 1000;
+    H := (Pixels - TH * 1000) DIV 100;
+    T := (Pixels - (Th * 1000 + H * 100)) DIV 10;
+    O := Pixels - (Th * 1000 + H * 100 + T * 10);
+    Spit (Th+48);
+    Spit (H+48);             { Hundreds digit }
+    Spit (T+48);             { Tens digit     }
+    Spit (O+48)              { Ones digit     }
+  End;
+
+
+  Procedure GetCell(X,Y : Integer);
+
+  Var
+    QY  : Integer;
+
+  Begin
+    For QY := 0 to 11 Do RBytes(X*8,Y*12+QY,1,@Cell[QY])
+  End;
+
+
+  Procedure PrtCell(TCell : BCell);
+
+  Var
+    CX,CY : Integer;
+
+    Procedure SendCol(CellColumn,StartRow : Integer);
+
+    Var
+      X : Integer;
+      B : Byte;
+
+      Procedure GetByte(N: Integer; Var B : Byte);
+
+        Function bit (i,j: integer): integer;
+
+        Var
+          b: integer;
+
+        Begin
+          b := cell[i]; bit := 0;
+          if b < 0 then b := b+256;
+          case j of
+              0: if (b and 128) <> 0 Then bit := 1;
+              1: if (b and 64) <> 0 then bit := 1;
+              2: if (b and 32) <> 0 then bit := 1;
+              3: if (b and 16) <> 0 then bit := 1;
+              4: if (b and 8) <> 0 then bit := 1;
+              5: if (b and 4) <> 0 then bit := 1;
+              6: if (b and 2) <> 0 then bit := 1;
+              7: if (b and 1) <> 0 then bit := 1;
+              end
+        end;
+
+      Begin                           { GetByte }
+        N := N * 6;
+        b := bit (N+5,CellColumn) * 32 +
+             bit (N+4,CellColumn) * 16 +
+             bit (N+3,CellColumn) *  8 +
+             bit (N+2,CellColumn) *  4 +
+             bit (N+1,CellColumn) *  2 +
+             bit (N,CellColumn)
+      End;
+
+
+    Begin                               { SendCol }
+      For X := 3 DownTo 0 Do Begin      { Send it once }
+        GetByte(X,B);
+        Spit(B)
+        End;
+      For X := 0 To 3 Do Spit(0)        { To keep Tosh from dying! }
+    End;
+
+  Begin                                 { PrtCell }
+    For CX := 0 to 7 Do SendCol(CX,7)
+  End;
+
+
+  Procedure ExpandCell;                 { Stretch a cell vertically }
+
+  Var
+    Counter : Integer;
+
+  Begin
+    For Counter := 11 DownTo 0 Do Begin
+      Cell[Counter * 2 + 1] := Cell[Counter];
+      Cell[Counter * 2] := Cell[Counter]
+      End
+  End;
+
+
+  begin                             { Mainline       }
+    WX := CurWnd^.LngthX;
+    WY := CurWnd^.LngthY;           { We got window size in pixels... }
+    TX := WX DIV 8;
+    TY := WY DIV 12;                { We got window size in 8 by 24 cells }
+    If (WX MOD 8) <> 0 Then TX := TX + 1;
+    If (WY MOD 24) <> 0 Then TY := TY + 1;
+    Spit(27);Spit(30);spit(8);      { Set line spacing }
+    for Y := TY - 1 DownTo 0 Do Begin
+      HitToshiba(TX * 8 * 2);
+      For X := 0 To TX - 1 Do Begin
+        GetCell(X,Y);
+        ExpandCell;
+        PrtCell(Cell);
+        If BrkPress Then Begin
+                           For Y := 0 to 23 Do Cell[y] := 0;
+                           For Y := X to TX - 1 Do PrtCell(Cell);
+                           Exit(PrtWnd)
+                         End
+        End
+      End
+  End;
+
+{$P}
+{----------------------------------------------------------------------}
+      begin
+      CCwndIOinit;
+      prtr := 6; disp := OSdispDv;
+      curWnd := pOScurWnd; pDev := pOSdevNam (prtr);
+      i := WinSystem (WsysCmd);
+      writeln ('\1BJ'); writeln ('PRTWND [',version,']');
+      i := WinSystem (WsysCurr);
+      if pDev^ <> 'PRINTER' then begin
+          i := WinSystem (WsysCmd);
+          write ('\1BJPrinter driver not loaded ....',chr(7));
+          i := WinSystem (WsysCurr);
+          exit (prtwnd);
+          end;
+      prtype := MX100;
+      if argc <> 0 then begin
+          prtype := NONE;
+          for argn := 1 to argc do begin
+              for i := 1 to length(argv[argn]^) do
+                  if argv[argn]^[i] in ['a'..'z'] then
+                     argv[argn]^[i] := chr(ord(argv[argn]^[i])
+                                           -ord('a')+ord('A'));
+              if argv[argn]^ = 'CITOH'   then prtype := CITOH;
+              if argv[argn]^ = 'ITOH'    then prtype := CITOH;
+              if argv[argn]^ = 'IDS'     then prtype := IDS;
+              if argv[argn]^ = 'IDS460'  then prtype := IDS;
+              if argv[argn]^ = 'EPSON'   then prtype := MX100;
+              if argv[argn]^ = 'MX'      then prtype := MX100;
+              if argv[argn]^ = 'MX100'   then prtype := MX100;
+              if argv[argn]^ = 'TOSH'    then prtype := TOSHIBA;
+              if argv[argn]^ = 'TOSHIBA' then prtype := TOSHIBA
+              end;
+          end;
+      write ('\1Bb'); { CURSOR OFF }
+      i := 0; unitstatus (prtr, i, $80); {transparent mode}
+      abort := BrkPress; abort := FALSE;
+      case prtype of
+                CITOH: DmpCITOH;
+                  IDS: DmpIDS;
+                MX100: DmpMX100;
+              TOSHIBA: DmpToshiba;
+            otherwise: begin
+                       i := WinSystem (WsysCmd);
+                       write ('\1BJInvalid printer type specified ....',
+                               chr(7));
+                       i := WinSystem (WsysCurr);
+                       end;
+                  end; {case}
+      if abort then begin
+          i := WinSystem (WsysCmd);
+          write ('\1BJPrinting terminated ....',chr(7));
+          i := WinSystem (WsysCurr);
+          end;
+      i := 1; unitstatus (prtr, i, $80);
+      write ('\1Bc'); { CURSOR ON }
+      end.

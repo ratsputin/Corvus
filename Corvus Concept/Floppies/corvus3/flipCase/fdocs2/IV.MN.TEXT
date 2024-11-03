@@ -1,0 +1,249 @@
+ {$S+}
+ { L LMnMgr.text }
+ {--------------------------------------------------------------------}
+ {                                                                    }
+ {                        Constellation II Mount Program              }
+ {                                                                    }
+ {                    Copyright (C) 1983 Corvus Systems, Inc.         }
+ {                                                                    }
+ {                                                                    }
+ {--------------------------------------------------------------------}
+
+
+
+
+ PROGRAM  MountManager;
+
+
+USES
+
+{!IV}   {$U IV.LIB              } UCDefn,
+{!UC}                             UCCrtio,
+{!UC}                             UCDrvio,
+{!IV}                             Mounts,
+{!IV}                             UCSDDir,
+{!UC}                             NiUtil,
+{!UC}                             UcTblRtn,
+{!UC}                             CVTUtils,
+{!IV}   {$U IV.LIB2             }
+{!UC}                             ErrReports,
+{!IV}                             C2Util1,
+{!UC}                             C2Util3;
+
+
+{$P}
+
+{!IV} {$I IV.ERRORS.TEXT }
+
+    Version              =   '1.0 '; { Program version number                           }
+    Datecode             =   '11-Jul-83';
+
+ VAR     {Constellation II MOUNT MANAGER global  VARIABLES}
+    CurSrvName:        String80;       { Name of current server                       }
+    CurDrvName:        String80;       { Name of current drive                        }
+    CurrentSlot:       INTEGER;        { Current active slot                          }
+    CurrentDrive:      INTEGER;        { Current active drive                         }
+    CurrentHost:       INTEGER;        { Current active disk server no.               }
+    CurDvCnt:          INTEGER;        { number of drives on current server           }
+    RetCode:           INTEGER;
+    MnDebug:           BOOLEAN;        { DEBUG flag                                   }
+    Loc:               CDaddr;         { Network address of Corvus volume             }
+    Vname:             STRING80;
+    Vunit:             INTEGER;
+    InputOk:           CrtStatus;
+
+{$P}
+
+  PROCEDURE Mntvol( Vname: STRING32; VUnit: INTEGER );
+
+  VAR
+
+     RetCode:       INTEGER;
+     Volumename:    Name;
+     DVrec:         DVtype;
+     t:             LONGINT;
+     I,J:           INTEGER;
+
+     BEGIN { Mntvol }
+     IF CnvStrName ( Vname, VolumeName) = FALSE THEN BEGIN
+        WriteErr ( Ac2Err, BadName);
+        EXIT(Mntvol);
+        END;
+
+     {                                                }
+     { check all the drives of current server to      }
+     { see if volume exits                            }
+     {                                                }
+     DVRec.VolName := VolumeName;
+     IF CurDrvName = '*' THEN BEGIN
+        I := 1;
+        REPEAT
+           SelectDrive ( I, RetCode );
+           IF RetCode = 0 THEN BEGIN
+              Loc.DriveNo := I;
+              DvGetRec (DvRec, RetCode );
+              END;
+           I := I + 1;
+        UNTIL (RetCode = 0) OR (I > CurDvCnt);
+        END
+     {                                               }
+     { It's not a wild card for all drives, so       }
+     { we have to call selectdrive to initialize     }
+     { DA, DU, DV tables before we can get DVrec     }
+     {                                               }
+     ELSE BEGIN
+        SelectDrive ( CurrentDrive, RetCode );
+        IF RetCode = 0 THEN DvGetRec (DvRec, RetCode );
+        END;
+
+     IF (RetCode <> 0) THEN BEGIN
+        WriteErr ( aC2Err, VolNotFound);
+        EXIT(MntVol);
+        END;
+
+     GetAbsAddr( DVRec.StartBlk, t );
+     Loc.Blkno := t;
+     GetAbsAddr( DVRec.Endblk, t );
+     t := t-Loc.Blkno+1;
+{!UC}     IF NOT Mount( Loc, t, VUnit ) THEN EXIT(Mntvol);
+     WRITELN( ' Volume ', Vname, ' mounted on unit ', VUnit:1 );
+
+     END;  { Mntvol }
+
+{$P}
+
+FUNCTION Selectit: CrtStatus;
+
+VAR
+   TLoc:         CdAddr;
+   Continue:     CrtStatus;
+   SName, Dname: String80;
+   RetCode:      INTEGER;
+   I, J:         INTEGER;
+   Dnum:         INTEGER;
+
+   BEGIN
+   TLoc := Loc;
+   SName := CurSrvName;   DName := CurDrvName;
+
+   WRITELN (' Enter drive information: ');
+   WRITELN;
+   {                                           }
+   {  get the new slot, server and drive       }
+   {     informationn                          }
+   {                                           }
+   IF GetDrv ( SName, DName, TLoc ) <> Normal THEN BEGIN
+      Selectit := Escape;
+      EXIT ( SelectIt );
+      END;  { if getdrv...  }
+
+   {                                                  }
+   { Initialize the table management routines         }
+   {                                                  }
+   CVTInit ( Tloc, MnDebug, RetCode );
+   IF RetCode <> 0 THEN BEGIN
+      WriteErr (aC2Err, RetCode );
+      SelectIt := Error;
+      EXIT ( SelectIt );
+      END;
+
+   {                                                     }
+   { set all current global variables                    }
+   {                                                     }
+   CurDvCnt := DrMax;
+   CurrentDrive := TLoc.DriveNo;
+   CurrentSlot := TLoc.SlotNo;
+   CurSrvName := SName;
+   CurDrvName := DName;
+   CurrentHost := TLoc.StationNo;
+    Loc := TLoc;
+  END;    { FUNCTION SelectIt }
+
+
+{$P}
+{--------------------------------------------------------------------}
+{ Procedure:    MountInit                                            }
+{                                                                    }
+{ Description:  Initialize the internal descriptor arrays.           }
+{                                                                    }
+{--------------------------------------------------------------------}
+
+FUNCTION MountInit: BOOLEAN;
+
+VAR
+   RetCode:      INTEGER;
+   I,J:          INTEGER;
+   Pstring:      STRING80;
+
+   BEGIN
+
+   {                                         }
+   { Setup initial configuration parameters  }
+   {                                         }
+
+   Mountinit := TRUE;
+   CcCrtIOInit;
+   CcDrvIOInit;
+
+   Initslot(Loc);
+   Loc.Driveno := 1;
+
+   { get server and drive name }
+
+   NiGetInfo( Loc, CurSrvName, CurDrvName, Pstring );
+   Pstring := '';
+   CurDrvName := '*';
+
+   CrtSdef:= TRUE;
+   CrtNdef:= TRUE;
+   CurrentDrive := 1;
+   CurDvCnt := DrMax;
+   CurrentSlot := Loc.SlotNo;
+   CurrentHost := Loc.StationNo;
+
+   {                                                  }
+   { Initialize the table management routines         }
+   {                                                  }
+   CVTInit ( Loc, MnDebug, RetCode );
+   IF RetCode <> 0 THEN BEGIN
+     WriteErr (aC2Err, RetCode );
+     EXIT ( Mountinit );
+     END;
+
+
+    Mountinit := TRUE;
+
+  END;   { Mountinit }
+
+
+   BEGIN   { MountManager }
+
+   MnDebug := FALSE;
+   IF Mountinit THEN BEGIN
+      WRITELN(' (Enter "." to select a drive)' );
+      REPEAT
+         Vname := '';
+         WRITE(' Enter volume name: ');
+         InputOK := Getstring( Vname );
+         IF Vname = '.' THEN BEGIN
+            InputOk := Selectit;
+            InputOk := error; { ask for volume name again }
+            END;
+      UNTIL InputOK <> error;
+
+      IF InputOk=Normal THEN
+      REPEAT
+         Vunit := 10;
+         WRITE(' Enter unit number: ');
+         InputOk := Getnum(Vunit);
+      UNTIL InputOK <> error;
+
+      IF Inputok=Normal THEN Mntvol( Vname, Vunit );
+      END;
+
+   END.
+
+
+
+
+

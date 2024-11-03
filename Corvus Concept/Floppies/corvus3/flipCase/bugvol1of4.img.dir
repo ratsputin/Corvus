@@ -1,0 +1,16 @@
+
+Directory of UCSD disk image file 'bugvol1of4.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume BACKUP1 has 8 files,  0 to 6 (6), eov 500, size 0, free 8
+
+ 1: BUGDATA.TEXT    Text  8-Oct-82    6-  12(   6),  3072+512=  3584 bytes
+ 2: BUGHLP.TEXT     Text 30-Jul-82   12-  18(   6),  3072+512=  3584 bytes
+ 3: BUGMAIN.TEXT    Text  8-Oct-82   18-  38(  20), 10240+512= 10752 bytes
+ 4: BUGLST.TEXT     Text 30-Jul-82   38-  58(  20), 10240+512= 10752 bytes
+ 5: BUGRPT          Data  8-Oct-82   58-  99(  41), 20992+512= 21504 bytes
+ 6: BUGUR.TEXT      Text 30-Jul-82   99- 111(  12),  6144+512=  6656 bytes
+ 7: BUGMAIN.OBJ     Data  8-Oct-82  111- 146(  35), 17920+512= 18432 bytes
+ 8: 1CCOS.BUGS      Data  6-Apr-84  146- 500( 354), 181248+276= 181524 bytes

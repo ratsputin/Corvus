@@ -1,0 +1,449 @@
+Program LookUp;
+
+{ eA"Virtuale@ eALookUp"e@ eAhandlese@ eAfilese@ eAofe@ eAanye@ eAsizee@ }
+
+uses {$U /ccutil/cclib  }
+        ccdefn,
+        cclblio,                 { Label stuff }
+        ccWndio,                 { Window stuff }
+        ccGrfIO,                 { Graphics stuff (?)}
+     {$U /ccutil/cctxtio}
+        VSIUTXT,                 { Fast text file I/O stuff }
+     {$U /ccutil/userio }
+        userio;
+
+const MaxRec = 2000;   { eAMaxe@ eAnumbere@ eAofe@ eArecordse@ eAine@ eARAMe@ eAate@ eAanye@ eAonee@ eAtimee@ }
+      MGLKUP=68;
+      MGFILE=10;
+
+type Str255 = string[255];
+     SPtr   = ^TXTString;
+
+var Spaces   : Str255;
+    PtrArray : Array[1..4000] Of SPtr;
+    PtrStr   : SPtr;
+    Diag     : Boolean;        { TRUE for diagnostic mode }
+    InitHeap : ^LongInt;       { eAInitiale@ eApositione@ eAofe@ eAheape@ }
+    CurRec,
+    LastRec  : Integer;
+    IFCB,                      { eAInpute@ eAfilee@ eAcontrole@ eAblocke@ }
+    OFCB     : TXTcb;          { eAOutpute@ eAfilee@ eAcontrole@ eAblocke@ }
+    LoadFNam,
+    SaveFNam: StrTyp;
+    Sel,
+    TtlLin,
+    FldLin: TXTString;
+    Counter,
+    CurFld: integer;
+
+
+{--------------------- G L O B A L    P R O C S ------------------}
+
+Function BrkPress: Boolean; External;
+
+
+Procedure UpShift( var S: StrTyp );
+
+{ Make all alphabetic characters in a string upper case }
+
+Var
+  i: integer;
+
+Begin
+  For i := 1 to length( S ) do
+    if S[i] in ['a'..'z'] then S[i] := chr( ord(S[i]) - 32 )
+End;
+
+
+Procedure TUpShift( var S: TXTString );
+
+{ Make all alphabetic characters in a string upper case }
+
+Var
+  i: integer;
+
+Begin
+  For i := 1 to length( S ) do
+    if S[i] in ['a'..'z'] then S[i] := chr( ord(S[i]) - 32 )
+End;
+
+
+Procedure Wait;        { eAWaite@ eAuntile@ eAusere@ eApressese@ eAae@ eAkey...e@ }
+
+Var
+  Counter : Integer;
+
+Begin
+  Write('Press any key to continue...');
+  Repeat Until UnitBusy(2); UnitClear(2);
+  For Counter := 1 To 10 Do Write('\08');
+  Write('          ')
+End;
+
+
+Function Match( var S,S1: TXTString): boolean;
+
+{ Returns TRUE if first N characters of current field in S1 match S. Case insen-
+  sitive. }
+
+Var
+  j,
+  i: integer;
+  C: char;
+
+begin
+  Match := true;
+  j := 1;                      { Pointer to char in selector }
+  I := CurFld;                 { Pointer to char in record   }
+  while j<=length(S) do begin
+     if S1[i] in ['a'..'z'] then C := Chr(Ord(S1[i])-32)
+       else C := S1[i];        { C now equals char from record }
+     if C<>S[j] then begin
+        Match := false;
+        j := length(S)
+        end;
+     j := j + 1;
+     i := i + 1
+     end
+end;
+
+
+Function NextRec( var S: TXTString ): boolean;
+
+{ Returns next record that meets current selection criteria
+  Function result is TRUE if a record was found,
+  FALSE if we run off the end of the file... }
+
+Var
+  Gotcha : Boolean;
+
+Begin
+  Gotcha := False;
+  If CurRec > LastRec Then Begin
+    CurRec := 1;
+    NextRec := False
+    End
+  Else Repeat
+    S := PtrArray[CurRec]^;
+    If Match(Sel,S) Then Gotcha := True
+      Else CurRec := CurRec + 1
+  Until Gotcha or (CurRec > LastRec);
+  If Gotcha Then Begin                      { Found a record }
+    CurRec := CurRec + 1;                   { Inc record pointer }
+    NextRec := True
+    End
+  Else Begin                                { Didn't find one! }
+    NextRec := False;                       { Reset pointer }
+    CurRec := 1
+    End
+End;
+
+
+Function NextField( Fld: integer ): integer;
+
+Begin
+  if (Fld<1) or (Fld>length(FldLin)) then Fld := 1
+    else begin
+      if Fld<length(FldLin) then Fld := Fld + 1;
+      while (Fld<length(FldLin)) and (FldLin[Fld]<>'+') do
+         Fld := Fld + 1;
+      if Fld=length(FldLin) then Fld := Fld + 1
+      end;
+   NextField := Fld
+end;
+
+
+Procedure FlipCursor;
+
+Begin
+  GotoXY( CurFld-1, 0 );
+  Write( '\1Bb\1BZ', chr( NextField(CurFld)-CurFld ) )
+end;
+
+{
+.PG
+}
+procedure CsrLft;
+begin
+   if FldLin<>'' then begin
+      FlipCursor;
+      if (CurFld<=1) or (CurFld>length(FldLin)) then
+         CurFld := length(FldLin)+1;
+      if CurFld>1 then CurFld := CurFld - 1;
+      while (CurFld>1) and (FldLin[CurFld]<>'+') do
+         CurFld := CurFld - 1;
+      FlipCursor;
+   end;
+end;
+
+{
+.PG
+}
+procedure CsrRht;
+begin
+   if FldLin<>'' then begin
+      FlipCursor;
+      CurFld := NextField( CurFld ) mod length(FldLin);
+      FlipCursor
+   end
+end;
+
+{
+.PG
+}
+procedure QueryIPC;
+
+var
+  i  : longint;
+  S  : TXTString;
+  Fnd: boolean;
+
+begin
+   TUpShift( Sel );
+   write( '\1BH\D\1BY' );
+   CurRec := 1;
+   Fnd := false;
+   while NextRec( S ) and UserIdle do begin
+      writeln( S );
+      Fnd := true;
+      If BrkPress Then Begin
+        WriteLn;
+        Wait;
+        writeln( '\1BJ\1BG8', TtlLin, '\1BG0' );
+        FlipCursor;
+        Exit(QueryIPC)
+        End
+   end;
+   if not Fnd then WrtMsg(MGLKUP,4)      { No records found that match! }
+     else if not UserIdle then begin
+       Bell( BelAck );
+       writeln;
+       writeln( ' * * * * * * * * * * * ' )
+       end;
+   writeln( '\1BH\1BG8', TtlLin, '\1BG0\1BK' );
+   FlipCursor
+end;
+
+
+Function LoadIPC: boolean;
+
+Var
+  Diff,
+  RecLen    : Integer;
+  Space,
+  TempStr   : TXTstring;      { String from block built here }
+  Fid       : TXTFile;
+  DiddleHeap: ^LongInt;
+  Initial,
+  Full      : Boolean;        { TRUE if the heap fills up }
+
+
+  Function Verify(IPCFile : Str255): Boolean;
+
+  { Verifies that designated file exists, and is an IPC file }
+
+  Var
+    Raskin   : TXTstring;
+    Ptr,
+    Counter  : Integer;
+
+  Begin
+    Verify := True;
+    {$I-}
+    TXTrdOPEN(IFCB,FID,IPCFile);
+    {$I+}
+    If IOResult <> 0 Then Begin
+      WriteLn('LOOKUP can''t open ',IPCFile,'. Check to make sure');
+      WriteLn('  that the file name is spelled correctly, and');
+      WriteLn('  remember that you must specify the volume name');
+      WriteLn('  if the file isn''t on your current volume.');
+      Verify := False;                         { Error opening file }
+      Exit(Verify)
+      End;
+
+    TXTread(IFCB,FID,Raskin);   { Get field descriptor }
+    For Counter := 0 To Length(Raskin) Do FldLin[Counter] := Raskin[Counter];
+    TXTread(IFCB,FID,Raskin);   { Get field names }
+    For Counter := 0 To Length(Raskin) Do TtlLin[Counter] := Raskin[Counter];
+
+    { Cheap verify: file's first line can consists of '+' and '-' ONLY! }
+
+    For Counter := 1 To Length(FldLin) Do
+      If Not(FldLin[Counter] In ['+','-']) Then Begin
+        WriteLn('Sorry, ',IPCFile,' isn''t an IPC file!');
+        Verify := False;                               { Not an IPC file }
+        Exit(Verify)
+        End;
+
+    RecLen := Length(FldLin);                          { File record length }
+    Diff := 255 - RecLen + 1;
+    Initial := False
+  End;                         { VERIFY }
+
+Begin                  { LoadIPC mainline }
+ Space := ' ';
+ Full := False;
+ CurRec := 0;
+ if PmtStr( Msg( MGLKUP, 2 ), LoadFNam ) then begin
+   UpShift( LoadFNam );
+   if pos('.TEXT',LoadFNam)=0 then LoadFNam := concat(LoadFNam,'.TEXT');
+   If Verify(LoadFNam) Then Begin
+     Repeat
+       TXTread(IFCB,FID,TempStr);     { Get a data string from the file }
+       If Length(TempStr) > 1 Then
+         If Not(IFCB.eofflg) Then Begin
+           RecLen := Length(TempStr) + 1; { Include lenth byte }
+           If Odd(RecLen) Then Begin
+             TempStr := Concat(TempStr,Space);
+             RecLen := RecLen + 1
+             End;
+           Diff := 256-RecLen;
+           CurRec := CurRec + 1;         { Update count of strings in memory }
+           New(ptrstr);                  { Allocate new string space on the heap }
+           ptrstr^ := TempStr;           { Set pointer to the new string }
+           PtrArray[CurRec] := ptrstr;   { Move actual string data to the heap }
+
+           Mark(DiddleHeap);             { Get current heap pointer }
+           DiddleHeap := Pointer(Ord4(DiddleHeap) - Diff);
+           Release(DiddleHeap);          { EFFICIENT use of heap space! }
+           End;
+
+         If (MemAvail < 2000) or (CurRec > 3999) Then Full := TRUE
+     Until IFCB.eofflg or Full;
+     If Full Then Begin
+       WriteLn;
+       Write(chr(7));                  { Beep }
+       WriteLn('LOOKUP couldn''t read the entire file into memory!');
+       WriteLn('Some records at the end of the file will not be present.');
+       WriteLn;
+       WriteLn('Try running LOOKUP from a higher level in ISYS, or use');
+       WriteLn('WORDPROC to make the ',LoadFNam,' file smaller.');
+       WriteLn;
+       Wait
+       End;
+     LastRec := CurRec;
+     TellUsr( Msg( 5, 10 ) );
+     while length(FldLin)>length(TtlLin) do TtlLin := concat(TtlLin,' ');
+     CurFld := 1;
+     writeln( '\1BJ\1BG8', TtlLin, '\1BG0' );
+     FlipCursor;
+     LoadIPC := true;
+     CurRec := 1
+     end
+   else begin
+     TellUsr( Subst(@LoadFNam,Msg(MGFILE,2)) );
+     Bell( BelErr );
+     Wait100MS( 15 );
+     LoadIPC := false
+     end
+   End
+End;                   { LOADIPC }
+
+
+
+Procedure SaveIPC;
+
+var S  : TXTString;
+    Fid: TXTFile;
+
+begin {$I-}
+  if PmtStr( Msg(MGFILE,6), SaveFNam ) then begin
+    UpShift( SaveFNam );
+    if pos( '.TEXT', SaveFNam )=0 then SaveFNam := concat(SaveFNam,'.TEXT');
+    TXTWrOpen( OFCB, Fid, SaveFNam );
+    if ioresult=0 then begin
+       TellUsr( Msg(MGFILE,7) );
+       TXTWrite( OFCB, Fid, FldLin );
+       TXTWrite( OFCB, Fid, TtlLin );
+       while NextRec( S ) do TXTWrite( OFCB, Fid, S );
+       OFCB.mode := TXToutput;
+       TXTClose(OFCB,Fid);
+       TellUsr( Subst(@SaveFNam,Msg(MGFILE,16)) )
+       end
+     else TellUsr( Subst(@SaveFNam,Msg(MGFILE,10)) )
+     end
+end;  {$I+}
+
+procedure BackGround;
+begin
+end;
+
+Procedure Init;
+
+Var
+  p: pStrTyp;
+
+Begin
+   {Diag := True;}
+   if ArgC>1 then UserIOInit( ArgV[2]^ ) else UserIOInit( '' );
+   Sel := '';
+   p := Msg(MGFILE,19);
+   SaveFNam := p^;
+   if ArgC>0 then LoadFNam := ArgV[1]^ else LoadFNam := p^;
+   write( '\1BJ\1Bb' );
+   CurFld := 1;
+end;
+
+procedure Home;
+begin
+   FlipCursor;
+   CurFld := 1;
+   FlipCursor;
+end;
+
+
+{$S PROMPT}
+Procedure Doit;
+
+Const LkUpFrm = 32;
+
+var Key : KeyTyp;
+    Ras : StrTyp;
+    C   : char;
+    Cntr: Integer;
+    Dum,
+    Done: boolean;
+
+begin
+   LoadLabels( LkUpFrm );
+   Done := not LoadIPC;
+   while not Done do Begin
+      For Cntr := 0 To Length(Sel) Do Ras[Cntr] := Sel[Cntr];
+      if PmtStr( Msg(MGLKUP,5), Ras ) then Begin
+        For Cntr := 0 To Length(Ras) Do Sel[Cntr] := Ras[Cntr];
+        QueryIPC
+        end
+      else begin
+        C := GetKey( false, Key );
+        case Key of
+          KF2  : begin Sel := ''; QueryIPC; end;
+          KF6  : Dum := LoadIPC;
+          KF7  : SaveIPC;
+          KF10 : Done := true;
+          KCSRU,
+          KCSRL: CsrLft;
+          KCSRD,
+          KCSRR: CsrRht;
+          KHOME: Home;
+          otherwise: begin end;
+          end        { CASE }
+        end
+      end
+end;
+
+{
+.PG
+}
+procedure WrapUp;
+begin
+   UserIOTerm;
+   write( '\1Bc' );
+end;
+
+begin                  { Mainline }
+   Mark(InitHeap);     { Mark heap position, we'll be using it }
+   Init;
+   LockUserIO( Doit );
+   WrapUp;
+   Release(InitHeap)   { Restore original heap position }
+end.

@@ -1,0 +1,113 @@
+CORVUS SYSTEMS, INC
+2029 O'Toole Avenue
+San Jose, CA  95131
+(408) 946-7700
+
+Dear EdWord User:
+
+     Welcome to the EdWord Workspace.  You are now looking at a
+short-form EdWord tutorial.  This tutorial is intended to help
+you become familiar with the basics of text editing with EdWord.
+
+     The area in which this text is displayed is called the
+Editing window.  Most of your word processing actions take place
+in this window.  Directly below this window is another area
+called the Command window.  The Command window contains various
+indicators and messages that inform you about your editing
+status.  On the bottom of the screen are EdWord's Function
+Labels.  These Function labels indicate which function key to
+press to perform various functions within EdWord.
+
+     Look around the Editing window.  Notice the various things
+that display which give the Workspace its own look.  At the top
+left hand corner of the window is small blinking box.  This box is
+the cursor.  The cursor indicates your current position.  You can
+move the cursor with the four arrow keys located at the top right
+hand corner of the Concept keyboard.
+
+eA     eALet's begin to use EdWord.e@  With EdWord you can delete
+characters one at a time or a whole row at a time.  Let's try it.
+Move the cursor to the capital letter eAAe@ below this paragraph.
+Then press the eADel Char e@label ten times.
+
+Aaaa aaaa___ Bbbb bbbb___ Cccc cccc___Dddd
+
+Next, let's clear part of the row.  Move the cursor to the capital
+letter eACe@.  Press the eAErase e@label--F7.  Notice that the remainder of
+the row is cleared and the cursor drops to the next line.
+
+     If your Concept is in the horizontal orientation you need
+to press eAScrlFwrde@--using the F2 key.
+
+     In addition to deleting characters you can also insert
+characters.  To do this move the cursor to the number eA1e@ of eA1983e@,
+in the paragraph below and press the eAInse@ eAChare@ label--F5.  Next,
+type "February 18, " while watching the change on the screen.
+
+Today's date is 1983
+
+     The last time you pressed eAScrlFwrde@ a large portion of this
+text was moved.  If you are using your Concept in the horizontal
+orientation this line appears near the bottom of the screen.  If
+you are in the vertical mode you are near the top of the screen.
+You should press the eAScrlFwrde@ label whenever the text reaches the
+bottom of the screen.
+
+      Move the cursor to the asterisk below this sentence, and
+type "This must be centered."  Do not press the RETURN key.
+
+eA*e@
+
+Now hold down the COMMAND key, which is located at the lower left
+corner of your keyboard.  You will see the word eACentere@ appear on
+the label F8.  Hold the COMMAND key down and press F8.  Notice
+that line of text was centered.  Simple, right?
+
+     A very important function label in EdWord is eAUndoe@.  Pressing
+this key will undo the last editing action you did, so you do not
+have to worry about making mistakes or pressing the wrong keys.
+If you press eAUndoe@ now, the line that was just centered will
+disappear and the asterisk will be on the line as it was before
+the change.  Try it.  The eAUndoe@ label is F3.
+e@
+     Let's move a paragraph.  We will move this paragraph further
+down in this letter.  Put the cursor at the first column of the
+blank line above this paragraph.e@  Press eAMarke@, which is the F4 key.
+Move the cursor down to the first column of the last line of this
+paragraph.  Hold down the SHIFT key and press eABounde@, the F4 key.
+
+     The paragraph is highlighted, and the function labels have
+changed.  Press the label eACutTexte@, which is a SHIFTed F1.  This
+causes the highlighted area to disappear.
+
+     Now let's place the paragraph at a new location.  e@ Move the
+cursor to the blank line following this paragraph.  Hold down the
+COMMAND key, and notice the change in the labels.  Next, press
+the label named eAPasteLine@, this is the F2 key.  Watch what
+happens.
+
+     Notice that the paragraph has been successfully placed in a
+new position.
+
+     Since the eAUndoe@ command keeps track of every editing action
+you do while you are working in a document, you could back up
+until every change made was changed back.  Again, to demonstrate
+this function you can press eAUndoe@ until the Command window displays
+that there are no more events to undo.  At that time, this letter
+will be the same as the original.  You can use this
+letter to practice, which will help you get the feel for using
+EdWord.  When you are finished, you can leave EdWord with the
+eAExite@ key, SHIFTed F10.  eHPLEASE BE SURE eHTO LEAVE EDWORD BEFORE YOU
+eHTURN OFF eHYOUR CONCEPT.e@e@  The EdWord User Guide has additional
+information on how to use EdWord.
+
+                                    Sincerely yours,
+
+
+
+                                    CORVUS SYSTEMS, INC.
+
+
+
+
+

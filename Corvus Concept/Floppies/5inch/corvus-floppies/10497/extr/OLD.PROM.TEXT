@@ -1,0 +1,900 @@
+; CC.PROM.TEXT ---------------------------------------------------------
+;
+;       CC.PROM -- Corvus CONCEPT Workstation PROM
+;
+;       Copyright 1982 Corvus Systems, Inc.
+;                      San Jose, California
+;
+;       All Rights Reserved
+;
+;       v 0.1  05-06-82  LEF  Original program
+;       v 0.2  05-27-82  LEF  Add keyboard driver (kb)
+;                             Add display driver (mb)
+;                             Add 8" Corvus floppy disk driver/boot
+;                             Finds first local disk for booting
+;                             OMNINET disk driver modifications
+;       v 0.3  06-21-82  LEF  Add MACSBUG interface
+;                             Add 5" floppy driver/boot
+;                             Finds first floppy disk for booting
+;                             Local disk driver modifications
+;                             OMNINET disk driver modifications
+;       v 0.4  06-29-82  LEF  Add time out to OMNINET short commands
+;       v 0.5  08-18-82  KB   Modified MacsBug interface
+;                             Modified Apple 5" floppy driver
+;       v 0.6  10-29-82  LEF  Swap BACKSPACE and \ keys
+;                             Modified display driver
+;       v 0.7  05-01-83  LEF  Remove Apple floppy boot
+;                             Add auto PROM boot
+;                             OMNINET disk driver modifications
+;                        KB   Add DSDD floppy driver/boot (rev B)
+;       v 0.8  07-01-83  LEF  Add Concept Plus, Uniplex, Venus support
+;              09-14-83  KB   Enhanced and changed Uniplex support
+;       v 1.0  01-18-84  KB   fixed to Const II boot on omnidisk
+;
+;{!CC} Concept version                                                  0.8
+;{!CP} Concept Plus version                                             0.8
+;{!UP} Uniplex version                                                  0.8
+;{!VN} Venus version                                                    0.8
+;-----------------------------------------------------------------------
+;{!CP} {/SC} {UC}       ;select generic Uniplex/Concept Plus            0.8
+;{!UP} {/SC} {UC}       ;select generic Uniplex/Concept Plus            0.8
+;{!CC} {/SC} {CV}       ;select generic Concept/Venus                   0.8
+;{!VN} {/SC} {CV}       ;select generic Concept/Venus                   0.8
+;
+;{!VN} {/SC} {DS}       ;select units with a display                    0.8
+;{!CC} {/SC} {DS}       ;select units with a display                    0.8
+;{!CP} {/SC} {DS}       ;select units with a display                    0.8
+;
+;{!VN} {/SC} {MM}       ;select units with a memory mgt board           0.8
+;{!UP} {/SC} {MM}       ;select units with a memory mgt board           0.8
+;{!CP} {/SC} {MM}       ;select units with a memory mgt board           0.8
+;
+; File: P.PROM.TEXT
+; Date: 18-Jan-84
+; By:   L. Franklin changes by K. Ball
+;
+;                        +-----+----------------+
+; Stag PROM checksums:   |     |                |
+;                        |  H  |                |
+;                        |     |                |
+;                        +-----+----------------+
+;                        |     |                |
+;                        |  L  |                |
+;                        |     |                |
+;                        +-----+----------------+
+    page
+        include 'P.PROM.EQ'     ;PROM equates
+    page    ;vectors
+; Corvus CONCEPT Workstation PROM address vectors
+;
+         org    ROMbase         ;
+         data.l 0               ;(10000) initial stack pointer
+         data.l setup           ;(10004) start of PROM code
+         data.l $FFFFFFFF       ;(10008) unique workstation ID
+         data.b PROMvers        ;(1000C) PROM version number
+         data.b PROMlevl        ;(1000D) PROM level number
+         data.w $FFFF           ;(1000E) PROM checksum
+                                ;
+         data.w jumpto          ;(10010) jump to OMNINET disk boot subr
+         data.l SBomni          ;(10012) OMNINET disk boot subr pointer
+         data.l ODblkIO         ;(10016) OMNINET disk blk i/o subr pointer
+         data.l ODdskIO         ;(1001A) OMNINET disk i/o subr pointer
+         data.w 0               ;
+                                ;
+         data.w jumpto          ;(10020) jump to local disk boot subr
+         data.l SBlocal         ;(10022) local disk boot subr pointer
+         data.l LDblkIO         ;(10026) local disk blk i/o subr pointer
+         data.l LDdskIO         ;(1002A) local disk i/o subr pointer
+         data.w 0               ;
+                                ;
+         data.w jumpto          ;(10030) jump to floppy disk boot subr
+         data.l SBflpy          ;(10032) floppy boot subr pointer
+         data.l FDblkIO   ;{!CC};(10036) SSSD floppy blk i/o subr       0.8
+         data.l FDsecIO   ;{!CC};(1003A) SSSD floppy sector i/o subr    0.8
+         data.l FDinit    ;{!CC};(1003E) SSSD floppy initialization     0.8
+         data.l 0,0,0     ;{!MM};(10036) ....unused                     0.8
+; ----   data.l ADblkIO         ;(10042) Apple floppy blk i/o subr      0.7
+; ----   data.l ADsecIO         ;(10046) Apple floppy sector i/o subr   0.7
+; ----   data.l ADinit          ;(1004A) Apple floppy initialization    0.7
+         data.l FBblkIO         ;(10042) DSDD floppy blk i/o subr       0.7
+         data.l FBsctIO         ;(10046) DSDD floppy sector i/o subr    0.7
+         data.l FBinit          ;(1004A) DSDD floppy initialization     0.7
+         data.w 0               ;
+
+         data.l KBinit          ;(10050) initialize (reset) keyboard driver
+         data.l KBgetch         ;(10054) get a keyboard character
+         data.l 0               ;(10058)
+         data.l 0               ;(1005C)
+
+         data.l DSinit          ;(10060) initialize display driver
+         data.l DSputch         ;(10064) display a character
+         data.l DSputst         ;(10068) display a string
+         data.l DScvtuc         ;(1006C) convert character to upper case
+
+         data.l INTslot         ;(10070) level 1 interrupt vector (SLOTS)
+         data.l INTdc1          ;(10074) level 2 interrupt vector (DC1)
+         data.l INTomni         ;(10078) level 3 interrupt vector (OMNINET)
+         data.l INTdc0          ;(1007C) level 4 interrupt vector (DC0)
+         data.l INTtimr         ;(10080) level 5 interrupt vector (TIMER)
+         data.l INTkybd         ;(10084) level 6 interrupt vector (KYDB)
+         data.l INTlvl7         ;(10088) level 7 interrupt vector
+         data.l 0               ;(1008C)
+    list   0
+msgcpy   data.b 'Copyright '    ;Corvus CONCEPT
+         data.b '1984 Corvus '  ;   PROM
+         data.b 'Systems, Inc.' ;      copyright notice
+         data.b 0               ;
+    list   1
+    page    ;Setup
+
+; Initialize Corvus CONCEPT hardware
+;
+Setup   move.w  #$2700,sr       ;set priority to 7, nmi interrupt only
+        lea     CPistack.w, SP  ;set system stack pointer               0.8
+;
+; delay for possible Apple floppy reset  *kb 8/23/82*                   0.5
+;                                                                       0.5
+        MOVEQ   #-1, D0         ;Must wait at least 1 second            0.8
+Setup1  DBRA    D0,Setup1       ;*                                      0.5
+Setup2  DBRA    D0,Setup2       ;*                                      0.5
+Setup3  DBRA    D0,Setup3       ;*                                      0.5
+Setup4  DBRA    D0,Setup4 ;{!VN};... and longer for Venus               0.8
+Setup5  DBRA    D0,Setup5 ;{!VN};*                                      0.8
+Setup6  DBRA    D0,Setup6 ;{!VN};*                                      0.8
+Setup7  DBRA    D0,Setup7 ;{!VN};*                                      0.8
+Setup8  DBRA    D0,Setup8 ;{!VN};*                                      0.8
+Setup9  DBRA    D0,Setup9 ;{!VN};*                                      0.8
+                                ;
+        move.l  #VIAbase,a6     ;get pointer to VIA I/O locations
+;{!VN} ---------------------------------------------------------------- 0.8
+;{!VN}                                                                  0.8
+;{!VN} Memory map of Venus used as a Concept is identical to Concept    0.8
+;{!VN} except for the following:                                        0.8
+;{!VN}                                                                  0.8
+;{!VN}    There is no zero detect to make the first 8 bytes of ROM and  0.8
+;{!VN}    the rest of static RAM.                                       0.8
+;{!VN}                                                                  0.8
+;{!VN}    Instead, when ALTMAP = 0 the map area 0-0FFFF is ROM0         0.8
+;{!VN}             when ALTMAP = 1 the map area 0-0FFFF is SRAM         0.8
+;{!VN}                                                                  0.8
+;{!VN}    ALTMAP is set to 1 before any writes to static RAM.           0.8
+;{!VN}                                                                  0.8
+;{!VN}    ALTMAP can only be reset to zero by turning power off.        0.8
+;{!VN}                                                                  0.8
+;{!VN} ---------------------------------------------------------------- 0.8
+                                ;{!VN}                                  0.8
+        move.b  #$40,$81(a6)    ;{!VN} set ALTMAP to 1                  0.8
+                                ;{!VN}                                  0.8
+        clr.w   CPextcrt.w      ;reset system flags (CPextcrt, CPsysst)
+        move.b  #$17,$07(a6)    ;kybd control, 600 baud, 8 bit word
+        move.b  #$0B,$05(a6)    ;kybd command, no parity, no interrupts
+        move.b  #$3E,$27(a6)    ;dcom0 control, 9600 baud, 7 bit word
+        move.b  #$AB,$25(a6)    ;dcom0 cmd mark parity, xmit & rcv w/o IRQ
+        move.b  #$3E,$47(a6)    ;dcom1 control, 9600 baud, 7 bit word
+        move.b  #$AB,$45(a6)    ;dcom1 command
+        clr.b   $7F(a6)         ;VIA port A -- ok to read port before  0.8
+        clr.b   $61(a6)         ;VIA port B -- write byte of zero      0.8
+        move.b  #$80,$67(a6)    ;VIA data direction A
+        move.b  #$37,$65(a6)    ;VIA data direction B
+        move.b  #$10,$77(a6)    ;free run shift register, counter
+        move.b  #$0F,$75(a6)    ;symmetrical wave shape
+        move.b  #$A0,$71(a6)    ;fairly low initial frequency
+        tst.b   $C1(a6)         ;turn off possible OMNINET interrupt
+        move.b  $01(a6),d0      ;clear keyboard data buffer
+        move.b  $21(a6),d0      ;clear dcom0 data buffer
+        move.b  $41(a6),d0      ;clear dcom1 data buffer
+
+        include 'P.PROM.SP'     ;{!UC} set seg/pag registers            0.8
+
+        page    ;SetMB
+;
+;  Check Corvus CONCEPT hardware  (test 1)
+;
+;       Verify ports making no data accesses
+;
+SetupCk cmpi.b  #$3E,$27(a6)    ;dcom0 control                          0.8
+        bne.s   CHerr           ;
+        cmpi.b  #$AB,$25(a6)    ;dcom0 command
+        bne.s   CHerr           ;
+        cmpi.b  #$3E,$47(a6)    ;dcom1 control
+        bne.s   CHerr           ;
+        cmpi.b  #$AB,$45(a6)    ;dcom1 command
+        bne.s   CHerr           ;
+        cmpi.b  #$17,$07(a6)    ;kybd control
+        bne.s   CHerr           ;
+        cmpi.b  #$0B,$05(a6)    ;kybd command
+        bne.s   CHerr           ;
+        cmpi.b  #$80,$67(a6)    ;VIA data direction A
+        bne.s   CHerr           ;
+        cmpi.b  #$37,$65(a6)    ;VIA data direction B
+        beq.s   CHend           ;
+
+CHerr   moveq   #-1,d0          ;short delay before error tone          0.8
+CHerr1  dbra    d0,CHerr1       ;*
+        bset    #0,CPsysst.w    ;set test 1 failed flag
+        bsr     Flash           ;*
+
+CHend
+         MOVEQ     #$41, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+
+        moveq   #-1,d0      ;{!DS};short delay before clearing screen   0.8
+CHend1  dbra    d0,CHend1   ;{!DS}
+        bsr     SBprom2     ;{!DS};is this a boot to PROM?              0.7
+        beq.s   CHend2      ;{!DS};yes, do not clear screen             0.7
+        move.l  #DSPbase,a0 ;{!DS};get pointer to start of display screen
+        move.l  #DSPend,a1  ;{!DS};get pointer to end of display screen
+        bsr     ZeroRam     ;{!DS};clear display screen
+CHend2  move.b  #$FF,$75(a6)    ;turn off initial tone                  0.7
+
+; SetMB -- Initialize MACSBUG RAM
+;
+SetMB   lea     RAMmxbug.w,a0   ;get pointer to start of MACSBUG RAM    0.8
+        lea     RAMwksta-4.w,a1 ;get pointer to end of MACSBUG RAM      0.8
+        bsr     ZeroRam         ;zero MACSBUG RAM                       0.7
+        bsr     SBprom1         ;is debug PROM present?                 0.7
+        bne.s   RomTst1         ;no, go on                              0.7
+        jsr     (a1)            ;initialize MACSBUG                     0.8
+         MOVEQ     #$42, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        lea     SPbusEr,a1   ;{!UC}bus error processing address         0.8
+        move.l  a1, BusErrV.W;{!UC}set vector                           0.8
+        bsr     SBprom2         ;is this a boot to PROM?                0.7
+        beq     MemClr1         ;yes, bypass PROM and RAM checks        0.7
+
+        page    ;RomTst1, RamTst1, RamTst2, MemTest
+;
+; RomTst1 -- Check Corvus CONCEPT PROM  (test 2)
+;
+RomTst1 move.l  #CPcksum,a0     ;get pointer to start of PROM
+         MOVEQ     #$43, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        move.l  #ROMend,a1      ;get pointer to end of PROM
+        bsr     RomTst          ;check PROM
+        beq.s   RamTst1         ;PROM ok, go on
+        bset    #1,CPsysst.w    ;set test 2 failed flag
+        bsr     Flash           ;*
+
+;
+; RamTst1 -- Check Corvus CONCEPT static RAM  (test 3)
+;
+RamTst1 lea     RAMwksta.w,a0   ;get pointer to start of RAM            0.8
+        bsr     WalkBit         ;is RAM valid?
+        bne.s   RT1err          ;no, report error
+         MOVEQ     #$44, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        lea     CPstack.w,a1    ;get pointer to end of RAM              0.8
+                                ;   (leave room for stack)
+        bsr     March           ;is RAM valid?
+        beq.s   RamTst2         ;yes, go on
+                                ;
+RT1err  bset    #2,CPsysst.w    ;set test 3 failed flag
+        bsr     Flash           ;*
+
+;
+; RamTst2 -- Check Corvus CONCEPT dynamic RAM  (test 4)
+;
+RamTst2
+         MOVEQ     #$45, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+
+        btst    #7, CPsysst.w   ;{!UC};if seg or page reg error         0.8
+        bon.s   MemClr1         ;{!UC};then don't check or clear dram   0.8
+        move.l  #USRbase,a0     ;get pointer to start of RAM
+        bsr     WalkBit         ;is RAM valid?
+        bne.s   RT2err          ;no, report error
+        bsr     RamSize         ;get dynamic RAM size (a1 = RAM size)
+        bsr     March           ;is RAM valid?
+        beq.s   MemTest         ;yes, go on
+                                ;
+RT2err  bset    #3,CPsysst.w    ;set test 4 failed flag
+        bsr     Flash           ;*
+
+;
+; MemTest -- Check Corvus CONCEPT dynamic RAM  (test 5)
+;
+MemTest bsr     IncTest         ;test user dynamic RAM
+        beq.s   MemClr          ;no error, clear memory
+        bset    #4,CPsysst.w    ;set test 5 failed flag
+        bsr     Flash           ;*
+   page    ;MemClr, SetIntV, SlotID
+; MemClr -- Clear memory
+;
+MemClr  move.l  #DSPbase,a0  ;{!CV};get pointer to start of RAM         0.7
+MemClr  move.l  #USRbase,a0  ;{!UC};get pointer to start of RAM         0.8
+         MOVEQ     #$46, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        bsr     RamSize         ;get dynamic RAM size (a1 = RAM size)   0.7
+        bsr     ZeroRam         ;zero RAM                               0.7
+                                ;                                       0.7
+MemClr1 lea     RAMwksta.w,a0   ;get pointer to start of RAM            0.8
+        lea     CPstack-2.w,a1  ;get pointer to end of RAM              0.8
+                                ;   (leave room for stack)              0.7
+         MOVEQ     #$47, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        bsr     ZeroRam         ;zero static RAM                        0.7
+
+; SetIntV -- Set up interrupt vectors
+;
+SetIntV move.l  #CPivec1,a0     ;get pointer to interrupt vector table
+        lea     IVlvl1.w,a1     ;get pointer to interrupt vectors       0.8
+        moveq   #6,d0           ;get number of vectors to move
+SUI1    move.l  (a0)+,(a1)+     ;move pointers to interrupt vectors
+        dbra    d0,SUI1         ;*
+                                ;{!DS}
+        bsr     KBinit          ;{!DS};initialize keyboard
+        bsr     DSinit          ;{!DS};initialize display
+         MOVEQ     #$0D, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+                                ;
+        lea     msg1,a0         ;mesg - "Corvus CONCEPT Initialization"
+        bsr     DSputst         ;output message
+        lea     msgcpy,a0       ;mesg - copyright notice
+        bsr     DSputst         ;output message
+        lea     msg2,a0         ;mesg - carriage returns
+        bsr     DSputst         ;output message
+
+; SlotID -- Examine slots for known devices
+;
+SlotID  lea     CPsl1typ.w,a5   ;get pointer to slot types table        0.8
+        movea.l #IOPprom,a0     ;get pointer to slot 1 interface PROM   0.7
+        moveq   #1,d6           ;get index for slot 1
+        bsr     LDsync           ;{!VN};sync with local disk            0.8
+        blt     SlotID8          ;{!VN};set no device if no disk        0.8
+        move.b  #DTlocl,-1(a5,d6);{!VN};set device type                 0.8
+        bra     SlotID9          ;{!VN};check next slot                 0.8
+
+SlotID1 movep.l 01(a0),d1       ;get interface prom code (ID)
+        movep.l 09(a0),d2       ;get interface prom code (ID)
+        tst.b   IOPbase+$9FFF.L ;disable interface RAM                  0.7
+    page    ;SlotID (continued)
+
+        move.b  #DTlocl,-1(a5,d6);set possible device type              0.7
+        cmp.l   #$A920A900,d1   ;is this a local disk?
+        bne.s   SlotID3         ;no, check next device
+        cmp.l   #$A903A93C,d2   ;is this a local disk?
+        bne.s   SlotID3         ;no, check next device
+        bsr     LDsync          ;sync with local disk
+        bge.s   SlotID9         ;check next slot if disk responded      0.7
+        bset    #5,CPsysst.w    ;set test 6 failed flag                 0.7
+        bsr     Flash           ;*                                      0.7
+        bra.s   SlotID8         ;bypass slot if disk did not respond    0.7
+                                ;                                       0.7
+SlotID3 move.b  #DTa5,-1(a5,d6) ;set possible device type               0.7
+        cmp.l   #$A220A000,d1   ;is this an Apple floppy?
+        bne.s   SlotID4         ;no, check next device
+        cmp.l   #$A203863C,d2   ;*
+        beq.s   SlotID9         ;check next slot (dev type set)         0.7
+                                ;
+SlotID4 cmp.l   #'CORV',d1      ;is this a Corvus floppy?
+        bne.s   SlotID8         ;no, check next slot                    0.7
+                                ;                                       0.7
+        move.b  #DTc8,-1(a5,d6) ;set possible device type               0.7
+        cmp.l   #'US01',d2      ;is this a Corvus SSSD floppy?          0.7
+        bne.s   SlotID5         ;no, check for another floppy type      0.7
+        bsr     SlotAdr         ;compute FDC register base pointer      0.7
+        move.b  #$20,1(a1)      ;turn off floppy motor                  0.7
+        bra.s   SlotID9         ;check next slot (dev type set)         0.7
+                                ;                                       0.7
+SlotID5 move.b  #DTf8,-1(a5,d6) ;set possible device type               0.7
+        cmp.l   #'US02',d2      ;is this a Corvus DSDD floppy?          0.7
+        bne.s   SlotID8         ;no, set no device in slot              0.7
+        bsr     SlotAdr         ;compute FDC register base pointer      0.7
+        move.b  #$08,9(a1)      ;turn off floppy motor                  0.7
+        btst    #7,9(a1)        ;is this an 8" floppy?                  0.7
+        bon.s   SlotID9         ;yes, check next slot (dev type set)    0.7
+        move.b  #DTf5,-1(a5,d6) ;set device type                        0.7
+        bra.s   SlotID9         ;check next slot (dev type set)         0.7
+                                ;                                       0.7
+SlotID8 clr.b   -1(a5,d6)       ;set no device in slot                  0.7
+                                ;
+SlotID9 adda.w  #$200,a0        ;update interface PROM pointer
+        addq    #1,d6           ;update slot number
+        cmp.w   #4,d6           ;have we looked at all slots?
+        ble     SlotID1         ;no, check next slot
+         MOVEQ     #'H',D0   ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+;;;;;;;  BRA       RPTSTAT   ;{!DB}skip omninet stuff
+
+    page    ;SlotID (continued)
+        btst    #7, CPsysst.w   ;{!UC};if seg or page reg error then   0.8
+        bon.s   RptStat         ;{!UC};can't do omninet - dram problem 0.8
+        moveq   #InitOp,d0      ;get OMNINET Transporter number
+        bsr     ODcomnd         ;*
+         MOVEQ     #'I', D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}DSPUTCH saves D0-D7 & A0-A6
+        move.b  d7,CPtprnbr.w   ;save OMNINET Transporter number        0.7
+        blt.s   SlotIDb         ;if error, go on                        0.7
+                                ;
+
+        bsr     ODpeek          ;check if transporter is a PTom         0.8
+        cmpi.b  #$63, D7        ;version less than 64?                  0.8
+        bls.s   RptStat         ;yes, is PTom - ignore it               0.8
+
+        moveq   #EchoOp,d0      ;is OMNINET Transporter number in use?
+        move.b  CPtprnbr.w,d1   ;get station's transporter host number  0.8
+        bsr     ODcomnd         ;*
+         MOVEQ     #'J', D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        cmpi.b  #Echoed,d7      ;*
+        bne.s   SlotIDa         ;no, go on
+        bset    #6,CPsysst.w    ;set test 7 failed flag
+        bsr     Flash           ;*
+        bra.s   SlotIDb         ;bypass disk server broadcast
+
+SlotIDa bsr     ODbroad         ;send broadcast message to disk srvr    0.7
+                                ;*  in order to get disk server         0.7
+                                ;*  Transporter number                  0.7
+         MOVEQ     #'K', D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+SlotIDb move.b  d7,CPbtsrvr.w   ;save boot server number
+        blt.s   RptStat         ;if error, go on
+        move.b  #DTomni,4(a5)   ;set device type
+    page    ;RptStat
+;
+; RptStat -- Report results of system initialization tests
+;
+RptStat moveq   #0,d1           ;initialize test number
+         MOVEQ     #$0D, D0  ;{!DB}
+         BSR       DSPUTCH   ;{!DB}
+        tst.b   CPsysst.w       ;any system errors?
+        bne.s   RptSt1          ;yes, report them
+        lea     msg32,a0        ;mesg - All system tests passed
+        bsr     DSputst         ;output message
+; ----  bra.s   RptSt8          ;output carriage returns
+                                ;
+RptSt1  btst    d1,CPsysst.w    ;did current test pass?
+        boff.s  RptSt2          ;yes, go on
+        lea     msg30,a0        ;mesg - System test
+        bsr     DSputst         ;output message
+        move.b  d1,d0           ;get test number
+        addi.b  #$31,d0         ;*
+        bsr     DSputch         ;output test number
+        lea     msg31,a0        ;mesg - failed
+        bsr     DSputst         ;output message
+                                ;
+RptSt2  addq.w  #1,d1           ;increment test number
+        cmp.w   #7,d1           ;finished with all tests?
+        bls.s   RptSt1          ;no, process next test                  0.8
+                                ;
+RptSt8  lea     msg2,a0         ;output carriage returns
+        bsr     DSputst         ;*
+        move.b  #$0F,$75(a6)    ;symmetrical wave shape
+        move.b  #$A0,$71(a6)    ;output a low pitch tone
+        moveq   #-1,d0          ;short delay                            0.8
+RptSt9  dbra    d0,RptSt9       ;leaves d0 as $FFFFFFFF
+        move.b  d0,$75(a6)      ;turn off tone                          0.8
+
+        page    ;SelBoot
+;
+; SelBoot -- Select boot type
+;
+SelBoot move.b  IObootsw.L,d0   ;get boot selection switches
+        andi.w  #$C0,d0         ;*
+        beq     SBuser          ;00 - user select
+        cmpi.b  #$40,d0         ;
+        beq.s   SBlocal         ;01 - local disk boot
+        cmpi.b  #$80,d0         ;
+        beq.s   SBomni          ;02 - OMNINET disk boot
+        bsr     SBprom1         ;is debug PROM present?                 0.7
+        bne.s   SBflpy          ;03 - no, floppy disk boot              0.8
+        move.b  #1,CPextcrt.w   ;03 - yes, debug (or other) PROM        0.7
+                                ;
+SBdebug bsr     SBprom1         ;is debug PROM present?                 0.7
+        bne.s   SBuser          ;no, ask user for boot device
+        lea     msg4,a0         ;mesg - MACSBUG I/O on DataComm 0       0.6
+        bsr     DSputst         ;output message
+        movea.l MXBentry.L,a0   ;*kb yes, go to debugger                0.5
+        jmp     (a0)            ;*kb                                    0.5
+                                ;
+SBomni  lea     msg11,a0        ;mesg - "OMNINET disk boot"
+        bsr     SBmsg           ;output message
+        bsr     Oboot           ;load OS boot code
+        bra.s   SBboot          ;transfer control to boot code
+                                ;
+SBlocal lea     msg12,a0        ;mesg - "Local disk boot"
+        bsr     SBmsg           ;output message
+        bsr     Lboot           ;load OS boot code
+        bra.s   SBboot          ;transfer control to boot code
+                                ;
+SBflpy  lea     msg13,a0        ;mesg - "Floppy disk boot"
+        bsr.s   SBmsg           ;output message
+        movea.l #CPsl1typ,a1    ;get pointer to slot 1 type
+        moveq   #1,d0           ;get initial slot number
+
+SBflpy1 move.b  -1(a1,d0),d1    ;get device type
+        cmpi.b  #DTc8,d1  ;{!CC};is this a Corvus SSSD floppy disk?     0.8
+        beq.s   SBflpy2   ;{!CC};yes, use it for booting                0.8
+; ----  cmpi.b  #DTa5,d1        ;is this an Apple floppy disk?          0.7
+; ----  beq.s   SBflpy3         ;yes, use it for booting                0.7
+        cmpi.b  #DTf8,d1        ;is this a Corvus DSDD 8" floppy disk?  0.7
+        beq.s   SBflpy4         ;yes, use it for booting                0.7
+        cmpi.b  #DTf5,d1        ;is this a Corvus DSDD 5" floppy disk?  0.7
+        beq.s   SBflpy4         ;yes, use it for booting                0.7
+        addq    #1,d0           ;update slot number
+        cmp.w   #4,d0           ;have we looked at all slots?
+        ble.s   SBflpy1         ;no, check next slot
+        bra     GoToBt1         ;output error message
+                                ;
+SBflpy2 bsr     Fboot     ;{!CC};load OS boot code                      0.8
+        bra.s   SBboot    ;{!CC};transfer control to boot code          0.8
+                                ;
+;Bflpy3 bsr     Aboot           ;load OS boot code                      0.7
+; ----  bra.s   SBboot          ;transfer control to boot code          0.7
+
+        page    ;SBuser, SBmsg, SBprom1, SBprom2
+SBflpy4 bsr     FBboot          ;load OS boot code                      0.7
+SBboot  bra     GoToBt          ;transfer control to boot code          0.7
+                                ;
+SBuser  bsr.s   SBprom2         ;boot to debug PROM?                    0.7
+        beq     SBdebug         ;yes                                    0.7
+        lea     msg10,a0        ;mesg - "Select boot device"
+        bsr     DSputst         ;output message
+        bsr     KBgetch         ;get reply
+        bsr     DScvtUC         ;convert character to upper case
+        move.b  d0,-(sp)        ;save reply
+        bsr     DSputch         ;echo reply
+        moveq   #DSCcr,d0       ;output carriage return
+        bsr     DSputch         ;*
+        move.b  (sp)+,d0        ;restore reply
+        cmpi.b  #'F',d0         ;Corvus floppy boot?
+        beq.s   SBflpy          ;yes, do it
+        cmpi.b  #'D',d0         ;debug?
+        beq     SBdebug         ;yes, do it
+        cmpi.b  #'L',d0         ;local disk boot?
+        beq     SBlocal         ;yes, do it
+        cmpi.b  #'O',d0         ;OMNINET disk boot?
+        beq     SBomni          ;yes, do it
+        bra     Setup           ;no, start over again
+
+;
+; SBmsg -- Output message
+;
+SBmsg   bsr     DSputst         ;output message
+        lea     msg19,a0        ;mesg - "disk boot"
+        bsr     DSputst         ;output message
+        rts                     ;return
+
+;
+; SBprom1 -- Is debug PROM present? (EQ - yes, NE - no)
+;
+SBprom1 lea     MXBinit.L,a0    ;is debug PROM present?                 0.7
+        lea     MXBbase+$C.L,a1 ;*                                      0.7
+        cmpa.l  (a0),a1         ;*                                      0.7
+        rts                     ;return                                 0.7
+
+;
+; SBprom2 -- Boot to debug PROM? (EQ - yes, NE - no)
+;
+SBprom2 movem.l a0-a1/d0,-(sp)  ;save registers                         0.7
+        bsr.s   SBprom1         ;is debug PROM present?                 0.7
+        bne.s   SBprom9         ;no, return                             0.7
+        move.b  IObootsw.L,d0   ;get boot selection switches            0.7
+        andi.w  #$C0,d0         ;*                                      0.7
+        cmpi.w  #$C0,d0         ;is this a boot to PROM?                0.7
+SBprom9 movem.l (sp)+,a0-a1/d0  ;restore registers                      0.7
+        rts                     ;return                                 0.7
+
+        page    ;GoToBt
+;
+; GoToBt -- Transfer control to boot code
+;
+;       Enter:  A0.L    = Boot code entry point pointer
+;
+;       Values passed in registers to the boot are:
+;
+;       +---------------+---------------+---------------+---------------+
+;    D0 | low user RAM address                                          |
+;       +---------------+---------------+---------------+---------------+
+;    D1 | high user RAM address                                         |
+;       +---------------+---------------+---------------+---------------+
+;    D2 | low user RAM address  (same as D0)                            |
+;       +---------------+---------------+---------------+---------------+
+;    D3 | high user RAM address (same as D1)                            |
+;       +---------------+---------------+---------------+---------------+
+;    D4 |             0 |             0 | boot slot     | boot server   |
+;       +---------------+---------------+---------------+---------------+
+;    D5 |                                                             0 |
+;       +---------------+---------------+---------------+---------------+
+;    D6 |                                                             0 |
+;       +---------------+---------------+---------------+---------------+
+;    D7 |                                                             0 |
+;       +---------------+---------------+---------------+---------------+
+;
+GoToBt  bge.s   GoToBt2         ;go on if no boot load error
+                                ;
+GoToBt1 lea     msg3,a0         ;mesg - "Boot error"
+        bsr     DSputst         ;output message
+        bra     SBuser          ;select boot device again
+                                ;
+GoToBt2 bsr     RamSize         ;get dynamic RAM size (a1 = RAM size)   0.6
+        cmpa.l  #MEMprom,a1     ;are we in PROM?                        0.7
+        bne.s   GoToBt3         ;yes, go on                             0.6
+        lea     CPbtslot.w,a1   ;set RAM size to protect code           0.6
+                                ;                                       0.6
+GoToBt3 move.l  #USRbase,d0     ;D0 - low user RAM address              0.6
+        move.l  a1,d1           ;D1 - high user RAM address
+        move.l  d0,d2           ;D2 - low user RAM address
+        move.l  d1,d3           ;D3 - high user RAM address
+        clr.l   d4              ;D4 - 0
+        move.b  CPbtslot.w,d4   ;D4 - boot slot
+        lsl.w   #8,d4           ;
+        move.b  CPbtsrvr.w,d4   ;D4 - boot slot/boot server
+        clr.l   d5              ;D5 - 0
+        clr.l   d6              ;D6 - 0
+        clr.l   d7              ;D7 - 0
+        jmp     (a0)            ;enter boot code
+
+        page    ;RomTst
+;
+; RomTst -- Compute checksum for PROM
+;           (PROM checksum is included in address range)
+;
+;       Enter:  A0.L    = PROM start pointer
+;               A1.L    = PROM end pointer
+;
+;       Exit:   EQ      = PROM checksum valid
+;               NE      = PROM checksum error
+;
+RomTst  move.l  a0,a2           ;get starting address
+        clr.w   d0              ;
+RT1     move.w  (a2)+,d1        ;
+        eor.w   d1,d0           ;
+        cmpa.l  a1,a2           ;
+        blt.s   RT1             ;
+        cmp.w   #$FFFF,d0       ;
+        rts                     ;return
+
+;
+; WalkBit -- Walking ones and zeros
+;
+;       Enter:  A0.L    = RAM start pointer
+;
+WalkBit move.l  a0,a2           ;get starting address
+        move.l  a0,a1           ;get ending address
+        adda.w  #$10,a1         ;*                         0.8
+
+WB1     moveq   #-2,d0          ;puts $FFFE in low word    0.8
+WB2     move.w  d0,(a2)         ;
+        cmp.w   (a2),d0         ;
+        bne.s   WBerr           ;
+        rol     #1,d0           ;
+        bcs.s   WB2             ;
+                                ;
+        moveq   #1,d0           ;                          0.8
+WB3     move.w  d0,(a2)         ;
+        cmp.w   (a2),d0         ;
+        bne.s   WBerr           ;
+        asl     #1,d0           ;
+        bcc.s   WB3             ;
+                                ;
+        addq.l  #2,a2           ;                          0.8
+        cmpa.l  a1,a2           ;
+        blt.s   WB1             ;
+                                ;
+WBerr   rts                     ;return
+
+        page    ;March
+;
+; March --
+;
+;       Enter:  A0.L    = RAM start pointer
+;               A1.L    = RAM end pointer
+;
+March   move.l  a0,a2           ;
+        clr.l   d0              ;
+                                ;
+MR1     move.w  d0,(a2)+        ;
+        cmpa.l  a1,a2           ;
+        bne.s   MR1             ;
+                                ;
+        move.w  d0,d2           ;
+        not.w   d2              ;
+MR2     move.w  -(a2),d1        ;
+        cmp.w   d0,d1           ;
+        bne.s   MRerr           ;
+        move.w  d2,(a2)         ;
+        cmpa.l  a0,a2           ;
+        bne.s   MR2             ;
+                                ;
+        move.w  d2,d0           ;
+        not.w   d2              ;
+MR3     move.w  (a2),d1         ;
+        cmp.w   d0,d1           ;
+        bne.s   MRerr           ;
+        move.w  d2,(a2)+        ;
+        cmpa.l  a1,a2           ;
+        bne.s   MR3             ;
+                                ;
+MRerr   rts                     ;return
+
+        page    ;IncTest, RamSize, ZeroRam
+;
+; IncTest --
+;
+;       Enter:  A0.L    = RAM start pointer
+;               A1.L    = RAM end pointer
+;
+IncTest move.l  a0,a2           ;
+        move.w  #$101,d1        ;
+                                ;
+IT01    move.w  d1,(a2)+        ;
+        rol.w   #1,d1           ;
+        cmpa.l  a1,a2           ;
+        blt.s   IT01            ;
+                                ;
+        move.l  a0,a2           ;
+        move.w  #$101,d1        ;
+                                ;
+IT02    cmp.w   (a2)+,d1        ;
+        bne.s   IT99            ;
+        rol.w   #1,d1           ;
+        cmpa.l  a1,a2           ;
+        blt.s   IT02            ;
+                                ;
+IT99    rts                     ;return
+
+;
+; RamSize -- Get end of user RAM pointer
+;
+;       Exit:   A1.L    = RAM end pointer
+;
+RamSize move.l  #MEMprom,a1     ;are we in PROM?                        0.7
+        cmpi.l  #ROMend,(sp)    ;*
+        bgt.s   RamSiz9         ;no, return
+
+        move.l  #MEM512k,MEM512k.L ;{!CV};get actual RAM size           0.7
+        move.l  #MEM256k,MEM256k.L ;{!CV}                               0.7
+        move.l  MEM512k.L,a1    ;{!CV}                                  0.7
+        lea     MEM512k.L, a1   ;{!UC} only has 512 kbytes              0.8
+
+RamSiz9 rts                     ;return
+
+;
+; ZeroRam -- Move 0 to RAM subroutine
+;
+;       Enter:  A0.L    = RAM start pointer
+;               A1.L    = RAM end pointer
+;
+ZeroRam clr.l   (A0)+           ;
+        cmpa.l  a1,a0           ;
+        ble.s   ZeroRam         ;
+        rts                     ;return
+
+        page    ;Flash
+;
+; Flash -- Flash display screen subroutine
+;
+Flash   movem.l a0-a1/a6/d0-d1,-(sp);save registers                     0.8
+        moveq   #3, d1          ;{!UC};make sound 4 times               0.8
+
+FL0     move.l  #VIAbase,a6     ;get pointer to VIA I/O locations
+        move.b  #$0F,$75(a6)    ;symmetrical wave shape
+        move.b  #$40,$71(a6)    ;output a high pitch error tone
+        bsr     SBprom2         ;{!CV};is this a boot to PROM?          0.7
+        beq.s   FL4             ;{!CV};yes, do not flash screen         0.7
+        move.l  #DSPend-$30,a1  ;{!CV};get ptr to end of display screen 0.7
+                                ;
+FL1     move.l  #DSPbase,a0     ;{!CV};get pointer to start of          0.8
+FL2     not.w   (a0)+           ;{!CV}; display screen                  0.8
+        cmpa.l  a1,a0           ;{!CV}                                  0.8
+        blt.s   FL2             ;{!CV}                                  0.8
+        move.l  #DSPbase,a0     ;{!CV};get pointer to start of          0.8
+FL3     not.w   (a0)+           ;{!CV}; display screen                  0.8
+        cmpa.l  a1,a0           ;{!CV}                                  0.8
+        blt.s   FL3             ;{!CV}                                  0.8
+                                ;{!CV}                                  0.8
+FL4     moveq   #-1,d0          ;short delay                            0.8
+FL5     dbra    d0,FL5          ;*
+        move.b  #$FF,$75(a6)    ;turn off tone
+        moveq   #-1,d0          ;short delay                            0.8
+FL6     dbra    d0,FL6          ;*
+
+        dbra    d1, FL0         ;{!UC} make sound again if no display   0.8
+        movem.l  (sp)+,a0-a1/a6/d0-d1;restore registers                 0.8
+        rts                     ;return
+
+        page    ;INT...
+;
+; INTlvl7  -- process level 7 interrupt (ignore interrupt)
+;
+INTlvl7 rte                     ;return from interrupt
+
+;
+; INTkybd -- process KEYBOARD interrupt (ignore interrupt)
+;
+INTkybd ori.b   #$02,IOkybd.l   ;lvl 6 (KYBD) - turn off recv int       0.7
+        andi.b  #$F3,IOkybd.l   ;lvl 6 (KYBD) - turn off xmit int       0.7
+        rte                     ;return from interrupt
+
+;
+; INTtimr -- process TIMER interrupt (ignore interrupt)
+;
+INTtimr move.b  #$7F,IOtimr.l   ;lvl 5 (TIMER) - turn off VIA int       0.7
+        rte                     ;return from interrupt
+
+;
+; INTdc0  -- process DATACOMM0 interrupt (ignore interrupt)
+;
+INTdc0  ori.b   #$02,IOdc0.l    ;lvl 4 (DC0) - turn off recv int        0.7
+        andi.b  #$F3,IOdc0.l    ;lvl 4 (DC0) - turn off xmit int        0.7
+        rte                     ;return from interrupt
+
+;
+; INTomni -- process OMNINET interrupt (ignore interrupt)
+;
+INTomni tst.b   IOomni.l        ;lvl 3 (OMNINET) - reset interrupt      0.7
+        rte                     ;return from interrupt
+
+; INTdc1  -- process DATACOMM1 interrupt (ignore interrupt)
+;
+INTdc1  ori.b   #$02,IOdc1.l    ;lvl 2 (DC1) - turn off recv int        0.7
+        andi.b  #$F3,IOdc1.l    ;lvl 2 (DC1) - turn off xmit int        0.7
+        rte                     ;return from interrupt
+
+; INTslot -- process SLOT interrupt (ignore interrupt)
+;
+INTslot movem.l D0/A0,-(SP)     ;save registers
+        lea     IOslot.l,a0     ;get pointer to port A ORA              0.7
+        move.b  (A0),D0         ;read port A w/o handshake
+        bchg    #7,D0           ;toggle IOX
+        move.b  D0,(A0)         ;write new IOX
+        movem.l (SP)+,D0/A0     ;restore registers
+        rte                     ;return from interrupt
+     page    ;SlotAdr, msg...
+;
+; SlotAdr -- compute slot address given slot number
+;
+;       Enter:  D6.B - Slot number
+;
+;       Exit:   A1.L - I/O port address
+;
+SlotAdr move.l  d6,-(sp)        ;save register
+        ext.w   d6              ;compute disk port address for slot
+        lsl.w   #5,d6           ;*
+        move.l  #IOPbase,a1     ;*                                      0.7
+        adda.w  d6,a1           ;*
+        move.l  (sp)+,d6        ;restore register
+        rts                     ;return
+    list 0
+msg1    data.b  DSCcr,DSCcr
+        data.b  'Corvus CONCEPT Initialization  ('              ;{!CC}  0.8
+        data.b  'Corvus Concept Plus Initialization ('          ;{!CP}  0.8
+        data.b  'Corvus Uniplex Initialization  ('              ;{!UP}  0.8
+        data.b  'Corvus Venus Initialization  ('                ;{!VN}  0.8
+        data.b  PROMvers+$30,'.',PROMlevl+$30,')'
+msg2    data.b  DSCcr,DSCcr,0
+msg3    data.b  'Boot error ....',DSCcr,DSCcr,0
+msg4    data.b  DSCcr,DSCcr,'MACSBUG I/O on DataComm 0',DSCcr,0
+msg10   data.b  'Select boot device (D,F,L,O): ',0
+msg11   data.b  'OMNINET',0
+msg12   data.b  'Local',0
+msg13   data.b  'Floppy',0
+msg19   data.b  ' disk boot',DSCcr,0
+msg30   data.b  'System test ',0
+msg31   data.b  ' failed',DSCcr,0
+msg32   data.b  'All system tests passed',DSCcr,0
+        data.b  0
+
+        page    ;p.prom.kb              ;
+        include 'P.PROM.KB'             ;keyboard driver
+        page    ;p.prom.ds              ;
+        include 'P.PROM.DS'             ;display driver
+        page    ;p.prom.ld              ;
+    list 1
+        include 'P.PROM.LD'             ;local disk driver
+        page    ;p.prom.od              ;
+        include 'P.PROM.OD'             ;OMNINET disk driver
+    list 0
+        page    ;p.prom.fd        ;{!CC};                               0.8
+        include 'P.PROM.FD'       ;{!CC};Corvus floppy driver           0.8
+; ----  page    ;p.prom.ad              ;                               0.7
+; ----  include 'P.PROM.AD'             ;Apple floppy driver            0.7
+        page    ;p.prom.fb              ;                               0.7
+        include 'P.PROM.FE'             ;Rev B floppy driver equates    0.7
+        include 'P.PROM.FB'             ;Rev B floppy driver            0.7
+
+        page
+    list 1
+PromLength EQU     %         ;bytes of code
+        end     setup

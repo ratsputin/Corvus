@@ -1,0 +1,37 @@
+;
+; interrupt service routine called by timer interrupt service routine
+; AND routines to verify interrupt occurred.
+;
+                global  DONADA,Wait,Clear,Test
+;
+stop1           equ     0               ;flag saying interrupt routine called
+;
+DONADA          lea     flag,A0         ;show Wait interrupt occurred
+                bset    #stop1,(A0)
+                rts
+;
+Wait            lea     flag,A0         ;wait until flag set
+wait10          btst    #stop1,(A0)
+                beq.s   wait10
+                bclr    #stop1,(A0)     ;always clear when done
+                rts
+;
+Clear           lea     flag,A0         ;clear interrupt occurred flag
+                bclr    #stop1,(A0)
+                rts
+;
+; test if stop flag set or clear
+; function Test : boolean;
+;
+Test
+                movea.l (SP)+,A1        ;get return address
+                lea     flag,A0
+                btst    #stop1,(A0)
+                beq.s   test10
+                move.w  #$01,(SP)       ;boolean is true if flag is set
+                bra.s   test20
+test10          move.w  #$00,(SP)       ;boolean is false if flag clear
+test20          jmp     (A1)
+flag            data    0               ;flag byte
+;
+                end

@@ -1,0 +1,11 @@
+Corvus Concept w/printed model/serial/rev plate
+  serial 056-E1661-
+  model WSB-2
+  revision D
+
+Contains:
+  Corvus Systems Processor board
+    sticker 8010-11181-01
+    rev A
+  Corvus Systems Corvus Concept Memory 8051 REV. daughterboard 
+     w/1.25MB installed (full board)

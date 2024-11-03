@@ -1,0 +1,387 @@
+File: CCOS.1.2A.TEXT
+Date: 10-Jan-84
+
+
+
+Corvus CONCEPT Distributed Software Modification Log
+
+
+
+System version 1.2a -- January 10, 1984
+
+
+5" floppy distribution:
+
+    Operating System --------------------------------------------
+       FBOOT   (FBOOT & FDIAG & FSYSGEN)
+       FPSYS   (FPSYS & FEDWORD)
+       FCCSYS1 (FCCSYS1 & FCCSYS2)
+       FCCSYS2 (FCCSYS3 & FCCSYS4)
+
+    ISYS --------------------------------------------------------
+       FISYS1  (FISYS1 & FISYS2)
+       FGRAPH
+       FLGICLC
+
+    Fortran -----------------------------------------------------
+n/c    FFORTRN (FFORTRN & FCCLIB)
+
+    Graphics ----------------------------------------------------
+n/c    FGRAPH
+
+    LogiCalc ----------------------------------------------------
+       FLGICLC
+
+    Pascal ------------------------------------------------------
+n/c    FPASCAL (FPASCAL & FCCLIB)
+
+.pg
+8" floppy distribution:
+
+    Operating System --------------------------------------------
+       FBOOT
+       FDIAG
+       FSYSGEN
+       FEDWORD
+       FPSYS
+       FCCSYS1
+       FCCSYS2
+       FCCSYS3
+       FCCSYS4
+
+    ISYS --------------------------------------------------------
+       FISYS1
+       FISYS2
+       FGRAPH
+       FLGICLC
+
+    Fortran -----------------------------------------------------
+n/c    FFORTRN
+n/c    FCCLIB
+
+    Graphics ----------------------------------------------------
+n/c    FGRAPH
+
+    LogiCalc ----------------------------------------------------
+       FLGICLC
+
+    Pascal ------------------------------------------------------
+n/c    FPASCAL
+n/c    FCCLIB
+
+.pg
+Distribution floppy /FBOOT
+
+
+CC.KERNEL       1.2a - update CCOS version number
+
+CC.SETUP        2.6  - add OmniDrive support
+
+CC.DISPAT       n.n  - ....
+
+CC.EXEC         n.n  - ....
+
+CC.FILMGR       1.5  - add -i volume list option
+
+CC.SYSMGR       n.n  - ....
+
+CC.WNDMGR       n.n  - ....
+
+DRV.DISPHZ      n.n  - ....
+
+DRV.DISPVT      n.n  - ....
+
+DRV.DTACOM      n.n  - ....
+
+DRV.EPRNT       2.0f - alt character translation modification
+
+DRV.KYBD        n.n  - ....
+
+DRV.OMNINET     1.0b - new version
+
+DRV.SYSTRM      1.5c - command key processing modification
+
+DRV.TIMER       ---  - add 50 ms timer counter
+
+DRV.ADISK       n.n  - ....
+
+DRV.CDISK1      2.0e - new version
+
+DRV.CDISK2      2.0e - new version
+
+DRV.FDISK1      n.n  - ....
+
+DRV.FDISK2      n.n  - ....
+
+CSD.DEFAULT     n.n  - ....
+
+CSK.DEFAULT     n.n  - ....
+
+ASSIGN          n.n  - ....
+
+.pg
+Distribution floppy /FDIAG
+
+
+DDIAG           3.1c - new version
+
+DIAG.DATA       n.n  - ....
+
+CF18.4AP.DATA   n.n  - ....
+
+ODIAG           1.2a - OmniDrive diagnostic
+
+OD.DIAG.DATA    ---  - OmniDrive diagnostic data file
+
+FODR1.3.DATA    1.3  - OmniDrive firmware file
+
+XFRMGR          1.0f - new version
+
+.pg
+Distribution floppy /FSYSGEN
+
+
+DEBUG           n.n  - ....
+
+SYSGEN          2.5  - new version
+
+BOOT.CONCEPT    3.8  - new version
+
+VOLUTIL         1.1e - system status modifications
+
+TERMINAL        n.n  - ....
+
+OTEST           1.3b - new version
+
+BLDACT          2.0b - new version
+
+BLDALT          2.0b - new version
+
+CSD.06.10       n.n  - ....
+
+CSD.06.10.ALT   n.n  - ....
+
+CSD.07.11       n.n  - ....
+
+CSD.07.11.ALT   n.n  - ....
+
+CSD.08.13.ALT   n.n  - ....
+
+CSD.09.14.ALT   n.n  - ....
+
+CSD.IBM         n.n  - ....
+
+PAT.CITOH       ---  - new version
+
+PAT.DATAPROD    ---  - new version
+
+PAT.DIABLO630   ---  - new version
+
+PAT.EPSONFX     ---  - new version
+
+PAT.EPSONMX     ---  - new version
+
+PAT.NEC         ---  - new version
+
+PAT.OKIDATA     ---  - new version
+
+PAT.TOSHIBA     ---  - new version
+
+PAT.NOENHANCE   ---  - new version
+
+CITOH.TEXT      n.n  - ....
+
+DIABLO.TEXT     n.n  - ....
+
+CCOS.1.2.TEXT   ---  - CCOS v 1.2 modification list
+
+CCOS.1.2A.TEXT  ---  - this file
+
+.pg
+Distribution floppy /FPSYS
+
+
+CC.PSYSTEM      ---  - input buffer overflow problem fixed
+
+SYSTEM.INTERP   ---  - UCSD p-System version IV.13
+
+SYSTEM.PASCAL   ---  - UCSD p-System version IV.13
+
+SYSTEM.MISCINFO n.n  - ....
+
+SYSTEM.LIBRARY  ---  - new version
+
+CPLIB           n.n  - ....
+
+RTLIB2.CODE     n.n  - ....
+
+RTLIB4.CODE     n.n  - ....
+
+BLIB.2.CODE     n.n  - ....
+
+BLIB.4.CODE     n.n  - ....
+
+SPOOL.CODE      n.n  - ....
+
+DESPOOL.CODE    n.n  - ....
+
+
+
+Distribution floppy /FEDWORD
+
+
+ED              2.2b - new version
+
+SYSMSG          ---  - new version
+
+KEYS.ED.TEXT    n.n  - ....
+
+EDINIT.TEXT     n.n  - ....
+
+.pg
+Distribution floppy /FCCSYS1
+
+
+CC.C2MGR        2.5  - new version
+
+C2.HELP.TEXT    ---  - new file
+
+C2.MISC.TEXT    ---  - new file
+
+C2.MENU.TEXT    ---  - new file
+
+ACCMGR          2.5a - new version
+
+BOOTMGR         2.5  - new version
+
+DRIVEMGR        2.5a - new version
+
+
+
+Distribution floppy /FCCSYS2
+
+
+PARMGR          2.2b - new version
+
+USERMGR         2.5a - new version
+
+MIRROR          2.3  - new version
+
+MBACKUP         2.2b - new version
+
+.pg
+Distribution floppy /FCCSYS3
+
+
+ASM68K          n.n  - ....
+
+LINKER          n.n  - ....
+
+LIBRARY         n.n  - ....
+
+LOADER.IMAGE    n.n  - ....
+
+CC.EDCHAR       n.n  - ....
+
+CC.HELP         n.n  - ....
+
+CC.SETDCP       3.0  - new version
+
+HELP.TEXT       n.n  - ....
+
+FFRMT           n.n  - ....
+
+FUTIL           2.2  - new version
+
+PRTWND          n.n  - ....
+
+WRITEBOOT       n.n  - ....
+
+BOOT.FLOPPY     n.n  - ....
+
+USERKEYS.TEXT   n.n  - ....
+
+
+
+Distribution floppy /FCCSYS4
+
+
+CC.MNTMGR       2.5  - new version
+
+DESPOOL         4.0c - new version
+
+SPOOL           4.0c - new version
+
+WNDUTIL         1.3  - accept command line parameters
+                     - resets transparent printer mode
+                     - add MX80, FX80, MX100, FX100 support
+
+.pg
+Distribution floppy /FISYS1
+
+
+CC.ISYS         1.1  - new version
+
+CC.CALC         n.n  - ....
+
+CC.CALEN        n.n  - ....
+
+CC.CLOCK        n.n  - ....
+
+CC.DCOMM        1.0a - new version
+
+CC.LOOKUP       n.n  - ....
+
+CC.SORT         n.n  - ....
+
+CC.GR.IPC.TEXT  n.n  - ....
+
+
+
+Distribution floppy /FISYS2
+
+
+CC.WP           1.1b - new version
+
+KEYS.ISYS       ---  - new version
+
+SYSMSG          ---  - new version
+
+
+
+Distribution floppy /FGRAPH
+
+
+CC.GRAPH        n.n  - ....
+
+CC.GR.FONTS     n.n  - ....
+
+CC.GR.TMPLTS    n.n  - ....
+
+CC.GR.LST.TEXT  n.n  - ....
+
+.pg
+Distribution floppy /FLGICLC
+
+
+CC.LGICLC       3.1  - new version
+
+KEYS.LC.TEXT    n.n  - ....
+
+KEYS.LCI.TEXT   n.n  - ....
+
+HELP.LC.TEXT    n.n  - ....
+
+
+
+Unsupported software
+
+
+FIXIT           2.2  - new version
+
+MOVE            n.n  - ....
+
+UNCAT           n.n  - ....
+
+ZAP             n.n  - ....
+

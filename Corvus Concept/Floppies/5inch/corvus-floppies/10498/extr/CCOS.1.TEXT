@@ -1,0 +1,37 @@
+ Constellation II Transfer Manager Results -- 16-OCT-84  (Concept v 1.2d)
+ 
+ Drive to Image Transfer of 29673 blocks
+    Fm:  slt: 5  srv: LOCAL.00    drv: VSI.03      vol: drive image
+    To:  slt: 5  srv: BANK.01     drv: BANK.01     vol: DEV.CCOS
+ 06:26:26   Transfer starting ....
+ 06:27:30   *** Read OTC error: block 600, error code 255 (FF)
+ 06:27:36   *** Read I/O error: block 601, error code 170 (AA)
+ 06:27:41   *** Read I/O error: block 602, error code 170 (AA)
+ 06:27:47   *** Read I/O error: block 603, error code 170 (AA)
+ 06:27:53   *** Read I/O error: block 604, error code 170 (AA)
+ 06:27:59   *** Read I/O error: block 605, error code 170 (AA)
+ 06:28:05   *** Read I/O error: block 606, error code 170 (AA)
+ 06:28:11   *** Read I/O error: block 607, error code 170 (AA)
+ 06:28:16   *** Read I/O error: block 608, error code 170 (AA)
+ 06:28:22   *** Read I/O error: block 609, error code 170 (AA)
+ 06:28:28   *** Read I/O error: block 610, error code 170 (AA)
+ 06:28:34   *** Read I/O error: block 611, error code 170 (AA)
+ 06:28:40   *** Read I/O error: block 612, error code 170 (AA)
+ 06:28:46   *** Read I/O error: block 613, error code 170 (AA)
+ 06:28:51   *** Read I/O error: block 614, error code 170 (AA)
+ 06:28:57   *** Read I/O error: block 615, error code 170 (AA)
+ 06:29:03   *** Read I/O error: block 616, error code 170 (AA)
+ 06:29:09   *** Read I/O error: block 617, error code 170 (AA)
+ 06:29:15   *** Read I/O error: block 618, error code 170 (AA)
+ 06:29:21   *** Read I/O error: block 619, error code 170 (AA)
+ 06:29:55   *** Read OTC error: block 702, error code 255 (FF)
+ 06:55:55   Transfer complete ....
+ 06:56:03   Drive/Image volume table update complete
+ 06:56:06   Drive/Image access table update complete
+ 06:56:07   Drive/Image info table update complete
+ 06:56:43   Constellation II volume table entry update complete
+ 06:56:44   Verify starting ....
+ 07:23:08   Verify complete ....
+ 07:23:08   Transfer status: 21 error(s)
+ 
+ 

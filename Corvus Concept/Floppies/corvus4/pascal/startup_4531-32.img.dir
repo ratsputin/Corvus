@@ -1,0 +1,23 @@
+
+Directory of UCSD disk image file 'startup_4531-32.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume STARTUP has 15 files,  0 to 6 (6), eov 500, size 207, free 15
+
+ 1: SYSTEM.PASCAL   Data 15-Nov-82    6- 128( 122), 62464+512= 62976 bytes
+ 2: SYSTEM.MISCINFO Data  6-Jan-83  128- 129(   1),   512+226=   738 bytes
+ 3: SYSTEM.INTERP   Data  9-Feb-83  129- 153(  24), 12288+512= 12800 bytes
+ 4: SYSTEM.LIBRARY  Data  7-Jan-83  153- 160(   7),  3584+512=  4096 bytes
+ 5: SYSTEM.EDITOR   Code  7-Jun-82  160- 207(  47), 24064+512= 24576 bytes
+ 6: SYSTEM.FILER    Code  7-Jun-82  207- 245(  38), 19456+512= 19968 bytes
+ 7: SYSTEM.STARTUP  Code 10-Feb-81  245- 257(  12),  6144+512=  6656 bytes
+ 8: EDITDEMO.TEXT   Text 21-Dec-79  257- 261(   4),  2048+512=  2560 bytes
+ 9: COMPDEMO.TEXT   Text 21-Dec-79  261- 267(   6),  3072+512=  3584 bytes
+10: NAMEFILE        Data 31-Jan-80  267- 270(   3),  1536+512=  2048 bytes
+11: SCDEMO.CODE     Code 10-Feb-81  270- 273(   3),  1536+512=  2048 bytes
+12: COPYSCUNIT.CODE Code 20-Feb-81  273- 277(   4),  2048+512=  2560 bytes
+13: UPDATE.TEXT     Text 30-Aug-79  277- 285(   8),  4096+512=  4608 bytes
+14: UPDATE.CODE     Code 10-Feb-81  285- 289(   4),  2048+512=  2560 bytes
+15: READ.ME.TEXT    Text 20-Feb-81  289- 293(   4),  2048+512=  2560 bytes

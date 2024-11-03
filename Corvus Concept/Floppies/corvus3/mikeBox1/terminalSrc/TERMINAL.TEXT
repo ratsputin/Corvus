@@ -1,0 +1,432 @@
+{$I-}
+PROGRAM Terminal;
+{ CC.SETUP.TEXT -------------------------------------------------------}
+{
+{       TERMINAL -- Corvus CONCEPT Terminal Program
+{
+{       Copyright 1982 Corvus Systems, Inc.
+{                      San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0b 02-04-83  KB   Original program
+{       v 1.1a 04-08-83  KB   added auto echo
+{
+{----------------------------------------------------------------------}
+
+USES {$U /CCUTIL/CCLIB } CCdefn, CCerrMsg, CClblIO,
+                         CCcrtIO, CCwndIO, CCdcpIO;
+
+CONST
+       pgmNAME =       'TERMINAL';
+       pgmVERS =       '1.1a';
+       pgmTITL =       'Corvus CONCEPT Terminal Program';
+
+       DEFFILE         =       '...ECHO.TEXT';
+       PRNTNAME        =       '/PRINTER';
+
+       KEYBOARD        =       2;
+       SCREEN          =       2;
+
+       {FUNCTION KEY NUMBERS}
+       F1              =       0;
+       F2              =       1;
+       F3              =       2;
+       F4              =       3;
+       F5              =       4;
+       F6              =       5;
+       F7              =       6;
+       F8              =       7;
+       F9              =       8;
+       F10             =       9;
+
+       AutoLFOn        =       '\1BL';
+       AutoLFOff       =       '\1BM';
+       EscChar         =       $1B;
+       LF              =       $0A;
+       NUL             =       $00;
+
+
+TYPE
+       p16k = ^SixteenK;
+       SixteenK = ARRAY[1..8192] OF INTEGER; {an 8k array}
+
+       PB = RECORD
+               Address : p16k;
+               Size    : INTEGER;
+               END;
+
+VAR
+       quit, UseFile, UsePrinter : BOOLEAN;
+       PrntALF, SendALF, RcvALF, AutoEcho : BOOLEAN;
+       ch : Byte;
+       unitno : INTEGER;
+       Fname : String80;
+       F : TEXT;
+       Prntr : INTERACTIVE;
+       OldTop : ^LONGINT;
+       iost : integer;
+       hx,hy,w,l,cx,cy: integer; s: String80; c: char;
+       pEwindow: pWndRcd;
+       Twindow: WndRcd;
+
+FUNCTION pOScurWnd: pWndRcd; EXTERNAL;
+
+FUNCTION GetCurALF(unitno : INTEGER) : BOOLEAN;
+    VAR ws : WrBufStatus;
+        ior : INTEGER;
+    BEGIN
+    ior := DCPWrStatus(ws);
+    GetCurALF := ws.AutoLinFeed;
+    END; {GetCurALF}
+
+PROCEDURE ShowStatus;
+    VAR ior : INTEGER;
+    BEGIN
+    ior := WinSystem(WsysCmd);
+    CrtAction (EraseALL);
+    WRITE(' Output to ');
+    IF (NOT UseFile) AND (NOT UsePrinter)
+        THEN WRITELN('screen only')
+        ELSE BEGIN
+            IF UseFile THEN WRITE('file ',Fname);
+            IF UseFile AND UsePrinter THEN WRITE(' and ');
+            IF UsePrinter THEN WRITE('Printer');
+            WRITELN;
+            END;
+    WRITELN(' Enter text or select function: ');
+    ior := WinSelect (Twindow);
+    END; {ShowStatus}
+
+PROCEDURE GetFile;
+
+    FUNCTION GetName(VAR Fname : String80) : BOOLEAN;
+        CONST TEXTTAG = '.TEXT';
+        VAR ior, fl, tl : INTEGER;
+        BEGIN
+        LblsOff;
+        ior := WinSystem(WsysCmd); CrtAction(DefStrOn);
+        CrtAction(EraseALL); CrtAction(UcaseOn);
+        WRITELN; WRITE(' Enter file name: ');
+        IF (GetString(Fname) <> Escape) THEN
+           BEGIN
+           GetName := TRUE;
+           fl := LENGTH(Fname); tl:= LENGTH(TEXTTAG);
+           IF fl > tl THEN
+              BEGIN
+              IF (COPY(Fname, (fl-tl)+1, tl) <> TEXTTAG) THEN
+                 Fname := CONCAT(Fname,TEXTTAG);
+              END
+           ELSE Fname := CONCAT(Fname,TEXTTAG);
+           END
+        ELSE GetName := FALSE;
+        CrtAction(UcaseOff);
+        ior := WinSelect (Twindow);
+        LblsOn;
+        END;
+
+    BEGIN
+    IF UseFile THEN
+       BEGIN
+       UseFile := FALSE;
+       CLOSE(F,LOCK);
+       IF IORESULT <> 0 THEN
+          BEGIN
+          WRITELN;
+          WRITELN(beep,'*** Failed to close file ',Fname);
+          CLOSE(F,PURGE);
+          END;
+       END
+    ELSE
+       BEGIN
+       IF GetName(Fname) THEN
+          BEGIN
+          REWRITE(F,Fname);
+          IF IORESULT <> 0 THEN
+             BEGIN
+             WRITELN;
+             WRITELN(beep,'*** Failed to open file ',Fname);
+             CLOSE(F,PURGE);
+             Fname := DEFFILE;
+             END
+          ELSE UseFile := TRUE;
+          END;
+       END;
+    ShowStatus;
+    END; {GetFile}
+
+PROCEDURE GetPrinter;
+    BEGIN
+    IF UsePrinter THEN
+       BEGIN
+       UsePrinter := FALSE;
+       CLOSE(Prntr);
+       {should never fail}
+       END
+    ELSE
+       BEGIN
+       RESET(Prntr,PRNTNAME);
+       IF IORESULT <> 0 THEN
+          BEGIN
+          WRITELN;
+          WRITELN(beep,'*** Failed to open Printer');
+          CLOSE(Prntr);
+          END
+       ELSE UsePrinter := TRUE;
+       END;
+    ShowStatus;
+    END; {GetPrinter}
+
+PROCEDURE DoExit;
+
+    PROCEDURE DeleteBuf;
+        VAR ParmBlk : PB;
+        BEGIN
+        ParmBlk.Address := NIL;
+        ParmBlk.Size := 0;
+        UNITSTATUS(unitno,ParmBlk,FCRDALTBUF);
+        RELEASE(OldTop);
+        END; {DeleteBuf}
+
+    PROCEDURE ResetALF;
+        VAR dummy : INTEGER;
+        BEGIN
+        WRITE(AutoLFOn);
+        IF (NOT SendALF) = GetCurALF(unitno) THEN
+            UNITSTATUS(unitno,dummy,FCAUTOLF);
+        IF (NOT PrntALF) = GetCurALF(PRT) THEN
+            UNITSTATUS(PRT,dummy,FCAUTOLF);
+        END; {ResetALF}
+
+    BEGIN
+    quit := TRUE;
+    IF UseFile THEN
+       BEGIN
+       CLOSE(F,LOCK);
+       IF IORESULT <> 0 THEN
+          BEGIN
+          WRITELN(beep,'*** Failed to close file ',Fname);
+          CLOSE(F,PURGE);
+          END;
+       END;
+    IF UsePrinter THEN CLOSE(Prntr);
+    DeleteBuf;
+    ResetALF;
+    END; {DoExit}
+
+PROCEDURE FuncKey;
+    VAR b : Byte; ch : CHAR;
+    BEGIN
+    UNITREAD(KEYBOARD,b,1);
+    ch := CHR(b);
+    CASE ch OF
+       '0' : GetFile;
+       '1' : GetPrinter;
+       '2' : DoExit;
+       '3' : CrtAction (EraseAll);
+       END;
+    END; {FuncKey}
+
+FUNCTION ProcEsc : Byte;
+    VAR b : Byte;
+    BEGIN
+    b := EscChar;
+    UNITREAD(KEYBOARD,ch,1);
+    IF ch <> EscChar THEN UNITWRITE(unitno,b,1);
+    ProcEsc := ch;
+    END; {ProcEsc}
+
+PROCEDURE ParseCmdLine;
+    VAR s : String80; i,j,p,l : INTEGER;
+
+    PROCEDURE  NoUnit;
+        VAR i : INTEGER; st : CrtStatus;
+        BEGIN
+        CrtAction (EraseALL);
+        WRITELN(beep,'*** No DataCom port specified on command line');
+        WRITELN(     '    For DATACOM 1 use DC1, for DATACOM 2 use DC2');
+        WRITELN; s := 'DC1';
+        WRITE('Select DataCom port [DC1/DC2]: ');
+        CrtAction(UcaseOn); st := GetString(s); CrtAction(UcaseOff);
+        IF st = Escape THEN EXIT(Terminal)
+        ELSE BEGIN
+             FOR i := 1 to LENGTH(s) do s[i] := UpperCase(s[i]);
+             IF s = 'DC1' THEN unitno := DC1
+             ELSE IF s = 'DC2' THEN unitno := DC2
+             ELSE EXIT(Terminal);
+             END;
+        END; {NoUnit}
+
+    PROCEDURE GetUnitNo(p,l :INTEGER; s : String80);
+      VAR i : INTEGER;
+      BEGIN
+      IF (p <> 0) AND ((l-p) >= 3) THEN
+         BEGIN
+         i := l-p; IF (l-p > 3) THEN i := 3;
+         s := COPY(s,p+1,i);
+         for i := 1 to length(s) do s[i] := uppercase (s[i]);
+         IF s = 'DC1' THEN unitno := DC1
+         ELSE IF s = 'DC2' THEN unitno := DC2
+         ELSE NoUnit;
+         END
+      ELSE NoUnit;
+      END; {GetUnitNo}
+
+    PROCEDURE GetONOFflag(VAR ALFflag : BOOLEAN; p,l :INTEGER; s : String80);
+      VAR i : INTEGER;
+      BEGIN
+      IF (p <> 0) AND ((l-p) >= 2) THEN
+         BEGIN
+         i := l-p; IF (l-p > 2) THEN i := 2;
+         s := COPY(s,p+1,i);
+         for i := 1 to length(s) do s[i] := uppercase (s[i]);
+         IF s = 'ON' THEN ALFflag := TRUE
+         ELSE IF s = 'OF' THEN ALFflag := FALSE;
+         END;
+      END; {GetALFflag}
+
+    PROCEDURE SetALF;
+      VAR dummy : INTEGER;
+      BEGIN
+      IF RcvALF THEN WRITE(AutoLFOn) ELSE WRITE(AutoLFOff);
+      IF SendALF <> GetCurALF(unitno) THEN UNITSTATUS(unitno,dummy,FCAUTOLF);
+      IF PrntALF <> GetCurALF(PRT) THEN UNITSTATUS(PRT,dummy,FCAUTOLF);
+      END; {SetALF}
+
+    BEGIN {ParseCmdLine}
+    IF argc <> 0 THEN BEGIN
+        FOR i := 1 TO argc DO BEGIN
+           s := argv[i]^;
+           FOR j := 1 to LENGTH(s) do s[j] := UpperCase(s[j]);
+           p := POS('=',s); l := LENGTH(s);
+           CASE s[1] OF
+             'U' : GetUnitNo(p,l,s);
+             'S' : GetONOFflag(SendALF,p,l,s);
+             'R' : GetONOFflag(RcvALF,p,l,s);
+             'P' : GetONOFflag(PrntALF,p,l,s);
+             'E' : GetONOFflag(AutoEcho,p,l,s);
+             END;
+           END;
+        END;
+    IF unitno = -1 THEN NoUnit;
+    SetALF;
+    END; {ParseCmdLine}
+
+FUNCTION MainLbls : INTEGER;
+    VAR  ior  : INTEGER;
+    BEGIN {MainLbls}
+    LblsInit;
+    ior := LblSet(  F1, 'File    ', '\FF0' );
+    MainLbls := ior;
+    IF ior <> 0 THEN EXIT(MainLbls);
+    ior := LblSet(  F5, 'Printer ', '\FF1' );
+    ior := LblSet(  F6, 'ClrWndow', '\FF3' );
+    ior := LblSet( F10, 'Exit    ', '\FF2' );
+    LblsOn;
+    END; {MainLbls}
+
+PROCEDURE MainInit;
+    VAR ior : INTEGER;
+
+    PROCEDURE BufFail;
+      BEGIN
+      WRITELN(beep,'*** Failed to increase read buffer size');
+      EXIT(Terminal);
+      END;
+
+    PROCEDURE MakeBuffer;
+      VAR ParmBlk : PB; ptr1,ptr2 : p16K; parm : INTEGER; ch : char;
+      BEGIN
+      WITH ParmBlk DO BEGIN
+         NEW(ptr1); NEW(ptr2);
+         IF (ptr1 = NIL) OR (ptr2 = NIL) THEN BufFail;
+         Address := ptr1;
+         Size := SIZEOF(SixteenK) + (SIZEOF(SixteenK) - 1);
+         UNITSTATUS(unitno,ParmBlk,FCRDALTBUF); ior := IORESULT;
+         IF ior = 0 THEN
+            BEGIN
+            parm := (Size DIV 3) * 2;
+            UNITSTATUS(unitno,parm,FCSETHIWATER);
+            parm := Size DIV 3;
+            UNITSTATUS(unitno,parm,FCSETLOWATER);
+            END
+         ELSE BufFail;
+         END;
+    END; {MakeBuffer}
+
+    BEGIN {MainInit}
+    CCcrtIOinit;
+    CrtAction(UcaseOff); CrtAction(DefStrOn);
+    CrtTpgm := pgmNAME; CrtTvrs := pgmVERS;
+    CrtTitle (pgmTITL);
+    CCdcpIOinit;
+    CClblIOinit;
+
+    CCwndIOinit;
+    pEwindow := pOScurWnd;
+    ior := WinStatus (hx,hy,w,l,cx,cy);
+    if ior <> 0 then begin
+        MsgIOerr (ior,s); writeln ('WinStatus ',s); CrtPause (c); end;
+    ior := WinCreate (Twindow,0,3,w,l-3,WfgCursOn+WfgInvCur+WfgWrap);
+    if ior <> 0 then begin
+        MsgIOerr (ior,s); writeln ('WinCreate ',s); CrtPause (c); end;
+    ior := WinSelect (Twindow);
+    if ior <> 0 then begin
+        MsgIOerr (ior,s); writeln ('WinSelect ',s); CrtPause (c); end;
+
+    quit := FALSE; UseFile := FALSE; UsePrinter := FALSE;
+    SendALF := TRUE; RcvALF := TRUE; PrntALF := TRUE;
+    AutoEcho := FALSE;
+    Fname := DEFFILE;   unitno := -1;
+    MARK(OldTop);
+
+    ParseCmdLine;
+    MakeBuffer;
+    ShowStatus;
+    CrtAction(EraseALL);
+    ior := MainLbls;
+    END;{MainInit}
+
+PROCEDURE SendOut(ch: byte);
+    VAR outch: CHAR;
+
+    BEGIN {SendOut}
+    UNITWRITE(SCREEN,ch,1);
+    IF (ch <> LF) AND (ch <> NUL) THEN
+        BEGIN
+        {if using file or printer send to them}
+        IF ch < 0 THEN outch := CHR(256 + ch)
+                  ELSE outch := CHR(ch);
+        IF UseFile THEN WRITE(F,outch);
+        IF UsePrinter THEN WRITE(Prntr,outch);
+        END;
+    END;{SendOut}
+
+    BEGIN {Terminal}
+    MainInit;
+    REPEAT
+
+        IF UNITBUSY(KEYBOARD) THEN BEGIN
+            {send char if not Function Key}
+            UNITREAD(KEYBOARD,ch,1);
+            IF ch = -1
+                THEN FuncKey
+                ELSE BEGIN
+                    IF ch = EscChar THEN ch := ProcEsc;
+                    UNITWRITE(unitno,ch,1);
+                    IF AutoEcho THEN SendOut(ch);
+                    END;
+            END;
+
+        IF UNITBUSY(unitno) THEN BEGIN
+            {get char from data com and put on screen}
+            UNITREAD(unitno,ch,1); SendOut(ch);
+            END;
+        UNTIL quit;
+
+    iost := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    iost := WinSystem(WsysCurr);
+
+    END. {Terminal}
+

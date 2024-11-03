@@ -1,0 +1,15 @@
+;
+; File ID: /FCCOMP/SYSTEM.UPDATE
+;
+; SYSTEM.UPDATE assumes volume /CCSYS exists has read/write access
+;
+pause Continue
+;
+setvol /FCCOMP
+krunch -q /CCSYS
+cpyfil -q -vCCSYS c ccterrs.text clib.obj stdio.m.text code
+krunch -q /CCSYS
+setvol /CCSYS
+;
+; SYSTEM.UPDATE complete
+;

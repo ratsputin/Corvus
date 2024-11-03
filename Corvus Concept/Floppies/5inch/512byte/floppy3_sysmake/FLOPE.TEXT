@@ -1,0 +1,1651 @@
+Program FlopTest;
+{ debug software for new floppy controller }
+{ works with drive 0 only.}
+{ NOTE: this will work only with the new floppy controller.}
+{       this is the one after march 25.}
+{Changed on 29 April for inverted device select enable}
+{bit in local register.}
+{ June 17, 1983 kb }
+uses {$U /ccutil/cclib} CCDefn;
+const
+        {good for both 8 and 5 1/4 inch}
+        BufStart  =   0;
+        SDBufEnd  = 127;
+        DDBufEnd  = 512;
+
+        MtrON = TRUE;
+        MtrOFF = FALSE;
+        RdDMA = TRUE;
+        WrDMA = FALSE;
+
+        Slot0  = $30001;
+        OFFSET =    $20;
+
+        {indices off BaseAddr}
+        CtlDATAreg   = 0;
+        CtlSTATUSreg = 2;
+        CtlCNTR      = 4;
+        CtlBUFFER    = 6;
+        CtlLOCALreg  = 8;
+
+        { FDC status register }
+        Drv0BUSY   =    1;  {drive 0 busy}
+        Drv1BUSY   =    2;  {drive 1 busy}
+        Drv2BUSY   =    4;  {drive 2 busy}
+        Drv3BUSY   =    8;  {drive 3 busy}
+        FDCBUSYbit =   16;  {read or write cmd in progress}
+        NDMAbit    =   32;  {Non-DMA mode operation}
+        DATADDRbit =   64;  {data direction bit,input or output}
+        FDCRDYbit  =  128;  {ready to send/rcv data at data reg}
+
+        { FDC status register 0 }
+        INTcode1   =  128;
+        INTcode0   =   64;
+        SEEKEND    =   32;
+        EquipChk   =   16;
+        FDDNRdy    =    8;
+        HdAddr     =    4;
+        Unit0      =    2;
+        Unit1      =    1;
+
+        { FDC status register 0 }
+        CTLmark    =   64;
+
+        { FDC status register 3 }
+        TWOSIDEbit =    8;  {if set drive is 2 sided}
+
+        { Local card register - command bits}
+  {IMPORTANT NOTE:}
+        {motor off bit only used for 5 1/4 inch drive}
+        {all 8 inch drives must be configured such that the device}
+        {select turns on the motor. The motoron line will be inverted }
+        {for the TANDON definition of the line but will be correct for}
+        {the MPI 92.  the motoron line, for now, is connected to the}
+        {NHDLD/NMOTON line, pin 18, of the MPI interface.}
+
+        DevSel0   =   1;  {Drive select bit 0}
+        DevSel1   =   2;  {Drive select bit 1}
+        DvSenbBit =   4;  {Enable device select circuitry}
+        MOTOROFF  =   8;  {controller register motor on bit}
+        EnblINTbit=  32;  {enable interrupt to 68K }
+        DMARWbit  =  64;  {dma direction, 1=read, 0=write}
+        RESETbit  = 128;  {reset FDC}
+
+        { Local card register - status bits}
+        DISKCHG  =   1;
+        NIRQbit  =   2;  {IRQ when = 0}
+        NDrvRDY  =  64;
+        NMINIbit = 128;  {0= 5 1/4 inch flop, 1=8 inch}
+
+        { read and write command bytes }
+        SDNUMbytes = 128;   { number of bytes per sector - FM }
+        DDNUMbytes = 512;   { number of bytes per sector - MFM }
+        SDDTL      = 128;
+        DDDTL      = 256;   { when NUMbytes <> 0 then $FF}
+        EOT8       =  26;   { 8 INCH final sector number on track }
+        EOT5       =   9;   { 5 1/4 INCH final sector number on track }
+        SIDE0      =   0;   { side number }
+        { old floppy controller driver writes Gap 3 length of 27 }
+        SDGPL      =   7;   { gap 3 length for read/write }
+                            { suggested by ap note for gap of 27 }
+        DDGPL      = $1B;   { gap 3 length for read/write }
+                            { suggested by ap note for gap of 54 }
+        {gap 3 lengths are good for both 5 and 8 inch}
+        SDGAP3LEN =  $1B; {27 byte gap 3 len for format cmd - FM }
+        DDGAP3LEN =  $36; {54 byte gap 3 len for format cmd - MFM }
+
+        {command bits}
+        MFMbit  =  64;    { read/write with MFM - double density}
+
+        {type differences}
+        ENDTRK8 =  76;
+        ENDTRK5 =  79;  {96 TPI - MPI model 92}
+
+        {floppy type indicators}
+        EIGHTINCH = 0;
+        FIVEINCH  = 1;
+
+        {DENSITY indicators}
+        SGLDNSTY =   0;
+        DBLDNSTY =  64;  {SAME AS MFMbit}
+
+        INTTOint = 100000;   {????}
+        TOint    =  10000;   {????}
+
+type
+        buffer = array[BufStart..DDBufEnd] of byte;
+        bf512  = array[0..511] of byte;
+        cmdbuf = array[1..40] of byte;
+        opstatus = (LCLERR, WRCERR, RDCERR, FNCERR, FAILED, GOOD);
+        str10 = string[10];
+
+var
+        track,sector,slot,drive: integer;
+        secinwr,secinrd: integer;
+        density,head,floptype: integer;
+        spcfycmd: cmdbuf;
+        RdBuf,WrBuf: buffer;
+        BaseAddr: pBytes;
+        hex: string[16];
+        TPI48: boolean;
+
+function Ucase(c: char) : char;
+  begin
+  if (c>='a') and (c<='z') then c := chr( ord(c) - $20 );
+  Ucase := c;
+  end;
+
+function cnvtob(i: integer) : byte;
+  begin
+  i := i mod 256;
+  if i>127 then cnvtob := i - 256 else cnvtob := i;
+  end;
+
+function cnvtoi(b: byte) : integer;
+  begin
+  if b<0 then cnvtoi := 256 + b else cnvtoi := b;
+  end;
+
+procedure gotoxy(x,y: integer);
+  begin
+  write('\1B=',chr(cnvtob(x)),chr(cnvtob(y)));
+  end;
+
+procedure clrline;
+  begin
+  write('\1BK');
+  end;
+
+function cnv2ch(b : byte) : char;
+var i:integer;
+  begin
+  i := cnvtoi(b);
+  if ((i<$20) or (i>$7F)) then cnv2ch := '.'
+                          else cnv2ch := chr(i);
+  end;
+
+function IsBreakPress : boolean;
+var b: integer;
+  begin
+  unitstatus(35,b,1); {test and clear break flag}
+  IsBreakPress := (b = 1);
+  end;
+
+function BuildCmd(c: byte) : byte;
+  begin
+  BuildCmd := cnvtob( (cnvtoi(c) or density) );
+  end;
+
+procedure showbyte(b: byte);
+var i,hi: integer;
+  begin
+  i := cnvtoi(b);
+  hi := i div 16;
+  write( hex[hi + 1] );
+  write( hex[ (i - (hi*16)) + 1 ] );
+  end;
+
+procedure showcmd(cmd: cmdbuf; cnt: integer);
+var i,b: integer;
+  begin
+  for i := 1 to cnt do
+      begin
+      b := cnvtoi(cmd[i]);
+      write('Command array byte ',i:1,' = ');
+      showbyte(cmd[i]); writeln;
+      end;
+  end;
+
+procedure DumpBuf(B: buffer);
+var i,j,k,n: integer;
+    strg : string[16];
+    s: string[1];
+  begin
+  n := 0;  s := ' '; strg := '';
+  if density = SGLDNSTY then k := SDBufEnd
+                        else k := DDBufEnd;
+  BaseAddr^[ CtlCNTR ] := cnvtob(k DIV 2);
+  for i := BufStart to k do
+      begin
+      showbyte(B[i]); write(' ');
+      s[1] := cnv2ch(B[i]);
+      strg := concat(strg,s);
+      n := n + 1;
+      if (n mod 16) = 0 then
+          begin
+          write('    ');
+          writeln(strg);  strg := '';
+          end;
+      end;
+  end;
+
+procedure cnvitos(i: integer; var s: str10);
+var k: integer;
+    numbers: str10;
+    s1: string[1];
+  begin
+  if i = 0 then s := '0'
+  else
+    begin
+    s := ''; s1 := 'x'; numbers := '0123456789';
+    while (i>0) do
+      begin
+      k := i mod 10;
+      i := i div 10;
+      s1[1] := numbers[k+1];
+      s := concat(s1,s);
+      end;
+    end;
+  end;
+
+procedure BuildWRbuf(var wrb: buffer; sector,trk: integer);
+var tstr,scstr: str10;
+    line: String80;
+    i,k: integer;
+  begin
+  cnvitos(trk,tstr); cnvitos(sector,scstr);
+  line := concat('Track: ',tstr,'  Sector: ',scstr);
+  k := 1;
+  for i:=0 to DDBufEnd do
+     begin
+     wrb[i] := cnvtob(ord(line[k]));
+     k := (k mod (length(line)) ) + 1;
+     end;
+  end;
+
+function RdController(var Cmd: cmdbuf; n: integer) : boolean;
+{read n bytes into cmd buffer from controller data register}
+{returns true if did read, false if timeout}
+var Ready, timeout: boolean;
+    tmot: longint;
+    i,sb: integer;
+  begin
+  i := 1;
+  repeat
+     tmot := 0;
+     repeat
+        sb := cnvtoi(BaseAddr^[ CtlSTATUSreg ]);
+        Ready := ( ((DATADDRbit + FDCRDYbit) and sb) =
+                             (DATADDRbit + FDCRDYbit) );
+        tmot := tmot + 1;
+        timeout := (tmot > TOint);
+        until ((Ready) or (timeout));
+
+  if NOT timeout then
+     Cmd[i] := BaseAddr^[ CtlDATAreg ];
+  i := i + 1;
+  until ( (timeout) or (i>n) );
+
+  RdController := NOT timeout;
+  end;
+
+function WrController(Cmd: cmdbuf; n: integer) : boolean;
+{write n bytes from cmd buffer to controller data register}
+{returns true if did write, false if timeout}
+var Ready, timeout: boolean;
+    tmot: longint;
+    i,sb: integer;
+  begin
+  i := 1;
+  repeat
+     tmot := 0;
+     repeat
+        sb := cnvtoi(BaseAddr^[ CtlSTATUSreg ]);
+        Ready := ( ((DATADDRbit + FDCRDYbit) and sb) =
+                        (FDCRDYbit) );
+        tmot := tmot + 1;
+        timeout := (tmot > TOint);
+        until ((Ready) or (timeout));
+
+     if NOT timeout then
+        BaseAddr^[ CtlDATAreg ] := Cmd[i];
+     i := i + 1;
+     until ( (timeout) or (i>n) );
+
+  WrController := NOT timeout;
+  end;
+
+function SenseDriveStatus(hd,drv: integer; Var ST3: integer): boolean;
+{true if worked, false if failed}
+var cmd: cmdbuf;
+  begin
+  SenseDriveStatus := FALSE;
+  cmd[1] := $04; {sense drive stat cmd}
+  {shift head left 2 bits and add drv number}
+  cmd[2] := cnvtob( (hd * 4) or drv );
+
+  if WrController(cmd,2) then
+      if RdController(cmd,1) then
+          begin
+          ST3 := cnvtoi(cmd[1]);
+          SenseDriveStatus := TRUE;
+          end;
+  end;
+
+function SetLocalReg(Motor,DMAdir: boolean) : boolean;
+{returns ture if done, false if timeout}
+var b,sb,ST3: integer;
+    Ready, timeout: boolean;
+    tmot: longint;
+  begin
+  {5 1/4 drives do not have a ready line.  Controller ties down line}
+  {to always ready.  MPI model 92 has a 500 ms. motor on delay}
+  {Can either turn off and on motor and wait 500 ms. or leave motor on }
+  {and never wait.  }
+
+  {assume drive 0,Enable device select,motor on,disable int,write dma and normal}
+  b := DvSenbBit;
+  {shift drive number to the left and put in reg}
+  b := (b or (drive * 2));
+
+  {should turn off motor and deselect drive to guarantee }
+  {motor is turned off.  ?? will 5 1/4 not turn motor off if }
+  {deselected same time turn off motor.}
+  if (floptype = EIGHTINCH) then {clear motr off bit and set dev sel enbl bit}
+      if Motor = MtrOFF then b := ( MOTOROFF or ((NOT DvSenbBit) and b) );
+  {we are always leaving the motor on for 5 1/4}
+
+  if DMAdir = RdDMA then b := (DMARWbit or b);
+  BaseAddr^[ CtlLOCALreg ] := cnvtob(b);
+
+  if Motor = MtrOFF then SetLocalReg := TRUE
+  else
+       begin
+       if floptype = EIGHTINCH then
+          begin
+          {turn on side select - 0}
+          {must do before do r/w after do seek}
+          Ready := SenseDriveStatus(head,0,ST3);
+
+          {wait for drive to be ready}
+          tmot := 0;
+          repeat
+            sb := cnvtoi(BaseAddr^[ CtlLOCALreg ]);
+            Ready := (NDrvRDY and sb) = 0;
+            tmot := tmot + 1;
+            timeout := (tmot > TOint);
+            until( (Ready) or (timeout) );
+
+          SetLocalReg := Ready;
+          end
+       else
+          begin
+          {wait 500 ms. or always leave motor on}
+          SetLocalReg := TRUE;
+          end;
+       end;
+  end;
+
+procedure MoveIN(WrBuf: buffer);
+{move data from write buffer to controller}
+{ assumes 1st byte of buffer must go into controller}
+{ buffer first.  Data is DMAed into (out of) buffer}
+{ starting at high counter and ending at low counter}
+{ low value = 0 }
+{ down count from end to beginning }
+var i,k: integer;
+  begin
+  { setup counter address }
+  if density = SGLDNSTY then k := SDBufEnd
+                        else k := DDBufEnd;
+  BaseAddr^[ CtlCNTR ] := cnvtob(k DIV 2);
+  for i := BufStart to k do
+      BaseAddr^[ CtlBUFFER ] := WrBuf[i];
+  end;
+
+procedure MoveOUT(var RdBuf: buffer);
+{move data from controller to read buffer}
+{ assumes 1st byte of buffer must go into controller}
+{ buffer first.  Data is DMAed into(out of) buffer}
+{ starting at high counter and ending at low counter}
+{ low value = 0 }
+{ down count from end to beginning }
+var i,k: integer;
+  begin
+  { setup counter address }
+  if density = SGLDNSTY then k := SDBufEnd
+                        else k := DDBufEnd;
+  BaseAddr^[ CtlCNTR ] := cnvtob(k DIV 2);
+  for i := BufStart to k do
+      RdBuf[i] := BaseAddr^[ CtlBUFFER ];
+  end;
+
+function WaitFDC : boolean;
+{returns true if got interrupt}
+{and false if timeout}
+var Ready,timeout: boolean;
+    tmot: longint;
+    sb: integer;
+  begin
+  tmot := 0;
+  repeat
+     sb := cnvtoi(BaseAddr^[ CtlLOCALreg ]);
+     Ready := ( (NIRQbit and sb) = 0 );
+     tmot := tmot + 1;
+     timeout := (tmot > INTTOint);
+     until ((Ready) or (timeout));
+  WaitFDC := NOT timeout;
+  end;
+
+function SenseInt(Var ST0, PCN: integer) : boolean;
+{gets status register 0 to find out what caused }
+{interrupt.  PCN is the track head is over.     }
+{returns true if completed operation.           }
+var cmd: cmdbuf;
+  begin
+  SenseInt := FALSE; ST0 := 0; PCN := 0;
+  cmd[1] := 8;  {sense int status command}
+  if WrController(cmd,1) then
+     begin
+     if RdController(cmd,2) then
+        begin
+        SenseInt := TRUE;
+        ST0 := cnvtoi(cmd[1]);
+        PCN := cnvtoi(cmd[2]);
+        end
+     else writeln(chr(7),'Timed out on controller read');
+     end
+  else writeln(chr(7),'Timed out on controller write');
+  end;
+
+function Track0(var ST0,PCN: integer): opstatus;
+{the FDC will stop the restore if it sends 77 step signals}
+{without getting NTRK0 saying on track 0.  The 5 1/4 has 80 tracks}
+{and therefore the FDC will not correctly restore the driver}
+{when the head is beyond track 77.}
+var cmd: cmdbuf;
+    cnt: integer;
+    OK: boolean;
+  begin
+  PCN := 0;
+  {setup cmd array}
+  cmd[1] := cnvtob($07);  {restore command}
+  cmd[2] := cnvtob($00);  {drive 0 select}
+  cnt := 2;
+
+  if NOT SetLocalReg(MtrON,RdDMA) then
+     begin
+     Track0 := LCLERR;
+     OK := SetLocalReg(MtrOFF,RdDMA);
+     exit(Track0);
+     end;
+
+  if WrController(cmd,cnt) then
+     begin
+     if NOT WaitFDC then
+        begin
+        Track0 := FNCERR;
+        OK := SetLocalReg(MtrOFF,RdDMA);
+        exit(Track0);
+        end;
+
+     if SenseInt(ST0, PCN) then {if fails reports to user}
+        begin
+        OK := ((INTcode1 + INTcode0 + SEEKEND + EquipChk)
+                 and ST0) = (SEEKEND);
+        if NOT OK then Track0 := FAILED
+                  else Track0 := GOOD;
+        end;
+     end
+  else Track0 := WRCERR;
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  end;
+
+function SeekTrk(track: integer; var ST0,PCN: integer): opstatus;
+var cmd: cmdbuf;
+    cnt,t: integer;
+    OK: boolean;
+  begin
+  {setup cmd array}
+  cmd[1] := cnvtob($0F);  {seek command}
+  cmd[2] := cnvtob( (head * 4) or $00 );  {drive 0 select}
+  t := track; if TPI48 then t := t * 2;
+  cmd[3] := cnvtob(t);
+  cnt := 3;
+
+  if NOT SetLocalReg(MtrON,RdDMA) then
+     begin
+     SeekTrk := LCLERR;
+     OK := SetLocalReg(MtrOFF,RdDMA);
+     exit(SeekTrk);
+     end;
+
+  if WrController(cmd,cnt) then
+     begin
+     if NOT WaitFDC then
+        begin
+        SeekTrk := FNCERR;
+        OK := SetLocalReg(MtrOFF,RdDMA);
+        exit(SeekTrk);
+        end;
+
+     if SenseInt(ST0, PCN) then {if fails reports to user}
+        begin
+        OK := ((INTcode1 + INTcode0 + SEEKEND + EquipChk)
+                 and ST0) = (SEEKEND);
+        if NOT OK then SeekTrk := FAILED
+                  else SeekTrk := GOOD;
+        end;
+     end
+  else SeekTrk := WRCERR;
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  end;
+
+procedure SetupCmdRW(var cmd: cmdbuf; s,t: integer);
+var n,d,g,e: integer;
+  begin
+  {select states for density differences}
+  if density = SGLDNSTY then
+      begin
+      { N = 00 when 128 bytes/sector and FM}
+      {Since FM N = 0 must put bytes/sector in DTL}
+      n := SDNumbytes;
+      d := SDDTL;
+      g := SDGPL;
+      end
+  else
+      begin
+      n := DDNumbytes;
+      d := DDDTL;
+      g := DDGPL;
+      end;
+  {select states for different floppy types}
+  if floptype = EIGHTINCH then
+     e := EOT8
+  else
+     e := EOT5;
+
+  cmd[2] := cnvtob( (head * 4) or $00 );  {drive 0 select}
+  cmd[3] := cnvtob(t);  {track}
+  cmd[4] := cnvtob(head);   {side}
+  cmd[5] := cnvtob(s);      {sector}
+  cmd[6] := cnvtob(2);{(n - 1) div 128);} {# bytes per sector code}
+  cmd[7] := cnvtob(e);      {last sector in track}
+  cmd[8] := cnvtob(g);      {gap 3 wait byte time}
+  cmd[9] := cnvtob(d);      {DTL read/write len differ from sector length}
+  end;
+
+function Read1(var RB: buffer; var cmd: cmdbuf; s,t: integer) : opstatus;
+{s = sector number, t = track number}
+var cnt,ST0,ST1,a: integer;
+    OK: boolean;
+  begin
+  if NOT SetLocalReg(MtrON,RdDMA) then
+     begin
+     Read1 := LCLERR;
+     OK := SetLocalReg(MtrOFF,RdDMA);
+     exit(Read1);
+     end;
+
+  {setup cmd array and controller <= bufferptr}
+  SetupCmdRW(cmd,s,t);
+  cmd[1] := BuildCmd($06); {MT=0,SK=0,READ DATA add density bit}
+  cnt := 9;
+  {set up buffer address}
+  if density = SGLDNSTY then a := SDBufEnd
+                        else a := DDBufEnd;
+  BaseAddr^[ CtlCNTR ] := cnvtob(a DIV 2);
+  if WrController(cmd,cnt) then
+     begin
+     if WaitFDC then
+        begin
+        if RdController(cmd,7) then
+           begin
+           {see if cmd done}
+           ST0 := cnvtoi(cmd[1]);
+           OK := ((INTcode1 + INTcode0) and ST0) = 0;
+           {if is done then move data from controller}
+           {       to read buffer}
+           if OK then
+              begin
+              MoveOUT(RB);
+              Read1 := GOOD;
+              end
+           else Read1 := FAILED;
+           end
+        else Read1 := RDCERR;
+        end
+     else Read1 := FNCERR;
+     end
+  else Read1 := WRCERR;
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  end;
+
+function Write1(WB: buffer; var cmd: cmdbuf; s,t: integer) : opstatus;
+{s = sector number, t = track number}
+var cnt,ST0,ST1,a: integer;
+    OK: boolean;
+  begin
+  if NOT SetLocalReg(MtrON,WrDMA) then
+     begin
+     Write1 := LCLERR;
+     OK := SetLocalReg(MtrOFF,RdDMA);
+     exit(Write1);
+     end;
+
+  MoveIN(WB);
+  {setup cmd array and controller <= bufferptr}
+  SetupCmdRW(cmd,s,t);
+  cmd[1] := BuildCmd($05); {MT=0,SK=0,WRITE DATA add density bit}
+  cnt := 9;
+  {set up buffer address}
+  if density = SGLDNSTY then a := SDBufEnd
+                        else a := DDBufEnd;
+  BaseAddr^[ CtlCNTR ] := cnvtob(a DIV 2);
+  if WrController(cmd,cnt) then
+     begin
+     if WaitFDC then
+        begin
+        if RdController(cmd,7) then
+           begin
+           {see if cmd done}
+           ST0 := cnvtoi(cmd[1]);
+           OK := ((INTcode1 + INTcode0) and ST0) = 0;
+           {if is done then move data from controller}
+           {       to read buffer}
+           if OK then Write1 := GOOD
+                 else Write1 := FAILED;
+           end
+        else Write1 := RDCERR;
+        end
+     else Write1 := FNCERR;
+     end
+  else Write1 := WRCERR;
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  end;
+
+procedure Restore;
+var st: opstatus;
+    ST0,PCN: integer;
+  begin
+  writeln;
+  writeln('Restoring to track 0'); writeln;
+  st := Track0(ST0,PCN);
+  case st of
+     LCLERR : writeln('Timed out waiting for Drive to come READY.');
+     WRCERR : writeln('Timed out on controller write');
+     RDCERR : writeln('Timeout Read Controller.  Unexpected.');
+     FNCERR : writeln('Timed out waiting for Restore to finish.');
+     FAILED : begin
+              write('Restore failed.  Status register 0 : ');
+              showbyte(cnvtob(ST0)); writeln;
+              write('Reported PCN: ');
+              showbyte(cnvtob(PCN)); writeln;
+              track := PCN;
+              if TPI48 then track := track div 2;
+              end;
+     GOOD   : begin
+              writeln('Restore completed.');
+              track := PCN;
+              if TPI48 then track := track div 2;
+              end;
+     end;
+  end;
+
+procedure Seek;
+var st: opstatus;
+    ST0,PCN: integer;
+  begin
+  writeln;      PCN := track;
+  writeln('Current track: ',track);
+  write('Enter track number: '); readln(track);
+
+  st := SeekTrk(track,ST0,PCN);
+  case st of
+     LCLERR : writeln('Timed out waiting for Drive to come READY.');
+     WRCERR : writeln('Timed out on controller write');
+     RDCERR : writeln('Timeout Read Controller.  Unexpected.');
+     FNCERR : writeln('Timed out waiting for Restore to finish.');
+     FAILED : begin
+              write('Seek failed.  Status register 0 : ');
+              showbyte(cnvtob(ST0)); writeln;
+              write('Reported PCN: ');
+              showbyte(cnvtob(PCN)); writeln;
+              track := PCN;
+              if TPI48 then track := track div 2;
+              end;
+     GOOD   : begin
+              writeln('Seek completed.');
+              track := PCN;
+              if TPI48 then track := track div 2;
+              end;
+     end;
+  end;
+
+procedure ShowRWstatus(cmd: cmdbuf);
+  begin
+  write( 'Status reg 0 : '); showbyte(cmd[1]);
+  write(' Status reg 1 : '); showbyte(cmd[2]);
+  write(' Status reg 2 : '); showbyte(cmd[3]);
+  writeln;
+  write('Track : '); showbyte(cmd[4]);
+  write(' Side : '); showbyte(cmd[5]);
+  write(' Sector : '); showbyte(cmd[6]);
+  writeln;
+  write('Bytes/Sector : '); showbyte(cmd[7]);
+  writeln;
+  end;
+
+procedure ReadSec;
+var cmd: cmdbuf;
+    ST1: integer;
+    st: opstatus;
+    ch: char;
+    OK: boolean;
+  begin
+  writeln;
+  writeln('READ SECTOR >  Current sector number: ',sector);
+  write('Do you want to change: '); read(ch); writeln;
+  if (ch='y') or (ch='Y') then
+     begin
+     write('Enter sector number: '); readln(sector);
+     end;
+
+  st := Read1(RdBuf,cmd,sector,track);
+  case st of
+     LCLERR : writeln('Timed out waiting for Drive to come READY.');
+     WRCERR : writeln('Timed out on controller write');
+     RDCERR : writeln('Timed out on controller read');
+     FNCERR : writeln('Timed out during wait for READ.');
+     FAILED : begin
+              writeln('Read failed.');
+              ShowRWstatus(cmd);
+              end;
+     GOOD   : begin
+              writeln('Sector read succesful.');
+              secinrd := sector; {save what sector read}
+              ST1 := cnvtoi(cmd[2]);
+              if ( (CTLmark and ST1) = CTLmark) then
+                 writeln('Read data marked deleted.');
+              end;
+     end;
+  end;
+
+procedure WriteSec;
+var cmd: cmdbuf;
+    ST1: integer;
+    st: opstatus;
+    ch: char;
+    OK: boolean;
+  begin
+  writeln;
+  writeln('WRITE SECTOR >  Current sector number: ',sector);
+  write('Do you want to change: '); read(ch); writeln;
+  if (ch='y') or (ch='Y') then
+     begin
+     write('Enter sector number: '); readln(sector);
+     end;
+
+  st := Write1(WrBuf,cmd,sector,track);
+  case st of
+     LCLERR : writeln('Timed out waiting for Drive to come READY.');
+     WRCERR : writeln('Timed out on controller write');
+     RDCERR : writeln('Timed out on controller read');
+     FNCERR : writeln('Timed out during wait for WRITE.');
+     FAILED : begin
+              writeln('Write failed.');
+              ShowRWstatus(cmd);
+              end;
+     GOOD   : begin
+              writeln('Sector write succesful.');
+              secinwr := sector; {save what sector written}
+              end;
+     end;
+  end;
+
+procedure CmpBuffs;
+var i,k,Ecnt: integer;
+    ch: char;
+  begin
+  writeln;
+  writeln('Comparing Read and Write buffers');
+  writeln('Read sector: ',secinrd,' Write sector: ',secinwr);
+  if (secinrd <> secinwr) then
+       begin
+       write('They are different, do you still want to do compare? ');
+       read(ch);
+       if NOT((ch='y') or (ch='Y')) then exit(CmpBuffs);
+       writeln;
+       end;
+
+  if density = SGLDNSTY then k := SDBufEnd
+                        else k := DDBufEnd;
+  BaseAddr^[ CtlCNTR ] := cnvtob(k DIV 2);
+  Ecnt := 0;
+  for i := BufStart to k do
+    if (RdBuf[i] <> WrBuf[i]) then Ecnt := Ecnt + 1;
+
+  writeln('Number of MisCompares: ',Ecnt); writeln;
+  writeln('The Read buffer:');
+  DumpBuf(RdBuf);
+  if IsBreakPress then exit(CmpBuffs);
+  writeln;
+  writeln('The Write buffer:');
+  DumpBuf(WrBuf);
+  end;
+
+procedure FillWrBuf(var WrBuf: buffer);
+var n,i,k,d: integer;
+    b: byte;
+    ch: char;
+    Done: boolean;
+  begin
+  Done := FALSE;
+  writeln;
+  writeln('Fill write Buffer.');
+  writeln;
+  write('Select option: [ S)ame, I)ncremented ] ');
+  read(ch); ch := Ucase(ch); writeln;
+  case ch of
+      'I': begin
+           write('Enter starting value: [0..255] '); readln(n);
+           n := abs(n) mod 256;
+           write('Enter increment: '); readln(i);
+           for k:=Bufstart to DDBufEnd do
+             begin
+             WrBuf[k] := cnvtob(n);
+             n:= (n + i) mod 256;
+             end;
+           Done := TRUE;
+           end;
+      'S': begin
+           write('Enter byte value: [0..255] '); readln(n);
+           b := cnvtob(abs(n));
+           for k:=Bufstart to DDBufEnd do WrBuf[k] := b;
+           Done := TRUE;
+           end;
+      end;
+  writeln;
+  if Done then
+     begin
+     writeln('The Write buffer:');
+     d := density; density := DBLDNSTY;
+     DumpBuf(WrBuf);
+     density := d;
+     end;
+  end;
+
+procedure SetSlot;
+var sn: integer;
+  begin
+  writeln;
+  writeln('Current slot: ',slot);
+  write('Enter slot [1,2,3,4]: '); readln(sn);
+  if (sn<1) or (sn>4) then
+       writeln(chr(7),'Invalid slot number')
+  else begin
+       slot := sn;
+       BaseAddr := pointer(Slot0 + (slot*OFFSET) );
+       end;
+  end;
+
+procedure WaitUser;
+var ch: char;
+  begin
+  writeln;
+  write('Press return when ready'); readln(ch);
+  end;
+
+procedure InitFDC;
+var i,ST0,PCN: integer;
+    cmd: cmdbuf;
+  begin
+  sector := 1; track := 0;
+  secinrd := sector; secinwr := sector;
+  for i := BufStart to DDBufEnd do
+      begin
+      RdBuf[i] := -2;
+      WrBuf[i] := -2;
+      end;
+
+  BaseAddr^[ CtlLOCALreg ] := cnvtob(RESETbit + MOTOROFF); {reset chip}
+  {set back to normal}
+  if floptype = FIVEINCH then
+      {turn motor back on drive 0}
+      BaseAddr^[ CtlLOCALreg ] := 0
+  else
+      BaseAddr^[ CtlLOCALreg ] := cnvtob(MOTOROFF);
+
+  writeln('FDC RESET');
+  end;
+
+procedure Specify;
+{NOTE:  For 8" drive}
+{it seems Restore needs 2 to 4 ms. more step rate then seek}
+{6 or 8 ms. for seek and 10 ms. for restore}
+{driver should have a table for step rates, seek and restore,}
+{                               head load time              }
+{                               head unload time            }
+{means must do specify before do restore and change to seek }
+{value after do restore.                                    }
+{FOR BOOT: pick a safe step rate??? will slow it down. maybe}
+{          always use 10 ms.                                }
+
+var cmd: cmdbuf;
+    Ready, timeout: boolean;
+    tmot: longint;
+    i,sb,step: integer;
+
+  begin
+  {do specify cmd}
+  writeln;
+  cmd[1] := cnvtob($03); {specify cmommand}
+  if floptype = EIGHTINCH then
+       begin
+       writeln('8 inch drive :');
+       write('Enter Step Rate in ms.: [1 to 16] ');
+       readln(step); step := 15 - (step - 1);
+       {no specification for head unload time for TANDON drive}
+       {therefore use minimum ?????}
+       cmd[2] := cnvtob( (step * 16) or  $01); {step rate and 16 ms. HUT}
+       {the TANDON has the head LOADED whenever the door is closed}
+       cmd[3] := cnvtob($02); {16 ms. HLT, DMA mode}
+       end
+  else
+       begin
+       writeln('5 1/4 inch drive :');
+       {MPI model 92 :  needs combined head load time and head settle time}
+       {of 60 ms.  It has 5 ms. step rate.  Motor up delay is 500  ms.}
+       {clock rate is 4 Mhz on for both densities therefore all data sheet}
+       {times increase by a factor of 2.}
+       {no specification for head unload time for MPI drive}
+       {therefore use minimum ?????}
+       write('Enter Step Rate in ms.: [2 to 32, even only] ');
+       readln(step); step := 15 - ((step DIV 2) - 1);
+       cmd[2] := cnvtob( (step * 16) or  $01); {step rate and 16 ms. HUT}
+       cmd[3] := cnvtob($1E); { 60 ms. HLT, DMA mode}
+       end;
+  write('Step byte: '); showbyte(cmd[2]); writeln;
+
+  tmot := 0;  {wait for FDC to not be busy}
+  repeat
+     sb := cnvtoi(BaseAddr^[ CtlSTATUSreg ]);
+     Ready :=  ((Drv0BUSY + Drv1BUSY + Drv2BUSY + Drv3BUSY + FDCBUSYbit)
+                    and sb) = 0;
+     tmot := tmot + 1;
+     timeout := (tmot > TOint);
+     until ((Ready) or (timeout));
+
+  if Ready then
+     begin
+     if NOT WrController(cmd,3) then
+         writeln('Timed out trying to do Specify.')
+     else for i := 1 to 3 do spcfycmd[i] := cmd[i];
+     end
+  else writeln('Timed out waiting for FDC to come ready.');
+  end;
+
+function QuietSpecify: boolean;
+{returns true if specify worked}
+var Ready, timeout: boolean;
+    tmot: longint;
+    sb: integer;
+
+  begin
+  tmot := 0;  {wait for FDC to not be busy}
+  repeat
+     sb := cnvtoi(BaseAddr^[ CtlSTATUSreg ]);
+     Ready :=  ((Drv0BUSY + Drv1BUSY + Drv2BUSY + Drv3BUSY + FDCBUSYbit)
+                    and sb) = 0;
+     tmot := tmot + 1;
+     timeout := (tmot > TOint);
+     until ((Ready) or (timeout));
+
+  QuietSpecify := Ready;
+  if Ready then QuietSpecify := WrController(spcfycmd,3);
+  end;
+
+procedure Examine;
+var ch: char;
+    b: byte;
+    ex,disp: boolean;
+  begin
+  writeln; ex := FALSE;
+  repeat
+    write('Examine :   [ L)ocal, S)tatus, D)ata, E)xit ]  ');
+    read(ch); ch := Ucase(ch); writeln;
+    disp := TRUE;
+    case ch of
+          'D': begin
+               b := BaseAddr^[ CtlDATAreg ];
+               write(' FDC data register : ');
+               end;
+          'S': begin
+               b := BaseAddr^[ CtlSTATUSreg ];
+               write(' FDC status register : ');
+               end;
+          'L': begin
+               b := BaseAddr^[ CtlLOCALreg ];
+               write(' Local status register : ');
+               end;
+          'E': begin
+               ex := TRUE;
+               disp := FALSE;
+               end;
+          Otherwise : disp := FALSE;
+          end;
+    if disp then showbyte(b);
+    writeln;
+    until ex;
+  end;
+
+procedure DriveSelect;
+{5 1/4 does not have two sided line. so can't check just try.}
+{do a sense drive status command}
+var hd,ST3: integer;
+    OK,twosd: boolean;
+  begin
+  writeln;
+  writeln('Drive status.  Current Head: ',head:1);
+  write('Enter Head select : ');  readln(hd);
+
+  if NOT SetLocalReg(MtrON,RdDMA) then
+     writeln('Timed out on Local Register')
+  else
+     if NOT SenseDriveStatus(hd,0,ST3) then
+        writeln('Failed to do drive status command.')
+     else
+        begin
+        write('ST3 : '); showbyte(cnvtob(ST3));
+        writeln;
+        twosd := ((ST3 and TWOSIDEbit) = TWOSIDEbit);
+        if ((hd = 1) and (twosd)) or (hd = 0) or (floptype = FIVEINCH) then
+             head := hd
+        else writeln('Drive does not have side ',hd:1);
+        end;
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  end;
+
+procedure ShowBf(B: bf512; cnt: integer);
+var i,j,n: integer;
+    strg : string[16];
+    s: string[1];
+  begin
+  n := 0;  s := ' '; strg := '';
+  for i := 0 to cnt-1 do
+      begin
+      showbyte(B[i]); write(' ');
+      s[1] := cnv2ch(B[i]);
+      strg := concat(strg,s);
+      n := n + 1;
+      if (n mod 16) = 0 then
+          begin
+          write('    ');
+          writeln(strg);  strg := '';
+          end;
+      end;
+  end;
+
+procedure FillCardBuf;
+var n,i,k,addr,cnt: integer;
+    b: byte;
+    ch: char;
+    Done: boolean;
+    buf: bf512;
+  begin
+  writeln;
+  writeln('Fill Controller Buffer.');
+  writeln;
+  write('Enter address : '); readln(addr);
+  write('Enter number of bytes to write: '); readln(cnt);
+
+  write('Bytes are: [ S)ame, I)ncremented ] ');
+  read(ch); ch := Ucase(ch); writeln;
+  case ch of
+      'I': begin
+           write('Enter starting value: [0..255] '); readln(n);
+           n := abs(n) mod 256;
+           write('Enter increment: '); readln(i);
+           BaseAddr^[ CtlCNTR ] := cnvtob(addr div 2);
+           for k := 0 to cnt-1 do
+             begin
+             BaseAddr^[ CtlBUFFER ] := cnvtob(n);
+             n := (n + i) mod 256;
+             end;
+           end;
+      'S': begin
+           write('Enter byte value: [0..255] '); readln(n);
+           BaseAddr^[ CtlCNTR ] := cnvtob(addr div 2);
+           b := cnvtob(abs(n));
+           for k := 0 to cnt-1 do BaseAddr^[ CtlBUFFER ] := b;
+           end;
+      end;
+  writeln;
+  end;
+
+
+procedure LookBuffer;
+var ex: boolean;
+    addr,cnt,i: integer;
+    buf: bf512;
+    ch: char;
+  begin
+  writeln;
+  writeln('Check out the Buffer.');
+  ex := FALSE;
+  repeat
+     write(' Select option : [ D)ump, F)ill, E)xit ] ');
+     read(ch);  ch := Ucase(ch);  writeln;
+
+     case ch of
+        'D': begin
+             write('Enter address : '); readln(addr);
+             write('Enter number of bytes to read: '); readln(cnt);
+             BaseAddr^[ CtlCNTR ] := cnvtob(addr div 2);
+             for i := 0  to cnt-1 do
+                 buf[i] := BaseAddr^[ CtlBUFFER ];
+             writeln; writeln('The buffer from ',addr:1,' for ',cnt:1,' bytes.');
+             ShowBf(buf,cnt);
+             writeln;
+             end;
+        'F': FillCardBuf;
+        'E': ex := TRUE;
+        end;
+     until ex;
+  end;
+
+procedure FormatSide;
+var l,filler,gap,ST0,PCN,trk: integer;
+    lastsector,lasttrack: integer;
+    OK,error: boolean;
+    ch: char;
+    st: opstatus;
+    cmd: cmdbuf;
+
+  procedure FrmtTbl(seclen,track: integer);
+  var i,k: integer;
+    begin
+    BaseAddr^[ CtlCNTR ] := cnvtob( ((lastsector * 4) - 1) DIV 2);
+    for i := 1 to lastsector do
+        begin
+        {does interleave of 2}
+        k := i+(i-1); if k > lastsector then k := (k mod lastsector) + 1;
+        BaseAddr^[ CtlBUFFER ] := cnvtob(track);
+        BaseAddr^[ CtlBUFFER ] := cnvtob(head);
+      { BaseAddr^[ CtlBUFFER ] := cnvtob(i);}
+        BaseAddr^[ CtlBUFFER ] := cnvtob(k);
+        BaseAddr^[ CtlBUFFER ] := cnvtob(seclen);
+        end;
+    end;
+
+  procedure SetFrmtCmd;
+    begin
+    cmd[1] := BuildCmd($0D); {format trk cmd}
+    cmd[2] := cnvtob( (head * 4) or 0);
+    cmd[3] := cnvtob(l);
+    cmd[4] := cnvtob(lastsector);
+    cmd[5] := cnvtob(gap);
+    cmd[6] := cnvtob(filler);
+    end;
+
+  procedure FrmtInit;
+    begin
+    if density = SGLDNSTY then
+       begin {single density}
+       l := SDNUMbytes;
+       filler := $E5;
+       gap := SDGAP3LEN;
+       end
+    else
+       begin {double density}
+       l := DDNUMbytes;
+       filler := $1A;
+       gap := DDGAP3LEN;
+       end;
+    l := (l - 1) DIV 128;
+    if (floptype = EIGHTINCH) then
+       begin
+        lastsector := EOT8;
+        lasttrack := ENDTRK8;
+        end
+    else
+        begin
+        lastsector := 9; {EOT5;}
+        lasttrack := ENDTRK5;
+        end;
+    trk := 0;
+    end;
+
+  begin
+  writeln;
+  if (floptype = EIGHTINCH) then
+       write('8 inch drive')
+  else
+       write('5 1/4 inch drive');
+  write(' Format a side :  ');
+  if density = SGLDNSTY then write('FM')
+                        else write('MFM');
+  writeln('  Head :  ',head:1);
+  write('OK to continue? [Y/N] ');
+  read(ch); ch := Ucase(ch);  writeln; writeln;
+  if ch<>'Y' then exit(FormatSide);
+
+  FrmtInit;
+
+  gotoxy(0,20); clrline; writeln('Formatting track :  ');
+  error := IsBreakPress;
+  repeat
+     error := TRUE;
+     if SeekTrk(trk,ST0,PCN) = GOOD then
+        begin
+        {set up sector table}
+        FrmtTbl(l,trk);   SetFrmtCmd;
+       {LookBuffer;}
+        gotoxy(20,20); clrline; writeln(trk:2);
+        BaseAddr^[ CtlCNTR ] := cnvtob( ((lastsector * 4) - 1) DIV 2);
+
+        if NOT SetLocalReg(MtrON,WrDMA) then
+           begin
+           writeln('Timed out waiting for Drive to come READY.');
+           OK := SetLocalReg(MtrOFF,RdDMA);
+           exit(FormatSide);
+           end;
+
+       {writeln('Format command :'); showcmd(cmd,6);}
+        if WrController(cmd,6) then
+           begin
+           if WaitFDC then
+              begin
+              if RdController(cmd,7) then
+                 begin
+                 {see if cmd done}
+                 ST0 := cnvtoi(cmd[1]);
+                 OK := ((INTcode1 + INTcode0) and ST0) = 0;
+                 {       to read buffer}
+                 if OK then error := FALSE
+                 else
+                      begin
+                      writeln('Format command failed.');
+                      writeln;  ShowRWstatus(cmd);
+                      end;
+                 end
+              else writeln('Timed out on controller write');
+              end
+           else writeln('Timed out on controller read');
+           end
+        else writeln('Timed out during wait for FORMAT.');
+        end
+     else writeln('Seek of track ',trk:1,' failed.');
+     trk := trk + 1;
+     until ( (trk>lasttrack) or (error) or (IsBreakPress) );
+
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  st := Track0(ST0,PCN);
+  if st <> GOOD then writeln('Restore failed.');
+  if NOT error then writeln('Format successful.')
+               else writeln('Format failed.');
+  end;
+
+{$I-}
+procedure ExerciseDrive;
+var i,trk,sec,lastsector,lasttrack: integer;
+    skretry,total,cebytes: longint;
+    skerr,rderr,wrerr,cmperr: longint;
+    Stop: boolean;
+    wrb,rdb: buffer;
+    fn: string[30];
+    fout: text;
+
+  procedure dispbyte(b: byte);
+  var i,hi: integer;
+    begin
+    i := cnvtoi(b);
+    hi := i div 16;
+    write( fout, hex[hi + 1] );
+    write( fout, hex[ (i - (hi*16)) + 1 ] );
+    end;
+
+  procedure DoRestr;
+  var ST0,PCN,i: integer;
+      done: boolean;
+      Estr: string[40];
+      st: opstatus;
+    begin
+    i := 1;
+    repeat
+       done := TRUE;
+       st := Track0(ST0,PCN);
+       case st of
+          LCLERR : Estr := 'Timeout Local register.';
+          WRCERR : Estr := 'Timeout Write controller.';
+          RDCERR : Estr := 'Timeout Read controller.';
+          FNCERR : Estr := 'Timeout wait for Restore.';
+          GOOD   : done := TRUE;
+          FAILED : begin
+                   done := FALSE;
+                   i := i + 1;
+                   Estr := 'command failed.';
+                   end;
+          end;
+       until (done) or (i>3);
+    if st <> GOOD then
+       begin
+       writeln(fout,'Failed to do Restore: ',Estr);
+       exit(ExerciseDrive);
+       end;
+    end;
+
+  procedure resetdrive;
+    begin
+    {reset controller}
+    BaseAddr^[ CtlLOCALreg ] := cnvtob(RESETbit); {reset chip}
+    BaseAddr^[ CtlLOCALreg ] := 0;        {set back to normal}
+
+    if NOT QuietSpecify then {uses last cmd string for manual specify}
+       begin
+       writeln(fout,'Specify command failed.');
+       exit(ExerciseDrive);
+       end;
+    DoRestr; {will exit exercise if fails}
+    end;
+
+    function DoSkTrk(var t: integer) : boolean;
+    {if get seek error retry 4 times}
+    {if 4th retry fails go to next track}
+    {keep track of seek errors and retries}
+    var ST0,PCN,i: integer;
+        done: boolean;
+        st: opstatus;
+      begin
+      i := 1;
+      repeat
+         st := SeekTrk(t,ST0,PCN);
+         case st of
+            LCLERR,
+            WRCERR,
+            RDCERR,
+            FNCERR : begin
+                     done := FALSE;
+                     i := i + 1;
+                     resetdrive;
+                     end;
+            FAILED : begin
+                     done := FALSE;
+                     i := i + 1;
+                     end;
+            GOOD   : done := TRUE;
+            end;
+         until (done) or (i>4);
+      if st <> GOOD then
+         begin
+         skerr := skerr + 1;
+         skretry := skretry + (i-2);
+         end;
+      DoSkTrk := (st = GOOD);
+      end;
+
+    procedure resetRW(t : integer);
+      begin
+      writeln(fout,'Reset on chip and drive.');
+      resetdrive;
+      if NOT DoSkTrk(t) then
+          begin
+          writeln(fout,'Seek on error recovery failed.');
+          exit(ExerciseDrive);
+          end;
+      end;
+
+    procedure RWerrst(tk: integer; st: opstatus; cmd: cmdbuf; var err: longint);
+      begin
+      case st of
+         LCLERR : writeln(fout,'Timeout on local register.');
+         WRCERR : writeln(fout,'Timeout on controller write.');
+         RDCERR : writeln(fout,'Timeout on controller read.');
+         FNCERR : writeln(fout,'Timeout on wait for command.');
+         FAILED : writeln(fout,'Command failed.');
+         GOOD   : writeln(fout,'Successfull.');
+         end;
+
+      write(fout,'ST0 : '); dispbyte(cmd[1]); writeln(fout);
+      write(fout,'ST1 : '); dispbyte(cmd[2]); writeln(fout);
+      write(fout,'ST2 : '); dispbyte(cmd[3]); writeln(fout);
+
+      if (st in [ WRCERR, RDCERR, FNCERR ]) then resetRW(tk);
+      err := err + 1;
+      end;
+
+    function RWsector(s,t: integer) : boolean;
+    {returns true if both read and write worked}
+    var st: opstatus;
+        i: integer;
+        cmd: cmdbuf;
+      begin
+      BuildWRbuf(wrb,s,t);
+      for i := BufStart to DDBufEnd do rdb[i] := 0;
+      RWsector := FALSE; {assume fails}
+      st := Write1(wrb,cmd,s,t);
+      if st = GOOD then
+         begin
+         st := Read1(rdb,cmd,s,t);
+         if st = GOOD then RWsector := TRUE
+         else
+            begin
+            write(fout,'Read sector ',s:1,' failed.  status : ');
+            RWerrst(t,st,cmd,rderr);
+            end;
+         end
+      else
+         begin
+         write(fout,'Write sector ',s:1,' failed.  status : ');
+         RWerrst(t,st,cmd,wrerr);
+         end;
+      end;
+
+    procedure CmpRWbuf;
+    var i,k: integer;
+        ce: boolean;
+      begin
+      ce := FALSE;
+      {compare write and read buffer}
+      if density = SGLDNSTY then k := SDBufEnd
+                            else k := DDBufEnd;
+      for i := BufStart to k do
+          if wrb[i] <> rdb[i] then
+             begin
+             ce := TRUE;
+             cebytes := cebytes + 1;
+             end;
+      {keep track of the number of compare errors}
+      if ce then cmperr := cmperr + 1;
+      end;
+
+    procedure DumpSummary;
+      begin
+      {display error summary}
+      writeln(fout,'*** Summary ***');
+      writeln(fout,'Total tracks read: ',total:1);
+      writeln(fout,'Seek errors: ',skerr:1,'  Seek retries: ',skretry:1);
+      writeln(fout,'Read errors: ',rderr:1,'  Write errors: ',wrerr:1);
+      writeln(fout,'Sectors w/ compare errors: ',cmperr:1);
+      writeln(fout,'Bytes w/ compare errors: ',cebytes:1);
+      end;
+
+    procedure XrciseInit;
+      begin
+      trk := 0; total := 0;
+      skerr := 0; rderr := 0; wrerr := 0;  cebytes := 0;
+      cmperr := 0; total := 0; skretry := 0;
+      if (floptype = EIGHTINCH) then
+         begin
+          lastsector := EOT8;
+          lasttrack := ENDTRK8;
+          end
+      else
+          begin
+          lastsector := EOT5;
+          lasttrack := ENDTRK5;
+          end;
+      writeln;  writeln('Exercise Drive....Side ',head:1,'  ');
+      if (density = SGLDNSTY) then writeln('FM')
+                              else writeln('MFM');
+      write('Enter file name: '); readln(fn);
+      if length(fn) = 0 then reset(fout,'/console')
+      else begin
+           rewrite(fout,fn);
+           if ioresult <> 0 then
+              begin
+              close(fout,purge);
+              writeln('Open failed.');
+              exit(ExerciseDrive);
+              end;
+           end;
+  {   FillWrBuf(wrb);   }
+      end;
+
+  begin
+  XrciseInit;
+  if (length(fn) <> 0) then
+     begin
+     writeln(fout,'Exercise Drive....');
+     if (floptype = EIGHTINCH) then write(fout,'8" drive')
+                               else write(fout,'5 1/4" drive');
+     write('  Side ',head:1,'  ');
+     if (density = SGLDNSTY) then writeln(fout,'FM')
+                             else writeln(fout,'MFM');
+     end;
+  Stop := IsBreakPress;
+  DoRestr;      {restore drive}
+  repeat
+     writeln(fout,'pass :  ',(total+1):1,'  track: ',trk:1);
+     if DoSkTrk(trk) then   {seek to trk}
+        begin
+        sec := 1;
+        repeat
+          if RWsector(sec,trk) then CmpRWbuf;
+          sec := sec + 1;
+          Stop := IsBreakPress;
+          until (Stop) or (sec>lastsector);
+        end
+     else writeln(fout,'Seek to track ',trk:1,' failed.');
+     trk := (trk + 1) mod (lasttrack + 1);  total := total + 1;
+     until Stop;
+
+  DumpSummary;
+  close(fout,lock);
+  if ioresult <> 0 then
+     begin
+     writeln('Close failed.');
+     close(fout,purge);
+     end;
+  end;
+{$I+}
+
+procedure SelectDensity;
+var ch: char;
+  begin
+  writeln;
+  write('Current density selection : ');
+  if density = SGLDNSTY then writeln('FM')
+                        else writeln('MFM');
+  writeln;
+  write('Select : [ M)FM, F)M ] ');
+  read(ch); ch := Ucase(ch);
+  case ch of
+     'F': density := SGLDNSTY;
+     'M': density := DBLDNSTY;  {must be same as MFMbit}
+     end;
+  end;
+
+procedure ChkDiskChng;
+var OK: boolean;
+    lr: integer;
+  begin
+  writeln; writeln('Check Disk Changed bit flag.');
+  if SetLocalReg(MtrON,RdDMA) then
+     begin
+     lr := cnvtoi(BaseAddr^[ CtlLOCALreg ]);
+     if ((lr and DISKCHG) = DISKCHG) then writeln('Disk has CHANGED.')
+                                     else writeln('Disk is the SAME.');
+     end
+  else writeln('Timedout on wait for READY.');
+  OK := SetLocalReg(MtrOFF,RdDMA);
+  end;
+
+procedure TrkInch;
+var ch: char;
+  begin
+  write('Current TPI selection : ');
+  if TPI48 then write('48')
+           else write('96');
+  writeln(' TPI');
+  write('Select : [ 4)8, 9)6 ] ');
+  read(ch); ch := Ucase(ch);
+  case ch of
+     '4': TPI48 := TRUE;
+     '9': TPI48 := FALSE;
+     end;
+  end;
+
+function menu: boolean;
+{returns true when should quit}
+var ch: char;
+    stop: boolean;
+  begin
+  stop := FALSE;
+  writeln('\1BJ');
+  write('Controller test program :  ');
+  if floptype = EIGHTINCH then writeln('8 inch drive.\0D')
+                          else writeln('5 1/4 inch drive.\0D');
+  writeln('Select option: [S)eek, F)ill, R)ead, W)rite, I)nit FDC, P)ick density,');
+  writeln('                E)xamine, B)uffer, C)ompare, A)lt slot, X)ercise, T)rack/Inch');
+  write(  '                Z)ero, D)efine, H)ead, M)forMatter, N)ew Disk, Q)uit] ');
+  read(ch); ch := Ucase(ch);
+  writeln;
+  case ch of
+        'A': SetSlot;
+        'B': LookBuffer;
+        'C': CmpBuffs;
+        'D': Specify;
+        'E': Examine;
+        'F': FillWrBuf(wrbuf);
+        'H': DriveSelect;
+        'I': InitFDC;
+        'M': FormatSide;
+        'N': ChkDiskChng;
+        'P': SelectDensity;
+        'Q': stop := TRUE;
+        'R': ReadSec;
+        'S': Seek;
+        'T': TrkInch;
+        'W': WriteSec;
+        'X': ExerciseDrive;
+        'Z': Restore;
+        end;
+  menu := stop;
+  if not stop then WaitUser;
+  end;
+
+procedure initialize;
+var sb: integer;
+  begin
+  hex := '0123456789ABCDEF';
+  slot := 3;  {assume slot 3}
+  drive := 0;  {uses drive 0}
+  density := SGLDNSTY; {single density}
+  head := 0; {side 0}
+  TPI48 := FALSE;
+  BaseAddr := pointer(Slot0 + (slot*OFFSET) );
+  sb := cnvtoi(BaseAddr^[ CtlLOCALreg ]);
+  if ((sb and NMINIbit) = NMINIbit) then floptype := EIGHTINCH
+                                    else floptype := FIVEINCH;
+
+  {to completly initialize -  reset FDC, specify cmd, and Restore}
+  InitFDC;  {only reset FDC}
+
+  {if 5" floppy then turn on motor for drive 0}
+  {leave in normal mode, IRQ disabled, and dma write}
+  {for motor to stay on must have device select and motor on}
+  if floptype = FIVEINCH then
+    BaseAddr^[ CtlLOCALreg ] := cnvtob(DvSenbBit);
+
+  WaitUser;
+  end;
+
+Begin
+initialize;
+repeat until menu;
+
+{if 5" drive turn off motor}
+if floptype = FIVEINCH then
+  BaseAddr^[ CtlLOCALreg ] := cnvtob(MOTOROFF);
+End.

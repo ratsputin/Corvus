@@ -1,0 +1,510 @@
+
+; file : sboot.40.4.text
+; last modified: 9/26/83
+;
+; contains table search routines:  c2verpw, c2vernm, c2verda, c2verdu,
+;                                  c2devboot, c2srchDB
+  page
+
+; C2verpw - determine if the password entered by the user matched that
+;           entered by the operator. If no match, return the invalid
+;           password return code.
+;
+; Parameters:
+;
+;
+;           d7  =  0   Passwords match
+;               = -1   Match failed
+;
+;
+C2verpw movem.l a0-a6/d0-d6,-(sp) ;save registers
+        clr.l   d7                ;assume string match
+        moveq   #pswlen,d0        ;passwords are 8 bytes long
+        move.l  a0,a5             ;setup match routine parameters
+        move.l  a1,a6             ;
+        bsr     c2compr           ;call string compare routine
+        tst.w   d0                ;check return code from string match routine
+        beq.s   c2vpwl1           ;strings match if d0 = 0
+        moveq   #er12,d7          ;setup invalid password return code
+
+c2vpwl1 lea     mtchitm+NUusrds,a5      ;get address of server in table
+        moveq   #namelen-1,d0     ;set length of server name
+        lea     data_area,a1      ;get address of server buffer
+        lea     C2_Name(a1),a6
+C2vpwl2 move.b  (a5)+,(a6)+       ;move server name into buffer
+        dbra    d0,C2vpwl2
+                                  ;now decrypt server
+        lea     C2_Name(a1),a0    ;set up parameters; decrypt into same location
+        move.l  a0,a1
+        lea     nambase,a2        ;encryption tables
+        lea     namincr,a3
+        move.w  #Namelen,d0
+        bsr     decrypt
+
+        movem.l (sp)+,a0-a6/d0-d6 ;restore registers
+        rts
+
+        page
+;
+;
+; C2vernm - read the Network.user table and verify the existence of the
+;           user by reading the network.user table located on the first
+;           drive of each disk cluster. the search routine called must
+;           first be setup to utilize the following search routine control
+;           vector.
+;
+;           --------
+;           |      | 00<- no. of entries in each block  (15)
+;           |------|
+;           |      | 02<- starting block offset to begin search of entries (32/0)
+;           |------|
+;           |      | 04<- search item field in each entry length (10)
+;           |------|
+;           |      | 06<- length of individual entry (32)
+;           |------|
+;           |      | 08<- address of search item
+;           |      |
+;           |------|
+;           |      | 12<- address to receive matched item entry
+;           |      |
+;           |------|
+;           |      | 16<- i/o buffer to be used by search routines
+;           |      |
+;           |------|
+;           |      | 20<- offset in entry where match item begmns (0)
+;           --------
+;
+;
+; Parameters:
+;
+;           a0  =  address to place matched item
+;           a1  =  address of user name buffer
+;           d7  =  0   Name was found
+;               = -1   Name not found
+;
+;
+C2vernm movem.l a0-a6/d0-d6,-(sp) ;save registers
+
+;
+;
+; initialize table search vector control block
+;
+;
+        lea     entcnt,a2       ;get address of search control vector pointer
+        move.l  a0,12(a2)       ;store location to place matched item
+                                ;
+        clr.l   d1              ;make zero
+        move.w  d1,20(a2)       ;starting offset within entry
+                                ;for match is zero
+        move.l  a1,8(a2)        ;store pointer user name buffer
+        lea     iobuf,a0        ;store i/o buffer pointer
+        move.l  a0,16(a2)       ;
+        move.w  #16,0(a2)       ;setup no. entries/block
+        move.w  #32,2(a2)       ;the first block of each network.user table
+                                ;contains 32 used bytes. Initially the search
+                                ;will skip this area, but will be reset to 0
+                                ;later in the loop...
+        move.w  #namelen,4(a2)  ;the user name field of each entry is 10 bytes
+        move.w  #32,6(a2)       ;each network.user entry is 32 bytes long
+
+        move.l  #512,d2         ;each disk read block is 512 bytes
+        move.l  c2nuadr,d5      ;d5 <= block no. of network.user table
+
+        clr.l   d3              ;zero out d3
+        move.w  c2nulen,d3      ;get length of network.user table
+        add.l   d5,d3           ;add in start of table
+        subq.l  #1,d3           ;d3 <= last block of network.user table
+;
+; loop through the blocks of the NETWORK.USER table
+; until a match or the end-of-table...
+;
+; register usage
+;
+; d0 -  current block being read ( needed by disk read routine )
+; d3 -  last block of table
+; d5 -  current block being read
+; d7 -  return address
+; a0 -  i/o buffer address
+; d2 -  no. of bytes in a block
+;
+;
+        lea     entcnt,a1       ;a1 = address of search routine control block
+c2nulp1 move.l  d5,d0           ;d0 <= network.user table disk block no.
+        lea     iobuf,a0        ;a0 <= input/output buffer address
+        bsr     DskRd           ;read disk block
+        bne.s   c2nuend         ;if d7 <> 0 some disk error occurred
+        bsr     c2srch          ;call table search routine
+        tst.w   d7              ;check for table match
+        beq.s   c2nuok          ;MATCH was found...........
+        tst.w   d7              ;check for end of table indicator found in block
+        blt.s   c2nunok         ;NO MATCH  end of table encountered,
+        cmp.l   d3,d5           ;compare current block(d5) with last block(d3)
+        beq.s   c2nunok         ;last block searched and no match found
+        addq.l  #1,d5           ;increment current block no.
+        move.w  #0,2(a1)        ;reset offset into block to begin search
+        bra.s   c2nulp1         ;try next block branch
+                                ;
+c2nunok moveq   #-1,d7          ;return code(d7) indicates no match in table
+        bra.s   c2nuend         ;end of routine branch
+c2nuok  clr.l   d7              ;match found
+c2nuend movem.l (sp)+,a0-a6/d0-d6
+        rts                     ;return
+
+        page
+
+; C2verda - read the DRIVE.ACCESS table and verify the existence of the
+;           user boot volume on the drive. once the boot volume is found
+;           on the drive the starting address is returned.
+;
+;
+; Parameters:
+;
+;           a0  =  starting addres of match item buffer  (OUTPUT)
+;           a1  =  contains user drive ID                (INPUT )
+;           d0  =  disk drive no.                        (INPUT )
+;           d1  =  disk server station no.               (INPUT )
+;           d7  =  0   Name was found                    (OUTPUT)
+;               = -1   Name not found
+;
+;
+C2verda movem.l a0-a6/d0-d6,-(sp) ;save registers
+
+; initialize first/last block no. of DRIVE.ACCESS table
+;
+;
+; loop through the blocks of the DRIVE.ACCESS table
+; until a match or the end-of-table...
+;
+; register usage
+;
+; d0 <-  current block being read ( needed by disk read routine )
+;        first block of DRIVE.ACCESS table
+; d2 <-  no. of bytes in a block
+; d3 <-  last block of table
+; d4 <-  DRIVE.USER id
+; d5 <-  current block being read
+; d7 <-  return code
+; a0 <-  i/o buffer address
+;
+;
+        lea     bootdrv,a3      ;get address of boot drive
+        move.b  (a3),-(sp)      ;store current drive number
+        move.b  d0,(a3)         ;
+        lea     bootsrv,a3      ;get address of boot disk server station no.
+        move.b  (a3),-(sp)      ;store current disk server station no.
+        move.b  d1,(a3)         ;setup new disk server station no.
+                                ;
+        move.w  a1,d4           ;d4 <= drive.user id
+        move.l  c2daadr,d5      ;d5 <= block no. of drive.access table
+
+        clr.l   d3              ;zero out d3
+        move.w  c2dalen,d3      ;get length of drive.access table
+        add.l   d5,d3           ;add in start of table
+        subq.l  #1,d3           ;d3 <= last block of drive.access table
+        lea     c2dabf1,a1      ;store register for later usage
+        move.l  a0,(a1)         ;
+        move.l  d5,d0
+
+c2dalp1 move.l  d0,-(sp)        ;store first block of table
+        move.l  d5,d0           ;d0 <= drive.access table disk block no.
+        move.l  #512,d2         ;d2 <= each disk read block is 512 bytes
+        lea     iobuf,a0        ;a0 <= input/output buffer address
+        bsr     DskRd           ;READ DISK BLOCK
+        bne.s   c2daend         ;if d7 <> 0 some disk error occurred
+;
+; Register usage:
+;
+; a5 <-  pointer to field in table being examined
+; a6 <-  pointer to search item
+; a2 <-  pointer to end of table
+; a3 <-  pointer to beginning of entry
+;
+        move.l  (sp)+,d0        ;restore first block of table
+        move.l  a0,a3           ;a3 <= get address of start of table
+        cmp.l   d0,d5           ;is this the first block
+        bne.s   c2datl4         ;yes
+        adda.w  #32,a3          ;add 32 byte offset for first block of table
+                                ;by adding table offset. this is used mostly for
+                                ;the first block of the table...
+c2datl4 move.l  a0,a2           ;making ending address of table
+        adda.w  #512,a2         ;a2 <= end of table address
+c2datl1 move.l  a3,a5           ;make address within an entry to begin the
+                                ;the actual search comparison
+;
+; test for null ( UNUSED) table entry
+;
+        tst.w   DAusrId(a5)     ;look for null table entries
+        beq.s   c2danl          ;null table entry
+        moveq   #-1,d6          ;
+        cmp.w   DAusrId(a5),d6  ;look for end-of-table entry
+        beq.s   c2danok         ;end-of-table found
+;
+; an entry has been located, determine if entry matches search item
+;
+        cmp.w   DAusrId(a5),d4  ;compare DRIVE.USER id with DA table entry User id
+        bne.s   c2danl
+;
+; this DRIVE.ACESS table entry belongs to the booting user
+; determine if this entry contains that magic flags which
+; indicates that this indeed is the BOOT VOLUME.... YEAH
+;
+        move.b  7(a5),d6        ;determine if this is the boot volume
+        and.b   #$0F,d6         ;and the mntinfo flag
+        beq.s   c2danl          ;BOOT FLAG not set - entry is not the boot volume
+        move.l  c2dabf1,a0      ;store register for later usage
+        move.l  (a5)+,(a0)+     ;copy matched DRIVE.ACCESS table entry
+        move.l  (a5)+,(a0)+     ;copy matched DRIVE.ACCESS table entry
+        bra.s   c2daok          ;
+;
+; (1)  either a null entry was found
+; (2)  the user name did not match
+; (3)  this drive.access table entry was not the boot volume
+;
+c2danl  adda.l  #8,a3           ;increment pointer to start of next entry
+        cmpa.l  a3,a2           ;compare end address to new starting address
+        bne.s   c2datl1         ;if not end-of-block branch
+;
+; end-of-block  -  entry not found in this block
+;
+; is this the last entry in the table
+;
+        cmp.l   d3,d5           ;compare current block(d5) with last block(d3)
+        beq.s   c2danok         ;last block searched and no match found
+        addq.l  #1,d5           ;increment current block no.
+        bra.s   c2dalp1         ;try next block branch
+                                ;
+c2danok moveq   #1,d7           ;return code(d7) indicates no match in table
+        bra.s   c2daend         ;end of routine branch
+c2daok  clr.l   d7              ;match found
+c2daend
+        lea     bootsrv,a3      ;get address of boot drive
+        move.b  (sp)+,(a3)      ;store current drive number
+        lea     bootdrv,a3      ;get address of boot drive
+        move.b  (sp)+,(a3)      ;store current drive number
+        movem.l (sp)+,a0-a6/d0-d6
+        rts                     ;return
+;
+c2dabf1 data.l  0
+    page
+; C2verdu - read the Drive.User to determine if the user has access to any
+;           volumes on this drive. Each drive on the cluster must be searched.
+;           The search routine called must first be setup to utilize the
+;           following search routine control vector.
+;
+;           --------
+;           |      | 00<- no. of entries in each block  (15)
+;           |------|
+;           |      | 02<- starting block offset to begin search of entries (32/0)
+;           |------|
+;           |      | 04<- search item field in each entry length (10)
+;           |------|
+;           |      | 06<- length of individual entry (32)
+;           |------|
+;           |      | 08<- address of search item
+;           |      |
+;           |------|
+;           |      | 12<- address to receive matched item entry
+;           |      |
+;           |------|
+;           |      | 16<- i/o buffer to be used by search routines
+;           |      |
+;           |------|
+;           |      | 20<- offset in entry where match item begins (0)
+;           --------
+;
+; Parameters:
+;           a0  =  address to place matched item
+;           a1  =  address of search item
+;
+;           d0  =  drive no. to search
+;           d1  -  disk server station
+;           d7  =  DU entry was found
+;               = -1   Name not found
+;
+C2verdu movem.l a0-a6/d0-d6,-(sp) ;save registers
+
+; initialize table search vector control block
+;
+        lea     entcnt,a2       ;get address of search control vegtor pointer
+        move.l  a0,12(a2)       ;store location to place matched item
+                                ;
+        move.l  a1,8(a2)        ;store pointer user DRIVE.USER entry
+        lea     iobuf,a0        ;store i/o buffer pointer
+        move.l  a0,16(a2)       ;
+        clr.l   d2              ;make zero
+        move.w  d2,20(a2)       ;starting offset within entry
+                                ;for match is zero
+;
+; reset boot ( active ) drive number to new value and save old value
+;
+        lea     bootdrv,a3      ;get address of boot drive
+        move.b  (a3),-(sp)      ;store current drive number
+        move.b  d0,(a3)
+        lea     bootsrv,a3      ;get address of boot drive
+        move.b  (a3),-(sp)      ;store current drive number
+        move.b  d1,(a3)         ;setup new drive number
+        move.w  #16,0(a2)       ;setup no. entries/block
+        move.w  #32,2(a2)       ;the first block of each DRIVE.USER table
+                                ;contains 32 used bytes. Initially the search
+                                ;will skip this area, but will be reset to 0
+                                ;later in the loop...
+        move.w  #10,4(a2)       ;the user name field of each entry is 10 bytes
+        move.w  #32,6(a2)       ;each drive.user entry is 32 bytes long
+
+        move.l  #512,d2         ;each disk read block is 512 bytes
+        move.l  c2duadr,d5      ;d5 <= block no. of DRIVE.USER table
+
+        clr.l   d3              ;zero out d3
+        move.w  c2dulen,d3      ;get length of DRIVE.USER table
+        add.l   d5,d3           ;add in start of table
+        subq.l  #1,d3           ;d3 <= last block of DRIVE.USER table
+
+; loop through the blocks of the DRIVE.USER table
+; until a match or the end-of-table...
+;
+; register usage
+;
+; d0 -  cuurent block being read ( needed by disk read routine )
+; d3 -  last block of table
+; d5 -  current block being read
+; d7 -  return address
+; a0 -  i/o buffer address
+; d2 -  no. of bytes in a block
+;
+        lea     entcnt,a1       ;a1 = address of search routine control block
+c2dulp1 move.l  d5,d0           ;d0 <= DRIVE.USER table disk block no.
+        lea     iobuf,a0        ;a0 <= input/output buffer address
+        bsr     DskRd           ;read disk block
+        bne.s   c2duend         ;if d7 <> 0 some disk error occurred  *3.6
+        bsr     c2srch          ;call table search routine
+        tst.w   d7              ;check for table match
+        beq.s   c2duok          ;MATCH was found...........
+        tst.w   d7              ;check for end of table indicator found in block
+        blt.s   c2dunok         ;NO MATCH  end of table encountered,
+        cmp.l   d3,d5           ;compare current block(d5) with last block(d3)
+        beq.s   c2dunok         ;last block searched and no match$found
+        addq.l  #1,d5           ;increment current block no.
+        clr.w   2(a1)           ;reset offset into block to begin search
+        bra.s   c2dulp1         ;try next block branch
+                                ;
+c2dunok moveq   #1,d7           ;return code(d7) indicates no match in table
+        bra.s   c2duend         ;end of routine branch
+c2duok  clr.l   d7              ;match found
+
+; restore current drive to read from
+;
+c2duend lea     bootsrv,a3      ;get address of boot drive
+        move.b  (sp)+,(a3)      ;restore current drive number
+        lea     bootdrv,a3      ;get address of boot drive
+        move.b  (sp)+,(a3)      ;store current drive number
+        movem.l (sp)+,a0-a6/d0-d6
+        rts                     ;return
+  page
+
+;
+;added 9/6/83 for version 4.0
+; C2DevBoot - see if this station is a device or a user.  If it is a
+;             a device get it's user and server name.
+;
+; Parameters: None
+; Returns   : d7 = error code
+;             ne = error, D0 = -1
+;             eq = good, check D0
+;             d0 = if =0 then user boot
+;                  if =1 then device boot
+;
+C2DevBoot
+         MOVE.L    #512, D2            ;each disk read block is 512 bytes
+         MOVE.L    c2nuadr, D5         ;D5 <= block no. of network.user table
+         CLR.L     D3                  ;make sure hi word clear
+         MOVE.W    c2nulen, D3         ;get length of network.user table
+         ADD.L     D5, D3              ;add in start of table
+         SUBQ.L    #1, D3              ;D3 <= last block of network.user table
+         MOVEQ     #32, D4             ;D4 <= index to entry to start search
+                                       ;1st entry of 1st block is not used
+
+C2DBread MOVE.L    D5, D0              ;block to read
+         LEA       IObuf, A0           ;where to put data
+         BSR       DskRd               ;read block
+         BEQ.S     C2DBrdok            ;good read
+         MOVEQ     #-1, D0             ;read error
+         BRA.S     C2DBexit            ;exit
+
+C2DBrdok MOVE.L    D4, D0              ;index to start search
+         BSR.S     C2srchDB            ;search entries for this station's host #
+         BMI.S     C2DBuser            ;found end of table, is user boot
+         BNE.S     C2DBfond            ;found an entry match
+
+         ADDQ.L    #1, D5              ;next block number of network.user table
+         CLR.L     D4                  ;always start at 1st entry in rest of blocks
+         CMP.L     D3, D5              ;beyond table?
+         BLS.S     C2DBread            ;no, continue reading
+
+C2DBuser CLR.L     D0                  ;yes, then doing user boot
+         BRA.S     C2DBexit
+
+; found an entry in table which matches.
+;
+C2DBfond LEA       NUusrnm(A0,D0), A5  ;get address of user name in table
+         MOVEQ     #NameLen-1, D1      ;set length of server name
+         LEA       C2nmbuf, A6         ;get address of user name buffer
+C2DBmusr MOVE.B    (A5)+, (A6)+         ;move user name into buffer
+         DBRA      D1, C2DBmusr
+
+         LEA       NUusrds(A0,D0), A5  ;get address of user name in table
+         MOVEQ     #NameLen-1, D1      ;set length of server name
+         LEA       Data_Area+C2_Name, A6 ;get address of server buffer
+C2DBmsrv MOVE.B    (A5)+, (A6)+        ;move server name into buffer
+         DBRA      D1, C2DBmsrv
+
+         LEA       Data_Area+C2_Name, A0 ;get address of server buffer
+         MOVEA.L   A0, A1              ;decrypt in situ
+         LEA       nambase, A2         ;encryption tables
+         LEA       namincr, A3
+         MOVEQ     #NameLen, D0
+         BSR       decrypt             ;Decrypt the server name
+
+         MOVEQ     #1, D0              ;Device boot
+C2DBexit TST.W     D7                  ;show error state
+         RTS                           ;exit
+
+
+;
+;added 9/6/83 for version 4.0
+; C2srchDB - search 1 block of the network.user table for an
+;            entry with this station's host number
+;
+; Parameters: d0 = index to first entry to examine
+;             a0 = address of start of table
+; Returns   : d1 =  1 = match
+;                   0 = no match
+;                  -1 = end of table
+;             mi = end of table
+;             ne = found a match
+;             eq = no match in block
+;             d0 = index to entry found
+;             a0 = address of start of table
+;
+C2srchDB MOVE.L    D2, -(SP)
+         MOVE.B    CPtprnbr.W, D2      ;get this stations host number
+
+C2SNlook TST.B     NUusrnm(A0,D0)      ;is entry valid?
+         BEQ.S     C2SNnext            ;no, try next
+         MOVEQ     #-1, D1             ;assume get end of table (reg = $FFFFFFFF)
+         CMP.B     NUusrnm(A0,D0), D1  ;is end of table (entry = $FF)?
+         BEQ.S     C2SNexit            ;yes, stop search
+
+         TST.B     NUusrtp(A0,D0)      ;is this a user entry?
+         BEQ.S     C2SNnext            ;yes, skip it
+         MOVEQ     #1, D1              ;assume find entry
+         CMP.B     NUstanm(A0,D0), D2  ;host numbers the same?
+         BEQ.S     C2SNexit            ;yes, got a match
+
+C2SNnext ADDI.W    #32, D0             ;bump index to next entry
+         CMPI.W    #512-32, D0         ;at end of block
+         BLS.S     C2SNlook            ;no, see if this is a match
+         CLR.L     D1                  ;no entry
+
+C2SNexit MOVE.L    (SP)+, D2
+         TST.L     D1                  ;set cc for what happened
+         RTS

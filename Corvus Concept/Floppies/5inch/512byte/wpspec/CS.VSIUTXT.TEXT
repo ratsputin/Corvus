@@ -1,0 +1,1043 @@
+{ P.VSIUTXT.TEXT ------------------------------------------------------}
+{
+{       VSIUTXT -- VSI Text File Processing Unit
+{
+{       (c) Copyright 1982 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  09-01-82  LEF  Original unit
+{       v 1.1  02-15-83  LEF  Minor modifications
+{       v 1.2  10-21-83  LEF  Add MSDOS file processing
+{       v 1.3  ?? ?? ??  LEF  Spooling always goes to server numbered 0
+{
+{!CS}{ Corvus Systems CCLIB/C2LIB version (ccTXTio)
+{----------------------------------------------------------------------}
+{!CS} {/SC} {CX} { select generic Corvus Concept   }
+      {$I-}
+      {$R-}
+
+UNIT vsiuTXT;
+{$S filetask}          { For W.P. }
+INTERFACE
+
+USES
+{!CS} {$U /CCUTIL/CCLIB   } ccDEFN, ccLNGINT,
+{!CS} {$U /wpspec/cc.drvio} ccDRVio;
+
+CONST
+      TXTversion   = '1.3'; { current version number                   }
+      TXTrcdlen    = 255;   { maximum length of a text record          }
+
+      TXTerIDN     = 02;    { status - Invalid Device Number           }
+      TXTerVNF     = 09;    { status - Volume Not Found                }
+      TXTerFNF     = 10;    { status - File Not Found                  }
+      TXTerFMT     = 20;    { status - invalid format for text file    }
+      TXTerFSZ     = 30;    { status - MSDOS FAT greater than maximum  }
+
+      { MSDOS directory entry offsets                                 }
+      {                 offset length description                      }
+      MSOfileID =  0; {    0      8   File name                        }
+      MSOextent =  8; {    8      3   File extention                   }
+      MSOattr   = 11; {   11      1   File attribute                   }
+      MSOfill   = 12; {   12     10   Filler                           }
+      MSOtime   = 22; {   22      2   Last update time                 }
+      MSOdate   = 24; {   24      2   Last update date                 }
+      MSOclust  = 26; {   26      2   Starting cluster number          }
+      MSOfsize  = 28; {   28      4   File size in bytes               }
+                      {  total   32   MSDOS directory entry size       }
+
+{$P}
+      MSmxFATs  = 8;    { maximum FAT size in sectors                  }
+      MSmxFATb  = 4096; { maximum FAT size in bytes (8 x 512)          }
+
+TYPE
+      str8         = string[8];
+      pStr8        = ^str8;
+{!CS} str80        = string80;
+
+      MSdirEntry   = record d: packed array [0..31] of char; end;
+      MSdirectory  = array [1..256] of MSdirEntry;
+
+      MSsector     = record case integer of
+                     1: (c: packed array [1..512] of char);
+                     2: (d:        array [1..016] of MSdirEntry);
+                     end;
+
+      MSfatPtr     = ^MSalotbl;
+      MSalotbl     = record case integer of
+                     1: (c: packed array [1..MSmxFATb] of char);
+                     2: (s:        array [1..MSmxFATs] of MSsector);
+                     end;
+
+      TXTfile      = FILE;
+      TXTstring    = string[TXTrcdlen];
+      TXTioname    = string[80];
+      TXTfilsys    = (UNKNOWN,CCOS,UCSD,MSDOS,CPM);
+
+      TXTbuf       = record case integer of
+{!CX}                1: (b:        array [1..1024] of byte);
+                     2: (c: packed array [1..1024] of char);
+                     3: (m:        array [1..2] of MSsector);
+                     end;
+
+      MSinfo   = record
+      fileID   : string[20]; { file name (and extention)               }
+      extent   : string[3];  { file extention                          }
+      yr,mo,dy : integer;    { file update date                        }
+      hr,mn,sc : integer;    { file update time                        }
+      clust    : integer;    { file starting cluster number            }
+      fsize    : longint;    { file size in bytes                      }
+      attrArc  : boolean;    { file attribute - archive flag           }
+      attrDir  : boolean;    { file attribute - sub directory entry    }
+      attrHid  : boolean;    { file attribute - hidden file            }
+      attrRO   : boolean;    { file attribute - read only file         }
+      attrSys  : boolean;    { file attribute - system file            }
+      attrVid  : boolean;    { file attribute - volume name entry      }
+      end;
+
+{$P}
+      { Text File Control Block                                        }
+
+      TXTcb    = record
+      mode     : (TXTinput,TXToutput,TXTspool,TXTpurge);
+      filsys   : TXTfilsys;  { file system type                        }
+      txtfil   : boolean;    { text file flag                          }
+      opnflg   : boolean;    { file open flag                          }
+      eofflg   : boolean;    { end of file flag                        }
+      iounit   : integer;    { unit for I/O if not disk                }
+      status   : integer;    { resulting status of any I/O operation   }
+      lidx     : integer;    { index of first char of next rcd in buf  }
+      ridx     : integer;    { index of last char of last rcd in buf   }
+      cidx     : integer;    { index of current record in buf          }
+      clen     : integer;    { count of current record non-blank chars }
+      cbla     : integer;    { count of leading blanks in cidx record  }
+      cblk     : integer;    { current file block number               }
+      rcnt     : integer;    { current file record number              }
+      splslt   : integer;    { slot for spooling                       }
+      splsrv   : integer;    { srvr for spooling                       }
+      pnbr     : integer;    { spool pipe number                       }
+      buf      : TXTbuf;     { current text block                      }
+      name     : string[64]; { complete file name                      }
+      volnam   : string[48]; { volume name                             }
+      filnam   : string[15]; { file name                               }
+
+      MS:        record
+      { current file information                                       }
+      dirent   : MSdirEntry; { current file directory entry            }
+      diridx   : integer;    { current file directory entry index      }
+      nxtclu   : integer;    { next cluster number                     }
+      curclu   : integer;    { current cluster number                  }
+      blknbr   : integer;    { block number of current cluster         }
+      blkofs   : integer;    { block number in current cluster         }
+      { current volume information                                     }
+      fixflg   : boolean;    { fixed media (Winchester) flag           }
+      spt      : integer;    { sectors per track (0, 8 or 9)           }
+      spc      : integer;    { sectors per cluster                     }
+      sides    : integer;    { nmbr of media sides                     }
+      ovhsiz   : integer;    { nmbr of "boot" sectors (1 or 4)         }
+      fatsiz   : integer;    { nmbr of sectors in FAT                  }
+      dirsiz   : integer;    { nmbr of sectors in directory            }
+      maxclu   : integer;    { maximum cluster number                  }
+      fatptr   : MSfatPtr;   { File Allocation Table pointer           }
+                 end;
+      end;
+
+{$P}
+VAR
+      TXTdebug : boolean;    { vsiuTXT unit debug flag                 }
+      TXTpstat : integer;    { pipe status                             }
+      TXTttl1  : string[80]; { title line 1                            }
+      TXTttl2  : string[80]; { title line 2                            }
+
+PROCEDURE TXTinit;
+PROCEDURE TXTsetCB  (var cntl: TXTcb; fs: TXTfilsys; tx: boolean);
+PROCEDURE TXTexpFID (var cntl: TXTcb);
+PROCEDURE TXTrdOpen (var cntl: TXTcb; var iof: TXTfile;
+                                      ioname:  TXTioname);
+PROCEDURE TXTwrOpen (var cntl: TXTcb; var iof: TXTfile;
+                                      ioname:  TXTioname);
+PROCEDURE TXTread   (var cntl: TXTcb; var iof: TXTfile;
+                                      var st:  TXTstring);
+PROCEDURE TXTwrite  (var cntl: TXTcb; var iof: TXTfile;
+                                      var st:  TXTstring);
+PROCEDURE TXTflush  (var cntl: TXTcb; var iof: TXTfile);
+PROCEDURE TXTclose  (var cntl: TXTcb; var iof: TXTfile);
+
+(* PROCEDURE MSrdDir   (var cntl: TXTcb; blk: integer;
+                     var fdir: MSdirectory);
+PROCEDURE MSwrDir   (var cntl: TXTcb; blk: integer;
+                     var fdir: MSdirectory);
+PROCEDURE MSfindDir (var cntl: TXTcb; var fdir: MSdirectory);
+FUNCTION  MScvtClust   (var cntl: TXTcb; cluster: integer): integer;
+PROCEDURE MSfindFormat (var cntl: TXTcb);
+PROCEDURE MSdirInit    (var p: MSinfo);
+PROCEDURE MSdirDecode  (d: MSdirEntry; var p: MSinfo);
+PROCEDURE MSdirEncode  (p: MSinfo; var d: MSdirEntry);  *)
+{!CS} PROCEDURE ccTXTioInit;
+
+IMPLEMENTATION
+{$S filetask}
+{$P}
+CONST
+      lf        = 10;   { line feed                                    }
+      cr        = 13;   { carriage return                              }
+      dle       = 16;   { DLE                                          }
+      ef        = 26;   { end of file (cntl-Z)                         }
+      PnamLen   = 8;    { size of a pipe name                          }
+      OPlen05   = 26;   { five byte opcode 1Ah                         }
+      OPlen10   = 27;   { ten byte opcode... 1Bh                       }
+      Pwrite    = 33;   { write pipe                                   }
+      Pclose    = 64;   { close read or close write                    }
+      OpnWt     = 128;  { write open                                   }
+      ClsWt     = 254;  { write close                                  }
+
+      FatEOF    = 4095; { hex 0FFF }
+      FatEOFmin = 4088; { hex 0FF8 }
+      FatBadClu = 4087; { hex 0FF7 }
+
+VAR   ploc: CDaddr; pbuf: SndRcvStr;
+{!CS} CDcurSlt,CDcurSrv:  integer;
+{!CS} CDloSlot,CDhiSlot:  integer;
+{!CS} CDloSrvr,CDhiSrvr:  integer;
+
+{!CX} FUNCTION OSactSlt: integer;                              EXTERNAL;
+{!CX} FUNCTION OSmaxDev: integer;                              EXTERNAL;
+{!CX} FUNCTION pOSdevNam (unt: integer): pStr8;                EXTERNAL;
+
+{$P}
+{ TXTinit -------------------------------------------------------------}
+{ VSIUTXT unit initialization
+{----------------------------------------------------------------------}
+PROCEDURE TXTinit;
+      begin
+{!CS} ccDRVioInit; InitSlot (ploc);
+{!CS} CDcurSlt := ploc.SlotNo; CDcurSrv := ploc.StationNo;
+{!CS} CDloSlot := Low_Slot;   CDhiSlot := High_Slot;
+{!CS} CDloSrvr := Low_Server; CDhiSrvr := High_Server;
+      TXTttl1 := ''; TXTttl2 := ''; TXTdebug := FALSE;
+      end;
+
+{ ccTXTioInit ---------------------------------------------------------}
+{ ccTXTio unit initialization
+{----------------------------------------------------------------------}
+{!CS} PROCEDURE ccTXTioInit; begin TXTinit; end;
+
+{ ScanNext ------------------------------------------------------------}
+{ ss: source string       returns: ds = next string from ss
+{ ds: destination string           ss = ss with ds removed
+{ dl: deliminator string
+{----------------------------------------------------------------------}
+PROCEDURE ScanNext (var ss,ds: str80; dl: str80);
+      var i: integer; s: string[1];
+      begin
+      for i := 1 to length(ss) do begin
+          s := ' '; s[1] := ss[i];
+          if pos (s,dl) <> 0 then ss[i] := '~';
+          end;
+      if ss[1] = '~' then delete (ss,1,1); i := pos ('~',ss);
+      if i = 0
+          then begin ds := ss; ss := ''; end
+          else begin ds := copy (ss,1,i-1); delete (ss,1,i-1); end;
+      end;
+
+{ SizeStr -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SizeStr (var s: str80; ln: integer);
+      begin
+      while length(s) > ln do delete (s,length(s),1);
+      while length(s) < ln do s := concat (s,' ');
+      end;
+
+{ MSrdSector ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+(* PROCEDURE MSrdSector (var cntl: TXTcb; b: integer; var s: MSsector);
+      begin with cntl do begin
+          unitread (iounit,s,512,b); status := ioresult; end;
+      end;
+
+{ MSwrSector ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSwrSector (var cntl: TXTcb; b: integer; var s: MSsector);
+      begin with cntl do begin
+          unitwrite (iounit,s,512,b); status := ioresult; end;
+      end;
+
+{$P}
+{ MScvtClust ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION MScvtClust {(var cntl: TXTcb; cluster: integer): integer};
+      begin
+      with cntl,MS do MScvtClust := ((cluster-2) * spc) +
+                                    ovhsiz + fatsiz+fatsiz + dirsiz;
+      end;
+
+{ MSnxtClust ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSnxtClust (var cntl: TXTcb);
+      var offset,b0,b1,b2: integer;
+      begin
+      with cntl,MS do begin
+          curclu := nxtclu;
+          if curclu >= FatEOFmin then begin
+              eofflg := TRUE;
+              exit (MSnxtClust);
+              end;
+          blknbr := MScvtClust (cntl,curclu);
+          blkofs := 0;
+          offset := (curclu div 2) * 3 + 1;
+          b0 := ord(fatptr^.c[offset+0]);
+          b1 := ord(fatptr^.c[offset+1]);
+          b2 := ord(fatptr^.c[offset+2]);
+          if odd(curclu)
+              then nxtclu := (b2 * 16) + (b1 div 16)
+              else nxtclu := ((b1 mod 16) * 256) + b0;
+          end;
+      end;
+
+{ MSnxtBlock ----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSnxtBlock (var cntl: TXTcb);
+      begin
+      with cntl,MS do begin
+          blkofs := blkofs+1;
+          if blkofs >= spc then MSnxtClust (cntl);
+          if NOT eofflg then MSrdSector (cntl,blknbr+blkofs,buf.m[1]);
+          end;
+      end;
+
+{$P}
+{ MSdirEncode ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSdirEncode {(p: MSinfo; var d: MSdirEntry)};
+      var i: integer; s,dlm,fid,ext: str80;
+      begin
+      with d,p do begin
+          fillchar (d,sizeof(d),chr(0));
+          if pos ('.',fileID) <> 0 then begin
+              s := fileID; dlm := '.';
+              ScanNext (s,fid,dlm); SizeStr (fid,8); fileID := fid;
+              ScanNext (s,ext,dlm); SizeStr (ext,3); extent := ext;
+              end;
+          s := fileID; SizeStr (s,8);
+          for i := 0 to 7 do d[MSOfileID+i] := s[i+1];
+          s := extent; SizeStr (s,3);
+          for i := 0 to 2 do d[MSOextent+i] := s[i+1];
+          i := ((yr-1980) * 512) + (mo * 32) + dy;
+          d[MSOdate+0]  := chr(Int2Byte (1,i));
+          d[MSOdate+1]  := chr(Int2Byte (0,i));
+          i := (hr * 2048) + (mn * 32) + (sc div 2);
+          d[MSOtime+0]  := chr(Int2Byte (1,i));
+          d[MSOtime+1]  := chr(Int2Byte (0,i));
+          d[MSOclust+0] := chr(Int2Byte (1,clust));
+          d[MSOclust+1] := chr(Int2Byte (0,clust));
+          d[MSOfsize+0] := chr(LIntByte (3,fsize));
+          d[MSOfsize+1] := chr(LIntByte (2,fsize));
+          d[MSOfsize+2] := chr(LIntByte (1,fsize));
+          d[MSOfsize+3] := chr(LIntByte (0,fsize));
+          i := 0;
+          if attrRO  then i := i + 01; if attrVid then i := i + 08;
+          if attrHid then i := i + 02; if attrDir then i := i + 16;
+          if attrSys then i := i + 04; if attrArc then i := i + 32;
+          d[MSOattr] := chr(i);
+          end;
+      end;
+
+{$P}
+{ MSdirDecode ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSdirDecode {(d: MSdirEntry; var p: MSinfo)};
+      var i: integer;
+      begin
+      with d,p do begin
+          fileID := '12345678';
+          for i := 0 to 7 do fileID[i+1] := d[MSOfileID+i];
+          while pos (' ',fileID) <> 0 do
+              delete (fileID,pos(' ',fileID),1);
+          extent := '123';
+          for i := 0 to 2 do extent[i+1] := d[MSOextent+i];
+          while pos (' ',extent) <> 0 do
+              delete (extent,pos(' ',extent),1);
+          Byte2Int (i,ord(d[MSOdate+1]),ord(d[MSOdate+0]));
+          dy := i mod 32;  i := i div 32;
+          mo := i mod 16;  i := i div 16;
+          yr := i mod 128 + 1980;
+          Byte2Int (i,ord(d[MSOtime+1]),ord(d[MSOtime+0]));
+          sc := i mod 32;  i := i div 32;  sc := sc+sc;
+          mn := i mod 64;  i := i div 64;
+          hr := i mod 32;
+          Byte2Int (clust, ord(d[MSOclust+1]), ord(d[MSOclust+0]));
+          ByteLInt (fsize, ord(d[MSOfsize+3]), ord(d[MSOfsize+2]),
+                           ord(d[MSOfsize+1]), ord(d[MSOfsize+0]));
+          i := ord(d[MSOattr]);
+          if odd(i div 01) then attrRO  := TRUE else attrRO  := FALSE;
+          if odd(i div 02) then attrHid := TRUE else attrHid := FALSE;
+          if odd(i div 04) then attrSys := TRUE else attrSys := FALSE;
+          if odd(i div 08) then attrVid := TRUE else attrVid := FALSE;
+          if odd(i div 16) then attrDir := TRUE else attrDir := FALSE;
+          if odd(i div 32) then attrArc := TRUE else attrArc := FALSE;
+          end;
+      end;
+
+{ MSdirInit -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSdirInit {(var p: MSinfo)};
+      var i: integer;
+      begin
+      with p do begin
+          fileID := ''; extent := '';
+          dy := 0; mo := 0; yr := 0; sc := 0; mn := 0; hr := 0;
+          clust := 0; fsize := 0;
+          attrRO  := FALSE; attrHid := FALSE; attrSys := FALSE;
+          attrVid := FALSE; attrDir := FALSE; attrArc := FALSE;
+          end;
+      end;
+
+{$P}
+{ MSfindFormat --------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSfindFormat {(var cntl: TXTcb)};
+      var i,tpi: integer; info: MSsector;
+      begin
+      with cntl,MS do begin
+          if fixflg
+          then with info do begin
+              MSrdSector (cntl,3,info);
+              spt := 0;
+              ovhsiz := 4; { ---- fix ---- }
+              dirsiz := (ord(c[10]) * 256 + ord(c[09])) div 16;
+              spc    := (ord(c[04]) * 256 + ord(c[03]));
+              fatsiz := (ord(c[14]) * 256 + ord(c[13]));
+              end
+          else begin
+              MSrdSector (cntl,1,info);
+              if (info.c[2] <> chr(255)) OR
+                 (info.c[3] <> chr(255)) then status := TXTerIDN;
+              ovhsiz   := 1;
+              case ord(info.c[1]) of
+                  255: begin { hex FF - double sided, 8 sector, floppy }
+                       spt := 8; dirsiz := 7; spc := 2; end;
+                  254: begin { hex FE - single sided, 8 sector, floppy }
+                       spt := 8; dirsiz := 4; spc := 1; end;
+                  253: begin { hex FD - double sided, 9 sector, floppy }
+                       spt := 9; dirsiz := 7; spc := 2; end;
+                  252: begin { hex FC - single sided, 9 sector, floppy }
+                       spt := 9; dirsiz := 4; spc := 1; end;
+                { nnn: begin { hex F8 - fixed disk }
+                {      end;                        }
+                  end; { case }
+              if spt = 8 then fatsiz := 1 else fatsiz := 2;
+              tpi := 1;
+              UnitStatus (iounit,spt,4); { set sectors per track }
+              UnitStatus (iounit,tpi,7); { set 48 TPI            }
+              end;
+          maxclu := 00000;
+          end;
+      end;
+
+{$P}
+{ MSrdFat -------------------------------------------------------------}
+{ Read MSDOS File Allocation Table for cluster
+{----------------------------------------------------------------------}
+PROCEDURE MSrdFat (var cntl: TXTcb);
+      var i: integer;
+      begin
+      with cntl,MS do begin
+          if fatptr = NIL then new (fatptr);
+          { ---- deallocate unused space ---- }
+          for i := 1 to fatsiz do begin
+              MSrdSector (cntl,ovhsiz+i-1,fatptr^.s[i]);
+              if status <> 0 then exit (MSrdFat);
+              end;
+          end;
+      end;
+
+{ MSwrFat -------------------------------------------------------------}
+{ Write MSDOS File Allocation Table for cluster
+{----------------------------------------------------------------------}
+PROCEDURE MSwrFat (var cntl: TXTcb);
+      var i: integer;
+      begin
+      with cntl,MS do begin
+          if fatptr = NIL then exit (MSwrFat); { ---- fix ---- }
+          for i := 1 to fatsiz do begin
+              MSwrSector (cntl,ovhsiz+i-1,fatptr^.s[i]);
+              if status <> 0 then exit (MSwrFat);
+              end;
+          for i := 1 to fatsiz do begin
+              MSwrSector (cntl,ovhsiz+fatsiz+i-1,fatptr^.s[i]);
+              if status <> 0 then exit (MSwrFat);
+              end;
+          end;
+      end;
+
+{$P}
+{ MSrdDir -------------------------------------------------------------}
+{ Read MSDOS volume directory
+{----------------------------------------------------------------------}
+   PROCEDURE MSrdDir {(var cntl: TXTcb; blk: integer;
+                    var fdir: MSdirectory)};
+      var i,j,limit: integer; DirSector: MSsector;
+      begin
+      with cntl,MS do begin
+          if blk = 0 then blk := ovhsiz + fatsiz+fatsiz;
+          for i := 0 to dirsiz-1 do begin
+              { ---- fix: read directly into directory buffer ---- }
+              MSrdSector (cntl,blk+i,DirSector);
+              if status <> 0 then exit (MSrdDir);
+              for j := 1 to 16 do
+                  fdir[(i)*16 + j] := DirSector.d[j];
+              end;
+          end;
+      end;
+
+{ MSwrDir -------------------------------------------------------------}
+{ Write MSDOS volume directory
+{----------------------------------------------------------------------}
+PROCEDURE MSwrDir {(var cntl: TXTcb)};
+      var i,j: integer;
+      begin
+      with cntl,MS do begin
+          { ... }
+          end;
+      end;
+
+{$P}
+{ MSfindDir -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE MSfindDir {(var cntl: TXTcb; var fdir: MSdirectory)};
+      var i,limit: integer; svol,cvol,dvol,fid,ext: str80; p: MSinfo;
+
+{ MSfindDir.fndvol ----------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION fndvol (cvol: str80): integer;
+      var i,j: integer; match: boolean;
+      begin
+      fndvol := 0;
+      while length(cvol) < 11 do cvol := concat (cvol,' ');
+      for i := 1 to limit do with fdir[i] do begin
+          if d[0] = chr(0) then exit (fndvol);
+          if (d[0] = '\E5') AND (d[1] > 'Z') then exit (fndvol);
+          match := TRUE;
+          for j := 1 to 11 do if d[j-1] <> cvol[j] then match := FALSE;
+          if match then begin
+              fndvol := i; exit (fndvol); end;
+          end;
+      end;
+
+{ MSfindDir -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      with cntl,MS do begin
+          limit := dirsiz * 16; svol := volnam; dvol := '/;\\';
+          blknbr := 0; ScanNext (svol,cvol,dvol);
+          MSrdDir (cntl,0,fdir); if status <> 0 then exit (MSfindDir);
+          repeat
+              ScanNext (svol,cvol,dvol);
+              if cvol <> '' then begin diridx := fndvol (cvol);
+                  if diridx = 0 then begin status := TXTerVNF;
+                      exit (MSfindDir); end;
+                  dirent := fdir[diridx]; MSdirDecode (dirent,p);
+                  blknbr := MScvtClust (cntl,p.clust);
+                  MSrdDir (cntl,blknbr,fdir);
+                  if status <> 0 then exit (MSfindDir);
+                  end;
+              until cvol = '';
+          if filnam <> '' then begin svol := filnam; dvol := '.';
+              ScanNext (svol,fid,dvol); SizeStr (fid,8);
+              ScanNext (svol,ext,dvol); SizeStr (ext,3);
+              diridx := fndvol (concat (fid,ext));
+              if diridx = 0 then begin status := TXTerFNF;
+                  exit (MSfindDir); end;
+              dirent := fdir[diridx]; MSdirDecode (dirent,p);
+              nxtclu := p.clust;
+              end;
+          end; { with cntl,MS do }
+      end;
+   *)
+{$P}
+{ TXTsetCB ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE TXTsetCB {(var cntl: TXTcb; fs: TXTfilsys; tx: boolean)};
+      begin
+      with cntl do begin
+          fillchar (cntl,sizeof(cntl),chr(0));
+          filsys := fs; txtfil := tx; opnflg := FALSE;
+          end;
+      end;
+
+{ TXTexpFID -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE TXTexpFID {(var cntl: TXTcb)};
+      var i,curfel,maxfel: integer; havevol: boolean; pdev: pStr8;
+          svol,cvol,dvol: str80;
+          fel: array [1..10] of record s: string[20]; end;
+      begin
+      with cntl do begin
+          for i := 1 to length(name) do
+              if name[i] in ['a'..'z'] then
+                  name[i] := chr(ord(name[i])-ord('a')+ord('A'));
+          volnam := ''; filnam := ''; iounit := 0;
+          splslt := -1; splsrv := -1; maxfel := 0;
+          for i := 1 to 10 do fel[i].s := '';
+          havevol := FALSE;
+          if POS ('/' ,name) <> 0 then havevol := TRUE;
+          if POS (':' ,name) <> 0 then havevol := TRUE;
+          if POS ('\\',name) <> 0 then havevol := TRUE;
+          svol := name; dvol := '/;\\';
+          repeat
+              ScanNext (svol,cvol,dvol);
+              if cvol <> '' then begin
+                  maxfel := maxfel+1; fel[maxfel].s := cvol; end;
+              until cvol = '';
+          if havevol AND (filsys = UNKNOWN) then begin
+              if name[1] = '/'  then filsys := CCOS;
+(*            if name[1] = '\\' then filsys := MSDOS;   *)
+              end;
+          if havevol AND (filsys = UNKNOWN) then begin
+              { ---- fix ---- }
+              if pos ('/' ,name) <> 0 then filsys := CCOS;
+              if pos (':' ,name) <> 0 then filsys := UCSD;
+(*            if pos ('\\',name) <> 0 then filsys := MSDOS;  *)
+              end;
+
+{$P}
+{!CX}     if filsys = UNKNOWN then filsys := CCOS;
+
+          case filsys of
+    UCSD,
+    CCOS: begin
+          filnam := fel[1].s;
+          if havevol then begin
+              volnam := fel[1].s; filnam := fel[2].s;
+              end;
+          end; { case filsys of UCSD/CCOS }
+
+(* MSDOS: with MS do begin
+          fixflg := FALSE;
+          for i := 4 to OSmaxDev do
+              if iounit = 0 then begin
+                  pdev := pOSdevNam (i);
+                  if pdev^ = fel[1].s then begin
+                      iounit := i; fixflg := TRUE; end;
+                  end;
+
+          if iounit = 0 then
+              iounit := (ord(fel[1].s[1])-ord('0')) * 10 +
+                        (ord(fel[1].s[2])-ord('0'));
+          { ---- fix: set Volume Not Found = 9 }
+
+          filnam := fel[maxfel].s;
+          if maxfel > 1 then begin
+              for i := 1 to maxfel-1 do
+                  volnam := concat (volnam,'\\',fel[i].s);
+              delete (volnam,1,1);
+              end;
+          end; { case filsys of MSDOS }   *)
+
+     CPM: begin
+          end; { case filsys of CPM }
+          end; { case filsys of .... }
+{$P}
+          if volnam = 'CONSOLE' then iounit := 1;
+          if volnam = 'PRINTER' then iounit := 6;
+          if volnam = 'REMOUT'  then iounit := 8;
+          if pos ('SPOOL',volnam) = 1 then begin
+              for i := CDloSlot to CDhiSlot do
+                  if CDslotInfo (i) = OmninetDisk then begin
+                      splslt := i; splsrv := 0; end;
+              if splslt = -1 then begin
+                  splslt := CDcurSlt; splsrv := CDcurSrv; end;
+              if length(volnam) > 5 then begin
+                  i := ord(volnam[6])-ord('0');
+                  if i in [CDloSlot..CDhiSlot] then splslt := i;
+                  end;
+              if length(volnam) > 6 then begin
+                  i := (ord(volnam[7])-ord('0'));
+                  if length(volnam) > 7
+                      then i := i * 256 + (ord(volnam[8])-ord('0'));
+                  if i in [CDloSrvr..CDhiSrvr] then splsrv := i;
+                  end;
+              if filnam = '' then filnam := 'PRINTER';
+              end;
+
+          case filsys of
+    UCSD,
+    CCOS: begin
+          if (splslt = -1) AND
+             (iounit =  0) AND
+             (filnam <> '') then
+              if filnam[length(filnam)] = '.'
+                  then delete (filnam,length(filnam),1)
+                  else if pos ('.TEXT',filnam) = 0
+                      then filnam := concat (filnam,'.TEXT');
+{!CX}     if havevol then volnam := concat ('/',volnam);
+          name := volnam;
+{!CX}     if (volnam <> '') AND (filnam <> '')
+{!CX}         then name := concat (name,'/');
+          name := concat (name,filnam);
+          end; { case filsys of UCSD/CCOS }
+
+(* MSDOS: with MS do begin
+          name := '';
+          for i := 1 to maxfel do
+              name := concat (name,'\\',fel[i].s);
+          end; { case filsys of MSDOS }
+  *)
+     CPM: begin
+          end; { case filsys of CPM }
+          end; { case filsys of .... }
+
+          end; { with cntl do }
+      end;
+
+{$P}
+{ PipeIO --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+FUNCTION PipeIO (var cntl: TXTcb): integer;
+      var pstat: integer;
+      begin
+      with cntl do begin
+{!CS}     ploc.SlotNo := splslt; ploc.StationNo := splsrv;
+          CDsend (ploc,pbuf); CDrecv (ploc,pbuf);
+          if pbuf.c[1] < chr(128)
+              then pstat := ord(pbuf.c[2]) * (-1)
+              else pstat := ord(pbuf.c[1]);
+          end;
+      PipeIO := pstat;
+      end;
+
+{ PipeWrite -----------------------------------------------------------}
+{ Write 512 byte block to current pipe
+{----------------------------------------------------------------------}
+PROCEDURE PipeWrite (var cntl: TXTcb; idx:integer);
+      begin
+      with cntl do begin
+          pbuf.sln := 512+5; pbuf.rln := 12;
+          pbuf.c[1] := chr(OPlen05);
+          pbuf.c[2] := chr(Pwrite);
+          pbuf.c[3] := chr(pnbr);
+          pbuf.b[4] := 0; pbuf.b[5] := 2;
+          MOVELEFT (buf.b[idx],pbuf.b[6],512);
+          status := PipeIO (cntl);
+          if status = 0 then TXTpstat := pbuf.b[4]*256+pbuf.b[3]
+                        else TXTpstat := status;
+          end;
+      end;
+
+{$P}
+{ transfer ------------------------------------------------------------}
+{ Transfer text block from/to disk processing
+{----------------------------------------------------------------------}
+PROCEDURE transfer (var cntl: TXTcb; var iof: TXTfile);
+      var blkcnt: integer;
+      begin
+      with cntl do begin {transfer one text block}
+          case mode of
+              TXTinput:  begin
+{!CX}                    blkcnt := BLOCKREAD (iof,buf,2,cblk);
+                         status := ioresult; end;
+              TXToutput: begin
+{!CX}                    blkcnt := BLOCKWRITE (iof,buf,2,cblk);
+                         status := ioresult; end;
+              TXTspool:  begin PipeWrite (cntl,1);
+                         if status = 0 then PipeWrite (cntl,513);
+                         blkcnt := 2; end;
+              end;
+          if status = 0 then begin
+              if blkcnt = 2 then cblk := cblk+blkcnt
+                            else status := 8;
+              end;
+          end;
+      end;
+
+{ TXTflush ------------------------------------------------------------}
+{ Flush text file processing
+{----------------------------------------------------------------------}
+PROCEDURE TXTflush {(var cntl: TXTcb; var iof: TXTfile)};
+      begin
+      with cntl do begin
+          status := 0;
+          if (mode = TXToutput) AND (cidx <> 1) then begin
+              transfer (cntl,iof);
+              if status = 0 then cblk := cblk-2;
+              end;
+          end;
+      end;
+
+{$P}
+{ TXTclose ------------------------------------------------------------}
+{ Close text file processing
+{----------------------------------------------------------------------}
+PROCEDURE TXTclose {(var cntl: TXTcb; var iof: TXTfile)};
+      begin
+      with cntl do if opnflg then begin
+          case mode of
+              TXTinput:  begin
+                         CLOSE (iof,LOCK); status := ioresult; end;
+              TXToutput: begin
+                         if cidx <> 1 then transfer (cntl,iof);
+                         if status = 0 then CLOSE (iof,CRUNCH);
+                         status := ioresult; end;
+              TXTspool:  begin
+                         if cidx <> 1 then transfer (cntl,iof);
+                         if status = 0 then with pbuf do begin
+                             sln := 5; rln := 12;
+                             c[1] := chr(OPlen05);
+                             c[2] := chr(Pclose);
+                             c[3] := chr(pnbr);
+                             c[4] := chr(ClsWt);
+                             status := PipeIO (cntl); end;
+                         end;
+              TXTpurge:  begin
+                         CLOSE (iof,PURGE); status := ioresult;
+                         rcnt := 0; end;
+              end;
+          opnflg := FALSE; eofflg := TRUE;
+          end;
+      end;
+
+{$P}
+{ TXTrdOpen -----------------------------------------------------------}
+{ Open input text file processing
+{----------------------------------------------------------------------}
+PROCEDURE TXTrdOpen {(var cntl: TXTcb; var iof: TXTfile;
+                                        ioname: TXTioname)};
+      var i: integer; directory: MSdirectory;
+      begin
+      with cntl do begin
+          cblk := 0; rcnt := 0; pnbr := 0; iounit := 0; status := 0;
+          opnflg := FALSE; eofflg := TRUE; mode := TXTinput;
+          name := ioname; TXTexpFID (cntl);
+          if status <> 0 then exit (TXTrdOpen);
+          case filsys of
+    UCSD,
+    CCOS: begin
+          reset (iof,name); status := IOresult;
+          if status <> 0 then exit (TXTrdOpen);
+          transfer (cntl,iof);
+          if status <> 0 then exit (TXTrdOpen);
+          if EOF (iof) then begin
+              TXTclose (cntl,iof); status := TXTerFMT;
+              exit (TXTrdOpen);
+              end;
+          end; { case filsys of CCOS/UCSD }
+
+(* MSDOS: with MS do begin
+          MSfindFormat (cntl);
+          if status <> 0 then exit (TXTrdOpen);
+          MSfindDir (cntl,directory);
+          if status <> 0 then exit (TXTrdOpen);
+          MSrdFat (cntl);
+          if status <> 0 then exit (TXTrdOpen);
+          blkofs := spc;
+          end; { case filsys of MSDOS }
+ *)
+     CPM: begin
+          end; { case filsys of CPM }
+
+          end; { case filsys of .... }
+
+          ridx := 0; lidx := 1; opnflg := TRUE; eofflg := FALSE;
+          end; { with cntl do }
+      end;
+
+{$P}
+{ TXTwrOpen -----------------------------------------------------------}
+{ Open output text file processing
+{----------------------------------------------------------------------}
+PROCEDURE TXTwrOpen {(var cntl: TXTcb; var iof: TXTfile;
+                                        ioname: TXTioname)};
+      var len,mx: integer;
+      begin
+      with cntl,MS do begin
+          cblk := 0;
+          rcnt := 0;
+          pnbr := 0;
+          iounit := 0;
+          cidx := 1;
+          opnflg := FALSE;
+          eofflg := FALSE;
+          volnam := '';
+          buf.b[1] := 0;
+          MOVELEFT (buf.b[1],buf.b[2],1023);
+          name := ioname;
+          TXTexpFID (cntl);
+          if splslt = -1 then begin
+            mode := TXToutput;
+            rewrite (iof,name);
+            status := IOresult;
+            if (status = 0) AND (iounit = 0)
+                then transfer (cntl,iof);
+            end
+          else with pbuf do begin
+              mode := TXTspool;
+              sln := 10; rln := 12;
+              c[1] := chr(OPlen10);
+              c[2] := chr(OpnWt);
+              for mx := 1 to PnamLen do
+                  if mx <= length(filnam)
+                      then c[3+mx-1] := filnam[mx]
+                      else c[3+mx-1] := ' ';
+              status := PipeIO (cntl);
+              if status = 0
+              then begin
+                  TXTpstat := b[3]; pnbr := TXTpstat;
+                  buf.c[1] := ' '; MOVELEFT (buf.b[1],buf.b[2],511);
+                  len := length(TXTttl1);
+                  buf.b[1] := 1; buf.b[2] := len;
+                  for mx := 1 to len do buf.c[03+mx-1] := TXTttl1[mx];
+                  len := length(TXTttl2); buf.b[83] := len;
+                  for mx := 1 to len do buf.c[84+mx-1] := TXTttl2[mx];
+                  buf.c[164] := '0';  { eAFormattede@ eAfilee@ eAflage@ }
+                  PipeWrite (cntl,1); if status = 0 then cblk := 1;
+                  end
+              else TXTpstat := status;
+              end;
+          if status = 0 then opnflg := TRUE;
+          end; {with cntl}
+      end;
+
+{$P}
+{ TXTread -------------------------------------------------------------}
+{ Read next record from input file processing
+{----------------------------------------------------------------------}
+PROCEDURE TXTread {(var cntl: TXTcb; var iof: TXTfile;
+                                     var st:  TXTstring)};
+      var i: integer; ch: char;
+{!CX}     txtptr: pBytes;
+      begin
+{!CX} txtptr := @st;
+      with cntl do begin
+          cbla := 0; clen := 0; st := '';
+          if eofflg then exit (TXTread);
+
+          case filsys of
+    UCSD,
+    CCOS: begin
+          { read text block, if needed --------------------------------}
+          if lidx > ridx then begin
+              if EOF (iof) then begin
+                  eofflg := TRUE; exit (TXTread); end;
+              transfer (cntl,iof);
+              if status = 0 then begin
+                  lidx := 1; ridx := 1024;
+                  ridx := ridx +
+{!CX}                     SCANNE (-ridx,chr(0),buf.b[ridx]);
+                  if ridx = 0
+                      then status := TXTerFMT
+                      else if buf.b[ridx] <> cr then begin
+                          ridx := ridx+1; buf.b[ridx] := cr;
+                          end;
+                  end;
+              if status <> 0 then exit (TXTread);
+              end;
+
+          { unblock next record ---------------------------------------}
+          cbla := 0;
+          if buf.b[lidx] = dle then begin
+              lidx := lidx+1;
+              if lidx <= ridx then
+                  if buf.b[lidx] >= 32 then begin
+                      cbla := buf.b[lidx]-32;
+                      lidx := lidx+1;
+                      end;
+              end;
+          while (lidx <= ridx) AND (buf.c[lidx] = ' ') do begin
+              cbla := cbla+1; lidx := lidx+1; end;
+{$P}
+          cidx := lidx;
+{!CX}     clen := SCANEQ (ridx-lidx+1,chr(cr),buf.b[lidx]);
+          lidx := lidx+clen+1; rcnt := rcnt+1;
+          if (cbla+clen) > TXTrcdlen then clen := TXTrcdlen-cbla;
+          st[0] := chr(cbla+clen);
+          if cbla > 0 then begin
+              st[1] := ' ';
+              if cbla > 1 then
+{!CX}             MOVELEFT (txtptr^[1],txtptr^[2],cbla-1);
+              end;
+          if clen <> 0 then
+{!CX}         MOVELEFT (buf.b[cidx],txtptr^[cbla+1],clen);
+          end; { case filsys of CCOS/UCSD }
+
+(* MSDOS: begin
+          repeat
+              if lidx > ridx then begin
+                  MSnxtBlock (cntl);
+                  if eofflg then exit (TXTread);
+                  if status <> 0 then exit (TXTread);
+                  lidx := 1; ridx := 512;
+                  end;
+              ch := buf.m[1].c[lidx]; lidx := lidx+1;
+              if ch = chr(ef) then begin
+                  eofflg := TRUE; exit (TXTread); end;
+              if ch = chr(cr) then exit (TXTread);
+              if ch <> chr(lf) then begin
+                  st[0] := chr(ord(st[0]) + 1);
+                  st[ord(st[0])] := ch;
+                  end;
+              until FALSE;
+          end; { case filsys of MSDOS }  *)
+
+          end; { case filsys of .... }
+          end; { with cntl of }
+      end;
+
+{$P}
+{ TXTwrite ------------------------------------------------------------}
+{ Write record to output file processing
+{----------------------------------------------------------------------}
+
+PROCEDURE TXTwrite {(var cntl: TXTcb; var iof: TXTfile;
+                                      var st:  TXTstring)};
+      var txt: TXTstring;
+{!CX}     txtptr: pBytes;
+      begin
+{!CX} txtptr := @txt;
+      with cntl do begin
+          if eofflg then exit (TXTwrite);
+          txt := st; cbla := 0;
+          If Mode = TxtSpool Then Begin
+            Txt := Concat(Txt,'\0D\0A');
+            End
+          else begin
+            txt[0] := chr(ord(txt[0])+1);
+            txt[length(txt)] := chr(cr)
+            end;
+          if (iounit = 0) and (mode <> TXTspool) then begin
+{!CX}         while (cbla < length(txt))
+{!CX}           AND (txt[cbla+1] = ' ') do cbla := cbla+1;
+              if cbla > 2 then begin
+                  txt[1] := chr(dle); txt[2] := chr(cbla+32);
+{!CX}             MOVELEFT (txtptr^[cbla+1],
+{!CX}                       txtptr^[3],length(txt)-cbla);
+                  txt[0] := chr(ord(txt[0])-cbla+2);
+                  end;
+              end;
+
+          { write text block, if needed -------------------------------}
+          if cidx+length(txt) > 1023 then begin
+              transfer (cntl,iof);
+              if status = 0 then begin
+                  buf.b[1] := 0; MOVELEFT (buf.b[1],buf.b[2],1023);
+                  cidx := 1; end;
+              end;
+{$P}
+          { block next record -----------------------------------------}
+          if status = 0 then begin
+              if iounit <> 0 then begin
+{!CX}             UNITWRITE (iounit,txtptr^[1],length(txt));
+                  cidx := 1;
+                  end
+              else begin
+{!CX}             MOVELEFT (txtptr^[1],buf.b[cidx],length(txt));
+                  cidx := cidx+length(txt); end;
+              rcnt := rcnt+1;
+              end;
+          end; {with cntl}
+      end;
+
+      end.
+
+

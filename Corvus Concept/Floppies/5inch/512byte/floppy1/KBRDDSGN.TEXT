@@ -1,0 +1,865 @@
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Last modified : 10-Feb-82 kb
+File : /kb/kbrddsgn.text
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+This is the desgin document for the interrupt driven keyboard.
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Each table that is user definable has a pointer in a table which has a pointer
+to it in the Systems Communcations Area of Merlin.  The pointers in this table
+(called Translation Table) point to the following tables :
+      1) SHIFT_TABLE
+      2) REGULAR_TABLE
+      3) CAPS_QUALIFIER FLAG TABLE
+      4) ESCAPE # SEQUENCE TABLE
+      5) STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+      6) RELEASE TABLE
+      7) BREAK KEYCODE TABLE
+The pointers are in the above order.
+
+Problem :
+   If a qualifier key (e.g. a shift key) and a key which generates a character
+   sequence are depressed and the qualifier key is released then the repeat will be
+   of the qualified character sequence not the unqualified sequence.  The Fast
+   key is an exception to this condition.
+   Example of this problem is :  the shift key and the A key are depressed together.
+   Then the shift key is released but the A key is still depressed.  The repeat
+   character does not change to "a" but remains as "A".
+
+Consider :
+   Since have XON & XOFF capabilities may want to drop BREAK and use the key
+   for context switching.
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+---------------------------------------------------
+pseudo-code for the interrupt service routine.
+---------------------------------------------------
+save registers (all or some?) on stack
+
+Had_interrupt := true; <-- tell slave to restart if running.
+
+get KEYCODE --> must be in a register
+if (KBRD data transmission error) then begin
+   set Error flag.
+   if (NOT only an OVERRUN error) then GOTO EXIT.
+   {character in data port is valid last character or new char (?) if overrun only}
+ end;
+
+get Primary and Secondary state record Base pointers.
+
+(* the interrupt service routine always uses the Primary state record. *)
+
+if (KEYCODE=BREAK Table keycode (currently : $DF - only on closure)) then
+   BEGIN
+     check Break flag in qualifier flag word (bit D4)
+     if (Break flag is set) then (* process is currently stopped *)
+       BEGIN
+        clear Break flag
+        restore registers from stack
+        do RTE
+       END
+     else BEGIN (* process is currently running, stop it *)
+        set Break flag
+        set status register interrupt status to allow Timer interrupt.
+              (* interrupt level #6, so set int stat to 5 *)
+        while (Break flag is set) do; (* wait until break key closure *)
+        restore registers from stack
+        do RTE
+      END
+   END
+else
+   if (Break flag set) then
+     BEGIN
+       restore registers from stack
+       do RTE  (* ignore all keys except break *)
+     END
+   else
+     BEGIN
+       if (Front=Rear) and (NOT Buffer_empty) then Buffer_full := true
+                                              else Buffer_full := false;
+
+       if (key closure (bit D7 of keycode = 1)) then
+           BEGIN
+           (* process key closure keycode *)
+
+             clear keycode bit D7
+             check Qualifiers flag word
+             if (Shift bit flag set) then
+               BEGIN
+                use SHIFT TABLE to get Table_code.
+                Index table by Keycode.
+                Table_code := SHIFT_TABLE[ Keycode ];
+               END
+             else BEGIN
+                use REGULAR TABLE to get Table_code.
+                Index by Keycode.
+                Table_code := REGULAR_TABLE[ Keycode ];
+               END;
+
+             CASE Table_code OF
+               ($9D) : This is esc # multiple character code sequence key.
+                       Search ESCAPE # SEQUENCE TABLE by Keycode. Find table
+                       entry, there will always be one.
+                    ___
+                   |   Select correct Character_pair from table by using the
+                   |    FLAG byte of the table entry and the Qualifier flag
+                   |    word.
+                   |
+ This must be a    |   if (Command & Shift flags set in Qualifier flag word) then
+ subroutine for    |      Character_pair := Command/Shift character pair;
+ use by the key----|   else if ( Command flag in Qualifier word is set) then
+ closure rtn       |           Character_pair := Command character pair.
+ also.             |        else if (Shift flag in Qualifier word is set) then
+                   |                  Character_pair := Shift character pair.
+                   |             else Character_pair := Unshifted character pair;
+                   |____              (* always ok to use Unshifted pair *)
+
+                       Put esc # plus Character_pair in buffer and New.key_seq
+                         in the primary state record.
+                       #_chars_put := 4;  <--- must be in a register
+
+                           | to place chars in buffer :
+                           |
+                           | Old_rear := rear;
+                           | call PutCharsInQueue (#_chars_put,#_chars_did);
+                           |      (* call put #_chars_put times or until *)
+    ***********************|      (* Buffer_full return.  returns the # of *)
+                           |      (* chars actually put in buffer.  *)
+                           | if (#_chars_put <> #_chars_did) then
+                           |    Rear := Old_rear; (* reset pointer and
+                           |                         ignore the characters *)
+
+                       if (successfully put all chars in buffer) then
+                           BEGIN
+                             New.length (*in primary state record*) := #_chars_put;
+                             New.new_change := true; <-- tell slave new repeat sequence
+                             Save Keycode in Previous_keycode.
+                             Wait := 0;  {Reset timer}
+                             clear Buffer_empty flag.
+                           END;
+
+               ($9E) : This is a STANDARD multiple character code sequence
+                       key.
+                       Search STANDARD MULTIPLE CHARACTER SEQUENCE TABLE by
+                       keycode for keycode.
+                       Put character string in buffer and New.key_seq in the
+                          primary state record.
+                       Update buffer pointers.
+                       #_chars_put := string length from table entry.
+
+                       if (successfully put all chars in buffer) then
+                           BEGIN
+                             New.length (*in primary state record*) := #_chars_put;
+                             New.new_change := true; <-- tell slave new repeat sequence
+                             Save Keycode in Previous_keycode.
+                             Wait := 0;  {Reset timer}
+                             clear Buffer_empty flag.
+                           END;
+
+               ($9F) : This is a QUALIFIER Keycode.
+                       Get FLAG byte from CAPS_QUALIFIER TABLE.
+                       Index by Keycode.
+                       Flag := (CAPS_QUALIFIER_TABLE[Keycode]) & $7F;
+                         (* remove D7 - caps lock flag bit *)
+                       if (Flag <> 0) then (* this is a qualifier with a flag *)
+                         begin
+                           Find Qualifier bit that is set.
+                           Set corresponding bit in Qualifier byte.
+                           if (Fast) then set Fast bit in Shared word flag.
+                           if (Qualifier has ESC # Seq flag is set) then begin
+                              Get ESC # sequence.
+                              put it in the buffer.
+                              if (put it in the buffer) then begin
+                                 update buffer pointers.
+                                 Wait := 0;  {Reset timer}
+                                 clear Buffer_empty flag.
+                              end;
+                       end else ignore Keycode.
+                       #_chars_put := 0;
+
+               Otherwise: The Table_code is the character code for a SINGLE
+                          character code key.
+                          check for control and caps lock.
+                          #_chars_put := 1;
+                          if ( (Control flag is set) AND (Char < $3F - a "?") then begin
+                             clear bits D7,D6 & D5 of the Table_code.
+                             if (ALTERNATE character set flag is clear) then begin
+                               if Changed Table_code = control-Q ($11) then begin
+                                 clear Stop_Go flag in the Shared CRT/KBRD
+                                   flag byte
+                                 #_chars_put := 0;
+                               end;
+                               if Changed Table_code = control-S ($13) then begin
+                                 set Stop_Go flag in the Shared CRT/KBRD
+                                   flag byte
+                                 #_chars_put := 0;
+                               end;
+                             end;
+                          end else
+                             if (Caps_lock flag is set) AND
+                                (CAPS_QUALIFIER_FLAG_TABLE[Keycode] bit D7 is set )then
+                                      Table_code := SHIFT_TABLE [Keycode];
+
+                          if #_chars_put <> 0 then begin  { if not control S or Q}
+                            if (ALTERNATE character set flag is set) then
+                               set bit D7 of character code (Table_code).
+                            Put character code (Table_code) in buffer and
+                              New.key_seq in primary state record.
+                            Update buffer pointers.
+
+                            if (successfully put all chars in buffer) then
+                                BEGIN
+                                  New.length (*in primary state record*) := #_chars_put;
+                                  New.new_change := true; <-- tell slave new repeat sequence
+                                  Save Keycode in Previous_keycode.
+                                  Wait := 0;  {Reset timer}
+                                  clear Buffer_empty flag.
+                                END;
+                          end;
+
+             END CASE;
+           ENDTHEN;
+  end of |
+  closure|---------------------------------
+  code   |
+       else
+       (* process key release *)
+           BEGIN
+             if (Keycode = Previous_keycode ) then begin
+                Previous_keycode := $FF <--- the null keycode
+                New.length (*in primary state record*) := 0; <-- null key seq
+                New.new_change := true;
+               end;
+
+             if (Previous_keycode = $FF) then Wait := 0;    {reset timer}
+
+             Search RELEASE TABLE. each entry is 2 bytes.
+             1st byte = keycode; 2nd byte = action code.
+             Not all keycodes are in the table.
+             (* release key search - table is sorted by keycode in ascending *)
+             (* order.  End of table is a null keycode of $FF, greater than  *)
+             (* any real keycode. *)
+
+             i := 0;
+             while (RELEASE_TABLE[i] < Keycode) do i := i+2;
+
+             if (RELEASE_TABLE[i] = Keycode) then (* found an entry in the release table *)
+               BEGIN
+                 Actioncode := RELEASE_TABLE[i+1];
+                 CASE Actioncode OF
+                   ($9E) : This is a qualifier. So, clear qualifier flag.
+                           Get FLAG byte from CAPS_QUALIFIER TABLE.
+                           Index by Keycode.
+                           Flag := (CAPS_QUALIFIER_TABLE[Keycode]) & $7F;
+                             (* remove D7 - caps lock flag bit *)
+                           if (Flag <> 0) then (* this is a qualifier with a flag *)
+                             begin
+                               Find Qualifier bit that is set.
+                               Clear corresponding bit in Qualifier byte.
+                               if (Fast) then clear Fast bit in Shared word flag.
+                               if (Qualifier has ESC # Seq flag is set) then begin
+                                   do as a subroutine the $9D action code case.
+                           end else ignore Keycode.
+
+                   ($9D) : This is a release key esc # sequence keycode.
+                         __Set bit D7 of keycode.
+  same character code   |  Find character code sequence to follow esc # codes
+  definition as ($9D)   |   by search ESCAPE # SEQ TABLE.
+  section of closure----|  use qualifiers to determine which element of entry
+  CASE Table_code.      |___to use.
+                           put esc # plus character pair in buffer & update
+                            pointers
+                           clear Buffer_empty flag. (* don't reset timer or save keycode*)
+
+                   Otherwise : The Actioncode is a character code.
+                               Put character in buffer & update ptrs.
+                               clear Buffer_empty flag.
+                 ENDCASE
+               END;
+           ENDELSE;
+         END;
+
+       copy primary state record into secondary state record.
+EXIT : restore registers.  *****************************************EXIT
+       do RTE. <--- normal return from keyboard interrupt
+
+---------------------------------------------------------------------------
+ (* END OF KEYBOARD INTERRUPT SERVICE ROUTINE *)
+---------------------------------------------------------------------------
+
+{$P}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+---------------------------------------------------------------------------
+KEYBOARD TIMER INTERRUPT SERVICE ROUTINE
+---------------------------------------------------------------------------
+
+ if Wait <> $FFFF then Wait := Wait + 1;
+ Repeat := true;  {show timer ticked}
+ do RTE.
+
+ -------------------------------------------------------------------
+ END OF TIMER INTERRUPT KEYBOARD REPEAT SERVICE ROUTINE DESIGN
+ -------------------------------------------------------------------
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+ -------------------------------------------------------------------
+ UNITREAD routine. pseudo-code design.
+ -------------------------------------------------------------------
+
+ (* unitread uses the secondary state record only. If interrupted by master *)
+ (* process (the interrupt handler) then the unitread process will restart. *)
+
+ For i:= 1 to (number of characters user wants) do begin
+
+  repeat
+  LOOP: Had_interrupt := false; (* if there was an interrupt ignore it *)
+        setup Primary and Secondary state record Base pointers.
+          test PTRBIT. if set then record A is primary.
+                              else record B is primary.
+        copy Primary state record into Secondary state record.
+
+        if (cont_rpt) then use_key_seq := true (* in middle of repeat seq *)
+        else if (Buffer_empty) then (* test for repeat *)
+                if (Not Repeat) then GOTO LOOP <-- no chars & no repeat
+                                                   so wait.
+                else begin
+                  Repeat := false;
+                  if (Not Fast) then if (Wait<5) then GOTO LOOP
+                   else BEGIN  (* start a repeat sequence *)
+
+                     if (New.new_change) then begin (*use new key seq *)
+                        New.new_change := false;
+                        Current.length := New.length;
+                        Current.key_seq := New.key_seq;
+                     end;
+
+                     if (Current.length=0) then GOTO LOOP; <--- only null repeat
+                                                                sequence available
+                     cont_rpt := true; (* starting new repeat sequence *)
+                     use_key_seq := true;
+                     Current.index := 1; (* start at first character *)
+                     if (Fast) then rpt_cnt := 4
+                               else rpt_cnt := 1;
+                   END;
+                  end;
+             else begin
+               use_key_seq := false; (* use chars in buffer *)
+               Repeat := false;
+             end;
+
+        if (use_key_seq) then BEGIN
+           Next_char := Current.key_seq[ Current.index ];
+           Current.index := Current.index + 1;
+           if (Current.index > Current.length) then BEGIN
+              rpt_cnt := rpt_cnt - 1;
+              if (rpt_cnt=0) then cont_rpt := false (* done with repeat *)
+                             else Current.index := 1; (* restart key seq *)
+             END;
+        END else BEGIN
+           Next_char := character pointed at by Front; (* next char in buffer *)
+           Update pointer :  Front := Front + 1;
+           if (Front > EndBuffer) then Front := @Buffer;
+           if (Front=Rear) then Buffer_empty := true;
+         END;
+
+       if (NOT Had_interrupt) then FLIP:
+          (* flip procedure *) if (PTRBIT set) then PTRBIT := false <- clear
+                                               else PTRBIT := true; <- set
+          (* if (PTRBIT is set) then state record A is primary, *)
+          (*                    else state record B is primary. *)
+
+  until (NOT Had_interrupt);  (* restart because of interrupt *)
+
+  put Next_char in user buffer.
+  if (Error flag set) then begin
+      IORESULT := 'KBRD data transmission error';
+      clear Error flag.
+    end;
+ END of for loop;
+
+------------------------------------------------------------------
+END of unitread design.
+------------------------------------------------------------------
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+---------------------------------------------------------------------------
+pseudo code for UNITBUSY, UNITCLEAR, UNITSTATUS, UNITINSTALL &  UNITUNMOUNT
+---------------------------------------------------------------------------
+
+(* unitbusy *)
+
+repeat
+  Had_interrupt := false;
+  get address of state records.
+  copy Primary state record into secondary state record;
+  if (Fast flag) then Waited := (Wait>0)  {only need to wait one tick if fast}
+                 else Waited := (Wait>=5);
+  New_Repeat character available := (Repeat flag) and (Waited) and (Buffer_empty flag)
+                            and (New.Length<>0) and (NOT Continue repeat flag);
+  if (New_Repeat character available) then begin
+     ReturnFlag := true;
+     {put repeat sequence in buffer so guarantee unitbusy}
+      Use primary state record (register A4).
+      Get Rear pointer into register A3.
+      Get Front pointer into register A2.
+      Get address of repeat chars in A6.
+      Get # of characters in repeat sequence in D3.
+       if (New.New_change) then begin
+         (D3) := New.length;
+         (A6) := @New.repeat_sequence;
+       end else begin
+         (D3) := Current.length;
+         (A6) := @Current.repeat_sequence;
+       end;
+      if (Fast flag) then #_sequences := 4
+                     else #_sequences := 1;
+      Disable Keyboard interrupt. { ORI.W  #$0700,SR }
+      if (NOT Had_interrupt) then begin
+        Buffer_full := false;   {necessary for PUTCHRS routine}
+        Closure := false;   {so BUFUPDAT does not reset Wait timer}
+        for i := 1 to #_sequences do begin
+           {will not have buffer full error}
+          call PUTCHRS routine to put characters in buffer.
+           {PUTCHRS saves A6 & D3}
+          Update state record (call BUFUPDAT).
+        end;
+        Enable interrupts.  { ANDI.W  #$F500,SR  }
+        EXIT <-- do RTS & return ReturnFlag.
+      end;
+      Enable interrupts.  { ANDI.W  #$F500,SR  }
+  end else ReturnFlag := (NOT Buffer_empty flag) or (Continue repeat flag);
+until (NOT Had_interrupt);
+Return to caller ( ReturnFlag );
+
+(* unitclear *)
+
+repeat
+  Had_interrupt := false;
+  get Base pointers to the primary and secondary state records.
+  copy into the secondary state record the initial values for the state
+    records.
+  FLIP: --> if PTRBIT then PTRBIT := false
+                      else PTRBIT := true;
+until (NOT Had_interrupt);
+return;
+
+(* unitstatus *)
+
+repeat
+  Had_interrupt := false;
+  get the values of the keyboard's UART's Status, Command, & Control registers.
+  put the 3 bytes into a long word's least significant 3 bytes.
+  store the long word in the user's buffer.
+until (NOT Had_interrupt);
+
+Return to caller ( long word );
+
+(* unitinstall *)
+
+(* reset the keyboard *)
+
+turn off keyboard interrupt and transmission by setting the UART Command Register
+  to $02.   (* call Unitunmount *)
+copy initial state record into primary state record. (* call Unitclear *)
+clear interrupt handler Internal Flag word, which includes Qualifier byte.
+clear Shared Flags word and CRT/KBRD Shared Memory byte.
+put addresses of Keyboard Interrupt Service Routine's Tables into pointer
+ table.   The following tables :
+            SHIFT TABLE
+            REGULAR TABLE
+            ESCAPE # TABLE
+            STANDARD MULTIPLE CHARACTER TABLE
+            CAPS LOCK & QUALIFIER FLAG TABLE
+            RELEASE TABLE
+            BREAK KEYCODE TABLE
+
+create a Timer Table Entry for the Keyboard Timer Interrupt Service Routine.
+ find unit number of Timer driver.
+ if (did not find Timer driver in device table) then ERROR <-- no repeat
+ else begin
+   Call UnitStatus((timer unit #),buffer_address,control);
+     control = 1 for Create procedure.
+     buffer_address := @parameterBlock
+       parameterBlock has fields :
+         address = pointer to Keyboard Timer Interrupt Service Routine (long word).
+         count = 2 for 100 milliseconds between calls (word).
+         flags = 0 for call every time and continuous mode (word).
+         tableID = don't care-Output value (word).
+     if (IORESULT <> 0) then ERROR <-- no repeat
+ end;
+setup KBRD UART Control Register for communication type and baud rate (600 baud).
+ (* write a $17 *)
+force a Break transmit to reset the Keyboard hardware.  Put a $0D in the
+  command register.
+turn on keyboard transmission by setting the UART Command Register to $09.
+
+(* unitunmount *)
+
+turn off keyboard interrupt and transmission by setting the UART Command Register
+  to $02.
+delete the Timer Table Entry for the Keyboard Timer Interrupt Service Routine.
+ find unit number of Timer driver.
+ if (did not find Timer driver in device table) then ERROR <-- ignore.
+ else begin
+   Call UnitStatus((timer unit #),buffer_address,control);
+     control = 2 for Delete procedure.
+     buffer_address := @parameterBlock
+       parameterBlock has fields :
+         tableID = tableID value returned by Create procedure in it's parameter block (word).
+     if (IORESULT <> 0) then ERROR <-- ignore
+ end;
+set the Keyboard interrupt vector to point at a RTE instruction.
+--------------------------------------------------------------------------------
+END of pseudo code for UNITBUSY, UNITCLEAR, UNITSTATUS, UNITINSTALL &  UNITUNMOUNT
+--------------------------------------------------------------------------------
+
+{$P}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+ -------------------------------------------------------------------
+ Tables for kbrd routines
+
+     - tables are constants at run time.
+     - tables are pre-sorted and their values organized in ascending
+       order by keycode (or other key field).
+ -------------------------------------------------------------------
+
+ $$$$$$$$$$ BREAK KEY CODE TABLE $$$$$$$$$$$$$
+
+ This table consists of one byte.  It is the Keycode for the key which performs
+ the start/stop toggle.  The value for the version 00 keyboard is : $5F.
+ This is the Keycode for BREAK closure.
+
+ $$$$$$$$$$ CAPS LOCK & QUALIFIER FLAG TABLE $$$$$$$$$$$$$
+
+ One single byte entry for each Keycode.  The Keycode is a direct index into
+ the table.  Each byte is a set of possible flags.  All unused bits are
+ cleared (value = 0).  The high order bit is always the Caps lock flag for
+ the corresponding Keycode.  The remaining bits are possible qualifier flags.
+ Only one of these bits can be set at a time.
+
+ The bits currently defined are :
+              D7 - Caps lock flag : when set means this keycode generates a
+                   shifted character when the Caps lock qualifier flag is set.
+              D6 - Qualifier has an ESC # sequence flag.  When set then must process
+                   the keycode as a non-repeating ESC # sequence. Also has a Release
+                   sequence.
+                    ______________
+              D5 - Command        |
+              D4 - Alternate      |
+              D3 - Fast           |      This bit says which type of Qualifier
+              D2 - Caps lock      |_____ key the Keycode represents.
+              D1 - Control        |
+              D0 - Shift  ________|
+
+ The values for the version 00 keyboard is external to this document; see
+ the table sheet for it.
+
+ $$$$$$$$$$ INTERNAL FLAG WORD $$$$$$$$$$$$$
+
+ 16 Bits available.  All unused bits are 0.  The low order byte is the Qualifier
+flag byte.  The high order byte is other miscellaneous internal flags.
+5 bits defined :
+
+  Qualifier byte:
+
+      D0 = Shift flag
+      D1 = Control flag
+      D2 = Caps_lock flag
+      D3 = Fast flag
+      D4 = Alternate character set flag
+      D5 = Command flag
+
+ Other internal flags:
+
+      D8 = BREAK flag - used as start/stop toggle indicator.
+      D9 = Buffer_full flag
+      D10 = Closure flag - set means processing a key closure
+                           clear means processing a key release
+
+      D6 -D7  = unused (clear to 0)
+      D10-D15 = unused (clear to 0)
+
+ The Alternate character set flag is used to create the 8 bit character codes.
+
+ Initial value for all bits of the Internal flag word is clear (0).
+
+ $$$$$$$$$$ STANDARD MULTIPLE CHARACTER SEQUENCE TABLE $$$$$$$$$$$$$
+
+ Each entry is composed of 3 fields. 1) the key field is the keycode.
+ 2) the string length and 3) the string, a variable length field.
+ The string is the sequence of character codes placed in the buffer for
+ this key.
+ The value of $9E as a Table_code signifies to use this table.  Every entry
+ with a $9E Table_code must be in this table.
+
+ Search algorithm:
+
+ i := 0;
+ while ( (Keycode <> SMCS_Table[i]) & (SMCS_Table[i]<>$FF) ) do
+   i := i + 2 + SMCS_Table[i+1];
+ if (SMCS_Table[i] = $FF) then ERROR-value not in table
+                          else i points to SMCS Table entry.
+
+ Values for the version 00 keyboard (programmers) :
+
+ KEYCODES   |   STRING LENGTH | STRING
+ -----------+-----------------+ ---------------------------------------
+ $00 (cursor|        2        |  $1B $42 (esc B)
+      down) |                 |
+ $03 (cursor|        2        |  $1B $43 (esc C)
+      right)|                 |
+ $05 (clear |        2        |  $1B $4B (esc K)
+      line) |                 |
+ $07 (enter)|        2        |  $1B $64 (esc d)
+            |                 |
+ $08 (cursor|        2        |  $1B $44 (esc D)
+      left) |                 |
+ $0B (cursor|        2        |  $1B $41 (esc A)
+      up)   |                 |
+ $3A (back  |        2        |  $1B $69 (esc i)
+      tab)  |                 |
+ $5D (home  |        2        |  $1B $48 (esc H)
+      up)   |                 |
+ $5E (clear |        2        |  $1B $49 (esc J)
+     screen)|                 |
+ $FF        |        0        |  END OF THE TABLE
+------------------------------------------------------------------------
+{$P}
+$$$$$$$$$$ RELEASE TABLE $$$$$$$$$$$$$
+
+This table specifies which keycodes have an action on key release. Each table
+has 2 fields. 1) the key field which is the keycode; 2) the action code.
+
+The action code has 3 different value types. First, $9D this specifies a key
+with a ESCAPE # SEQUENCE TABLE entry to be put in the buffer (must set bit
+D7 of keycode before search). Second, $9E this specifies a qualifier keycode.
+Any other action code is a character code to be placed in the buffer. The end
+of the table is specified by a NULL keycode of $FF.  The value of the NULL
+keycode is not generated by the keyboard.
+
+ Values for the version 00 keyboard (programmers) :
+
+ __________________________________________________
+| KEYCODE | ACTION CODE |  KEY NAME
+|---------+-------------+--------------------------
+|   $1F   |    $9E      |  Right shift
+|   $3C   |    $9E      |  Caps lock
+|   $3E   |    $9E      |  Left shift
+|   $48   |    $9E      |  Control
+|   $49   |    $9E      |  Fast
+|   $4A   |    $9E      |  Alternate
+|   $4C   |    $9E      |  Right command
+|   $FF   |    $00      |  NULL keycode - END OF TABLE
+|_________|_____________|____________________________
+
+{$P}
+$$$$$$$$$$ ESCAPE # SEQUENCE TABLE $$$$$$$$$$$$$
+
+This table is used when a Table_code of $9D is found in key closure or a
+Action code of $9D is found in key release.  It specifies a key which has a
+ESC # AH AH multiple character sequence.  AH stands for ASCII Hex, which is a
+representation of hexidecimal digits in ASCII (0-9 & A-F, capitals only).
+Each keycode may have a different ASCII Hex character pair when the Qualifier
+keys change (shift and control).
+
+Each table entry has the form (entry length = 10 bytes) :
+    1) The key search field - Keycode. (1 byte)
+    2) filler byte : it's value is 0 (zero).  It is used to keep each entrytion.
+                     on a word boundary.
+    3) The 4 ASCII Hex character pairs in priority order.
+        a) Command & Shift together (2 bytes)
+        b) Command only (2 bytes)
+        c) Shift only (2 bytes)
+        d) Unshifted & Uncommanded (2 bytes)
+
+If a Qualifier state is not allowed then use the ASCII Hex character pair of
+the next lowest priority (a is highest and d is lowest) to fill in that
+character pair.
+
+ Values for the version 00 keyboard (programmers) :
+
+ __________________________________________________________________
+| KEYCODE | NULL | US/UC  | S only | C only | C/S | KEY NAME
+|---------+------+--------+--------+--------+-----+----------------
+|   $20   |  00  |   00   |   0A   |   14   | 1E  | Function key 1
+|   $21   |  00  |   01   |   0B   |   15   | 1F  | Function key 2
+|   $22   |  00  |   02   |   0C   |   16   | 20  | Function key 3
+|   $23   |  00  |   03   |   0D   |   17   | 21  | Function key 4
+|   $24   |  00  |   04   |   0E   |   18   | 22  | Function key 5
+|   $4C   |  00  |   FF   |   FF   |   FF   | FF  | Right command (closure)
+|   $58   |  00  |   05   |   0F   |   19   | 23  | Function key 6
+|   $59   |  00  |   06   |   10   |   1A   | 24  | Function key 7
+|   $5A   |  00  |   07   |   11   |   1B   | 25  | Function key 8
+|   $5B   |  00  |   08   |   12   |   1C   | 26  | Function key 9
+|   $5C   |  00  |   09   |   13   |   1D   | 27  | Function key 10
+|   $CC   |  00  |   FE   |   FE   |   FE   | FE  | Right command (release)
+|_________|______|________|________|________|_____|________________
+  Search algorithm:
+  i := 0;
+  while ( (Keycode <> ESC#_Table[i]) & (ESC#_Table[i] <> $FF) ) do
+    i := i + 10;
+  if (ESC#_Table[i] = $FF) then ERROR-value not in table
+                           else i points to ESC# Table entry.
+
+$$$$$$$$$$ SHARED FLAG BYTE BETWEEN CRT DRIVER AND KEYBOARD DRIVER $$$$$$$$$$$$$
+
+This single byte allows the Keyboard to communicate with the CRT.  The flags
+are used by the CRT to control the display.  These flags are set and cleared by
+the Keyboard interrupt service routine depending on user input.
+
+Currently, 1 bit is defined.  All undefined bits are 0.
+
+Defined Bits :
+
+     STOP_GO flag : bit D7  where,
+            1 means stop. It is set when a control-S ($13) character code is
+            detected.  The character is not placed in the buffer.
+            0 means go.  It is cleared when a control-Q ($11) character is
+            detected.  The character is not placed in the buffer.
+
+$$$$$$$$$$ TRANSLATION TABLE $$$$$$$$$$$$$
+
+Each entry in this table is a pointer to a translation table.  There are 7
+entries.  They are pointers to the following tables :
+      1) SHIFT_TABLE
+      2) REGULAR_TABLE
+      3) CAPS_QUALIFIER FLAG TABLE
+      4) ESCAPE # SEQUENCE TABLE
+      5) STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+      6) RELEASE TABLE
+      7) BREAK KEYCODE TABLE
+
+The entries must also be in the above order.
+
+The address of this table is kept in the Systems Communications Area.
+$$$$$$$$$$ STATE RECORDS $$$$$$$$$$$$$
+
+This data structure is used by the interrupt handler and the unitread processes.
+It allows the unitread process to restart it's operations on the sharred
+memory when the interrupt handler process (the master) interrupts it.
+
+A state records can be either the primary or secondary state record.  During
+processing of the shared memory (mainly the buffer & repeat key sequence)
+the records will swap their state of which one is primary and which is
+secondary.  The flag PTRBIT tells the software which of the two state records
+is currently the primary record.  If PTRBIT is set then record A is the primary
+state record, else PTRBIT is clear and record B is the primary state record.
+
+A state record has the form :
+  1) Front : pointer to first byte in circular queue buffer.
+  2) Rear : ponter to last byte in circular queue buffer.
+  3) Buffer_empty : bit flag - set means circular queue buffer is empty.
+  4) New : a record of the form :
+      a) length : unsigned integer byte describing the length of the new repeat
+                  key sequence.  length = 0 means null key sequence.
+      b) key_seq : packed array [1..10] of char, the new repeat key sequence.
+      c) new_change : bit flag - set means interrupt handler placed a new
+                                 key sequence in the array New.key_seq.
+  5) Current : a record of the form :
+      a) length : Length of current repeat key sequence. A length of 0 means
+                  null key sequence.
+      b) index : index into current key sequence when processing a repeat
+                 in unitread.
+      c) key_seq : the current key sequence. (same as New)
+      d) rpt_cnt : Unsigned integer byte stating the current number of repeat
+                   key sequences to be used while unitread processes a repeat.
+      e) cont_rpt : bit flag - set means in the middle of processing a repeat
+                    in the unitread process.
+
+
+There are two state records. They are A and B.
+
+Initial values for the state records at cold or warm start or for UNITCLEAR are :
+
+ 1) Front := address of first byte in buffer space
+ 2) Rear := Front (the buffer is empty)
+ 3) Buffer_empty := true (set)
+ 4) New.length := 0 (null key sequence)
+ 5) New.key_seq := don't care
+ 6) New.new_change := false (clear)
+ 7) Current.length := 0 (null key sequence)
+ 8) Current.index := 0
+ 9) Current.key_seq := don't care
+ 10) Current.rpt_seq := 0
+ 11) Current.cont_rpt := false
+
+The other flags shared by the three processes are not in the state record
+They are in the Shared flags word.  All unused bits are clear (= to 0).
+The bits defined are :
+   D0 = Had_interrupt flag - tells keyboard unit I/O if interrupt handler
+                             has interrupted.
+   D2 = Repeat flag - when set shows timer has ticked.
+   D3 = Fast flag - a exact copy of the interrupt handler's Fast flag in the
+                    Qualifier word.
+   D4 = PTRBIT - points to primary state record. Set means A is primary.
+   D5 = Error flag - Data transmission error from Keyboard to Computer when
+                     set.
+
+Initial values for Shared flags word is :
+ D15-D6 = 0 (unused)
+     D5 = false (clear)
+     D4 = set (A is primary)
+     D3 = false (clear)
+     D2 = false (clear)
+     D1 = 0 (unused)
+     D0 = false (clear)
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+---------------------------------------------------------------------------
+The BUFFER
+---------------------------------------------------------------------------
+
+The buffer is a sequence of bytes used as a circular queue.  It has two
+pointers, Front & Rear, which tell where to get characters from and where to
+put characters into the buffer.
+
+A Pascal-like program fragment to describe the buffer data structure.
+
+DataStructure Circular_Queue;
+ (* the circular queue is the organization and access to the buffer *)
+
+ const N = (length of the buffer in bytes);
+
+ var Buffer : array[0..(N-1)] of Byte;
+     a : Byte;
+     Front,Rear,EndBuffer : pointer to Byte;
+     Buffer_empty,Buffer_full : Boolean;
+
+INIT Section;
+  EndBuffer := @Buffer + (N-1); (* address of last byte of Buffer *)
+  Front := @Buffer;
+  Rear := @Buffer;
+  Buffer_empty := true;
+  Buffer_full := false;
+
+To GET a character from the Circular Queue;
+
+  if (Buffer_empty) then (no characters to get)  ERROR
+  else begin
+     a := ^Front;
+     Front := Front + 1;
+     if (Front > EndBuffer) then Front := @Buffer;
+     if (Front = Rear) then Buffer_empty := true;
+   end;
+
+To PUT a character into the Circular Queue;
+
+  if (Buffer_full) then (no more space) ERROR
+  else begin
+     ^Rear := a;
+     Rear := Rear + 1;
+     if (Rear > EndBuffer) then Rear := @Buffer;
+     if (Front = Rear) then Buffer_full := true;
+   end;
+
+END DataStructure.
+

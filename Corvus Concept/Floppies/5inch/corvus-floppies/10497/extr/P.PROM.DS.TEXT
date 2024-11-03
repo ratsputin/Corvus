@@ -1,0 +1,616 @@
+; File: CC.PROM.DS
+; Date: 15-Nov-83
+;
+; DISPLAY DRIVER FOR PROM (mb) 05/18/82
+;
+; BOTH horizontal and vertical display driver
+; contains default window records, copies them into memory
+; contains default character sets
+; no CRTST code: no window functions
+
+DSClf    equ    $0A    ;line feed character
+DSCcr    equ    $0D    ;carriage return character
+DSCesc   equ    $1B    ;escape character
+DSCblnk  equ    $20    ;blank character
+DSClca   equ    $61    ;lower case "a"
+DSClcz   equ    $7A    ;lower case "z"
+DSCdiff  equ    $20
+;
+; Character Set Record Equates
+;
+;Stblloc equ    0      ;character set data pointer (not used)
+CSlpch   equ    4      ;scanlines per character
+CSbpch   equ    6      ;bits per character
+CSfrstch equ    8      ;first character code - ascii
+CSlastch equ    10     ;last character code - ascii
+CSmask   equ    12     ;mask used in positioning cells
+CSattr1  equ    16     ;attributes
+                       ;  bit 0 = 1 - vertical orientation
+CSattr2  equ    17     ;currently unused
+CSdata   equ    18     ;offset of char data from char record
+;
+; Window Record Equates
+;
+WRcharpt equ    0       ;character set pointer
+WRhomept equ    4       ;home (upper left) pointer
+WRcuradr equ    8       ;current location pointer
+WRhomeof equ    12      ;bit offset of home location
+WRbasex  equ    14      ;home x value, relative to root window
+WRbasey  equ    16      ;home y value, relative to root window
+WRlngthx equ    18      ;maximum x value, relative to window (bits)
+WRlngthy equ    20      ;maximum y value, relative to window (bits)
+WRcursx  equ    22      ;current x value (bits)
+WRcursy  equ    24      ;current y value (bits)
+WRbitofs equ    26      ;bit offset of current address
+WRgrorgx equ    28      ;graphics - origin x (bits relative to home loc)
+WRgrorgy equ    30      ;graphics - origin y (bits relative to home loc)
+WRattr1  equ    32      ;attributes
+WRattr2  equ    33      ;attributes
+vert     equ    0       ;  1 = vertical, 0 = horizontal
+WRstate  equ    34      ;used for decoding escape sequences
+WRrcdlen equ    35      ;window description record length
+                        ;
+WRlength equ    36      ;actual window record length
+        page
+;
+; DSinit - Initialize display driver
+;
+DSinit  MOVEM.L D4/A0-A2,-(SP)          ;save registers
+        MOVE.W  #DSdefOf,CPscnofs.W     ;set bytes per scan line
+        LEA     DSwndH,A0               ;assume horizontal orientation
+        LEA     DScsetH,A2              ;*
+        BTST    #3,IObootsw.L           ;is display horizontal?
+        BOFF.S  DSinit1                 ;yes, go on
+        LEA     DSwndV,A0               ;set vertical orientation
+        LEA     DScsetV,A2              ;*
+DSinit1 LEA     CPwndrcd.W,A1           ;get pointer to RAM window record 0.8
+        MOVEQ   #WRlength-1,D4          ;get window record length       0.6
+DSinit2 MOVE.B  (A0)+,(A1)+             ;copy window record to RAM      0.6
+        DBRA    D4,DSinit2              ;*
+        LEA     CPwndrcd.W,A0           ;get RAM window record pointer    0.8
+        MOVE.L  A2,WRcharpt(A0)         ;set character set record pointer
+        BSR     DScurs                  ;display cursor on screen
+        MOVEM.L (SP)+,D4/A0-A2          ;restore registers
+        RTS                             ;return
+
+;
+; DScvtUC - Convert character to upper case
+;
+;       Enter:  D0.B = ASCII character
+;
+;       Exit:   D0.B = upper case ASCII character
+;
+DScvtUC CMPI.B  #DSClca,D0              ;is character lower case?
+        BLO.S   DScvtU1                 ;no, return
+        CMPI.B  #DSClcz,D0              ;*
+        BHI.S   DScvtU1                 ;no, return
+        SUBI.B  #DSCdiff,D0             ;convert character to upper case
+DScvtU1 RTS                             ;return
+
+;
+; DSputst - Display a string
+;
+;       Enter:  A0.L - Character string pointer
+;                      (terminated by 0)
+;
+DSputst movem.l D0/A0,-(SP)             ;save registers
+                                        ;
+DSpst1  move.b  (a0)+,d0                ;get next character
+        beq.s   DSpst9                  ;finished, return
+        bsr.s   DSputch                 ;output character
+        bra.s   DSpst1                  ;get next character
+                                        ;
+DSpst9  movem.l (SP)+,D0/A0             ;restore registers
+        rts                             ;return
+
+        page
+;
+; DSputch - Display a character
+;
+;       Enter:  D0.B - Character to output
+;
+DSputch MOVEM.L D0-D7/A0-A6,-(SP)       ;save registers
+        andi.w  #$7F,d0                 ;make character 7 bits
+        LEA     CPwndrcd.W,A0           ;get RAM window record pointer  0.8
+        tst.b   CPextcrt.w              ;using external CRT?            0.8
+        bon.s   DSxCrt                  ;yes, use data comm 0           0.8
+        bsr     SBprom2                 ;debug PROM boot?               0.7
+        beq.s   DSxCrt                  ;yes, use data comm 0           0.7
+        MOVE.L  WRcharpt(A0),A2         ;get character set record pointer
+        CLR.L   D3                      ;
+        MOVE.B  WRstate(A0),D3          ;
+        LSL.W   #1,D3                   ;convert to state table index
+        LEA     DSsTbl,A1               ;
+        MOVE.W  0(A1,D3.W),D3           ;D3 = dist from DSsTbl
+        JMP     0(A1,D3.W)              ;go to current state processing
+                                        ;
+DSnxtSt ADDQ.B  #1,WRstate(A0)          ;increment for next state
+        BRA.S   DSexit                  ;return
+                                        ;
+DSxCrt  move.l  #DScPort,a1             ;get UART pointer               0.7
+DSxCrt1 btst    #DSwrBit,DSuSt(a1)      ;is UART output busy?           0.7
+        boff.s  DSxCrt1                 ;yes, try again                 0.7
+        move.b  d0,DSuDa(a1)            ;output the character           0.7
+        cmpi.b  #DSCcr,d0               ;was it a <CR>?                 0.7
+        bne.s   DSreset                 ;no, go on                      0.7
+        btst    #1,CPdspflg.w           ;auto line feed?                0.7
+        bon.s   DSreset                 ;yes, bypass <LF> insertion     0.7
+        moveq   #DSClf,d0               ;add a <LF>                     0.7
+        BRA.S   DSxCrt1                 ;output LF                      0.8
+
+DSreset CLR.B   WRstate(A0)             ;reset current state
+                                        ;
+DSexit  MOVEM.L (SP)+,D0-D7/A0-A6       ;restore registers
+        RTS                             ;return
+    page
+DSst0   CMP.B   #DSCesc,D0              ;is char ESC?
+        BEQ.S   DSnxtSt                 ;yes, go to next state
+        CMP.W   CSfrstch(A2),D0         ;ascinum < first char?
+        BLO.S   DSctl                   ;yes, it's a control char
+        BSR.S   DSshwCh                 ;display character
+        BSR     DSincx                  ;inccurx
+        BRA.S   DSexit                  ;return
+
+DSctl   SUBQ.W  #8,D0                   ;commence decoding ctrl char
+        BMI.S   DSexit                  ;
+        CMPI.W  #5,D0                   ;ascinum in [8..13]?
+        BHI.S   DSexit                  ;yes, do cursor ctrl
+        LEA     DScTbl,A3               ;A3==>jump table for ctrl chars
+        LSL.W   #1,D0                   ;make it word count
+        PEA     DSexit                  ;ensure RTS to exit
+;----   MOVE.W  0(A3,D0),D0             ;D0 is offset from DScTbl  0.8
+;----   JMP     0(A3,D0)                ;jump to proper routine    0.8
+        BRA.S   DSgortn                 ;goto proper routine       0.8
+
+DSesc   CLR.W   D1                      ;initialize index reg
+        LEA     DSeTbl,A3               ;A3==> beginning of table
+                                        ;
+DSesc1  CMP.W   0(A3,D1),D0             ;does table entry match char?
+        BEQ.S   DSesc2                  ;yes, go on
+        ADDQ.W  #4,D1                   ;go to next entry
+        TST.W   0(A3,D1)                ;end of table?
+        BPL.S   DSesc1                  ;no, loop
+        BRA.S   DSreset                 ;return
+                                        ;
+DSesc2  MOVE.W  D1,D0                   ;set D0 to table offset
+        ADDQ.W  #2,D0                   ;
+        PEA     DSreset                 ;ensure RTS to reset state
+DSgortn MOVE.W  0(A3,D0),D0             ;D0 is offset from DSeTbl
+        JMP     0(A3,D0)                ;jump to proper routine
+
+        page
+;
+; DSshwCh - Display character
+;
+;       Enter:  A0.L = window record pointer
+;               A2.L = character set record pointer
+;               D0.W = ASCII character
+;
+;       Note:   Character set must be in bytes, not words
+;
+DSshwCh BSR     DScvtUC                 ;convert character to upper case
+        CMP.W   CSfrstch(A2),D0         ;is character in character set?
+        BLT.S   DSshow1                 ;no, output space
+        CMP.W   CSlastch(A2),D0         ;*
+        BLE.S   DSshow2                 ;yes, output character
+DSshow1 MOVE.W  #DSCblnk,D0             ;no, output space
+                                        ;
+DSshow2 SUB.W   CSfrstch(A2),D0         ;get relative character position
+        LEA     DScsetV+CSdata,a3       ;get pointer to character data
+        MULU    #DScellW,D0             ;*
+        ADDA.L  D0,A3                   ;*
+        MOVE.L  WRcuradr(A0),A4         ;get current character address
+        MOVE.W  CSlpch(A2),D1           ;get number of scan lines for character
+        SUBQ.W  #1,D1                   ;get count for DBRA
+        MOVE.W  CPscnofs.W,D3           ;get scan line length
+        MOVE.W  WRbitofs(A0),D5         ;get bit offset of character in cell
+        MOVE.L  CSmask(A2),D6           ;get character mask
+        BTST    #vert,WRattr2(A0)       ;is this vertical orientation?
+        BOFF.S  DSshow6                 ;no, output horizontal character
+        ;
+        ; output vertical orientation character
+        ;
+        MOVE.L  D6,D0                   ;
+        NOT.L   D0                      ;D0 = inverted mask
+        ROR.L   D5,D6                   ;D6 = positioned mask
+DSshow3 MOVE.B  (A3)+,D2                ;D2 = char data
+        LSL.W   #8,D2                   ;
+        SWAP    D2                      ;get char in high word
+        AND.L   D0,D2                   ;clear rest of source char
+        LSR.L   D5,D2                   ;position source char
+        AND.L   D6,(A4)                 ;clear dest char area
+        OR.L    D2,(A4)                 ;move in character
+        SUBA.W  D3,A4                   ;
+        DBRA    D1,DSshow3              ;repeat for D1:=CSlpch-1 to 0
+        BRA.S   DSshow9                 ;return
+
+        page
+        ;
+        ; output horizontal orientation character
+        ;
+DSshow6 TST.W   -(A4)                   ;A4==>long word with cell
+        ROL.L   D5,D6                   ;D6 = positioned mask
+        MOVE.L  D6,D4                   ;
+        NOT.L   D4                      ;D4 = inverted mask
+        moveq   #7,d0                   ;use 8 bits of character data
+                                        ;
+DSshow7 clr.l   d2                      ;clear current scan line of character
+        tst.w   d0                      ;have we used 8 bits of character data?
+        blt.s   DSshw76                 ;yes, pad with space
+        btst    d0,0(a3)                ;construct next horizontal character
+        boff.s  DSshw71                 ;*  from vertical character data
+        bset    #0,d2                   ;*
+DSshw71 btst    d0,1(a3)                ;*
+        boff.s  DSshw72                 ;*
+        bset    #1,d2                   ;*
+DSshw72 btst    d0,2(a3)                ;*
+        boff.s  DSshw73                 ;*
+        bset    #2,d2                   ;*
+DSshw73 btst    d0,3(a3)                ;*
+        boff.s  DSshw74                 ;*
+        bset    #3,d2                   ;*
+DSshw74 btst    d0,4(a3)                ;*
+        boff.s  DSshw75                 ;*
+        bset    #4,d2                   ;*
+DSshw75 btst    d0,5(a3)                ;*
+        boff.s  DSshw76                 ;*
+        bset    #5,d2                   ;*
+DSshw76 subq    #1,d0                   ;indicate another bit used
+        LSL.L   D5,D2                   ;shift char into position
+        AND.L   D6,(A4)                 ;
+        OR.L    D2,(A4)                 ;
+        SUBA.W  D3,A4                   ;
+        DBRA    D1,DSshow7              ;
+DSshow9 RTS                             ;return
+
+        page
+;
+; DScrsR -- cursor right
+;
+DScrsR  BSR     DScurs0                 ;remove cursor
+DSincx  MOVE.W  WRcursx(A0),D1          ;get current cursor X position
+        ADDQ.W  #DScellW,D1             ;increment 1 character space    0.6
+        MOVE.W  D1,WRcursx(A0)          ;save new cursor X position     0.6
+        CMP.W   WRlngthx(A0),D1         ;at end of line?                0.6
+        BGE.S   DSrtrn1                 ;yes, do carriage return        0.6
+        BRA.S   DScurs                  ;show cursor                    0.6
+
+;
+; DScrsU -- cursor up
+;
+DScrsU  BSR.S   DScurs0                 ;remove cursor
+        BRA.S   DSdecy                  ;decrement cursor Y position
+
+;
+; DSrtrn -- return
+;
+DSrtrn  BSR.S   DScurs0                 ;remove cursor
+DSrtrn1 CLR.W   WRcursx(A0)             ;zero current cursor X position
+        BTST    #1,CPdspflg.w           ;auto line feed?
+        BOFF.S  DSincy                  ;no, increment cursor Y position
+        BRA.S   DScurs                  ;show cursor
+
+;
+; DScrsD -- cursor down
+;
+DScrsD  BSR.S   DScurs0                 ;remove cursor
+DSincy  MOVE.W  WRcursy(A0),D1          ;get current cursor Y position
+        ADDI.W  #DScellY,D1             ;increment 1 character space    0.6
+        MOVE.W  D1,WRcursy(A0)          ;save new cursor Y position     0.6
+        CMP.W   WRlngthy(A0),D1         ;at bottom of screen?           0.6
+        BLE.S   DScurs                  ;on bottom line?                0.6
+        BRA     DSclAL                  ;yes, wrap to home position     0.6
+
+;
+; DScrsL -- cursor left
+;
+DScrsL  BSR.S   DScurs0                 ;remove cursor
+DSdecx  TST.W   WRcursx(A0)             ;at beginning of line?
+        BEQ.S   DSwrapx                 ;yes, wrap to previous line
+        SUBQ.W  #DScellW,WRcursx(A0)    ;decrement 1 character space
+        BRA.S   DScurs                  ;show cursor
+
+        page
+;
+; DScrsH -- cursor home
+;
+DScrsH  BSR.S   DScurs0                 ;remove cursor
+DScrsH1 CLR.W   WRcursx(A0)             ;zero current cursor X position
+        CLR.W   WRcursy(A0)             ;zero current cursor Y position
+        BRA.S   DScurs                  ;show cursor
+
+DSwrapx BSR.S   DSwrap                  ;
+        MOVE.W  D0,WRcursx(A0)          ;
+DSdecy  TST.W   WRcursy(A0)             ;at top line?
+        BEQ.S   DScurs                  ;yes, show cursor
+        SUBI.W  #DScellY,WRcursy(A0)    ;decrement 1 character space
+        BRA.S   DScurs                  ;show cursor
+
+DSwrap  CLR.L   D0                      ;get current cursor X position
+        MOVE.W  WRlngthx(A0),D0         ;*
+        MOVEQ   #DScellW,D2             ;get character width
+        DIVU    D2,D0                   ;
+        MULU    D2,D0                   ;
+        RTS                             ;return
+
+DScurs  BSR.S   DScrsAd                 ;compute cursor address
+DScurs0 MOVE.W  CSlpch(A2),D1           ;get scan lines per character
+        SUBQ.W  #1,D1                   ;set loop counter
+        MOVE.L  WRcuradr(A0),A4         ;get current cursor address
+        MOVE.W  WRbitofs(A0),D5         ;get current cursor bit offset
+        MOVE.L  CSmask(A2),D7           ;get character mask
+        BTST    #vert,WRattr2(A0)       ;vertical orientation?
+        BOFF.S  DScurs1                 ;no
+        ROR.L   D5,D7                   ;
+        BRA.S   DScurs2                 ;
+DScurs1 TST.W   -(A4)                   ;
+        ROL.L   D5,D7                   ;
+DScurs2 NOT.L   D7                      ;D7 = positioned inverted mask
+DScurs3 EOR.L   D7,(A4)                 ;invert character
+        SUBA.W  CPscnofs.W,A4           ;*
+        DBRA    D1,DScurs3              ;*
+        RTS                             ;return
+
+DScrsAd MOVEM.W WRcursx(A0),D5-D6       ;get current cursor position
+        BSR     DSaddr                  ;compute cursor address
+        MOVE.W  D7,WRbitofs(A0)         ;save cursor bit offset
+        MOVE.L  A4,WRcuradr(A0)         ;save cursor address
+        RTS                             ;return
+
+        page
+;
+; DSclAL -- clear screen
+;
+DSclAL  BSR     DScrsH1                 ;home cursor
+
+;
+; DSclES -- clear to end of screen
+;
+DSclES  BSR.S   DSclEL                  ;first clear this line
+        BTST    #vert,WRattr2(A0)       ;vertical orientation?
+        BON.S   DSclES2                 ;yes, clear vertical screen
+                                        ; --- clear to end of horizontal screen
+        MOVE.W  WRcursy(A0),D6          ;get current cursor Y position
+DSclES1 ADDI.W  #DScellY,D6             ;increment to next line
+        MOVE.W  WRlngthy(A0),D0         ;get bottom of screen limit
+        CMP.W   D0,D6                   ;at bottom of screen?
+        BGE.S   DSclES9                 ;yes, return
+        SUB.W   D6,D0                   ;compute number of scan lines to clear
+        CLR.W   D3                      ;set starting X position to 0
+        BSR.S   DSclrH                  ;clear to bottom of screen
+        BRA.S   DSclES9                 ;return
+                                        ; --- clear to end of vertical screen
+DSclES2 MOVE.W  WRcursy(A0),D0          ;get current cursor Y position
+DSclES3 ADDI.W  #DScellY,D0             ;increment to next line
+        CMP.W   WRlngthy(A0),D0         ;at bottom of screen?
+        BGE.S   DSclES9                 ;yes, return
+        MOVE.W  D0,D6                   ;
+        CLR.W   D5                      ;
+        BSR.S   DSclrV                  ;clear one vertical line
+        BRA.S   DSclES3                 ;repeat until all lines cleared
+                                        ;
+DSclES9 RTS                             ;return
+
+;
+; DSclEL -- clear to end of line
+;
+DSclEL  BSR     DScurs0                 ;remove cursor
+        MOVEM.W WRcursx(A0),D5-D6       ;get current cursor X and Y
+        BTST    #vert,WRattr2(A0)       ;vertical orientation
+        BOFF.S  DSclEL1                 ;no, clear horizontal line
+        BSR.S   DSclrV                  ;clear one vertical line
+        BRA.S   DSclEL2                 ;show cursor
+                                        ;
+DSclEL1 MOVEQ   #DScellY-1,D0           ;D0 = #scanlines to clear
+        MOVE.W  D5,D3                   ;
+        BSR.S   DSclrH                  ;clear one horizontal line
+DSclEL2 BRA     DScurs0                 ;show cursor
+
+        page
+DSclrV  MOVE.W  WRlngthx(A0),D4         ;get length of line
+        SUB.W   D5,D4                   ;compute number of scan lines clear
+        BSR     DSaddr                  ;compute cursor address
+        MOVE.W  CPscnofs.W,D1           ;get bytes per scan line
+        MOVE.L  CSmask(A2),D6           ;get character mask
+        ROR.L   D7,D6                   ;align character mask
+DSclrV1 AND.L   D6,(A4)                 ;clear one scan line
+        SUBA.W  D1,A4                   ;compute address of next scan line
+        DBRA    D4,DSclrV1              ;repeat to end of line
+        RTS                             ;return
+
+DSclrH  MOVE.W  WRlngthx(A0),D4         ;D5 = x, D6 = y
+        ADDQ.W  #1,D4                   ;
+        MOVE.W  D4,D5                   ;
+        SUB.W   D3,D4                   ;
+        BSR     DSaddr                  ;A4 = addr(x,y), D7 = bitnum
+        SUB.W   D7,D4                   ;
+        TST.W   D7                      ;
+        BNE.S   DSclrH1                 ;
+        TST.W   (A4)+                   ;
+DSclrH1 MOVE.W  D4,D3                   ;
+        ANDI.W  #$F,D3                  ;
+        ASR.W   #4,D4                   ;
+        SUBQ.W  #1,D4                   ;
+        MOVEQ   #-1,D1                  ;
+        MOVE.W  D1,D2                   ;
+        LSL.W   D7,D1                   ;
+        LSR.W   D3,D2                   ;
+DSclrH2 MOVE.L  A4,A5                   ;
+        TST.W   D7                      ;
+        BEQ.S   DSclrH3                 ;
+        AND.W   D1,(A5)+                ;
+DSclrH3 MOVE.W  D4,D6                   ;
+        BMI.S   DSclrH5                 ;
+DSclrH4 CLR.W   (A5)+                   ;
+        DBRA    D6,DSclrH4              ;
+DSclrH5 TST.W   D3                      ;
+        BEQ.S   DSclrH6                 ;
+        AND.W   D2,(A5)                 ;
+DSclrH6 SUBA.W  CPscnofs.W,A4           ;
+        DBRA    D0,DSclrH2              ;
+        RTS                             ;return
+
+        page
+DStab   MOVE.W  WRcursx(A0),D0          ;get current cursor X position
+        AND.L   #$FFFF,D0               ;clear hi word
+        MOVEQ   #DScellW*8,D2           ;
+        DIVU    D2,D0                   ;find next tab to right
+        ADDQ.W  #1,D0                   ;
+        MULU    D2,D0                   ;
+        CMP.W   WRlngthx(A0),D0         ;new x > right?
+        BLS.S   DStab1                  ;no, change x
+        RTS                             ;return
+
+DStab1  BSR     DScurs0                 ;remove cursor
+        MOVE.W  D0,WRcursx(A0)          ;save new cursor X position
+        BRA     DScurs                  ;show cursor
+
+;
+; DSaddr -- compute cursor address
+;
+;       Enter:  D5 = x
+;               D6 = y
+;
+;       Exit:   DSaddr (x,y) in A4, bit offset in D7
+;
+DSaddr  MOVEA.L WRhomept(A0),A4         ;get home pointer for orientation
+        BTST    #vert,WRattr2(A0)       ;vertical orientation?
+        BON.S   DSaddrV                 ;yes, compute address for vertical
+                                        ;
+DSaddrH ADD.W   WRhomeof(A0),D5         ;
+        MOVE.W  D5,D7                   ;
+        ANDI.W  #$F,D7                  ;
+        ASR.W   #4,D5                   ;
+        ASL.W   #1,D5                   ;
+        SUBA.W  D5,A4                   ;
+        MULU    CPscnofs.W,D6           ;
+        SUBA.L  D6,A4                   ;
+        RTS                             ;return
+                                        ;
+DSaddrV ADD.W   WRhomeof(A0),D6         ;
+        MOVE.W  D6,D7                   ;
+        ANDI.W  #$F,D7                  ;
+        ASR.W   #4,D6                   ;
+        ASL.W   #1,D6                   ;
+        ADDA.W  D6,A4                   ;
+        MULU    CPscnofs.W,D5           ;
+        SUBA.L  D5,A4                   ;
+        RTS                             ;return
+
+        page
+;
+; jump tables
+;
+DScTbl  DATA.W  DScrsL-DScTbl           ;ctl-H: back space
+        DATA.W  DStab-DScTbl            ;ctl-I: tab
+        DATA.W  DScrsD-DScTbl           ;ctl-J: line feed
+        DATA.W  DScrsU-DScTbl           ;ctl-K: cursor up
+        DATA.W  DScrsR-DScTbl           ;ctl-L: cursor right
+        DATA.W  DSrtrn-DScTbl           ;ctl-M: carriage return
+
+DSeTbl  DATA.W  $48,DScrsH-DSeTbl       ;esc-H: home cursor
+        DATA.W  $4A,DSclAL-DSeTbl       ;esc-J: clear screen
+        DATA.W  $4B,DSclEL-DSeTbl       ;esc-K: clear to end of line
+        DATA.W  $59,DSclES-DSeTbl       ;esc-Y: clear to end of screen
+        DATA.W  -1                      ;end of table
+
+DSsTbl  DATA.W  DSst0-DSsTbl            ;state 0
+        DATA.W  DSesc-DSsTbl            ;state 1
+
+DSwndH  DATA.L  DScsetH                 ;WRcharpt
+        DATA.L  DShomeH                 ;home
+        DATA.L  DShomeH                 ;address
+        DATA.W  0,0,0                   ;WRhomeof,WRbasex,WRbasey
+        DATA.W  DSmaxXH,DSmaxYH         ;right,bottom
+        DATA.W  0,0,0                   ;x,y,WRbitofs
+        DATA.W  0,DSmaxYH               ;WRgrorgx,WRgrorgy
+        DATA.B  0,$1C                   ;attr1,attr2
+        DATA.B  0,WRlength              ;state, WRrcdlen
+
+DScsetH DATA.L  DScsetV+CSdata          ;character set record pointer
+        DATA.W  DScellY,DScellW         ;CSlpch, CSbpch
+        DATA.W  32,90                   ;CSfrstch, CSlastch
+        DATA.W  $FFFF,$FFC0,0           ;mask, dummy, attribs
+        ;
+        ; use vertical character set data
+        ;
+
+        page
+DSwndV  DATA.L  DScsetV                 ;WRcharpt
+        DATA.L  DShomeV                 ;home
+        DATA.L  DShomeV                 ;address
+        DATA.W  0,0,0                   ;WRhomeof,WRbasex,WRbasey
+        DATA.W  DSmaxXV,DSmaxYV         ;right,bottom
+        DATA.W  0,0,0                   ;x,y,WRbitofs
+        DATA.W  0,DSmaxYV               ;WRgrorgx,WRgrorgy
+        DATA.B  0,$1D                   ;attr1,attr2
+        DATA.B  0,WRlength              ;state, WRrcdlen
+
+DScsetV DATA.L  DScsetV+CSdata          ;character set record pointer
+        DATA.W  DScellW,DScellY         ;CSlpch, CSbpch
+        DATA.W  32,90                   ;CSfrstch, CSlastch
+        DATA.W  $003F,$FFFF,256         ;mask, dummy, attribs
+        ;
+        ; vertical character set data
+        ;
+        DATA.B  0,0,0,0,0,0             ; blank
+        DATA.B  0,0,$FD,0,0,0           ; !
+        DATA.B  0,$E0,0,$E0,0,0         ; "
+        DATA.B  $28,$FE,$28,$FE,$28,0   ; #
+        DATA.B  $24,$54,$FE,$54,$48,0   ; $
+        DATA.B  $C4,$C8,$10,$26,$46,0   ; %
+        DATA.B  $6C,$92,$6A,$04,$0A,0   ; &
+        DATA.B  0,0,$20,$C0,0,0         ; '
+        DATA.B  0,$38,$44,$82,0,0       ; (
+        DATA.B  0,0,$82,$44,$38,0       ; )
+        DATA.B  $08,$2A,$1C,$2A,$08,0   ; *
+        DATA.B  $08,$08,$3E,$08,$08,0   ; +
+        DATA.B  0,$01,$07,0,0,0         ; ,
+        DATA.B  $10,$10,$10,$10,$10,0   ; -
+        DATA.B  0,0,$02,0,0,0           ; .
+        DATA.B  $04,$08,$10,$20,$40,0   ; /
+        DATA.B  $7C,$8A,$92,$A2,$7C,0   ; 0
+        DATA.B  0,$42,$FE,$02,0,0       ; 1
+        DATA.B  $46,$8A,$92,$92,$62,0   ; 2
+        DATA.B  $84,$82,$92,$B2,$CC,0   ; 3
+        DATA.B  $18,$28,$48,$FE,$08,0   ; 4
+        DATA.B  $E4,$A2,$A2,$A2,$9C,0   ; 5
+        DATA.B  $3C,$52,$92,$92,$1C,0   ; 6
+        DATA.B  $80,$8E,$90,$A0,$C0,0   ; 7
+        DATA.B  $6C,$92,$92,$92,$6C,0   ; 8
+        DATA.B  $62,$92,$92,$94,$78,0   ; 9
+        DATA.B  0,0,$24,0,0,0           ; :
+        DATA.B  0,$01,$26,0,0,0         ; ;
+        DATA.B  0,$10,$28,$44,$82,0     ; <
+        DATA.B  0,$28,$28,$28,$28,0     ; =
+        DATA.B  0,$82,$44,$28,$10,0     ; >
+        DATA.B  $40,$80,$9A,$A0,$40,0   ; ?
+        DATA.B  $7C,$82,$9A,$9A,$7A,0   ; @
+        DATA.B  $3E,$48,$88,$48,$3E,0   ; A
+        DATA.B  $FE,$92,$92,$92,$6C,0   ; B
+        DATA.B  $7C,$82,$82,$82,$44,0   ; C
+        DATA.B  $FE,$82,$82,$82,$7C,0   ; D
+        DATA.B  $FE,$92,$92,$82,$82,0   ; E
+        DATA.B  $FE,$90,$90,$80,$80,0   ; F
+        DATA.B  $7C,$82,$8A,$8A,$4C,0   ; G
+        DATA.B  $FE,$10,$10,$10,$FE,0   ; H
+        DATA.B  0,$82,$FE,$82,0,0       ; I
+        DATA.B  $04,$82,$82,$FC,$80,0   ; J
+        DATA.B  $FE,$10,$28,$44,$82,0   ; K
+        DATA.B  $FE,$02,$02,$02,$02,0   ; L
+        DATA.B  $FE,$40,$30,$40,$FE,0   ; M
+        DATA.B  $FE,$20,$10,$08,$FE,0   ; N
+        DATA.B  $7C,$82,$82,$82,$7C,0   ; O
+        DATA.B  $FE,$90,$90,$90,$60,0   ; P
+        DATA.B  $7C,$82,$8A,$84,$7A,0   ; Q
+        DATA.B  $FE,$90,$98,$94,$62,0   ; R
+        DATA.B  $64,$92,$92,$92,$4C,0   ; S
+        DATA.B  $80,$80,$FE,$80,$80,0   ; T
+        DATA.B  $FC,$02,$02,$02,$FC,0   ; U
+        DATA.B  $F8,$04,$02,$04,$F8,0   ; V
+        DATA.B  $FC,$02,$1C,$02,$FC,0   ; W
+        DATA.B  $C6,$28,$10,$28,$C6,0   ; X
+        DATA.B  $C0,$20,$1E,$20,$C0,0   ; Y
+        DATA.B  $86,$8A,$92,$A2,$C2,0   ; Z
+        DATA.W  0
+

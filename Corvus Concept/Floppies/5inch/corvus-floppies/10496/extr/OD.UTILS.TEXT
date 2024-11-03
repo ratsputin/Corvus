@@ -1,0 +1,346 @@
+  { ********************************************************************* }
+  { ********************************************************************* }
+  
+  {  This is file OD.UTILS.  It contains utility routines which are used  }
+  {  by the OMNIDIAG program.  This is INCLUDEd by OMNIDIAG.              }
+  
+  { ********************************************************************* }
+  { ********************************************************************* }
+  
+  
+  FUNCTION unsigned; {  (b: BYTE): INTEGER;  forward declaration }
+    BEGIN
+    IF b < 0 THEN
+      unsigned := b + 256
+    ELSE
+      unsigned := b;
+    END;
+
+
+  { *********************************************************** }
+  { getsock - read a socket number and make sure it is a legal  }
+  { socket number ...  rsock := -1 if user types <esc>          }
+  { *********************************************************** }
+  PROCEDURE getsock(VAR rsock: INTEGER);
+    BEGIN
+    IF getnum(rsock) <> Normal THEN
+      BEGIN rsock := -1; EXIT(getsock); END;
+    IF (rsock > 4) OR (rsock < 1) THEN
+      BEGIN
+        printmsg(0, 2, 'Sockets are numbered 1, 2, 3, or 4.');
+        write('      1= 80, 2 = 90, 3 = A0, 4 = B0');
+        printmsg(0, 1, 'Which socket? ');
+        getsock(rsock);
+        END;
+    END;
+
+{$P}
+
+
+
+  { *********************************************************** }
+  { get a header length from the keyboard and make sure it's OK }
+  { if the user types <esc> then return -1 for hdrlen           }
+  { *********************************************************** }
+  PROCEDURE gethdrlen(VAR hl: BYTE; sock: INTEGER);
+    VAR i: INTEGER;
+    BEGIN
+    IF sock >= 3 THEN
+      BEGIN
+      printmsg(0, 3, 'What is the header length? ');
+      i := hl;
+      IF getnum(i) <> Normal THEN
+        BEGIN
+        hl := -1;
+        EXIT(gethdrlen);
+        END;
+      hl := ORD(i);
+      IF (hl > HdrLen) OR (hl < 0) THEN
+        BEGIN
+        printmsg(0,4, 'Sorry, Header Length must be >= 0 and <= ');
+        write(CHR(7), HdrLen, '.');
+        gethdrlen(hl, sock);
+        END;
+      END
+    ELSE
+      hl := 0;
+    END;
+{$P}
+
+
+  { *************************************************** }
+  { sendcnts - increments the appropriate send counters }
+  { assumes rcode is the return code from the last send }
+  { *************************************************** }
+  PROCEDURE sendcnts(rcode: INTEGER);
+    BEGIN
+    counts[SAT] := counts[SAT] + 1;
+    IF rcode <= MaxRetries THEN 
+      BEGIN
+      counts[SOK] := counts[SOK] + 1;
+      counts[rcode] := counts[rcode] + 1;
+      END;
+    CASE rcode OF 
+      GaveUp: counts[SGU] := counts[SGU] + 1;
+      TooLong: counts[STL] := counts[STL] + 1;
+      NoSockt: counts[SNS] := counts[SNS] + 1;
+      HdrErr: counts[SHE] := counts[SHE] + 1;
+      END; {CASE}
+    END;
+    
+
+
+  { ******************************************************************** }
+  { fillbuf - fills a buffer with a pattern.  The pattern is val followed}
+  { by the index of the element followed by val followed by the index... }
+  { ******************************************************************** }
+  PROCEDURE fillbuf(VAR buf: BUFFER; val: BYTE; lim: INTEGER);
+    VAR
+      i: INTEGER;
+    BEGIN
+    FOR i := 1 TO lim DO
+      IF (i MOD 2) = 0 THEN
+        buf.BYT[i] := i MOD 256
+      ELSE
+        buf.BYT[i] := val;
+    END;
+
+
+
+  { *********************************************************** }
+  { hexdump - displays the contents of a buffer in hex....      }
+  { *********************************************************** }
+  PROCEDURE hexdump(buf: BUFFER; lim: INTEGER);
+    VAR
+      ptr: pBYTES;
+
+    BEGIN   { hexdump }
+    GOTOXY(0,0);
+    CRT(EraseALL);
+    ptr := @buf;
+    dumphex(ptr, lim);
+    END;
+{$P}
+  { *********************************************************** }
+  { fill the user header portion of a result record             }
+  { *********************************************************** }
+  PROCEDURE hdrfill(VAR res: ODRES; hlen: INTEGER);
+    VAR
+      i, num: INTEGER;
+    BEGIN
+    printmsg(0, 5, 'Do you want to specify the header contents? N');
+    CRT(CURSORLEFT);
+    IF GETBYTE = 'Y' THEN
+      FOR i := 1 to hlen DO
+        BEGIN
+        num := 0;
+        printmsg(0,6, 'Header[');
+        write(i:2, '] = ');
+        IF getnum(num) <> Normal THEN EXIT(hdrfill);
+        res.HDR[i] := ORD(num MOD 256);
+        END
+    ELSE
+      WITH res DO
+        FOR i := 1 to hlen DO HDR[i] := i;
+    END;
+
+
+  PROCEDURE manfill(VAR b: BUFFER; VAR len: INTEGER);
+    VAR
+      s: String80;
+      i, num: INTEGER;
+      ch: CHAR;
+    BEGIN
+    printmsg(0,9, 'T)ext or N)umeric input? N');
+    CRT(CURSORLEFT);
+    num := 0;
+    ch := GETBYTE;
+    IF ch = 'T' THEN
+      BEGIN
+      printmsg(0,10, 'Enter your message: ');
+      writeln;
+      i := 1;
+      s := '';
+      IF getstring(s) <> Normal THEN EXIT(manfill);
+      len := LENGTH(s);
+      FOR i := 1 TO len DO b.CHR[i] := s[i];
+      END
+    ELSE
+      WITH b DO
+        FOR i := 1 TO len DO
+          BEGIN
+          printmsg(0,10, 'Data[');
+          write(i:2, '] = ');
+          IF getnum(num) <> Normal THEN EXIT(manfill);
+          BYT[i] := ORD(num MOD 256);
+          END;
+    END;
+{$P}
+
+  { *********************************************************** }
+  { autofill - fill an entire buffer with a paritcular value... }
+  { *********************************************************** }
+  PROCEDURE autofill(VAR b: BUFFER; ln: INTEGER);
+    VAR
+      num, i: INTEGER;
+    BEGIN
+    num := 0;
+    printmsg(0,8, 'Fill the buffer with what number? ');
+    IF getnum(num) <> Normal THEN EXIT(autofill);
+    WITH b DO
+      FOR i := 1 TO ln DO BYT[i] := ORD(num);
+    END;
+
+  { *********************************************************** }
+  { buffill - fill a data buffer with input from console...     }
+  { *********************************************************** }
+  PROCEDURE buffill(VAR b: BUFFER; VAR len: INTEGER);
+    VAR
+      ch: CHAR;
+    BEGIN                       { should also provide file capability }
+    printmsg(0,7, 'M)anual,  A)uto or  D)efault  filling?  D');
+    CRT(CURSORLEFT); ch := GETBYTE;
+    CASE ch OF
+      'M': manfill(b, len);
+      'A': autofill(b, len);
+      ' ', 'D': fillbuf(b, hostnum, len);{fill with a pattern...}
+      END;
+    END;
+
+
+  { ****************************************************** }
+  { hdump - display the contents of a header on the screen }
+  { ****************************************************** }
+  PROCEDURE hdump;
+    VAR
+      i, id: INTEGER;
+      b: BYTE;
+    BEGIN
+    printmsg(0,0, 'Dump which header? ');
+    id := 7;
+    IF getnum(id) <> Normal THEN EXIT(hdump);
+    IF id > MaxBufs THEN EXIT(hdump);
+    i := winselect(genwind);
+    printmsg(0,0, 'Header = ');
+    WITH restbl[id] DO
+      FOR i := 1 TO HdrLen DO
+        BEGIN
+        puthexbyte(HDR[i]);
+        write(' ');
+        END;
+    END;
+{$P}
+
+  { ******************************************* }
+  { bdump - display the contents of a buffer... }
+  { ******************************************* }
+  PROCEDURE bdump;
+    VAR
+      ch: CHAR;
+      id, i, n: INTEGER;
+    BEGIN
+    id := 7;
+    printmsg(0, 0, 'Dump which buffer? ');
+    IF getnum(id) <> Normal THEN EXIT(bdump);
+    printmsg(0,0, ' ');
+    IF id > MaxBufs THEN
+      BEGIN
+      printmsg(0,0, 'Does not exist!!!!');
+      bdump;
+      END;
+    printmsg(0,0, 'Dump how many bytes? ');
+    n := rdl;
+    IF getnum(n) <> Normal THEN EXIT(bdump);
+    printmsg(0,0, 'Dump as a S)tring of ASCII or H)ex? H');
+    CRT(CURSORLEFT);
+    ch := GETBYTE;
+    i := winselect(genwind);
+    CASE ch OF
+      ' ', 'H': hexdump(buftbl[id], n);
+      'S': BEGIN
+           printmsg(0,0, '');
+           FOR i := 1 TO n DO write(buftbl[id].CHR[i]);
+           END;
+      END; {CASE}
+    END;
+
+  { ****************************************** }
+  { mdump - display STAR! memory on the screen }
+  { ****************************************** }
+  PROCEDURE mdump;
+    VAR
+      li: LONGINT;
+      mp: pBUFFER;
+      n: INTEGER;
+    BEGIN
+    printmsg(0,0, 'Dump host memory starting at what location? ');
+    IF getlongnum(li) <> Normal THEN EXIT(mdump);
+    printmsg(0,0, 'Dump how many bytes? ');
+    n := BufSize;
+    IF getnum(n) <> Normal THEN EXIT(mdump);
+    mp := POINTER(li);
+    ior := winselect(genwind);
+    hexdump(mp^, n);
+    END;
+
+{$P}
+  { ***************************************** }
+  { ramdump - displays the entire 6801 RAM!!! }
+  { ***************************************** }
+  PROCEDURE ramdump;
+    VAR
+      val: INTEGER;
+      i,j: INTEGER;
+    BEGIN
+    i := winselect(ramwind);
+    CRT(EraseAll);
+    inverson;
+    printmsg(0,0,' ');
+    printmsg(0, 1, ' 6801 RAM, locations 80 thru FF:');
+    GOTOXY(0, 2);
+    inversoff;
+    FOR i := 128 TO 255 DO
+      BEGIN
+      IF ((i MOD 16) = 0) AND (i <> 128) THEN writeln;
+      IF (i MOD 4) = 0 THEN write(' ');
+      IF TCpeekTrans(i, val) <> 0 THEN fatal(' Transporter not responding');
+      puthexbyte(ORD(val));
+      write(' ');
+      END;
+    END;
+
+
+    PROCEDURE delaycmd;
+      BEGIN
+      ior := winselect(genwind);
+      printmsg(0,0, 'Change the delay factor...');
+      printmsg(5,1, 'New delay = ');
+      IF getnum(delay) <> Normal THEN EXIT(delaycmd);
+      END;
+
+
+  PROCEDURE help;
+    BEGIN
+    ior := winselect(genwind);
+    printmsg(0, 1,  'Help!!! command:');
+    printmsg(5,2, 'Do you really want help? N');
+    CRT(CURSORLEFT);
+    IF GETBYTE = 'Y' THEN
+      printmsg(5,3, 'That''s too bad, help has not been implemented yet!');
+    END;
+
+{ end of OD.UTILS }
+{$P}
+
+
+
+
+
+
+
+
+
+
+
+
+

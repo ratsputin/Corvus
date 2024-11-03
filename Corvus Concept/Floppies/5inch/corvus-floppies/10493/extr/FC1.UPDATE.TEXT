@@ -1,0 +1,18 @@
+clrwnd
+;
+; File ID: /FCCNSS1/SYSTEM.UPDATE
+;
+; This SYSTEM.UPDATE assumes the volume /CCNSS exists and
+; is mounted with read/write access.
+;
+pause Continue
+;
+setvol /CCNSS
+delfil -q display nas_api.obj nas_defs.obj
+krunch -q /CCNSS
+setvol /FCCNSS1
+cpyfil -q -vCCNSS display nas_api.obj nas_defs.obj
+krunch -q /CCNSS
+;
+; SYSTEM.UPDATE complete
+;

@@ -1,0 +1,21 @@
+
+Directory of UCSD disk image file 'calcSrc.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 13 files,  0 to 6 (6), eov 500, size 17, free 13
+
+ 1: DRV.DISPHZ      Data  2-Feb-83    6-  17(  11),  5632+512=  6144 bytes
+ 2: DRV.DISPVT      Data  2-Feb-83   17-  28(  11),  5632+512=  6144 bytes
+ 3: DRV.KYBD        Data  4-Feb-83   28-  33(   5),  2560+512=  3072 bytes
+ 4: DRV.SYSTRM      Data 18-Apr-83   33-  40(   7),  3584+512=  4096 bytes
+ 5: ED              Data 22-May-83   40- 367( 327), 167424+512= 167936 bytes
+ 6: KEYS.ED.TEXT    Ux5d13 22-May-83  367- 381(  14),  7168+512=  7680 bytes
+ 7: ASSIGN          Data  4-Apr-83  381- 392(  11),  5632+512=  6144 bytes
+ 8: CSD.06.10       Data 23-May-83  392- 394(   2),  1024+506=  1530 bytes
+ 9: CSD.07.11       Data 23-May-83  394- 397(   3),  1536+ 95=  1631 bytes
+10: CS.8BY13        Data 22-May-83  397- 404(   7),  3584+ 72=  3656 bytes
+11: CSK.DVORAK      Data 15-Mar-83  404- 406(   2),  1024+512=  1536 bytes
+12: CALC            Data 18-May-83  406- 459(  53), 27136+512= 27648 bytes
+13: CALC.TEXT       Text 18-May-83  459- 483(  24), 12288+335= 12623 bytes

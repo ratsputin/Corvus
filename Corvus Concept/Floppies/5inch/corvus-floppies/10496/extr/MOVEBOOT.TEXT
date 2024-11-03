@@ -1,0 +1,38 @@
+program moveboot;
+type
+    byte = -128..127;
+    diskblocks = array[1..512] of byte;
+    quikload = record
+                   header: array[1..12] of byte;
+                   a: array[1..4] of diskblocks;
+                   end;
+var
+    blkno: longint;
+    i,x: integer;
+    fnDest,fnSrc: string[20];
+    f1: file;
+    f2: file of quikload;
+    FourBlocks: quikload;
+
+begin
+write('Enter file name to write blocks: '); readln(fnDest);
+write('Enter file name to get boot blocks: '); readln(fnSrc);
+write('Enter block number in ',fnDest,' to write boot blocks: '); readln(blkno);
+reset(f1,fnDest);
+reset(f2,fnSrc);
+read(f2,FourBlocks);
+for i := 1 to 4 do
+   begin
+   x := blockwrite(f1,FourBlocks.a[i],1,blkno);
+   if (ioresult <> 0) or (x <> 1) then
+      begin
+      writeln('Write of block ',blkno,' failed.');
+      close(f1,lock);
+      close(f2,lock);
+      exit(moveboot);
+      end
+   else blkno := blkno + 1;
+   end;
+close(f1,lock);
+close(f2,lock);
+end.

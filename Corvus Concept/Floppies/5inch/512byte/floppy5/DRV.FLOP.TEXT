@@ -1,0 +1,1908 @@
+;
+; file: drv.flop.text
+; date: 22-June-1983
+; Floppy driver for the new controller.
+;
+; Include files :
+;       /ccos/os.gbl.asm.text   {not listed}
+;       flop.equ.text           {driver equates}
+;
+; version 1.0a is initial version of driver. completed :  6/22/83 kb
+;
+; PROBLEMS:
+;        1) When a time out on the controller occurs (send/rcv of cmd/result)
+;           should the driver RESET the FDC or what??? to get it back to a known
+;           state.
+;
+;        2) If get a fault line error (ST0 bit D4 = 1) then the door may be
+;           open.
+;
+;        3) Driver will not work, as currently structured, with ASSIGN.  ASSIGN
+;           does not call the driver twice if this is the first time anything
+;           is attached to the slot; once for drive nuber = 0 and then once for
+;           the drive number to install.  Second, it does not set the values for
+;           UTdrv and UTslt, drive and slot numbers.
+;
+;        4) Floppy drive says 2-sided if diskette in drive is 2-sided even if
+;           drive has only 1 head (not positive)?? OR drive 2-sided and diskette
+;           2-sided but only side 0 formatted.  Possible solution if fail
+;           on read/write operation to side 1 because can't find adr mark or ???
+;           then assume diskette is single sided and restart whole operation from
+;           side,track,starting calculation.  Requires user buffer address, starting
+;           block, and ??? are NOT destroyed.
+;
+;        5) May have density variation of diskette when read/write may have to switch
+;           density if get unformatted error.  Do this before check if no side 1, see
+;           problem 4.
+;
+;        6) Switching diskettes with different density and/or sides does not always
+;           work.  If the disk change bit is cleared by another program, such as the
+;           formatter, the driver may not correctly determine the correct diskette
+;           state.  Example, state is FM/1-side and palce in a new diskette and format
+;           it FM/2-side.  The driver would never detect this change unless the disk
+;           change bit was set, which it wouldn't be because the formatter changed it
+;           with its select and deselect of the drive.  Therefore, the driver could
+;           incorrectly determine the sector and block ordering.
+;
+;           Solution :  each program that changes the state of the diskette or prevents
+;                       the driver from being aware of a diskette state change, such as
+;                       the formatter, MUST update the device type flags for density
+;                       and sides before calling the driver or terminating.
+;
+;        7) Physical track number is the track number wanted on the diskette.  If
+;           using 5-1/4 drive with 48 TPI diskettes then to seek to track must
+;           multiply track number by 2.  All the 5-1/4 drives are 96 TPI, therefore
+;           must use every other track (even numbers).
+;
+; equates
+;
+
+; INCLUDE   '/ccos/os.gbl.asm.text' done here
+         list      0
+         INCLUDE   '/ccos/os.gbl.asm.text'
+         list      1
+         INCLUDE   'flop.equ.text'               ;{driver equates}
+  page
+;
+; UNIT I/O PARAMETER PASSING DEFINITION
+;
+;   COMMAND       UNIT   ADDR   COUNT   BLOCK   MODE     IORESULT   BUSY
+; 0 - INSTALL     DO.W                                   D7.W
+; 1 - READ        D0.W   D1.L   D2.L    D3.L             D7.W
+; 2 - WRITE       D0.W   D1.L   D2.L    D3.L             D7.W
+; 3 - CLEAR       D0.W                                   D7.W
+; 4 - BUSY        D0.W                                   D7.W       D0.W
+; 5 - STATUS      D0.W   D1.L   D2.W <--FUNCTION CODE    D7.W
+; 6 - UNMOUNT     D0.W                                   D7.W
+;
+; ALL REGISTER VALUES ON ENTRY ARE SAVED AND RESTORED EXCEPT D0 & D7
+; INTERNAL REGISTER USEAGE :
+;
+;        D0 = temporary register
+;        D1 = temporary register
+;        D2 = count of bytes user wants then number of bytes in
+;              partial sector - if no partial then = sector size
+;        D3 = temporary register
+;        D4 = driver command then # of sectors to read/write (loop counter)
+;        D5 = starting block then current logical sector number
+;        D6 = count of bytes in command or result array
+;        D7 = current IOresult code
+;
+;        A0 = temporary register
+;        A1 = temporary register
+;        A2 = pointer to local temporary variables (even word boundary)
+;        A3 = pointer to user's buffer or parameter block
+;        A4 = device table entry pointer
+;        A5 = Slot base address
+;        A6 = Static ram Base page pointer - local data
+;
+  page
+         GLOBAL    NewFlopDRV
+;
+; Floppy DRIVER
+;
+NewFlopDRV
+         BRA.S     FLOP001                       ;JUMP AROUND HEADER
+         DATA.B    1                             ;DEVICE BLOCKED
+         DATA.B    31                            ;VALID CMDS - ALL
+         DATA.B    83,06,22,00                   ;DATE June 22, 1983
+         DATA.B    hmlen                         ;HEADER MSG LENGTH
+xxx010   DATA.B    'DDDS Floppy driver (v 1.0a)' ;HEADER MSG
+hmlen    EQU       %-xxx010
+;
+FLOP001
+         MOVEQ     #IOEioreq,D7                  ;assume invalid command
+         CMPI.W    #UNMCMD,D4                    ;VALID COMMAND
+         BHI.S     FlopERR                       ;no, exit
+         CLR.L     D7                            ;clear IOresult
+         MOVEM.L   D1-D6/A0-A6,-(SP)             ;SAVE REGISTERS
+         MOVE.L    D3, D5                        ;move block adr to internal global reg
+         MOVEA.L   D1,A3                         ;ADDRESS OF USERS BUFFER
+         SUBA.W    #LocalFrame, SP               ;allocate local stack frame
+         MOVE.L    SP, A2                        ;save address(must be even # of bytes)
+
+; Get data Ram(A6), Slot(A5), and Device table entry(A4) pointers
+;
+         BSR       GetBaseAdrs                   ; on Entry: D0 = unit number
+         BNE.S     NFDexit                       ; if invalid unit number error
+
+         LEA       FlopTBL,A0                    ;TURN THE COMMAND INTO A
+         LSL.W     #1,D4                         ;INDEX TO THE FUNCTION
+         MOVE.W    0(A0,D4.W),D4
+         JSR       0(A0,D4.W)                    ;DO FUNCTION
+
+NFDexit  ADDA.W    #LocalFrame, SP               ;release local stack frame
+         MOVEM.L   (SP)+,D1-D6/A0-A6             ;RESTORE registers
+FlopERR  RTS
+
+; THE FLOPPY DRIVER JUMP TABLE
+;
+FlopTBL  DATA.W    FLPINST-FlopTBL               ;UNITINSTALL
+         DATA.W    FLPREAD-FlopTBL               ;UNITREAD
+         DATA.W    FLPWRIT-FlopTBL               ;UNITWRITE
+         DATA.W    FLPCLER-FlopTBL               ;UNITCLEAR
+         DATA.W    FLPBUSY-FlopTBL               ;UNITBUSY
+         DATA.W    FLPSTAT-FlopTBL               ;UNITSTATUS
+         DATA.W    FLPUNMT-FlopTBL               ;UNITUNMOUNT
+  page
+;
+; UnitInstall - init device table and internal variables.
+;               initialize controller
+;
+; Put default values in device table entry
+;
+FLPINST                                          ;assume 8
+         CLR.B     UTro(A4)                      ; not a read only device
+         MOVE.B    #D8Type, UTtyp(A4)            ;type = single density and 1 side
+         MOVE.B    #D8TrkSd, UTtps(A4)           ; default TRACKS PER SIDE
+         MOVE.B    #D8ScTrk, UTspt(A4)           ; default SECTORS PER TRACK
+         MOVE.W    #D8SctLen, UTblk+2(A4)        ; default sector length
+
+         BTST      #LSeight, FDClocl(A5)         ;is it 8?
+         BON.S     FINis8                        ;yes, else do for 5
+         MOVE.B    #D5Type, UTtyp(A4)            ;type = double density and 2 sides
+         MOVE.B    #D5TrkSd, UTtps(A4)           ; default TRACKS PER SIDE
+         MOVE.B    #D5ScTrk, UTspt(A4)           ; default SECTORS PER TRACK
+         MOVE.W    #D5SctLen, UTblk+2(A4)        ; default sector length
+
+
+; initialize internal variables
+;
+FINis8   BSR.S     InitIntrnal
+
+; if drive number is 0 then init controller & find # of drives on card
+;
+         TST.B     UTdrv(A4)
+         BNE.S     FINrstr                       ;not drive 0, do restore
+         BSR.S     InitCntrlr                    ;init controller
+         BNE.S     FINerror                      ;if failed try to recover
+         BSR.S     GetNumDrvs                    ;get number of drives at card
+         BRA.S     FINexit                       ;always exit
+
+; else do restore then
+; do read id and sense drive status to get disk and drive info
+;
+FINrstr  BSR       FLPCLER                       ;does all this
+FINexit  RTS
+
+; possible serious I/O error reset chip again to try to recover
+;
+FINerror BSR.S     InitCntrlr                    ;init controller also turns off motor
+         BEQ.S     FINexit                       ;if ok exit
+         BRA       InitFDC                       ;else reset controller and leave
+  page
+;
+; InitIntrnal - initialze all internal variables to their default state
+;
+;        Entry : (A6) = data ram base address
+;                (A4)=ptr to device table entry
+;
+; Init the interleave, skew, start track & step rate table
+;
+InitIntrnal
+         MOVEQ     #LgclTbl, D0                  ;field index
+         LEA       DefIntTbl, A0                 ;default table
+
+IINmoveI MOVE.W    (A0)+, 0(A6,D0)               ;
+         ADDQ.W    #2, D0                        ;each field is an integer
+         CMPI.W    #LgclTLen, D0                 ;do for each field in table
+         BCS.S     IINmoveI                      ;branch when Dest < Src
+
+         MOVE.L    #FDDTimeOut, RdyTO(A6)        ;init ready wait timeout
+         CLR.W     FLAGS(A6)                     ;clear flag word
+
+         LEA       CurTrack(A6), A0              ;clear current track
+         MOVE.B    UTdrv(A4), D0                 ;number for this drive
+         BEQ.S     IINexit                       ;if drive number = 0 don't do
+         EXT.W     D0
+         SUBQ.W    #1, D0                        ;make into index into array
+         CLR.B     0(A0,D0)
+IINexit  RTS
+
+; Default table
+;
+DefIntTbl
+         DATA.W    1                             ;1 interleave
+         DATA.W    0                             ;0 skew
+         DATA.W    0                             ;starting track = 0
+; Bug in FDC - must specify step rate 1 ms. faster than want it
+         DATA.W    4                             ;3 millisecond step rate
+;
+; InitCntrllr - init the FDC and do a Specify command
+;
+InitCntrllr
+         BSR       InitFDC                       ;reset the FDC
+         BSR       SpecifyCmd                    ;do a specify command
+ICRexit  RTS
+  page
+;
+; GetNumDrvs - get number of drives attached to controller at current slot.
+;              Only called when drive number in device table entry = 0.
+;
+;       Entry : (A4)=ptr to device table entry
+;               (A5)=ptr to slot
+;               (D7) = 0 (no error)
+;       Exit  : (NE)=error D7 has error code
+;               (EQ)=no error, D7 = 0
+;
+; SEE IF DRIVE 0 THRU 3 IS ATTACHED.  DRIVE NUMBERS MUST BE DENSE.
+;
+GetNumDrvs
+         MOVEQ     #1, D3                        ;drive number
+GTNchk   MOVE.B    D3, UTdrv(A4)                 ;needed FOR MotorON
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       MotorON                       ;turn on motor and wait for Ready
+         BNE.S     GTNdone                       ;drv never came ready so assume no drv
+         ADDQ.W    #1, D3                        ;inc to next drive number
+         CMPI.W    #MAXdrive, D3                 ;did for all the drives?
+         BLS.S     GTNchk                        ;no
+
+;  Put the number of drives in the slot table entry for this slot.
+;  always put at least a 1 in slot table ndr field
+;
+GTNdone  BSR       MotorOFF                      ;turn off motor
+         CLR.L     D7                            ;clear timeout error code
+         SUBQ.W    #1, D3                        ;drive number back to last correct
+         CLR.B     UTdrv(A4)                     ;set drive # BACK TO ZERO
+         MOVEA.L   pSysCom.W, A0                 ;syscom pointer
+         MOVEA.L   SCslttbl(A0), A0              ;A0 ==> PTR TO SLOT TABLE
+         ADDA.W    #STinfo+Stndrv, A0            ;A3  => PTR FIRST ENTRY, FIELD NDR
+         CLR.L     D0                            ;D0 is lsot number
+         MOVE.B    UTslt(A4), D0
+         SUBQ.W    #1, D0                        ;get index into slot table
+         MULU      #STinfoL, D0
+         MOVE.W    D3, 0(A0,D0.W)                ;PUT NUMBER OF DRIVES IN SLOT TABLE
+
+; IF NUMBER OF DRIVES = 0 THEN ERROR --- NO DRIVES ATTACHED
+;
+         TST.W     D3                            ;drive number will be zero if no drive 1
+         BNE.S     GTNexit                       ;if not 0 then ok
+         MOVEQ     #IOEnfdrv, D7                 ;NO FLOPPY DRIVE ERROR
+GTNexit  TST.W     D7
+         RTS
+  page
+;
+; FLPREAD - UnitRead of floppy
+;
+; save user buffer address and starting block in local stack frame
+;
+FLPREAD  MOVE.L    A3, StrtBfAdr(A2)
+         MOVE.L    D3, StrtBlk(A2)
+
+; Turn on motor
+;
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       MotorON
+         BNE.S     FRDmtrOFF                     ;drive not come ready
+
+; check for disk change
+;
+         BSR       DskChng
+         BNE.S     FRDmtrOFF                     ;I/O error, exit
+
+; get starting sector, track and side and # of sectors to read
+;
+         BSR       StrtSTS
+         BNE.S     FRDmtrOFF                     ;invalid block number
+         BSR       CalcNmSctr
+         SUBQ.W    #1, D4                        ;turn into loop counter
+
+; seek to track and build interleave table
+;
+         BSR       Seek
+         BNE.S     FRDmtrOFF
+         BSR       BuildIntrl
+
+; for i := 1 to (# of sectors to read) do
+; read sector, move data to user's buffer, update sector,track and side
+;
+FRDread  BSR       ReadSector                    ;read sector
+         BNE.S     FRDmtrOFF                     ;I/O error exit
+         BSR       MoveOUT                       ;move data to user's space
+         BSR       UpdtSTS                       ;update sector,track and side
+         DBNE      D4, FRDread                   ;do until(bad block) or (read all sectors)
+
+; turn motor off and exit
+;
+FRDmtrOFF
+         BSR       MotorOFF
+FRDexit  RTS
+  page
+;
+; FLPWRIT - UnitWrite of floppy
+;
+; Turn on motor
+;
+FLPWRIT  MOVEQ     #DMAWrite, D0                 ;use dma in write direction
+         BSR       MotorON
+         BNE.S     FWRmtrOFF                     ;drive not come ready
+
+; check for disk change
+;
+         BSR       DskChng
+         BNE.S     FWRmtrOFF                     ;I/O error, exit
+
+; get starting sector, track and side and # of sectors to write
+;
+         BSR       StrtSTS
+         BNE.S     FWRmtrOFF                     ;invalid block number
+         BSR       CalcNmSctr
+         SUBQ.W    #1, D4                        ;turn into loop counter
+
+; seek to track and build interleave table
+;
+         BSR       Seek
+         BNE.S     FWRmtrOFF
+         BSR       BuildIntrl
+
+; for i := 1 to (# of sectors to write) do
+; move data from user's buffer, write sector, update sector,track and side
+;
+FWRread  TST.W     D4                            ;if last sector and is partial
+         BNE.S     FWRnlast                      ;then read sector into controller
+         CMP.W     UTblk+2(A4), D2               ;buffer first
+         BEQ.S     FWRnlast                      ;last sector is full, don't read first
+         MOVEQ     #DMARead, D0                  ;reset dma to read direction
+         BSR       MotorON
+         BNE.S     FWRmtrOFF                     ;drive not come ready
+         BSR       ReadSector                    ;read sector
+         BNE.S     FWRmtrOFF                     ;I/O error exit
+         MOVEQ     #DMAWrite, D0                 ;put dma back as write direction
+         BSR       MotorON
+         BNE.S     FWRmtrOFF                     ;drive not come ready
+
+FWRnlast BSR       MoveIN                        ;move data from user's space
+         BSR       WriteSector                   ;write sector
+         BNE.S     FWRmtrOFF                     ;I/O error exit
+         BSR       UpdtSTS                       ;update sector,track and side
+         DBNE      D4, FWRread                   ;do until(bad block) or (read all sectors)
+
+; turn motor off and exit
+;
+FWRmtrOFF
+         BSR       MotorOFF
+FWRexit  RTS
+  page
+;
+; FLPCLER - UnitClear
+;           Restore drive then find out diskete states.
+;
+FLPCLER
+         BSR       InitCntrllr                   ;reset FDC
+         BNE.S     FCLexit                       ;failed to reset
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       MotorON                       ;turn on motor and wait for Ready
+         BNE.S     FCLexit                       ;timed out waiting for ready
+         BSR       Restore                       ;restore to track 0
+         BNE.S     FCLexit                       ;timed out waiting for FDC
+         BSR       GetDrvInfo                    ;init for current disk
+FCLexit  BRA       MotorOFF                      ;turn off motor and deselect drive
+
+; FLPBUSY - UnitBusy :   always return true.
+;
+FLPBUSY  MOVEQ     #1, D0
+         RTS
+
+; UNITUNMOUNT - make sure motor is off
+;
+FLPUNMT  MOVE.B    #MMtrOFF, FDClocl(A5)
+         RTS
+  page
+;common functions - put in groups so can make include files if necessary
+;routines to do macro I/O operations
+
+;
+; DskChng - check if disk has changed.  If it has then find out diskette
+;           state and restore the drive.
+; ASSUMES motor is alreay on and up to speed.
+;
+;        Exit  : (NE) = failed, I/O error
+;                (EQ) = worked
+;
+DskChng  BTST      #LSdskchg, FDClocl(A5)        ;disk changed?
+         BOFF.S    DKCexit                       ;no, exit (cc = EQ)
+
+; restore drive
+;
+         BSR       Restore                       ;restore to track 0
+         BNE.S     DKCexit                       ;failed, D7 has error code
+
+; get diskette info
+;
+         BSR.S     GetDrvInfo
+
+DKCexit  RTS
+  page
+; GetDrvInfo - get sector length, density and number of sides.
+;              get sides from sense drive status command and get sector
+;              length and density from read id command.
+;        try read id with current density if fails flip density flag.
+;        if that fails report error and stop.
+;        Exit  : (NE) = failed, I/O error or no density????
+;                (EQ) = worked
+; do read id to find density
+;
+GetDrvInfo
+         MOVEQ     #3, D0                        ;try each density at least twice
+
+GDIagain MOVE.W    D0, -(SP)                     ;save retry count
+         MOVEQ     #Mside0, D3                   ;need look at side 0 only
+         BSR       ReadID                        ;if works will clear D7
+         BEQ.S     GDIok                         ;did command
+         BRA.S     GDIexit1                      ;timedout, error exit
+
+GDIok    BSR       RdIDstat                      ;see if command worked
+         BEQ.S     GDIsave                       ;worked, save state
+         BCHG      #TYPdnsty, UTtyp(A4)          ;try other density
+         MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, GDIagain                  ;do until no more retries
+         BRA.S     GDIexit                       ;failed, exit
+
+;save sector length from read id result
+;
+GDIsave  BSR       CnvSLenCd                     ;convert sector length code and save
+         BNE.S     GDIexit1                      ;sector size to large error
+
+; see if drive has side 1
+;
+         BTST      #FLGsides, Flags(A6)          ;if user sets sides then don't
+         BON.S     GDIclr7                       ;change or calc
+         MOVEQ     #Mside0, D0                   ;need look at side 0 only
+         BSR       SensDrvStat                   ;do drive status to get # of sides
+         BNE.S     GDIexit1                      ;timed out, exit
+         BSET      #TYPsides, UTtyp(A4)          ;assume single sided
+         BTST      #ST32sid, (A2)                ;test for number of sides
+         BOFF.S    GDIspt                        ;is single sided (1=2 sided)
+
+; make sure can read side 1
+;
+         MOVEQ     #Mside1, D3                   ;look at side 1
+         BSR       ReadID                        ;if works will clear D7
+         BNE.S     GDIexit1                      ;command failed timeout, exit
+         BSR       RdIDstat                      ;see if command worked
+         BNE.S     GDIclr7                       ;failed leave as 1 sided
+         BCLR      #TYPsides, UTtyp(A4)          ;is double sided
+GDIclr7  CLR.L     D7                            ;if read of side 1 failed - ignore err
+GDIspt   BSR       CalcSPT                       ;calculate sectors per track
+GDIexit1 MOVE.W    (SP)+, D0                     ;remove D0 from stack
+GDIexit  TST.W     D7                            ;show error state
+         RTS
+  page
+;
+; ReadSector - read 1 sector.  Finds disk parameters if read function
+;              returns an "UNFORMATTED" error.
+;
+;        Entry : (D5) = logical sector number
+;                (A2) = pointer to local stack frame
+;        Exit  : (NE) = failed, I/O error
+;                (EQ) = worked
+;
+ReadSector
+         MOVEQ     #RTRYread, D0                 ;read sector retry count
+
+; if read fails and get "UNFORMATTED" error then retry with other density
+;
+RSCrtry  MOVE.W    D0, -(SP)                     ;save retry count
+         CLR.L     D7                            ;make sure error code cleared
+
+         MOVEQ     #CMDread, D0                  ;get in command
+         BSR       RdWr1                         ;do read operation
+         BNE.S     RSCexit1                      ;timedout, error exit
+
+         BSR       RDstatus                      ;see if worked
+         BEQ.S     RSCexit1                      ;read sector, all done
+         CMPI.W    #IOEnfmtd, D7                 ;not formatted error
+         BNE.S     RSCother                      ;no, retry with same density
+         BSR.S     GetDrvInfo                    ;get drive parameters
+         BNE.S     RSCexit1                      ;maybe drive is not formatted
+         MOVEQ     #IOEnfmtd, D7                 ;restore error code
+
+RSCother MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, RSCrtry                   ;do until no more retries then
+         BRA.S     RSCexit                       ;exit with error in D7
+
+RSCexit1 MOVE.W    (SP)+, D0                     ;remove retry count from stack
+RSCexit  TST.W     D7                            ;show error condition
+         RTS
+  page
+;
+; WriteSector - write 1 sector.  Finds disk parameters if write function
+;               returns an "UNFORMATTED" error.
+;
+;        Entry : (D5) = logical sector number
+;                (A2) = pointer to local stack frame
+;        Exit  : (NE) = failed, I/O error
+;                (EQ) = worked
+;
+WriteSector
+         MOVEQ     #RTRYwrite, D0                ;write sector retry count
+
+; if write fails and get "UNFORMATTED" error then retry with other density
+;
+WSCrtry  MOVE.W    D0, -(SP)                     ;save retry count
+         CLR.L     D7                            ;make sure error code cleared
+
+         MOVEQ     #CMDwrite, D0                 ;get in command
+         BSR       RdWr1                         ;do write operation
+         BNE.S     WSCexit1                      ;timed out, error exit
+
+         BSR       WRstatus                      ;see if worked
+         BEQ.S     WSCexit1                      ;read sector, all done
+         CMPI.W    #IOEnfmtd, D7                 ;not formatted error
+         BNE.S     WSCother                      ;no, retry with same density
+         BSR       GetDrvInfo                    ;get drive parameters
+         BNE.S     WSCexit1                      ;maybe drive is not formatted
+         MOVEQ     #IOEnfmtd, D7                 ;restore error code
+
+WSCother MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, WSCrtry                   ;do until no more retries then
+         BRA.S     WSCexit                       ;exit with error in D7
+
+WSCexit1 MOVE.W    (SP)+, D0                     ;remove retry count from stack
+WSCexit  TST.W     D7                            ;show error condition
+         RTS
+  page
+;FDC, FDD commands
+;
+; SpecifyCmd - do a specify command to FDC
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+SpecifyCmd
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDspcfy, (A0)+              ;put specify in command buffer
+
+; 2nd byte is step rate code in bits D7 to D4 inclusive, HUT in D3 to D0 inclusive
+; 3rd byte is HLT code in bits D7 to D1 and NOT DMA in bit D0
+;
+         MOVEQ     #HLT8code+NDMAcode, D3        ;HLT code is pre-shifted/assume 8
+         MOVEQ     #16, D1                       ;step rate code goes
+         MOVE.W    StepRate(A6), D0              ;from F to 0 where F = 1 ms.,
+                                                 ;E = 2 ms., D = 3 ms. and so on
+         BTST      #LSeight, FDClocl(A5)         ;is it 8?
+         BON.S     SPCis8                        ;yes, else formula for 5
+         LSR.W     #1, D0                        ;has step rate div 2
+         MOVEQ     #HLT5code+NDMAcode, D3        ;use HLT code for 5 1/4
+
+SPCis8   SUB.B     D0, D1                        ;formula = 16 - step rate
+         LSL.B     #4, D1                        ;put step rate in correct bits
+         ORI.B     #HUTcode, D1                  ;add head unload time code
+         MOVE.B    D1, (A0)+                     ;put 2nd byte in command array
+         MOVE.B    D3, (A0)                      ;put 3rd byte in command array
+
+         MOVEQ     #3,D6                         ;specify command 3 bytes in length
+         BSR       WrController                  ;write command array to controller
+SPCexit  RTS                                     ;WrController sets cc for error state
+  page
+;
+; SensIntStat - do a Sense Interrupt Status command to FDC.  Find out cause of
+;               interrupt.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;                IF completed THEN at (A2) is result array of command
+;                                          (2 bytes)
+;
+SensIntStat
+         MOVE.B    #CMDsnsint, (A2)              ;put command byte in buffer
+         MOVEQ     #1, D6                        ;only 1 byte to command
+         BSR       WrController                  ;send command
+         BNE.S     SISexit                       ;if timed out exit
+
+         MOVEQ     #RSLTsnsint, D6               ;length of result array
+         BSR       RdController                  ;read result
+SISexit  RTS
+  page
+;
+; SensDrvStat - do a Sense Drive Status command to FDC.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;                (D0) = side select: side 1=Mside1, side 0=Mside0
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;                IF completed THEN at (A2) is result array of command
+;                                          (1 byte: ST3)
+;
+SensDrvStat
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDsnsdrv, (A0)+             ;put command byte in buffer
+
+; 2nd byte:  bit D2 is side and bits D1 and D0 are the device select
+;
+         MOVE.B    UTdrv(A4), D1                 ;get drive number
+         SUBQ.B    #1, D1                        ;turn into dev sel bits
+         OR.B      D0, D1                        ;put in side select
+         MOVE.B    D1, (A0)                      ;put in command array
+
+         MOVEQ     #2, D6                        ;2 bytes to command
+         BSR       WrController                  ;send command
+         BNE.S     SDSexit                       ;if timed out exit
+
+         MOVEQ     #RSLTsnsdrv, D6               ;length of result array
+         BSR       RdController                  ;read result
+SDSexit  RTS
+  page
+;
+; Restore - do a recalibrate command to FDC.  Puts head on Track 0.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+Restore  MOVEQ     #RTRYrstr, D0                 ;restore retry count
+
+RSTrtry  MOVE.W    D0, -(SP)                     ;save retry count
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDrclbrt, (A0)+             ;put recalibrate in command buffer
+
+; 2nd byte is drive selected in bits D1 and D0, the other bits are 0
+;
+         MOVE.B    UTdrv(A4), D0                 ;get drive number
+         SUBQ.B    #1, D0                        ;turn into dev sel bits
+         MOVE.B    D0, (A0)                      ;put in command array
+         MOVEQ     #2, D6                        ;2 bytes in command array
+
+         BSR       WrController                  ;write command array to controller
+         BNE.S     RSTexit                       ;command timed out
+
+; wait for command to complete
+;
+RSTwait  BSR       WaitFDC
+         BNE.S     RSTexit                       ;should there be a timeout on cmd???
+
+; do Sense Interrupt Status command to get command results
+;
+         BSR.S     SensIntStat
+         BNE.S     RSTexit
+
+; first byte of result array (pointed at by A2) is ST0, see if seek end is good
+;
+         BSR       RstrStatus                    ;find out type of error
+         BCS.S     RSTwait                       ;wrong drive wait for correct
+         BEQ.S     RSTexit                       ;was good, so exit
+         MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, RSTrtry                   ;do until no more retries then
+         BRA.S     RSTexit1                      ;return failuere
+
+RSTexit  MOVE.W    (SP)+, D0                     ;remove retry count from stack
+RSTexit1 TST.W     D7                            ;show error condition
+         RTS
+  page
+; Seek - do a seek to track command to FDC.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to local stack frame
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;                physical side and track setup
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+Seek     MOVEQ     #RTRYseek, D0                 ;restore retry count
+
+SEKrtry  MOVE.W    D0, -(SP)                     ;save retry count
+         MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVE.B    #CMDseek, (A0)+               ;put seek cmd in command buffer
+
+; 2nd byte is drive selected in bits D1 and D0 and head select in D2
+;
+         BSR       DevSelHD                      ;get device and head select byte
+         MOVE.B    D1, (A0)+                     ;put in command array
+         MOVE.B    Ptrack(A2), D0                ;3rd byte: track wanted
+         BTST      #FLGtpi, Flags(A6)            ;if 48 TPI is selected
+         BOFF.S    SEKis96                       ;then multipy the physical track
+         LSL.B     #1, D0                        ;by 2 to get 96 TPI position.
+SEKis96  MOVE.B    D0, (A0)                      ;save track number in array
+
+         MOVEQ     #3, D6                        ;2 bytes in command array
+         BSR       WrController                  ;write command array to controller
+         BNE.S     SEKexit                       ;command timed out
+
+; wait for command to complete
+;
+SEKwait  BSR       WaitFDC
+         BNE.S     SEKexit                       ;should there be a timeout on cmd???
+
+; do Sense Interrupt Status command to get command results
+;
+         BSR       SensIntStat
+         BNE.S     SEKexit
+
+; see if seek end is good
+;
+         BSR       SeekStatus                    ;find out type of error
+         BCS.S     SEKwait                       ;wrong drive wait for correct
+         BEQ.S     SEKexit                       ;was good, so exit
+         MOVE.W    (SP)+, D0                     ;get retry count
+         DBRA      D0, SEKrtry                   ;do until no more retries then
+         BRA.S     SEKexit1                      ;error exit if no more
+
+SEKexit  MOVE.W    (SP)+, D0                     ;remove retry count from stack
+SEKexit1 TST.W     D7                            ;show error condition
+         RTS
+  page
+;
+; ReadID - do a read id command to FDC.
+; ASSUMES motor is on and up to speed.
+;        Entry : (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;                (D3) = side select: side 1=Mside1, side 0=Mside0
+;        Exit  : (NE) = failed
+;                (EQ) = completed
+;
+ReadID   MOVE.L    A2, A0                        ;save addr of cmd array
+         MOVEQ     #CMDredID, D0                 ;get in command
+         BSR       AddDensity                    ;combine command and MFM/FM bit
+         MOVE.B    D0, (A0)+                     ;put command byte in buffer
+
+; 2nd byte:  bit D2 is side and bits D1 and D0 are the device select
+;
+         MOVE.B    UTdrv(A4), D1                 ;get drive number
+         SUBQ.B    #1, D1                        ;turn into dev sel bits
+         OR.B      D3, D1                        ;put in side select
+         MOVE.B    D1, (A0)                      ;put in command array
+
+         MOVEQ     #2, D6                        ;2 bytes to command
+         BSR       WrController                  ;send command
+         BNE.S     RIDexit                       ;if timed out exit
+
+; wait for command to complete
+;
+         BSR       WaitFDC
+         BNE.S     RIDexit                       ;should there be a timeout on cmd???
+
+; get results of operation
+;
+         MOVEQ     #RSLTredID, D6                ;length of result array
+         BSR       RdController                  ;read result
+RIDexit  RTS
+  page
+;
+; RdWr1 - do 1 read or write sector operation.
+; ASSUMES motor is on and up to speed and on correct track.
+;        Entry : D0   = command byte
+;                (A2) = pointer to command and result array
+;                (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (A6) = Static ram Base page pointer - local data
+;                D5 = logical sector number
+;        Exit  : (NE) = failed, time out
+;                (EQ) = completed
+;
+RdWr1    MOVE.L    A2, A0                        ;save addr of cmd array
+         BSR.S     SetRWcmd                      ;setup the rest of the cmd array
+         BNE.S     RW1exit                       ;invalid sector length error
+
+         BSR       SetBfCntr                     ;setup controller counter
+
+; send command
+;
+         MOVEQ     #RWcmdlen, D6                 ;9 bytes to command
+         BSR       WrController                  ;send command
+         BNE.S     RW1exit                       ;if timed out exit
+
+; wait for command to complete
+;
+         BSR       WaitFDC
+         BNE.S     RW1exit                       ;should there be a timeout on cmd???
+
+; get results of operation
+;
+         MOVEQ     #RSLTrdwr, D6                 ;length of result array
+         BSR       RdController                  ;read result
+RW1exit  RTS
+  page
+;command operations support functions
+
+;
+; SetRWcmd - setup common portions of Read and Write command arrays.
+;
+;        Entry : A0 = points at 2nd byte of command array
+;                A2 = local stack frame pointer
+;                A4 = device table entry pointer
+;                D0 = command byte
+;                D5 = logical sector number
+;        Exit  : (NE) = invalid length error
+;                (EQ) = got code
+;
+; 2nd byte:  bit D2 is side and bits D1 and D0 are the device select
+;
+SetRWcmd BSR.S     AddDensity                    ;expects D0 to have command byte
+         MOVE.B    D0, (A0)+                     ;put command byte in buffer
+
+         BSR.S     DevSelHD                      ;calc device sel and head sel byte
+         MOVE.B    D1, (A0)+                     ;put in command array
+
+         MOVE.B    Ptrack(A2), (A0)+             ; 3rd byte: track number
+         MOVE.B    Pside(A2), (A0)+              ; 4th byte: head number
+         MOVE.B    LtoPmap(A6, D5), (A0)+        ; 5th byte: sector number
+
+         BSR.S     Cnv2SLCd                      ; 6th byte: sector size code
+         BNE.S     SRWexit                       ; invalid length
+         MOVE.B    D0, (A0)+
+
+         MOVE.B    UTspt(A4), (A0)+              ; 7th byte: EOT
+
+         BSR.S     GPLcode                       ; 8th byte: GPL, gap 3 length code
+         MOVE.B    D1, (A0)+
+
+         MOVE.B    #SLfmLow, D1                  ; 9th byte: DTL
+         TST.B     D0                            ;use a DTL value if code is
+         BEQ.S     SRWmin                        ;0 = 128 bytes sector
+         MOVEQ     #-1, D1                       ;use FF if length code > 0
+SRWmin   MOVE.B    D1, (A0)+
+
+SRWexit  TST.W     D7
+         RTS
+  page
+;
+; DevSelHD - calc device and head select values
+;
+;        Exit  : (D1) = device and head select byte for command array
+;
+DevSelHD MOVE.B    UTdrv(A4), D1                 ;get drive number
+         SUBQ.B    #1, D1                        ;turn into dev sel bits
+         MOVE.B    Pside(A2), D0                 ;get head select
+         LSL.B     #2, D0                        ;put in correct position
+         OR.B      D0, D1                        ;add to drive select
+         RTS
+;
+; GPLcode - calculate Gap 3 length (GPL) code for read/write operations.
+;CANNOT change value in D0 or use A0
+;
+;        Entry : (D0) = sector size code
+;        Exit  : (D1) = GPL code
+;
+GPLcode  CLR.W     D1                            ;make sure index has hi byte
+         MOVE.B    D0, D1                        ;of word clear
+         LEA       GPLtable, A1                  ;use sector size code as index
+         MOVE.B    0(A1,D1), D1                  ;get GPL code from table
+GPLexit  RTS
+
+; Gap 3 length code translation table
+;
+GPLtable DATA.B    $07                 ;for  128 byte sectors
+         DATA.B    $0E                 ;for  256 byte sectors
+         DATA.B    $1B                 ;for  512 byte sectors
+         DATA.B    $35                 ;for 1024 byte sectors
+;
+;
+; AddDensity - add density bit to command
+;CANNOT use D3
+;        Entry : D0 = command byte
+;        Exit  : D0 = command byte with MFM/FM bit
+;
+AddDensity
+         MOVEQ     #MfmBit, D1                   ;assume is FM
+         BTST      #TYPdnsty, UTtyp(A4)          ;is it FM?
+         BON.S     ADNisFM                       ;yes (1=FM)
+         MOVEQ     #Mmfmbit, D1                  ;no then use MFM
+ADNisFM  OR.B      D1, D0                        ;combine command and MFM/FM bit
+         RTS
+  page
+;
+; Cnv2SLCd - convert sector length to sector length code.
+;CANNOT use A0
+;        Entry : (A4) = device table entry pointer
+;        Exit  : (D0) = sector length code
+;                (NE) = invalid length error
+;                (EQ) = got code
+;
+;                             FM        MFM
+;        sector lengths      code      code
+;               128           00        --
+;               256           01        01       controller's buffer is 512 bytes
+;               512           02        02       therefore it can not read/write
+;              1024           --        03       1024 byte sectors
+;
+Cnv2SLCd MOVE.W    UTblk+2(A4), D1               ;get sector length in device table
+         CLR.B     D0                            ;start with code = 0
+         LSR.W     #7, D1                        ;put 4 possible bits in low order nibble
+
+C2Cfind  LSR.W     #1, D1                        ;shift out next bit
+         BCS.S     C2Ctest                       ;if set then D0 = correct code
+         BEQ.S     C2Cerror                      ;if word clear then invalid length
+         ADDQ.B    #1, D0                        ;do next code
+         BRA.S     C2Cfind
+
+C2Ctest  CMPI.B    #2, D0                        ;is code in range (512 <= sector size)
+         BLS.S     C2Cexit                       ;yes
+C2Cerror MOVEQ     #IOEinvsct, D7                ;invalid sector length error
+
+C2Cexit  TST.W     D7                            ;show error status
+         RTS
+  page
+;
+; CnvSLenCd - convert sector length code to a number and save in device table.
+;        Entry : (A2) = address of result array from READ ID command
+;                (A4) = device table entry pointer
+;        Exit  : (NE) = sector to long
+;                (EQ) = ok
+;                             FM        MFM
+;        sector length       code      code
+;               128           00        --
+;               256           01        01       controller's buffer is 512 bytes
+;               512           02        02       therefore it can not read/write
+;              1024           --        03       1024 byte sectors
+;
+CnvSLenCd
+         MOVE.W    #SLfmLow, D0                  ;get min. sector length(128)
+         CLR.W     D1                            ;make sure high order byte is clear
+         MOVE.B    RSLTsctrl(A2), D1             ;get sector length code
+         LSL.W     D1, D0                        ;length = multiply of integral of 2 of code
+         MOVE.W    D0, UTblk+2(A4)               ;save length in device table
+
+         CMPI.B    #2, D1                        ;is sector length to large?
+         BLS.S     CSLexit                       ;no
+         MOVEQ     #IOEinvsct, D7                ;invalid sector length error
+         CLR.W     UTblk+2(A4)                   ;sector size = 0 means invalid sector size
+
+CSLexit  TST.W     D7                            ;show error status
+         RTS
+  page
+;address functions
+;
+; GetBaseAdrs - Get static ram base page address for this slot, get slot base
+;               address and device table entry address
+; CANNOT use D4
+;        Entry: D0 = unit number (destroyed)
+;        Exit : A4 = device table entry pointer
+;               A5 = Slot base address
+;               A6 = Static ram Base page pointer - local data
+;               (NE) = failed, invalid unit number
+;               (EQ) = worked
+;
+GetBaseAdrs
+         BSR.S     DevTblEntry                   ;must be called first
+         BNE.S     GBAexit
+         BSR.S     CALCADRS
+         BSR.S     SlotAddr
+GBAexit  TST.W     D7                            ;set cc
+         RTS
+;
+; CALCADRS - calculate base page address of static ram data area
+;
+; CANNOT use D4
+;        Entry : (A4) = device table entry pointer
+;        Exit  : (A6) = Base page address
+;
+CALCADRS LEA       DataBase.W, A6                ;address of I/o slot Static Ram base page
+         MOVE.B    UTslt(A4), D0                 ;Slot number
+         EXT.W     D0                            ;base :=
+         SUBQ.W    #1,D0                         ;   ((slot - 1) *
+         MULU      #DBPoffst, D0                 ;   (page length)) +
+         ADDA.L    D0, A6                        ;   (Slot Static ram base address)
+         RTS
+
+  page
+;
+;DevTblEntry - Fetches the beginning of the entry of the device table
+;              for this unit and the associated slot address.
+;
+; CANNOT use D4
+;        Entry: D0 = unit number (destroyed)
+;        Exit : A4 = device table entry pointer
+;               (NE) = error and D7 = IOresult code
+;               (EQ) = good, A4 and A5 valid
+;
+DevTblEntry
+; check unit number in range
+;
+         TST.W     D0                            ;See if the volume is negative
+         BMI.S     DESerror                      ;NEGATIVE, bad unit number
+         MOVE.L    pSysCom.W, A4                 ;see if to large
+         MOVE.L    SCdevtab(A4), A4              ;PTR TO DEV TBL --> A4
+         CMP.W     (A4)+, D0                     ;Compare Vol num to MAXDEV
+         BLS.S     DESgood                       ;good unit number
+;
+DESerror MOVEQ     #IOEinvdev, D7                ;To large, bad unit number
+         BRA.S     DESexit
+
+;  Get the beginning of the device entry for this vol
+;
+DESgood  MULU      #UTlen, D0
+         ADDA.L    D0, A4
+
+DESexit  TST.W     D7
+         RTS
+;
+;SlotAddr - Fetches the slot base address.
+;
+; CANNOT use D4
+;        Entry : (A4) = device table entry pointer
+;        Exit  : (A5) = Slot base address
+;
+SlotAddr
+         MOVE.L    #IOSbase, A5                  ;slot 0 Base adrs
+         MOVE.B    UTslt(A4), D0                 ;slot * offset + slot 0 base
+         EXT.W     D0                            ;equals this slot's base address
+         MULU      #IOSoffst, D0
+         ADDA.L    D0, A5
+         RTS
+  page
+;
+; RdController - read n bytes from controller into command/result buffer
+;
+;        Entry : (A2) = pointer to command/result array
+;                (A5) = slot base address
+;                (D6) = number of bytes to read
+;        Exit  : (D6) = number of bytes not sent - 1
+;                (NE) = timed out and array AND (D6) are invalid
+;                (EQ) = worked array is valid
+;
+RdController
+         SUBQ.W    #1, D6                        ;decrement for loop counter
+         MOVE.L    A2, A0                        ;get address of array
+         MOVEQ     #IOEflpto, D7                 ;assume timeout error
+
+; while (not timeout) and (haven't sent all the bytes) do
+;
+RDCloop  MOVE.L    #FDCTimeOut, D0               ;time out counter
+
+;repeat until(timeout) or (FDC is ready)
+;
+RDCrdy   BTST      #FDCready, FDCstat(A5)        ;Ready := FDC is ready
+         SNE       D3                            ;         and
+         BTST      #DataDir, FDCstat(A5)         ;         Data direction is READ
+         SNE       D1
+         AND.B     D3, D1
+         BNE.S     RDCok                         ;Ready so stop waiting
+         SUBQ.L    #1, D0                        ;count down timeout
+         BMI.S     RDCexit                       ;timed out so exit  (also NE)
+         BRA.S     RDCrdy                        ;else check again
+
+RDCok    MOVE.B    FDCdata(A5), (A0)+            ;get data from reg into array
+         DBRA      D6, RDCloop                   ;see if more to get
+         CLR.L     D7                            ;got all the data show no error
+RDCexit  RTS
+  page
+;
+; WrController - write n bytes to controller from command/result buffer
+;
+;        Entry : (A2) = pointer to command/result array
+;                (A5) = slot base address
+;                (D6) = number of bytes to read
+;        Exit  : (NE) = timed out and did not finish sending array
+;                (EQ) = worked array is sent
+;
+WrController
+         SUBQ.W    #1, D6                        ;decrement for loop counter
+         MOVE.L    A2, A0                        ;get address of array
+         MOVEQ     #IOEflpto, D7                 ;assume timeout error
+
+; while (not timeout) and (haven't sent all the bytes) do
+;
+WRCloop  MOVE.L    #FDCTimeOut, D0               ;time out counter
+
+;repeat until(timeout) or (FDC is ready)
+;
+WRCrdy   BTST      #FDCready, FDCstat(A5)        ;Ready := FDC is ready
+         SNE       D3                            ;         and
+         BTST      #DataDir, FDCstat(A5)         ;         Data direction is WRITE
+         SEQ       D1
+         AND.B     D3, D1
+         BNE.S     WRCok                         ;Ready so stop waiting
+         SUBQ.L    #1, D0                        ;count down timeout
+         BMI.S     WRCexit                       ;timed out so exit (also NE)
+         BRA.S     WRCrdy                        ;else check again
+
+WRCok    MOVE.B    (A0)+, FDCdata(A5)            ;get data from array into reg
+
+;FDC will not give a valid ready state for 12 microseconds after
+;after issuing the COMMAND byte of the command array
+;code is probably slow enough to compensate w/o a wait loop (????)
+;;         MOVEQ     #5, D1                        ;wait 12 microsecs. for RQM
+;;WRCwait  DBRA      D1, WRCwait                   ;to settle to correct state
+
+         DBRA      D6, WRCloop                   ;see if more to get
+         CLR.L     D7                            ;got all the data show no error
+WRCexit  RTS
+  page
+; MotorON - select drive, dma direction and turn motor on.  Wait til
+;           drive comes ready.
+;CANNOT use D3.
+;
+;        Entry : (A4) = device table entry pointer
+;                (A5) = Slot base address
+;                (D0) = DMARWdir bit = 1 if read dma, = 0 if write dma
+;                            all other bits of low order byte clear!!
+;        Exit  : (NE) = timed out waiting for drive
+;                (EQ) = worked array is sent
+;
+; Add to DMA direction bit Enable device select,motor on, disable INTS
+;        and NOT reset FDC
+;
+MotorON  ORI.B     #MMtrON, D0
+
+         MOVE.B    UTdrv(A4), D1                 ;get drive number (1..4)
+         SUBQ.B    #1, D1                        ;convert to 0..3
+         OR.B      D1, D0                        ;put as dev sel 0 and 1
+
+         MOVE.B    D0, FDClocl(A5)               ;put in local command register
+
+; wait until ready or timeout
+;
+         MOVE.L    RdyTO(A6), D1                 ;get time out counter
+
+MONwait  BTST      #LSNdrRdy, FDClocl(A5)        ;is drive(FDD) ready?
+         BOFF.S    MONexit                       ;Ready so stop waiting
+         SUBQ.L    #1, D1                        ;count down timeout
+         BPL.S     MONwait                       ;not timed out so continue
+         MOVEQ     #IOEflpto, D7                 ;show timeout error
+MONexit  RTS
+;
+; MotorOFF - deselect drive and turn motor off (if 8" drive).
+;
+;        Entry : (A4) = device table entry pointer
+;                (A5) = Slot base address
+;
+MotorOFF MOVE.B    #MRstDvS, FDClocl(A5)
+MOFexit  RTS
+  page
+;
+;InitFDC - reset the floppy disk controller
+;        Entry : (A5) = Slot base address
+;
+InitFDC  MOVE.B    #MRstFDC, FDClocl(A5)         ;reset FDC
+         MOVE.B    #MMtrOFF, FDClocl(A5)         ;set it back to normal
+         RTS
+;
+; WaitFDC - wait for a command to finish.  FDC generates an IRQ when done.
+;
+;        Entry : (A5) = Slot base address
+;        Exit  : (NE) = timed out waiting for command to finish
+;                (EQ) = command completed
+;
+WaitFDC  MOVE.L    #CMDTimeOut, D0               ;timeout counter
+
+WFDCwait BTST      #LSNirq, FDClocl(A5)          ;did IRQ happen
+         BOFF.S    WFDCexit                      ;yes, command done
+         SUBQ.L    #1, D0                        ;no, see if ran out of time
+         BPL.S     WFDCwait                      ;if more counts do again else
+         MOVEQ     #IOEflpto, D7                 ;show timeout error
+
+WFDCexit RTS
+;
+; SetBfCntr - setup controller counter to point to big enough buffer
+;   Counter is 8 bit interface to a 9 bit down count register which is used
+;   as address selector for the controller's buffer.
+;   D7 thru D1, inclsive, of interface goto D8 thru D2 of register.
+;   D0 of interface goes to D1 and D0 of counter register.
+;
+;        Entry : (A5) = Slot base address
+;
+SetBfCntr
+         MOVE.W    UTblk+2(A4), D0               ;counter := (SectorSize
+         SUBQ.W    #1, D0                        ;             - 1)
+         LSR.W     #1, D0                        ;           DIV 2
+         MOVE.B    D0, FDCcntr(A5)
+SBCexit  RTS
+  page
+;
+; MoveOUT - move data out of controller buffer into user's buffer
+;
+;        Entry : (D2) = number of bytes in partial sector
+;                (D4) = current sector loop counter
+;
+MoveOUT  MOVE.W    UTblk+2(A4), D1               ;if full sector move full sector
+         TST.W     D4                            ;is this last sector
+         BNE.S     MVOfull                       ;no
+         MOVE.W    D2, D1                        ;then use partial length
+MVOfull  SUBQ.W    #1, D1                        ;make into loop counter
+         BSR.S     SetBfCntr                     ;init buffer counter
+
+MVOmove  MOVE.B    FDCbffr(A5), (A3)+            ;get data from buffer to user
+         DBRA      D1, MVOmove
+MVOexit  RTS
+;
+; MoveIN - move data into controller buffer from user's buffer
+;
+;        Entry : (D2) = number of bytes in partial sector
+;                (D4) = current sector loop counter
+;
+MoveIN   MOVE.W    UTblk+2(A4), D1               ;if full sector move full sector
+         TST.W     D4                            ;is this last sector
+         BNE.S     MVIfull                       ;no
+         MOVE.W    D2, D1                        ;then use partial length
+MVIfull  SUBQ.W    #1, D1                        ;make into loop counter
+         BSR.S     SetBfCntr                     ;init buffer counter
+
+MVImove  MOVE.B    (A3)+, FDCbffr(A5)            ;get data from buffer to user
+         DBRA      D1, MVImove
+MVIexit  RTS
+  page
+; sector,track,side calc support routines
+
+; StrtSTS - calculate starting side, track, and sector from starting block
+;           do logical track and sector and physical side and track
+;
+; A zero (0) sector size (UTblk+2) means invalid sector size.
+;
+;        Entry : (D5) = starting block
+;        Exit  : (NE) = invalid block sector size, other return params invalid
+;                (EQ) = worked
+;                (D3) = logical track  (word)
+;                (D5) = logical sector (word)
+;                Pside and Ptrack inited with physical side and track
+;
+StrtSTS  CMPI.L    #$7FFF, D5                    ;block bigger than maxint
+         BHI.S     SSSinvblk                     ;yes, invalid block number
+         TST.W     UTblk+2(A4)                   ;is sector size invalid?
+         BEQ.S     SSSinvsct                     ;yes, error exit
+
+; Logical Track := ( ((block #) * (block size)) DIV (sector size) ) DIV (sectors/track)
+;
+         MULU      #BlockSz, D5                  ;sector size divides evenly into block size
+         DIVU      UTblk+2(A4), D5               ;sector size must be 128,256, or 512
+         CLR.L     D1                            ;get byte and make it a word
+         MOVE.B    UTspt(A4), D1                 ;
+         DIVU      D1, D5                        ;D5 low word is logical track
+         MOVE.W    D5, D1                        ;save for later use and validation
+         MOVE.B    UTdrv(A4), D0                 ;save logical track number
+         EXT.W     D0
+         SUBQ.W    #1, D0
+         MOVE.B    D1, CurTrack(A6,D0)           ;in drive's current track loc
+         MOVE.W    D1, D3                        ;save logical track
+
+; logical sector number := remainder + 1
+;
+         CLR.W     D5                            ;hi word of D5 is logical sector
+         SWAP      D5                            ; minus 1.  must add one to it
+         ADDQ.W    #1, D5
+
+; Calc physical side and track
+;
+         BRA.S     CalcPhys                      ;calc physical and exit
+
+SSSinvsct
+         MOVEQ     #IOEinvsct, D7                ;invalid sector size
+         BRA.S     SSSexit
+SSSinvblk
+         MOVEQ     #IOEinvblk, D7                ;invalid block number
+SSSexit  RTS
+  page
+;
+; CalcPhys - calculate physical track and side from logical track
+;
+; Physical track number is the track number wanted on the diskette.  If
+; using 5-1/4 drive with 48 TPI diskettes then to seek to track must
+; multiply track number by 2.  All the 5-1/4 drives are 96 TPI, therefore
+; must use ever other track (even numbers).
+;
+;        Entry : D1 = logical track number
+;        Exit  : Pside and Ptrack set up
+;                (NE) = invalid block, other return params invalid
+;                (EQ) = worked
+;
+CalcPhys
+         ADD.W     StartTrk(A6), D1              ;add starting track offset to logical track
+         CLR.W     Ptrack(A2)                    ;clear track and side, assume side 0
+         BTST      #TYPsides, UTtyp(A4)
+         BON.S     CPHsd0                        ;is side 0 only.
+
+         LSR.W     #1, D1                        ;ptrack := track div 2
+         ROXL.W    Ptrack(A2)                    ;pside := track mod 2  shift in bit in xcarry}
+
+CPHsd0   CLR.L     D0                            ;get max # of tracks per side in
+         MOVE.B    UTtps(A4), D0                 ;a word
+         CMP.W     D0, D1                        ;is physical track greater than max.?
+         BHI.S     SSSinvblk                     ;yes, invalid block number
+         MOVE.B    D1, Ptrack(A2)                ;save physical track number
+         TST.W     D7
+         RTS
+  page
+;
+; UpdtSTS - update side, track and sector
+;
+;        Entry : (D5) = current logical sector number
+;                (D4) = loop counter of sectors to read/write
+;        Exit  : (NE) = invalid block or I/O error
+;                (EQ) = worked
+;                (D5) = updated logical sector number
+;                Pside and Ptrack set up
+;                Did seek if track changed
+;
+UpdtSTS  TST.W     D4                            ;was this the last sector?
+         BEQ.S     UPSexit                       ;yes, exit
+         ADDQ.W    #1, D5                        ;treat as word but value is a byte
+         CMP.B     UTspt(A4), D5                 ;still in same track
+         BLS.S     UPSexit                       ;yes, then all done
+
+; must update track and side
+;
+         MOVEQ     #1, D5                        ;reset sector number back to 1
+         CLR.L     D1                            ;holds logical track number
+         MOVE.B    UTdrv(A4), D0
+         EXT.W     D0
+         SUBQ.W    #1, D0
+         ADDQ.B    #1, CurTrack(A6,D0)           ;inc logical track number
+         MOVE.B    CurTrack(A6,D0), D1           ;get updated track number
+         BSR.S     CalcPhys                      ;calc physical side and track
+         BNE.S     UPSexit                       ;invalid block error,track out of range
+
+; do seek then calc new interleave table
+;
+         BSR       Seek                          ;seek physical track
+         BNE.S     UPSexit                       ;I/O error, exit
+         BSR.S     BuildIntrl                    ;build new interleave table
+UPSexit  TST.W     D7
+         RTS
+  page
+;
+; CalcNmSctr - calculate number of sectors to read/write and number
+;              of bytes in partial sector
+;
+; Must call StrtSTS before call this routine.  Sector size of 0 is invalid sector size.
+;
+;        Entry : D2 = number of bytes to read (long)
+;        Exit  : D2 = number of bytes in partial sector - if no partial then = sector size
+;                D4 = total number of sectors to read,
+;                     includes the partial sector
+;
+CalcNmSctr
+         MOVE.W    UTblk+2(A4), D0               ;# of full sectors :=
+         DIVU      D0, D2                        ;(# of bytes) DIV (sector size)
+         MOVE.W    D2, D4                        ;save # of full sectors
+         CLR.W     D2                            ;the remainder is the number
+         SWAP      D2                            ;of bytes in partial sector
+         TST.W     D2                            ;if partial is empty
+         BEQ.S     CNSpart                       ;then don't read it, exit
+         ADDQ.W    #1, D4                        ;else total := (# of full sectors) + 1
+         MOVE.W    D2, D0                        ;and use partial byte count
+CNSpart  MOVE.W    D0, D2                        ;if partial empty set it to sec length
+CNSexit  RTS
+  page
+;
+; CalcSPT - calculate the number of sectors per track from the sector size
+;           parameter in the device table.
+;        Exit  : (NE) = invalid sector length
+;                (EQ) = worked
+;
+CalcSPT  BTST      #FLGspt, Flags(A6)            ;should calc spt?
+         BON.S     CSPTexit                      ;NO
+
+         MOVE.W    UTblk+2(A4), D0               ;get number of bytes/sector
+         LSR.W     #8, D0                        ;change length into index into SPTtable
+         LSL.W     #1, D0                        ;which is a matrix of sector per track
+         BTST      #TYPdnsty, UTtyp(A4)          ;for 128,256 and 512 byte sectors
+         BON.S     CSPTsngl                      ;the first value is for single density
+         ADDQ.W    #1, D0                        ;the 2nd value is for double density
+
+CSPTsngl LEA       SPT8table, A0                 ;assume 8 table
+         BTST      #LSeight, FDClocl(A5)         ;is it 8?
+         BON.S     CSPTis8                       ;yes, else do for 5
+         LEA       SPT5table, A0                 ;use 5 table
+
+CSPTis8  MOVE.B    0(A0,D0), UTspt(A4)
+         BNE.S     CSPTexit                      ;a value of 0 is invalid sector length
+         MOVEQ     #IOEinvsct, D7
+CSPTexit TST.W     D7
+         RTS
+;
+SPT8table                                        ;8 inch drives
+         DATA.B    26,0                          ;128 byte sector(Dbl dnsty 128 invalid)
+         DATA.B    15,26                         ;256 byte sector
+         DATA.B    8,15                          ;512 byte sector
+SPT5table                                        ;5 inch drives
+         DATA.B    16,0                          ;128 byte sector(Dbl dnsty 128 invalid)
+         DATA.B    8,16                          ;256 byte sector
+         DATA.B    4,9                           ;512 byte sector
+  page
+;
+; BuildIntrl - build interleave table from logical track number
+;
+BuildIntrl
+         MOVE.W    Intrleav(A6), D0              ;if interleave = 1
+         SUBQ.W    #1, D0
+         BNE.S     IntlvTABLE                    ;no, do full interleave calc
+         TST.W     Skew(A6)                      ;and skew = 0
+         BNE.S     IntlvTABLE                    ;then no interleave
+;
+; NointTABLE - build an interleave translation table when
+;              interleave = 1 and skew = 0.  Therefore, logical
+;              sector number = physical number.
+;
+;        Entry : (A6) = slot's base page
+;
+NointTABLE
+         MOVE.B    UTspt(A4), D0                 ;MUST be <= 40
+         EXT.W     D0                            ;standard max is 26
+NITloop  MOVE.B    D0, LtoPmap(A6,D0)            ;for i:=1 to UTspt do
+         DBRA      D0, NITloop                   ;LtoPmap[i] := i
+NITexit  RTS                                     ;does for 1 plus # of sectors
+  page
+;
+; IntlvTABLE - build the interleave translation table.  Logical to
+;              physical sector mapping
+;use skew - done every time seek
+;do a seek every time enter driver for a read or a write
+;        Entry : interleave and skew in Logical table initialized
+;                (A4) = device table entry pointer
+;                (A6) = slot's base page
+;
+IntlvTABLE
+         LEA       SectrLst(A6), A0              ;tracking of which physical sectors used
+         LEA       LtoPmap(A6), A1               ;logical to physical sector map
+         MOVE.B    UTspt(A4), D0                 ;MUST be <= 40
+         EXT.W     D0                            ;standard max is 26
+
+         MOVE.L    D0, D1                        ;sector numbering starts with 1
+ITTlop1  CLR.B     (A0)+                         ;init all ents + 1 to zero
+         DBRA      D1, ITTlop1
+
+         LEA       SectrLst(A6), A0              ;D3 is j {init starting sector entry}
+         MOVE.B    UTdrv(A4), D3                 ;get logical track number
+         EXT.W     D3
+         SUBQ.W    #1, D3
+         MOVE.B    CurTrack(A6,D3), D3
+         MULU      Skew(A6), D3                  ; j is starting sector to begin with
+         DIVU      D0, D3                        ; j := ((track * skew) mod UTspt) + 1
+         CLR.W     D3                            ;make sure hi word is all 0
+         SWAP      D3                            ;use remainder as result of mod
+         ADDQ.W    #1, D3                        ;add the 1 to j
+         MOVE.B    #1,0(A0,D3)                   ;SECTOR = array[1..UTspt] of byte
+         MOVE.B    D3,1(A1)                      ;logical= array[1..UTspt] of byte
+
+         MOVEQ     #2,D1                         ;FOR i:=2 TO UTspt DO
+ITTlop2  ADD.W     Intrleav(A6), D3              ;D1 is i, just a loop counter
+         SUBQ.W    #1, D3                        ;j := j + interleave - 1
+                                                 ;repeat
+ITTlop3  DIVU      D0, D3                        ;j := (j mod UTspt) + 1
+         CLR.W     D3                            ;UTspt is D0
+         SWAP      D3                            ;use remainder as result of mod
+         ADDQ.W    #1,D3                         ;adding the one to j
+         TST.B     0(A0,D3)                      ;until sectors[j]<>0
+         BNE.S     ITTlop3
+
+         MOVE.B    D1, 0(A0,D3)                  ;sectors[j] := i
+         MOVE.B    D3, 0(A1,D1)                  ;logical[i] := j
+
+         ADDQ.W    #1, D1                        ;next logical sector
+         CMP.W     D0, D1                        ;did all sectors
+         BLS.S     ITTlop2                       ;no
+
+ITTexit  RTS
+  page
+; error routines
+
+;
+; RstrStatus - check error for restore operation
+;
+;        Entry : (A2) = address of result array from sense int command
+;                       2 bytes. 1st is ST0, 2nd is cylinder number.
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;                (C)  = wrong drive
+;
+RstrStatus                    ;find out type of error
+         BSR       ChkST0
+         BCS.S     RRSexit                       ;wrong drive, exit don't do TST
+         BEQ.S     RRSexit                       ;no error, exit
+         CMPI.W    #IOEnoT0, D7                  ;is it type w/ equipment error
+         BNE.S     RRSexit                       ;no
+         BTST      #ST0equp, (A2)                ;yes,drive won't ack Track 0 after
+         BON.S     RRSexit                       ;77 step pulses
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+RRSexit  RTS
+;
+; SeekStatus - check error for seek operation
+;
+;        Entry : (A2) = address of result array from sense int command
+;                       2 bytes. 1st is ST0, 2nd is cylinder number.
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;                (C)  = wrong drive
+;
+SeekStatus
+         BSR       ChkST0                        ;check ST0 for operation state
+         BCS.S     SKSexit                       ;wrong drive, exit don't do TST
+         BEQ.S     SKSexit                       ;no error, exit
+         CMPI.W    #IOEnoT0, D7                  ;did cmd stop in middle?
+         BNE.S     SKSexit                       ;no, give IOresult ChkST0 found
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+SKSexit  RTS
+  page
+;
+;RdIDstat - check error for read ID operation
+;        Entry : (A2) = address of result array of read id command
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;
+RdIDstat BSR       ChkST0                        ;see if command worked
+         BEQ.S     RDSexit                       ;worked so exit
+         CMPI.W    #IOEnoT0, D7                  ;did cntrllr not finish cmd?
+         BNE.S     RDSexit                       ;no, then exit
+
+; check if can't read disk - maybe unformatted?  {check ST1}
+;
+         MOVEQ     #IOEnfmtd, D7                 ;assume not formatted
+         MOVE.W    (A2), D0                      ;get 2nd byte of array in low byte
+         BTST      #ST1snfnd, D0                 ;sector not found?
+         BON.S     RDSexit                       ;yes, maybe unformatted
+         BTST      #ST1nadrm, D0                 ;missing address mark?
+         BON.S     RDSexit                       ;yes, maybe unformatted
+
+; see if CRC error
+;
+         MOVEQ     #IOEcrcer, D7                 ;assume have CRC error
+         BTST      #ST1dataer, D0                ;CRC error?
+         BON.S     RDSexit                       ;yes
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+
+RDSexit  TST.W     D7
+         RTS
+  page
+;
+;RDstatus - check error for read sector operation
+;
+;WRstatus - check error for write sector operation
+;  **** temp ??? **** are there any other bits to check different than read
+;
+;        Entry : (A2) = address of result array of read id command
+;        Exit  : (D7) = IOresult code
+;                (NE) = I/O error
+;                (EQ) = no error
+;
+WRstatus
+RDstatus BSR.S     RdIDstat                      ;do same tests as Read ID operation
+         BEQ.S     RSUexit                       ;no errors, read worked
+
+; always try wrong cylinder. if is then restore and re-seek
+;
+         MOVE.B    ST2(A2), D0                   ;get status register 2 from result array
+         BTST      #ST2wrngC, D0                 ;read the wrong track?
+         BOFF.S    RSUchker                      ;no
+         BSR       Restore                       ;do restore
+         BNE.S     RSUexit                       ;I/O error
+         BSR       Seek                          ;do seek
+         BNE.S     RSUexit                       ;I/O error
+         MOVEQ     #IOEwrngC, D7                 ;tell higher level what failed
+         BRA.S     RSUexit
+
+; try read/write on bad track, write protect or missing data address mark
+;
+RSUchker CMPI.W    #IOEnebhrd, D7                ;did RdIDstat fail to find cause?
+         BNE.S     RSUexit                       ;no, then exit
+
+         MOVEQ     #IOEbdtrk, D7                 ;track marked as bad (IBM spec)
+         BTST      #ST2bdtrk, D0
+         BON.S     RSUexit
+
+         MOVEQ     #IOEnfmtd, D7                 ;missing data address mark
+         BTST      #ST2ndtam, D0                 ;if is disk needs formatting
+         BON.S     RSUexit                       ;yes disk in bad shape
+
+         MOVEQ     #IOEwrprot, D7                ;disk write protected?
+         BTST      #ST1wrpro, ST1(A2)            ;
+         BON.S     RSUexit                       ;yes
+
+         MOVEQ     #IOEnebhrd, D7                ;give nebulous hardware err code
+
+RSUexit  TST.W     D7
+         RTS
+  page
+;
+;ChkST0 - check ST0 to see if command failed or succeded
+;        Entry : (A2) = address of ST0 byte
+;        Exit  : (D7) = IOresult code from ST0 check
+;                (NE) = I/O error
+;                (EQ) = no error
+;                (C)  = wrong drive
+;
+ChkST0   MOVE.B    (A2), D0                      ;get ST0
+         ANDI.B    #MIntCod, D0                  ;check interrupt code
+
+; see if controller tried but didn't finish
+;
+         MOVEQ     #IOEnoT0, D7                  ;give can't get to Track 0
+         CMPI.B    #MABstp, D0                   ;if cmd stopped in middle
+         BEQ.S     CS0exit                       ;yes
+
+; see if drive changed ready line
+;
+         CMPI.B    #MABrdy, D0
+         BNE.S     CS0invcd
+         MOVEQ     #IOEoffln, D7                 ;drive went off line, lost ready
+         MOVEQ     #3, D0                        ;see if have correct drive response
+         AND.B     (A2), D0                      ;leave just drive sel bits
+         ADDQ.B    #1, D0                        ;make drive number 1..4
+         CMP.B     UTdrv(A4), D0                 ;is drive the same?
+         BEQ.S     CS0exit                       ;correct drive, exit carry clear
+         MOVE.W    #1, CCR                       ;set NE and C got wrong drive
+         BRA.S     CS0exit1                      ;exit
+
+; see if invalid code, if is then have either severe hardware error or software bug
+;
+CS0invcd MOVEQ     #IOEunknwn, D7                ;give unknown hardware err code
+         CMPI.B    #MInvCod, D0                  ;is it invalid?
+         BEQ.S     CS0exit                       ;no, exit no errors
+         CLR.L     D7                            ;show no error
+
+CS0exit  TST.W     D7                            ;clears the carry flag
+CS0exit1 RTS
+  page
+
+; FLPSTAT - Unitstatus functions
+;
+FLPSTAT  MOVEQ     #IOEfnccd, D7
+         CMPI.W    #LastFnc, D2                  ;VALID FUNCTION CODE
+         BHI.S     FSTerr                        ;NO
+         CLR.L     D7                            ;ok, clear ioresult and do fuction
+         MOVE.W    (A3), D0                      ;get users value
+         LEA       FSTTABL, A1                   ;TURN THE FUNCTION CODE INTO
+         LSL.W     #1, D2                        ;AN INDEX TO THE FUNCTION
+         MOVE.W    0(A1,D2.W), D2
+         JSR       0(A1,D2.W)                    ;DO FUNCTION
+FSTerr   RTS
+
+; THE Floppy DRIVER STATUS JUMP TABLE
+;
+
+FSTTABL  DATA.W    STIntrl-FSTTABL               ;Change Logical Interleave
+         DATA.W    STlSkew-FSTTABL               ;Change Logical Skew
+         DATA.W    STStrTk-FSTTABL               ;Change Starting Track
+         DATA.W    STStpRt-FSTTABL               ;Change Step Rate
+         DATA.W    STchSPT-FSTTABL               ;Change sectors per track
+         DATA.W    STchTPS-FSTTABL               ;Change tracks per side
+         DATA.W    STtimot-FSTTABL               ;Change Ready wait timeout counter
+         DATA.W    STchTPI-FSTTABL               ;Change tracks per inch selection
+         DATA.W    STchSDS-FSTTABL               ;Change sides
+         DATA.W    STdrvst-FSTTABL               ;Get driver status
+LastFnc  EQU       ((FSTTABL-%)/2)-1
+  page
+;STIntrl - Change Logical Interleave
+;
+;        Parameter Block : Interleave = word {range = 1..spt}
+;
+;STlSkew - Change Logical Skew
+;
+;        Parameter Block : Skew = word {range = 0..spt}
+;
+STIntrl  TST.W     D0                            ;for interleave, check param
+         BEQ       STbadprm                      ;if 0 then bad
+         MOVEQ     #Intrleav, D3                 ;good, get interleave index
+         BRA.S     STIS10
+
+STlSkew  MOVEQ     #Skew, D3                     ;get skew index
+
+STIS10   CLR.L     D1                            ;get sectors per track
+         MOVE.B    UTspt(A4), D1
+         CMP.W     D1, D0                        ;if greater than spt then
+         BHI.S     STbadprm                      ;error
+
+         MOVE.W    D0, 0(A6,D3)                  ;valid skew or interleave, save it
+STISexit RTS
+
+;STStrTk - Change Starting Track
+;
+;        Parameter Block : StartTrack = word {range = 0..tps}
+;
+STStrTk  CLR.L     D1                            ;put byte tps in word
+         MOVE.B    UTtps(A4), D1                 ;if user's start track is
+         CMP.W     D1, D0                        ;greater than tps then
+         BHI.S     STbadprm                      ;error
+         MOVE.W    D0, StartTrk(A6)              ;valid skew, save it
+         RTS
+
+;STtimot - Change Ready wait timeout counter
+;
+;        Parameter Block : TimeOut = long word {range = positive integer}
+;
+STtimot  TST.L     (A3)                          ;if negative
+         BMI.S     STbadprm                      ;then invalid number
+         MOVE.L    (A3), RdyTO(A6)               ;valid timeout cntr, save it
+         RTS
+  page
+;STStpRt - Change Step Rate
+;
+;        Parameter Block : StepRate = word {range = 1..16}
+;
+STStpRt  CMPI.W    #StpRLow, D0                  ;if (steprate<1) or
+         BCS.S     STbadprm                      ;   (steprate>16) then
+         CMPI.W    #StpRtHi, D0                  ; invalid step rate
+         BHI.S     STbadprm
+         MOVE.W    D0, StepRate(A6)              ;valid step rate, save it
+
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       MotorON                       ;turn motor on
+         BNE.S     STSTPex                       ;timed out, exit
+         BSR       SpecifyCmd                    ;init step rate in FDC
+         BNE.S     STSTPex                       ;timed out, exit
+         BSR       Restore                       ;restore to track 0
+STSTPex  BRA       MotorOFF                      ;turn motor off
+
+;STchSPT - Change sectors per track
+;
+;        Parameter Block : Sector/Track = word {range = 0..127}
+;
+; a value of 0 means use the table calculation based on density and
+; sector size
+;
+STchSPT  CMPI.W    #127, D0                      ;if greater than 127
+         BHI.S     STbadprm                      ;then invalid number
+         MOVE.B    D0, UTspt(A4)                 ;save in device table
+         BSET      #FLGspt, Flags(A6)            ;show not to calc with new disk
+
+         TST.W     D0                            ;if zero then
+         BNE.S     STCSexit
+         BCLR      #FLGspt, Flags(A6)            ;show calc with new disk
+         BSR       CalcSPT                       ;just in case no floppy in drive
+
+;entry to get diskette state
+;
+STCSmtrON
+         MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       MotorON                       ;turn on motor and wait for Ready
+         BNE.S     STCSex10                      ;timed out waiting for ready
+         BSR       GetDrvInfo                    ;init for current disk
+STCSex10 BSR       MotorOFF                      ;turn off motor and deselect drive
+         CLR.L     D7                            ;if failed don't return I/O erro
+         RTS
+
+STbadprm MOVEQ     #IOEuiopm, D7                 ;invalid parameter error
+         RTS
+  page
+;
+;STchTPS - Change tracks per side
+;
+;        Parameter Block : Track/Side = word {range = 0..127}
+;
+; a value of 0 means use the default number of tracks for drive
+;
+STchTPS  CMPI.W    #127, D0                      ;if greater than 127
+         BHI.S     STbadprm                      ;then invalid number
+
+         TST.W     D0                            ;if zero use default
+         BNE.S     STCTsave
+         MOVEQ     #D8TrkSd, D0                  ;assume 8, 48 TPI standard
+         BTST      #LSeight, FDClocl(A5)         ;is it 8?
+         BON.S     STCTsave                      ;yes, else do for 5
+         MOVEQ     #D5TrkSd, D0                  ;96 TPI 5 1/4 standard
+         BTST      #FLGtpi, Flags(A6)            ;is it 96 TPI?
+         BOFF.S    STCTsave                      ;yes
+         LSR.W     #1, D0                        ;no, use 48 TPI standard
+STCTsave MOVE.B    D0, UTtps(A4)                 ;save in device table
+STCSexit RTS
+
+;STchTPI - Change tracks per inch selection
+;
+; Only valid for 5-1/4 inch drives
+;
+;        Parameter Block : Track/Side = word {range = 0..1}
+;
+; a value of 0 means use 96 TPI, 1 means use 48 TPI.
+;
+STchTPI  BTST      #LSeight, FDClocl(A5)         ;is it 8?
+         BON.S     STbadprm                      ;yes, invalid call for 8
+
+         CMPI.W    #1, D0                        ;if greater than 1
+         BHI.S     STbadprm                      ;then invalid selection code
+
+         BCLR      #FLGtpi, Flags(A6)            ;assume 96 TPI
+         MOVEQ     #D5TrkSd, D1                  ;set tps for 96 TPI default
+         TST.W     D0                            ;is it 96?
+         BEQ.S     STCIexit                      ;yes
+         BSET      #FLGtpi, Flags(A6)            ;no, its 48 TPI
+         MOVEQ     #D5TrkSd/2, D1                ;save tps as 1/2 of 96 TPI
+STCIexit MOVE.B    D1, UTtps(A4)
+         RTS
+  page
+;
+; STchSDS - Change number of sides parameter
+;
+;        Parameter Block : Number of Sides = word {range = 0..2}
+;
+; a value of 0 means let driver calc number sides.
+;
+STchSDS  CMPI.W    #2, D0                        ;if greater than 2
+         BHI.S     STbadprm                      ;then invalid selection code
+
+         BCLR      #FLGsides, Flags(A6)          ;assume 0 parameter
+         TST.W     D0                            ;is it 0?
+         BEQ.S     STCSmtrON                     ;yes, calc sides of floppy
+
+         BSET      #FLGsides, Flags(A6)          ;user is setting sides
+         BSET      #TYPsides, UTtyp(A4)          ;assume 1 side only
+         SUBQ.W    #1, D0                        ;is it 1 or 2 sides
+         BEQ.S     STSDSex                       ;1 side, so exit
+         BCLR      #TYPsides, UTtyp(A4)          ;user setting 2 sided
+
+STSDSex  RTS
+  page
+;STdrvst - Get driver status
+;
+; Parameter Block : record
+;                          intrlv,
+;                          skew,
+;                          StartTrack,
+;                          StepRate,
+;                          spt,
+;                          tps,
+;                          SectorSize : integer;
+;                          TimeOut : longint;
+;                          Diskette,             {true if diskette in drive}
+;                          1Sided,               {true if 1 side only}
+;                          SnglDensity,          {true if single density}
+;                          UserSPT,              {true if user set spt}
+;                          tpi48,                {true if 48 TPI}
+;                          EightDrv : boolean;   {true if 8 inch drive}
+;                          end;
+;
+; Diskette field must be true to have valid SectorSize, 1Sided, and
+;        SnglDensity fields.
+; tpi48 field valid only if EightDrv is false, 5-1/4 inch drive.
+;
+STdrvst  MOVEQ     #DMARead, D0                  ;use dma in read direction
+         BSR       MotorON                       ;turn on motor and wait for Ready
+         BNE.S     STDSnod                       ;timed out waiting for ready, no disk
+         BSR       GetDrvInfo                    ;get diskette state
+STDSnod  SEQ       D0                            ;if fails say no diskette
+         ANDI.B    #1, D0                        ;make boolean for Diskette
+         BSR       MotorOFF                      ;turn off motor and deselect drive
+         CLR.L     D7                            ;always clear IOresult
+
+         MOVE.W    Intrleav(A6), (A3)+           ;interleave
+         MOVE.W    Skew(A6), (A3)+               ;skew
+         MOVE.W    StartTrk(A6), (A3)+           ;starting track
+         MOVE.W    StepRate(A6), (A3)+           ;step rate
+         CLR.B     (A3)+                         ;make sure hi byte = 0
+         MOVE.B    UTspt(A4), (A3)+              ;number of sectors per track
+         CLR.B     (A3)+                         ;make sure hi byte = 0
+         MOVE.B    UTtps(A4), (A3)+              ;number of tracks per side
+         MOVE.W    UTblk+2(A4), (A3)+            ;sector size
+         MOVE.L    RdyTO(A6), (A3)+              ;ready timeout counter
+         MOVE.B    D0, (A3)+                     ;save diskette boolean
+         BTST      #TYPsides, UTtyp(A4)          ;1-sided
+         BSR.S     MakeBool
+         BTST      #TYPdnsty, UTtyp(A4)          ;single density
+         BSR.S     MakeBool
+         BTST      #FLGspt, Flags(A6)            ;user running spt
+         BSR.S     MakeBool
+         BTST      #FLGtpi, Flags(A6)            ;TPI selection flag
+         BSR.S     MakeBool
+         BTST      #LSeight, FDClocl(A5)         ;8 inch drive flag
+
+MakeBool SNE       D0
+         ANDI.B    #1, D0
+         MOVE.B    D0, (A3)+
+         RTS
+
+         END       NewFlopDRV

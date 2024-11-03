@@ -1,0 +1,6 @@
+!assign /kbdc/drv.dtacom dtacom1 31 <%
+y
+!assign =31 dtacom2 32 <%
+y
+!assign /kbdc/drv.eprnt printer 6
+/sysmake/cc.setdcp

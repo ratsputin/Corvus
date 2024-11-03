@@ -1,0 +1,17 @@
+
+Directory of UCSD disk image file 'ccsys_3of6.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCSYS3 has 9 files,  0 to 6 (6), eov 500, size 0, free 9
+
+ 1: 3PAINT.MOUSE    Data 20-Sep-83    6- 264( 258), 132096+512= 132608 bytes
+ 2: PASCTERRS.TEXT  Text  4-Feb-83  264- 278(  14),  7168+512=  7680 bytes
+ 3: PASLIB.OBJ      Data  4-Feb-83  278- 373(  95), 48640+512= 49152 bytes
+ 4: SGEN.TEXT       Text 20-Sep-83  373- 379(   6),  3072+512=  3584 bytes
+ 5: SYSTEM.INTERP   Data  4-Feb-83  379- 403(  24), 12288+512= 12800 bytes
+ 6: ASSIGN          Data  4-Feb-83  403- 413(  10),  5120+512=  5632 bytes
+ 7: DEBUG           Data  4-Feb-83  413- 425(  12),  6144+512=  6656 bytes
+ 8: ASM68K          Data  4-Feb-83  425- 499(  74), 37888+512= 38400 bytes
+ 9: 3LINKER         Data  4-Feb-83  499- 500(   1),   512+512=  1024 bytes

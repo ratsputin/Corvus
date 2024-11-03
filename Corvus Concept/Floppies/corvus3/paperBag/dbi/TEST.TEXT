@@ -1,0 +1,6 @@
+Echo Setting printer driver parameters...
+cc.setprt EPSON
+Echo
+Echo The EPSONrinter driver is now setup.
+
+

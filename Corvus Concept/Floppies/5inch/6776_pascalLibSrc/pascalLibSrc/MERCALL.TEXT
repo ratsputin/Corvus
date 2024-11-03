@@ -1,0 +1,37 @@
+; File: mercall.text
+; Date: 25-Sep-81
+
+        ident   mercall
+        
+        global  %_call,%_chain
+        
+psyscom equ     $180
+
+;
+; %_call
+;
+
+%_call
+        moveq   #8,d0
+        bra.s   jsvect
+        
+;
+; %_chain
+;
+
+%_chain
+        moveq   #16,d0
+;
+; jsvect - jump to routine in user vector
+;
+; Parameter: D0.W - Offset in user vector
+;
+
+jsvect
+        move.l  psyscom.w,a0    ; (A0) = SYSCOM
+        move.l  $1c(a0),a0      ; (A0) = user vector
+        move.l  0(a0,d0.w),a0   ; (A0) = desired routine
+        jmp     (a0)            ; Go to it!
+        
+        end
+

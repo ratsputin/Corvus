@@ -1,0 +1,63 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FLOPPY has 56 files,  0 to 6 (6), eov 1440, size 927, free 56
+
+ 1: ...SVS.MATHLIB  Data 15-Jun-83    6-   7(   1),   512+512=  1024 bytes
+ 2: .BLD.MATH.TEXT  Text 15-Jun-83    7-  11(   4),  2048+512=  2560 bytes
+ 3: ADD.OBJ         Data 29-Sep-83   11-  12(   1),   512+512=  1024 bytes
+ 4: ADD.TEXT        Text 17-Nov-81   12-  24(  12),  6144+244=  6388 bytes
+ 5: CAI.OBJ         Data 29-Sep-83   24-  25(   1),   512+512=  1024 bytes
+ 6: CAI.TEXT        Text 29-Dec-81   25-  31(   6),  3072+512=  3584 bytes
+ 7: CMP.OBJ         Data 29-Sep-83   31-  32(   1),   512+512=  1024 bytes
+ 8: CMP.TEXT        Text 17-Nov-81   32-  42(  10),  5120+103=  5223 bytes
+ 9: CMPLXF.OBJ      Data 29-Sep-83   42-  52(  10),  5120+512=  5632 bytes
+10: CMPLXF.TEXT     Text 28-Jan-82   52-  66(  14),  7168+512=  7680 bytes
+11: D13.OBJ         Data 29-Sep-83   66-  95(  29), 14848+512= 15360 bytes
+12: D13.TEXT        Text 19-Jan-83   95- 135(  40), 20480+512= 20992 bytes
+13: DADD.OBJ        Data 29-Sep-83  135- 136(   1),   512+512=  1024 bytes
+14: DADD.TEXT       Text 18-Nov-81  136- 150(  14),  7168+288=  7456 bytes
+15: DCL.TEXT        Text 15-Oct-81  150- 156(   6),  3072+512=  3584 bytes
+16: DCMP.OBJ        Data 29-Sep-83  156- 157(   1),   512+512=  1024 bytes
+17: DCMP.TEXT       Text 28-Dec-81  157- 169(  12),  6144+512=  6656 bytes
+18: DIV.OBJ         Data 29-Sep-83  169- 170(   1),   512+512=  1024 bytes
+19: DIV.TEXT        Text 11-Oct-82  170- 182(  12),  6144+512=  6656 bytes
+20: DMUL.OBJ        Data 29-Sep-83  182- 183(   1),   512+512=  1024 bytes
+21: DMUL.TEXT       Text 11-Oct-82  183- 195(  12),  6144+512=  6656 bytes
+22: DPK.OBJ         Data 29-Sep-83  195- 198(   3),  1536+512=  2048 bytes
+23: DPK.TEXT        Text  8-Oct-82  198- 226(  28), 14336+512= 14848 bytes
+24: DVMD.OBJ        Data 29-Sep-83  226- 228(   2),  1024+512=  1536 bytes
+25: DVMD.TEXT       Text 11-Oct-82  228- 252(  24), 12288+512= 12800 bytes
+26: FHLL.OBJ        Data 29-Sep-83  252- 253(   1),   512+512=  1024 bytes
+27: FHLL.TEXT       Text 14-Oct-81  253- 257(   4),  2048+512=  2560 bytes
+28: FPK.OBJ         Data 29-Sep-83  257- 259(   2),  1024+512=  1536 bytes
+29: FPK.TEXT        Text 11-Oct-82  259- 275(  16),  8192+512=  8704 bytes
+30: FRT.OBJ         Data 29-Sep-83  275- 276(   1),   512+512=  1024 bytes
+31: FRT.TEXT        Text 15-Oct-81  276- 280(   4),  2048+512=  2560 bytes
+32: FTN.MISC.OBJ    Data 29-Sep-83  280- 282(   2),  1024+512=  1536 bytes
+33: FTN.MISC.TEXT   Text  9-Nov-82  282- 290(   8),  4096+512=  4608 bytes
+34: FTNCHAR.OBJ     Data 29-Sep-83  290- 292(   2),  1024+512=  1536 bytes
+35: FTNCHAR.TEXT    Text 13-Dec-82  292- 318(  26), 13312+512= 13824 bytes
+36: GDCL.OBJ        Data 29-Sep-83  318- 321(   3),  1536+512=  2048 bytes
+37: GDCL.TEXT       Text 20-Oct-81  321- 325(   4),  2048+512=  2560 bytes
+38: GFTN.OBJ        Data 29-Sep-83  325- 340(  15),  7680+512=  8192 bytes
+39: GFTN.TEXT       Text  2-Jul-82  340- 362(  22), 11264+512= 11776 bytes
+40: GPASC.OBJ       Data 29-Sep-83  362- 376(  14),  7168+512=  7680 bytes
+41: GPASC.TEXT      Text  2-Dec-81  376- 398(  22), 11264+512= 11776 bytes
+42: GUC.OBJ         Data 29-Sep-83  398- 401(   3),  1536+512=  2048 bytes
+43: GUC.TEXT        Text 11-Dec-81  401- 407(   6),  3072+512=  3584 bytes
+44: GUR.OBJ         Data 29-Sep-83  407- 412(   5),  2560+512=  3072 bytes
+45: GUR.TEXT        Text 15-Nov-82  412- 422(  10),  5120+512=  5632 bytes
+46: GUTIL.OBJ       Data 29-Sep-83  422- 426(   4),  2048+512=  2560 bytes
+47: GUTIL.TEXT      Text 15-Oct-81  426- 438(  12),  6144+512=  6656 bytes
+48: IPK.OBJ         Data 29-Sep-83  438- 440(   2),  1024+512=  1536 bytes
+49: IPK.TEXT        Text 17-Nov-81  440- 458(  18),  9216+258=  9474 bytes
+50: IUPI.OBJ        Data 29-Sep-83  458- 459(   1),   512+512=  1024 bytes
+51: IUPI.TEXT       Text  3-Dec-81  459- 463(   4),  2048+512=  2560 bytes
+52: MOD.OBJ         Data 29-Sep-83  463- 464(   1),   512+512=  1024 bytes
+53: MOD.TEXT        Text  8-Oct-82  464- 476(  12),  6144+512=  6656 bytes
+54: MUL.OBJ         Data 29-Sep-83  476- 477(   1),   512+512=  1024 bytes
+55: MUL.TEXT        Text  8-Oct-82  477- 487(  10),  5120+512=  5632 bytes
+56: NOTES4.TEXT     Text 30-Dec-81  487- 513(  26), 13312+512= 13824 bytes

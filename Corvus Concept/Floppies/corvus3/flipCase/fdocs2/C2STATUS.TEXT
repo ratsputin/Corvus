@@ -1,0 +1,21 @@
+All of the functions described in the document dated February 15, 1982
+have been implemented on the Concept, except the ones listed below.
+This software is currently available for evaluation by R&D and product
+marketing.
+
+Functions not yet implemented:
+
+- All programs
+  - multiple disk server support
+  
+- Access manager
+  - specifying volume access for several users
+  
+- Mount manager
+  - mounting volumes from other users
+  - secure/release function
+  
+- Library procedures for mount/unmount, get user name
+
+- Recovery programs
+

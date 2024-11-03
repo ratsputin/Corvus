@@ -1,0 +1,99 @@
+                                          21-Jul-82
+
+
+This release supports Microsoft CP/M on the Apple II, for 5, 10 and 20
+MB drives.  THIS SOFTWARE WORKS ON FLAT CABLE ONLY.  OMNINET IS NOT
+SUPPORTED BY APPLE CP/M UTILITIES.
+
+There are two floppies that support Apple II CP/M.  One is UCSD format
+and one is CP/M format.  The contents of each are listed below.
+
+The Apple CP/M user must have a drive configured for Pascal or Pascal/Basics.
+Each Apple CP/M user must have a RAM card.
+
+All Corvus utilities such as Diagnostic and Mirror, cannot be run from CP/M.
+They must be run from Pascal or Basic.
+
+This release was tested with Microsoft CP/M version 2.2 0B.
+
+Known problems
+--------------
+
+The mount program gets messed up when mounting volumes whose total size
+is greater than 8k.
+
+Files changed in this release
+-----------------------------
+
+21-Jul-82.  Changed CPMUTIL to fix transfer option so it works.
+
+            Also gives an error if SYSTEM.APPLECPM file cannot
+            be created.
+
+$P
+
+
+6/10/20 AP (5 1/4" soft-sectored media - 104/1D - #801187)
+
+Contents of the Apple CP/M utilities floppies:
+    CSCPM:
+        CPMBOOT.CODE            nvn     10-Oct-81       28
+        CPMUTIL.CODE            1.3     21-Jul-82       58
+
+                                        CSCPM CRC:     209
+    CP/M format floppy:
+        CBOOT16.PGM             1.0                     07 7A
+        CBIOS.PGM               1.40AP                  30 B8
+        MOUNT.COM               1.0                     1B 5A
+        CSCONFIG.BAS            nvn     Oct 81          80 C4
+        CSPATCH.BAS             1.0     26-Oct-81       FC 3D
+                        
+                                        CP/M CRC:       D0 8D
+  
+
+The current floppy labels are listed below:
+
+                +-------------------------------+
+                |                               |
+                |    Apple II CP/M Utilities    |
+                |                               |
+                |          Pascal 1.1           |  CRC = 209
+                |                               |
+                |    Release date:  21-Jul-82   |
+                |                               |
+                +-------------------------------+
+
+                
+                +-------------------------------+
+                |                               |
+                |    Apple II CP/M Utilities    |
+                |                               |
+                |           CP/M 2.2            |  CRC = 36
+                |                               |
+                |    Release date:  18-Nov-81   |
+                |                               |
+                +-------------------------------+
+
+
+$P
+
+
+Previous releases:
+------------------
+
+First release - 18-Nov-81, Apple II CP/M  Utilities Pascal 1.1.
+
+
+The floppy labels is listed below:
+
+                      +-----------------------------+
+                      |                             |
+                      |  Apple II CP/M Utilities    |Checksum=162
+                      |                             |
+                      |         Pascal 1.1          |
+                      |                             |
+                      |   Release date: 18-Nov-81   |
+                      +-----------------------------+
+
+
+$P

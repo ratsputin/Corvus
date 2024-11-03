@@ -1,0 +1,720 @@
+program BldAlt;
+
+{**************************************************************}
+{                                                              }
+{ BldAlt - Build an Alternate character translation table.     }
+{                                                              }
+{ Used by person to build a printer Alternate character        }
+{ translation table.  Also allows user read in old files for   }
+{ modification.                                                }
+{                                                              }
+{   11 Feb 1983   original version   KB                        }
+{                   released 1.0b                              }
+{                                                              }
+{   08 Apr 1983   bug fix,screen     KB                        }
+{                   clean up and                               }
+{                   more strings                               }
+{   03 Aug 1983   increased length   KB                        }
+{                   of strings and                             }
+{                   ALT-x in char display                      }
+{                                                              }
+{**************************************************************}
+
+USES {$U /CCUTIL/CCLIB } CCdefn, CClblIO, CCcrtIO,
+                         CCwndIO, CChexOut,
+     {$U BLDALT.EQU    } BldAltEQU;
+
+CONST
+       pgmVERSION      =   '1.2a';
+       pgmNAME         =   'BLDALT';
+       pgmTITLE        =   'Build Printer Alternate Character Translation Table';
+
+       {FUNCTION KEY NUMBERS}
+       F1              =       0;
+       F2              =       1;
+       F3              =       2;
+       F4              =       3;
+       F5              =       4;
+       F6              =       5;
+       F7              =       6;
+       F8              =       7;
+       F9              =       8;
+       F10             =       9;
+
+       NUL             =       '\00';
+       NOCHAR          =       '\00';
+       BEL             =       '\07';
+       BS              =       '\08';
+       HT              =       '\09';
+       FF              =       '\0C';
+       CR              =       '\0D';
+       SO              =       '\0E';
+       SUB             =       '\1A';
+       ESC             =       '\1B';
+       FS              =       '\1C';
+       US              =       '\1F';
+       SPACE           =       ' ';
+       DEL             =       '\7F';
+       AltSPACE        =       '\A0';
+       AltDEL          =       '\FF';
+
+       NullIndx        =       -1;     {no string for this Alt char}
+
+       ALTCHX          =       0;      {X IS COLUMNS}
+       ALTCHY          =      25;      {Y IS ROWS}
+       SLCTX           =       0;
+       SLCTY           =      15;
+       FILEX           =       0;
+       FILEY           =       5;
+       STRSX           =       0;
+       STRSY           =       5;
+       DLETX           =       0;
+       DLETY           =      37;
+       NSTRX           =       0;
+       NSTRY           =      37;
+
+VAR
+     ior, i, j,StrCount : INTEGER;
+     CurrChar : CHAR;
+     Quit, RedoDsp, Saved, ReadNext : BOOLEAN;
+     FilName : String80;
+     F : FILE OF AltTbl;
+     kbrd : INTERACTIVE;
+     AltTable :  AltTbl;
+
+  PROCEDURE InitTbl;
+  VAR i : INTEGER;
+  BEGIN
+    WITH AltTable DO
+       BEGIN
+       ActualStrs := 0;
+       STptr := POINTER( SIZEOF(pAltStrTbl) + SIZEOF(StrIndxTbl) );
+       FOR i := 0 TO 95 DO Indices[i] := NullIndx;
+       FOR i := 0 TO MAXSTR DO StrList[i] := '';
+       END; {WITH}
+  END; {InitTbl}
+
+  PROCEDURE MainInit;
+  VAR ior : INTEGER;
+  BEGIN {MainInit}
+    CCcrtIOinit;
+    CClblIOinit;
+    CCwndIOinit;
+    CChexInit;
+
+    CrtTpgm := pgmNAME;
+    CrtTvrs := pgmVERSION;
+    CrtAction(UcaseOff);
+    CrtAction(EchoOff);
+    CrtAction(DefStrOn);
+    ior := WinSystem(WsysCmd);
+    CrtAction(CursorOff);
+    ior := WinSystem(WsysCurr);
+    CrtAction(CursorOff);
+
+    RESET(kbrd, '/SYSTERM');
+
+    Quit := FALSE;
+    RedoDsp := TRUE;
+    ReadNext := TRUE;
+    CurrChar := CHR(0);
+    StrCount := -1;
+    Saved := FALSE;
+    FilName := '';
+    InitTbl;
+  END; {MainInit}
+
+  FUNCTION MainLbls : INTEGER;
+  VAR  ior  : INTEGER;
+  BEGIN {MainLbls}
+
+    ior := WinSystem(WsysCurr);
+    MainLbls := ior;
+    IF ior <> 0 THEN EXIT(MainLbls);
+
+    LblsInit;
+    ior := LblSet( F1, 'ReadFile', 'R' );
+    MainLbls := ior;
+    IF ior <> 0 THEN EXIT(MainLbls);
+    ior := LblSet( F2, 'Select', 'S' );
+    MainLbls := ior;
+    ior := LblSet( F3, 'ShowStrs', 'D' );
+    MainLbls := ior;
+    ior := LblSet( F5, 'DletStr', 'K' );
+    MainLbls := ior;
+    ior := LblSet( F6, 'WritFile', 'W' );
+    MainLbls := ior;
+    IF ior <> 0 THEN EXIT(MainLbls);
+    ior := LblSet( F10, 'EXIT', 'E' );
+    MainLbls := ior;
+    IF ior <> 0 THEN EXIT(MainLbls);
+    LblsOn;
+  END; {MainLbls}
+
+  PROCEDURE DispNoStrs;
+  BEGIN
+    ior := WinSystem(WsysCurr);
+    GOTOXY( NSTRX, NSTRY );
+    CrtAction(ErasEOL);
+    WRITE(CHR(7),'No Strings in Table.');
+  END; {dspASCII}
+
+  PROCEDURE dspASCII( a : CHAR);
+  BEGIN
+    CASE a OF
+       ESC       : WRITE(' ESCAPE ');
+       CR        : WRITE(' RETURN ');
+       BS        : WRITE(' BACKSPACE');
+       SPACE     : WRITE(' SPACE ');
+       DEL       : WRITE(' DEL ');
+       OTHERWISE : BEGIN
+                   IF (ORD(a) > 127) THEN
+                     BEGIN
+                     WRITE(' ALT-');
+                     a := CHR( ORD(a) - 128 );
+                     END
+                   ELSE
+                     WRITE(' ');
+                   IF (a < SPACE) THEN
+                     WRITE('CONTROL-',CHR( ORD(a) + $40 ),' ' )
+                   ELSE
+                     WRITE('"',a,'" ');
+                   END;
+       END;
+  END; {dspASCII}
+
+  PROCEDURE display( a : CHAR);
+  VAR ior, i : INTEGER;
+  BEGIN {display}
+    ior := WinSystem(WsysCurr);
+    GOTOXY( ALTCHX, ALTCHY );
+    CrtAction(ErasEOL);
+    IF (a = NOCHAR) THEN WRITELN(' No Current Character')
+    ELSE
+       BEGIN
+       a := CHR( ORD(a) - $80 );
+       WRITE('  ALTERNATE');
+       dspASCII(a);
+       i := ORD(a) + $80;
+       GOTOXY( ALTCHX + 30, ALTCHY );
+       WRITE('   DECIMAL VALUE = ',i:1);
+       GOTOXY( ALTCHX + 48, ALTCHY + 1);
+       PutHexWord(i);
+       GOTOXY( ALTCHX + 30, ALTCHY + 1);
+       WRITE('   HEX VALUE     = $');
+       END;
+  END; {display}
+
+  FUNCTION MainPrompt : INTEGER;
+  VAR  ior  : INTEGER;
+  BEGIN {MainPrompt}
+    LblsOn;
+    ior := WinSystem(WsysCmd);
+    MainPrompt := ior;
+    IF ior <> 0 THEN EXIT(MainPrompt);
+    CrtAction(EraseALL);
+    WRITELN;
+    WRITELN('Enter Alternate Character or Press Function Key.');
+
+    IF RedoDsp THEN
+        BEGIN
+        RedoDsp := FALSE;
+        MainPrompt := WinSystem(WsysCurr);
+        CrtTitle(pgmTITLE);
+        GOTOXY( ALTCHX, ALTCHY - 2 );
+        WRITE('CURRENT ALTERNATE CHARACTER');
+        display( CurrChar );
+        END;
+  END; {MainPrompt}
+
+  FUNCTION GetFile : INTEGER;
+  VAR ior : INTEGER;
+
+  BEGIN
+    ior := WinSystem(WsysCurr);
+
+    GOTOXY( FILEX, FILEY );
+    CrtAction(ErasEOL);
+    {$I-} RESET(F, FilName); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE(CHR(7),'  Cannot open file....IORESULT = ',ior:1);
+        GetFile := ior;
+        EXIT(GetFile);
+        END;
+
+    {$I-} READ(F, AltTable); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE(CHR(7),'  Cannot write file....IORESULT = ',ior:1);
+        GetFile := ior;
+        {$I-} CLOSE(F); {$I+}
+        EXIT(GetFile);
+        END;
+    StrCount := AltTable.ActualStrs - 1;
+
+    {$I-} CLOSE(F, LOCK); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE(CHR(7),'  Cannot close file....IORESULT = ',ior:1);
+        GetFile := ior;
+        EXIT(GetFile);
+        END;
+
+    GetFile := ior;
+    Saved := FALSE;
+  END; {GetFile}
+
+  PROCEDURE ReadFile;
+  VAR ior : INTEGER;
+      c : CHAR;
+      s80: String80;
+      st : CrtStatus;
+
+  BEGIN {ReadFile}
+    LblsOff;
+    ior := WinSystem(WsysCmd);
+    CrtAction(CursorOn);
+    CrtAction(EraseALL);
+
+    WRITE('Do you want to load a new file? [Y/N] N',BS);
+    s80 := '';  c := 'N';
+    CrtAction(EchoOn);
+    IF (GetString(s80) <> Escape) THEN
+       IF LENGTH(s80) <> 0 THEN
+          BEGIN
+          c := s80[1];
+          c := UpperCase(c);
+          END;
+    CrtAction(EchoOff);
+
+    IF c='Y' THEN
+       BEGIN
+       CrtAction(EraseALL);
+       WRITE('Enter file name : ');
+       CrtAction(EchoOn);
+       st := GetString(FilName);
+       CrtAction(EchoOff);
+       IF (LENGTH(FilName) <> 0) THEN ior := GetFile;
+       END;
+    RedoDsp := (ior = 0);
+    ior := WinSystem(WsysCmd);
+    CrtAction(CursorOff);
+  END; {ReadFile}
+
+  PROCEDURE CurrStr( ch : CHAR; VAR str : AltStrg );
+  VAR  i : INTEGER;
+  BEGIN
+    WITH AltTable DO
+       BEGIN
+       str := ''; {assume no string}
+       i := ORD(ch) - $A0;
+       IF (Indices[i] <> NullIndx) THEN
+               str := StrList[ Indices[i] ];
+       END;
+  END; {CurrStr}
+
+  PROCEDURE DspString( str : AltStrg );
+  VAR i : INTEGER;
+  BEGIN
+    FOR i := 1 TO LENGTH(str) DO dspASCII( str[i] );
+  END; {DspString}
+
+  FUNCTION GetTblStr( VAR str : AltStrg ) : BOOLEAN;
+  VAR i : INTEGER;
+      ch : CHAR;
+      s80: String80;
+      s : STRING[1];
+
+  BEGIN
+    GOTOXY( SLCTX, SLCTY + 4 );
+    str := ''; i := 1;
+
+    READ( kbrd, s);
+    WHILE (NOT EOLN(kbrd)) AND (i <= ALTSTRLEN) DO
+       BEGIN
+       IF (s[1]=ESC) THEN READ( kbrd, s);
+       dspASCII( s[1] );
+       str := CONCAT( str,s );
+       i := i + 1;
+       READ( kbrd, s);
+       END;
+
+    GOTOXY( SLCTX, SLCTY + 5 );
+    WRITE('Do you want to save this translation string? [Y/N] N',BS);
+    s80 := ''; ch := 'N';
+    CrtAction(EchoOn);
+    IF (GetString(s80) <> Escape) THEN
+       IF LENGTH(s80) <> 0 THEN
+          BEGIN
+          ch := s80[1];
+          ch := UpperCase(ch);
+          END;
+    CrtAction(EchoOff);
+    GetTblStr := ( ch = 'Y' )
+  END; {GetTblStr}
+
+  FUNCTION SearchTbl( str : AltStrg; VAR Indx : INTEGER ) : BOOLEAN;
+  VAR Found : BOOLEAN;
+  BEGIN
+    Found := FALSE;
+    Indx := 0;
+    WITH AltTable DO
+        WHILE (NOT Found) AND (Indx <= StrCount) DO
+          IF str = StrList[Indx] THEN Found := TRUE
+                                 ELSE Indx := Indx + 1;
+    SearchTbl := Found;
+  END; {PutInTable}
+
+  PROCEDURE PutInTable( ch : CHAR; str : AltStrg );
+  VAR  i, strindx : INTEGER;
+  BEGIN
+    WITH AltTable DO
+       BEGIN
+       i := ORD(ch) - $A0;
+       IF SearchTbl( str, strindx )  THEN
+           Indices[i] := strindx    {found same in array}
+       ELSE
+           BEGIN  {new string}
+           StrCount := StrCount + 1; {strcount = index - 1 of new string}
+           IF StrCount > MAXSTR THEN
+              BEGIN
+              StrCount := StrCount - 1;
+              GOTOXY( SLCTX, SLCTY + 6 );
+              CrtAction(ErasEOL);
+              WRITE('Cannot add new string => STRING TABLE FULL.');
+              EXIT(PutInTable);
+              END;
+           Indices[i] := StrCount;
+           StrList[ StrCount ] := str;
+           END;
+       END;
+    Saved := FALSE;
+  END; {PutInTable}
+
+  PROCEDURE DoChar;
+  VAR ior,i : INTEGER;
+      s : AltStrg;
+
+  BEGIN {DoChar}
+    LblsOff;
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    WRITELN;
+    WRITELN('Change Translation String for Alternate character.');
+
+    ior := WinSystem(WsysCurr);
+    FOR i := SLCTY TO (SLCTY + 6) DO
+       BEGIN
+       GOTOXY( SLCTX, i ); CrtAction(ErasEOL);
+       END;
+
+    GOTOXY( SLCTX, SLCTY );
+    IF CurrChar = NOCHAR THEN WRITE(' No Current Character.')
+    ELSE
+       BEGIN
+       WRITE('CURRENT TRANSLATION STRING');
+       GOTOXY( SLCTX, SLCTY + 1 );
+       CurrStr(CurrChar, s);
+       IF LENGTH(s) = 0 THEN WRITE('No string for this character.')
+                        ELSE DspString(s);
+       GOTOXY( SLCTX, SLCTY + 3 );
+       CrtAction(CursorOn);
+       WRITE('Enter new string for Current Character :');
+       IF GetTblStr(s) THEN PutInTable(CurrChar, s);
+       CrtAction(CursorOff);
+       END;
+  END; {DoChar}
+
+  FUNCTION WriteFile : INTEGER;
+  VAR ior : INTEGER;
+
+  BEGIN
+    ior := WinSystem(WsysCurr);
+
+    GOTOXY( FILEX, FILEY );
+    CrtAction(ErasEOL);
+    {$I-} REWRITE(F, FilName); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE(CHR(7),'  Cannot open file....IORESULT = ',ior:1);
+        WriteFile := ior;
+        EXIT(WriteFile);
+        END;
+
+    AltTable.ActualStrs := StrCount + 1;
+    {$I-} WRITE(F, AltTable); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE(CHR(7),'  Cannot write file....IORESULT = ',ior:1);
+        WriteFile := ior;
+        {$I-} CLOSE(F, PURGE); {$I+}
+        EXIT(WriteFile);
+        END;
+
+    {$I-} CLOSE(F, LOCK); {$I+}
+    ior := IORESULT;
+    IF ior <> 0 THEN
+        BEGIN
+        WRITE(CHR(7),'  Cannot close file....IORESULT = ',ior:1);
+        WriteFile := ior;
+        {$I-} CLOSE(F, PURGE); {$I+}
+        EXIT(WriteFile);
+        END;
+
+    WriteFile := ior;
+    Saved := TRUE;
+  END; {WriteFile}
+
+  PROCEDURE SaveFile;
+  VAR ior : INTEGER;
+      c : CHAR;
+      s80: String80;
+      st : CrtStatus;
+  BEGIN
+    LblsOff;
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    CrtAction(CursorOn);
+
+    WRITE('Do you want to save this table? [Y/N] N',BS);
+    s80 := ''; c := 'N';
+    CrtAction(EchoOn);
+    IF (GetString(s80) <> Escape) THEN
+       IF LENGTH(s80) <> 0 THEN
+          BEGIN
+          c := s80[1];
+          c := UpperCase(c);
+          END;
+    CrtAction(EchoOff);
+
+    IF c='Y' THEN
+       BEGIN
+       CrtAction(EraseALL);
+       WRITE('Enter file name : ');
+       CrtAction(EchoOn);
+       st := GetString(FilName);
+       CrtAction(EchoOff);
+       IF (LENGTH(FilName) <> 0) THEN ior := WriteFile;
+       END;
+    RedoDsp := (ior = 0);
+    ior := WinSystem(WsysCmd);
+    CrtAction(CursorOff);
+  END; {SaveFile}
+
+  FUNCTION Show10str( First : INTEGER) : INTEGER;
+  VAR i, j, k,ior, y, Last : INTEGER;
+      ch : CHAR;
+  BEGIN
+    Last := First + 9;
+    IF Last > StrCount THEN Last := StrCount;
+    Show10str := Last + 1;
+    IF First > Last THEN EXIT(Show10str);
+
+    ior := WinSystem(WsysCurr);
+    CrtTitle(pgmTITLE);
+    GOTOXY( STRSX, STRSY );
+    WRITE('List of Strings ',(First+1):1,' to ',(Last+1):1,' in Table');
+
+    y := STRSY + 2;
+    FOR i := First TO Last DO
+      BEGIN
+      GOTOXY( STRSX, y );
+      WRITE('STRING ', (i+1):1,' :  ');
+      WITH AltTable DO
+         BEGIN
+         FOR j := 1 TO LENGTH(StrList[i]) DO
+           DspASCII( StrList[i,j]  );
+         GOTOXY( STRSX, y + 1 );
+         WRITE('Character codes : ');
+         FOR j := 0 TO 95 DO
+           IF Indices[j] = i THEN
+             BEGIN
+             PutHexWord(j+$A0);
+             FOR k := 1 TO 4 DO CrtAction(CursorLeft);
+             WRITE(' $');
+             FOR k := 1 TO 2 DO CrtAction(CursorRight);
+             END;
+         END;
+      y := y + 3;
+      END;
+
+    RedoDsp := TRUE;
+  END; {Show10str}
+
+  PROCEDURE ShowStrs;
+  VAR i, ior : INTEGER;
+      ch : CHAR;
+  BEGIN
+    LblsOff;
+    i := 0;
+    IF StrCount < 0 THEN
+      DispNoStrs
+    ELSE
+      WHILE (i <= StrCount) DO
+         BEGIN;
+         i := Show10str(i);
+         ior := WinSystem(WsysCmd);
+         CrtAction(EraseALL);
+         IF i > StrCount THEN WRITE('Press [RETURN] to continue')
+                         ELSE WRITE('Press [RETURN] to advance display, [ESC] to stop');
+         READ(ch); IF ch = ESC THEN i := StrCount + 1; {stop on Escape}
+         END;
+  END; {ShowStrs}
+
+  FUNCTION FixTable( Si : INTEGER ) : INTEGER;
+  VAR i, j : INTEGER;
+  BEGIN
+    WITH AltTable DO
+      BEGIN
+      {find all indices which point to Si-1 and set to -1}
+      FOR i := 0 TO 95 DO
+         IF (Indices[i] = Si) THEN Indices[i] := Nullindx;
+
+      {crunch table and update all indices}
+      FOR i := (Si + 1) TO StrCount DO
+         BEGIN
+         StrList[i-1] := StrList[i];
+         FOR j := 0 TO 95 DO
+            IF (Indices[j] = i) THEN Indices[j] := i - 1;
+         END;
+      END;
+    FixTable := StrCount - 1; {new last index}
+  END; {FixTable}
+
+  PROCEDURE DeleteStr;
+  VAR strnum, First, OldFirst,ior, i : INTEGER;
+      s80: String80;
+      ch : CHAR;
+  BEGIN
+    LblsOff;
+    IF StrCount < 0 THEN
+       BEGIN
+       DispNoStrs;
+       EXIT(DeleteStr);
+       END;
+
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    WRITE('Delete String :  Press [ESC] to stop, -1 to advance display.');
+
+    ior := WinSystem(WsysCurr);
+    First := 0;
+    WHILE (First <= StrCount) DO
+       BEGIN
+       OldFirst := First;
+       First := Show10str(First);
+       ior := WinSystem(WsysCurr);
+       GOTOXY( DLETX, DLETY );
+       CrtAction(CursorOn);
+       WRITE('Enter string number to delete :  ');
+
+       CrtAction(EchoOn);
+       strnum := -1;
+       IF GetNum( strnum ) <> Escape THEN
+           BEGIN
+           CrtAction(CursorOff);
+           IF (strnum >= 1) AND (strnum <= (StrCount+1)) THEN
+                BEGIN
+                {find string and ask user if really want to delete}
+                GOTOXY( DLETX, DLETY + 2 );
+                WRITE('STRING ',strnum:1,' :  ');
+                strnum := strnum - 1;  {turn into index}
+                DspString(AltTable.StrList[strnum]);
+                GOTOXY( DLETX, DLETY + 3 );
+                CrtAction(CursorOn); CrtAction(EchoOn);
+                WRITE('Delete this string?  [Y/N] N',BS);
+                s80 := '';   ch := 'N';
+                IF (GetString(s80) <> Escape) THEN
+                   IF LENGTH(s80) <> 0 THEN
+                      BEGIN
+                      ch := s80[1];
+                      ch := UpperCase(ch);
+                      END;
+                CrtAction(EchoOff); CrtAction(CursorOff);
+                IF ch = 'Y' THEN StrCount := FixTable( strnum );
+                END
+           ELSE IF strnum <> -1 THEN
+                BEGIN
+                GOTOXY( DLETX, DLETY + 1 );
+                WRITE(CHR(7),'INVALID STRING NUMBER.');
+                First := OldFirst;
+                FOR i := 1 TO 30000 DO;
+                END;
+           END
+       ELSE
+           BEGIN
+           First := StrCount+1;  {STOP on Escape}
+           CrtAction(CursorOff);
+           END;
+       END;
+
+    CrtAction(EchoOff);
+    ior := WinSystem(WsysCmd);
+    CrtAction(EraseALL);
+    WRITE('Press [RETURN] to continue'); READ(ch);
+    RedoDsp := TRUE;
+  END; {DeleteStr}
+
+  PROCEDURE ChkExit;
+  VAR ch : CHAR;
+  BEGIN {ChkExit}
+    Quit := TRUE;
+    IF (NOT Saved) THEN SaveFile;
+  END; {ChkExit}
+
+  PROCEDURE ProcFncKey;
+  VAR ch : CHAR;
+  BEGIN {ProcFncKey}
+    READ( kbrd, ch );
+    CASE ch OF
+       'R' :  ReadFile;
+       'W' :  SaveFile;
+       'S' :  DoChar;
+       'D' :  ShowStrs;
+       'E' :  ChkExit;
+       'K' :  DeleteStr;
+       OTHERWISE : IF (ch >= AltSPACE) THEN
+                      BEGIN
+                      CurrChar := ch;
+                      RedoDsp := TRUE;
+                      ior := WinSystem(WsysCmd);
+                      END;
+       END;{CASE}
+  END; {ProcFncKey}
+
+  PROCEDURE LeavePgm;
+  BEGIN
+    ior := WinSystem(WsysCmd);
+    CrtAction(CursorOn);
+    ior := WinSystem(WsysCurr);
+    CrtAction(CursorOn);
+  END; {LeavePgm}
+
+BEGIN {BldAlt}
+
+  MainInit;
+
+  ior := MainLbls;
+  IF ior <> 0 THEN
+       WRITELN('Failed to establish main environment.  IORESULT = ',ior:1)
+  ELSE
+       REPEAT
+         ior := MainPrompt;
+         IF ior <> 0 THEN
+              BEGIN
+              WRITELN('Failed to acquire msg/cmd window.  IORESULT = ',ior:1);
+              Quit := TRUE;
+              END
+         ELSE
+              ProcFncKey;
+         UNTIL(Quit);
+
+  LeavePgm;
+
+END. {BldAlt}

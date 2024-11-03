@@ -1,0 +1,145 @@
+*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           User Guide
+                       File Management Aid
+                     for the Corvus Concept
+
+
+
+
+
+
+
+
+                  FMA ver 3.1          February 1985
+
+
+
+
+
+                  Program developed by Neil Everhart
+                  36631 Bridgepointe Dr., Newark, Ca.
+
+
+.PG
+
+                         FILE MANAGEMENT AID - USER GUIDE page 1
+
+
+          INDEX:  ...................................  1
+
+
+               DISCLAIMER ...........................  2
+
+               INTRODUCTION .........................  2
+
+               REQUIREMENTS .........................  2
+
+               CONVENTIONS  .........................  2
+
+               USING FMA - Operational Overview .....  4
+
+     LABEL DEFINITIONS
+
+                FILE MAINTENANCE LABELS .............  6
+
+                  Set Flag ..........................  6
+                  Vol Dir  ..........................  6
+                  UndoFlag ..........................  6
+                  ConcFile ..........................  6
+                  ViewFile ..........................  7
+                  AlphaDir - Norm Dir ...............  7
+                  Set Vol  ..........................  7
+                  Del-Temp ..........................  8
+                  Crunch   ..........................  8
+                  Spool    ..........................  8
+                  Calc     ..........................  8
+                  LocPrint ..........................  8
+                  Clock    .......................... 10
+                  Rename   .......................... 10
+                  CopyFile .......................... 10
+                  DELETE   .......................... 11
+                  RunPgms  .......................... 11
+                  FindFile .......................... 11
+                  Exit     .......................... 12
+                  Help     .......................... 12
+
+
+                VOLUME LABELS ....................... 12
+
+                  (List) New Vol .................... 12
+                  (Reset) Vol Dir ................... 12
+                  RenamVol  ......................... 12
+
+               FMA ERROR MESSAGES ................... 13
+
+               BUG REPORTS .......................... 14
+.PG
+
+                          FILE MANAGEMENT AID - USER GUIDE page 2
+
+
+eIDISCLAIMER:e@
+
+FMA is not warranted.  The user uses FMA at his or her own risk.
+Network users must check with the Network System Manager before
+installing and using FMA.
+
+
+eIINTRODUCTION:e@
+
+The FMA program provides the Corvus Concept user with an easy to
+use file management utility.  Using FMA, the user can perform the
+most common file maintenance operations in and between volumes on
+the network and local drives.
+
+The general concepts of the program are:
+
+      a.  to provide on a single screen a complete file directory
+          of a selected volume and a directory of the user's volumes
+          with as much status information as possible,
+
+      b.  to eliminate the need to type volume names and filenames
+          when performing common file operations,
+
+      c.  and to leave the users Concept in a graceful state
+          when FMA is exited and or when errors are encountered.
+
+
+The user should be familiar with the Corvus Concept and have a
+general understanding of the operating system and file structure
+before using the FMA program.  New users should read "The Corvus
+Concept Personal Workstation User Guide" before using FMA.
+
+
+
+
+eIREQUIREMENTS:e@
+
+To use FMA, the Corvus Concept Operating System, CCOS (ver 1.2a)
+must be correctly installed to the network or local drive and the
+user must have READ access to volumes CCSYS, CCUTIL and ISYS.  The
+System Manager should install FMA and HELP.FMA.TEXT to the CCSYS
+volume so that FMA can be accessed by all users.
+
+FMA does require that file names and volume names comply with the
+Operating System requirements, ref the Workstation User Guide.
+
+

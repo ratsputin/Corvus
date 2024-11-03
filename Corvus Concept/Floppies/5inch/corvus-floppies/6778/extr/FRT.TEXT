@@ -1,0 +1,17 @@
+        IDENT   F_R_T
+
+        GLOBAL  %I_FLT,%_ROUND,%_TRUNC
+
+        EXTERN  %I_2_F,%I_NINT,%F_2_I
+
+%_ROUND
+;------
+        MOVE.L  (SP),-(SP)
+        MOVE.L  8(SP),4(SP)
+        JMP     %I_NINT
+
+%I_FLT  JMP     %I_2_F
+;------
+%_TRUNC JMP     %F_2_I 
+;------
+        END

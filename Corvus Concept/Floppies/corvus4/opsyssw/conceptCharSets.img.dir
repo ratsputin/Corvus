@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'conceptCharSets.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 7 files,  0 to 6 (6), eov 500, size 425, free 7
+
+ 1: CS.5BY5         Data 27-Jan-83    6-   9(   3),  1536+328=  1864 bytes
+ 2: CS.8BY13        Data 27-Jan-83    9-  15(   6),  3072+360=  3432 bytes
+ 3: CS.9BY14        Data 29-Mar-83   15-  28(  13),  6656+136=  6792 bytes
+ 4: CS.CORVUS       Data 27-Jan-83   28-  43(  15),  7680+  8=  7688 bytes
+ 5: DIRECTORY.TEXT  Text 29-Mar-83   43-  47(   4),  2048+337=  2385 bytes
+ 6: CS.46           Data 15-Nov-82   47-  62(  15),  7680+512=  8192 bytes
+ 7: CS.72           Data 15-Nov-82   62-  75(  13),  6656+512=  7168 bytes

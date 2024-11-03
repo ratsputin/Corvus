@@ -1,0 +1,129 @@
+
+
+
+This pco covers the AVL Eagle software included on the following
+floppies.
+
+
+ CP/M Working        Corvus Utilities      Corvus Installation
+  Configured              3/17/82                3/24/82
+   3/17/82                                       3/17/82
+
+
+ CP/M Working
+  3/17/82 dp.
+
+
+The files on the CP/M floppies are listed below:
+
+CP/M Working - configured:          CP/M Working:
+
+Files:                     Size:    Files:                 Size:
+
+ PIP        .COM            8k      x                      x
+ STAT       .COM            6k      x                      x
+ DDT        .COM            6k      x                      x
+ SUBMIT     .COM            2k      x                      x
+ XSUB       .COM            2k      x                      x
+ SYSGEN     .COM            2k      x                      x
+ ED         .COM            8k      x                      x
+ LOAD       .COM            2k      x                      x
+ ASM        .COM            8k      x                      x
+ MOVCPM     .COM           10k      x                      x
+ DUMP       .COM            2k      x                      x
+ ASSIGN     .COM            6k      x                      x
+ DISKUTIL   .COM            6k      x                      x
+ DDISKUTL   .COM            6k      x                      x
+ ICPM58     .HEX            2k      ICPM60   .ASM          2k
+ ICPM58     .ASM            2k      x                      x
+ EBIOS5     .HEX           12k      EBIOS    .ASM         64k
+ CPM58      .COM           12k      EBIOS5   .ASM         12k
+ EBIOS5     .ASM           72k      EBIOS10  .ASM         72k
+                                    EBIOS20  .ASM         72k
+
+         Bytes remaining: 210k           Bytes remaining:240k
+
+
+
+The files on the Corvus Utilities floppy are listed below:
+
+Files:                     Size:
+
+ CDIAGNOS    .ASM           64k
+ CDIAGNOS    .COM           10k
+ MIRROR      .ASM           32k
+ MIRROR      .COM            6k
+ CORVB173    .CLR           32k
+                                Bytes remaining: 240k
+
+$P
+
+The files on the Corvus Installation floppies for 3/24/82 and
+3/17/82 are listed below:
+
+Note:  The file CHK20 .COM is not included in the 3/17/82 release
+
+Corvus Installation 3/24/82        Corvus Installation 3/17/82
+
+Files:                    Size:    Files:                  Size:
+ PIP       .COM             8k       x                       x
+ HELLO     .COM             2k       x                       x
+ DISKUTIL  .COM             6k       x                       x
+ SUBMIT    .COM             2k       x                       x
+ XSUB      .COM             2k       x                       x
+ SSS05     .COM            12k       x                       x
+ STAT      .COM             6k       x                       x
+ ASSIGN    .COM             6k       x                       x
+ HSS05     .COM            12k       x                       x
+ TYPEIT    .COM             2k       x                       x
+ SYSWRT    .COM             2k       x                       x
+ STEP6                      2k       x                       x
+ DDISKUTL  .COM             6k       x                       x
+ HDBOOT    .COM             2k       x                       x
+ STEP2                      2k       x                       x
+ CHK05     .COM             4k       x                       x
+ CHK20     .COM             2k
+ ACTING    .COM            18k       x                       x
+ STEP4                      2k       x                       x
+ STEP7                      2k       x                       x
+ STEP8                      2k       x                       x
+ STEP1                      2k       x                       x
+ STEP5                      2k       x                       x
+ STEP3                      2k       x                       x
+ CLDIR     .COM             2k       x                       x
+ UPS10     .SUB             2k       x                       x
+ UPD10     .SUB             2k       x                       x
+
+$P
+
+ UPS05     .SUB             2k       x                       x
+ UPD20     .SUB             2k       x                       x
+ UPD20     .BAK             2k       x                       x
+ UPS20     .SUB             2k       x                       x
+ CRUN2     .COM            18k       x                       x
+ COPYDOC   .COM            10k       x                       x
+ SET10MG   .INT             2k       x                       x
+ PSINT10   .INT             6k       x                       x
+ PSINT5    .INT             6k       x                       x
+ SET5MB    .INT             2k       x                       x
+ ASSIGN    .INT             4k       x                       x
+ SSS20     .COM            12k       x                       x
+ PSTRAN    .FIL             2K       x                       x
+ PSDATA    .FIL             2k       x                       x
+ PSNAME    .FIL             2k       x                       x
+ HSD05     .COM            12k       x                       x
+ HSS10     .COM            12k       x                       x
+ UPD05     .SUB             2k       x                       x
+ SSS10     .COM            12k       x                       x
+ SSD05     .COM            12k       x                       x
+ MASTR     .COM             6k       x                       x
+ HSS20     .COM            12k       x                       x
+ HSD10     .COM            12k       x                       x
+ HSD20     .COM            12k       x                       x
+ SSD10     .COM            12k       x                       x
+ SSD20     .COM            12k       x                       x
+                              Bytes remaining: 240
+
+$P
+
+

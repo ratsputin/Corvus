@@ -1,0 +1,57 @@
+
+
+         Agenda for Const II meeting
+
+         1. NIS discussion - Phil presents report if upgraded.
+
+         2. physical transporter driver
+               a. operation
+               b. interface
+               c. buffer mgt algorithm
+
+         3. boot process document - Denise
+
+         4. allocation of work to be done for release
+
+               WORK
+               a. disk driver and utility changes
+                     - mount table changes
+                     - boot changes
+                     - new generic drive cmd inteface
+                     - timeout value from status area
+               b. transporter driver
+               c. volume lock out
+                     - boot and mount manager
+               d. spool driver - Denise has version for Concept
+
+               e. Apple II - Sean does multi-servers but not
+                  extras. No transporter driver or spool driver.
+                  Volume lock out may be possible with changes in
+                  mount manager and secondary boot.  These don't
+                  take up system resident space.
+
+               f. utility changes - user utilities for spooler
+                  and mount manager, cmd line driven.
+                  system utilities for speed up and batch.
+               g. UCSD for our utilities running on top of MSDOS
+                  2.0.
+
+               h. New IBM transporter ROM for interrupt
+                  transporter.
+               i. changes to boot process ???
+
+               WHO
+               a. Denise define further what needs to be done
+                  with utilities.  Define schedule and people.
+               b. Bruce K. and me do drivers, disk and
+                  transporter.
+               c. Sean continues with Apple
+               d. Boot process - goes with drivers.
+
+
+         5. Questions
+               a. SONY - do CP/M 86. Also do MSDOS 2.0?
+                       - schedule for SONY.  (Cluney)
+                       - viable to do first then do IBM?
+
+               b. Z100 - how is UCSD on MSDOS 2.0 going?

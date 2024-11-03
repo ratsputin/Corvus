@@ -1,0 +1,274 @@
+{$P}
+
+ {--------------------------------------------------------------------}
+ { Procedure:     OSCopy                                              }
+ {                                                                    }
+ { Description:   Copy Concept operating system to drive. LOC is the  }
+ {                beginning the the volume 'CCSYS'.                   }
+ {                                                                    }
+ {--------------------------------------------------------------------}
+
+ PROCEDURE OSCopy {( Loc: CDaddr )};
+
+ LABEL 1;
+
+ CONST
+    mode       = 0;
+    startblk   = 1;
+    blocksize  = 512;
+    flexunit   = 4;
+
+ TYPE
+    indexrec   = RECORD
+                 Date:  PACKED ARRAY [1..6] OF CHAR; { release date mmddyy}
+                 Vers:  PACKED ARRAY [1..4] OF CHAR; { OS version xx.xx}
+                 Total: INTEGER;                     { number of floppies in set }
+                 Thisone: INTEGER;                   { number of this floppy }
+                 Blocks: INTEGER;                    { number of blocks on this floppy }
+                 END;
+
+ VAR
+    Inputok:   CrtStatus;
+    Command,ch:CHAR;
+    Istr:      String80;           { input buffer                     }
+    Buf:       CD_buf;             { Input/Output copy buffer         }
+    Sloc:      CDaddr;             { Source volume address            }
+    Dloc:      CDaddr;             { Destination volume address       }
+    ErrCode:   INTEGER;
+    srcDRV:    INTEGER;            { Source drive number              }
+    dstDRV:    INTEGER;            { Destnation drive number          }
+    srcBLK:    INTEGER;            { Source block starting number     }
+    dstBLK:    INTEGER;            { Destination block starting number}
+    noblks:    INTEGER;            { no. of blocks to transfer        }
+    srcSLT:    INTEGER;            { Source slot number               }
+    srcSRV:    INTEGER;            { Source disk  server number       }
+    dstSLT:    INTEGER;            { Destination slot number          }
+
+    Index    : IndexRec;           { floppy info                      }
+
+    Vers     : STRING[4];
+    Total    : INTEGER;          { info from first floppy in set }
+    Date     : STRING[6];
+
+    Count,i  : INTEGER;            { count of floppies processed so far }
+
+    FUNCTION moveok (VAR Sloc, Dloc: CDaddr):   BOOLEAN;
+
+
+       BEGIN
+       moveok := FALSE;
+       WRITELN;
+       srcSLT := 2;
+       srcDRV := 1;
+       srcBLK := 0;
+       srcSRV := 0;
+
+       GoToXy ( 0,8);
+       CrtAction ( ErasEOS);
+       WRITELN('Location of operating system volume is:');
+       WRITELN;
+       WRITE ('   Enter source volume slot: ');
+       IF getnum(srcSLT) <> normal THEN
+          EXIT ( moveok );
+       Sloc.Slotno := SrcSLT;
+
+       Sloc.Kind := CDSlotInfo ( srcSLT);
+       IF Sloc.Kind = OmninetDisk THEN
+          BEGIN
+          WRITE ('   Enter source volume host number: ');
+          IF getnum(srcSRV) <> normal THEN
+             EXIT ( moveok );
+          END
+       ELSE
+          srcSRV := -127;
+       Sloc.Stationno :=  SrcSRV ;
+
+       WRITE ('   Enter source volume drive number: ');
+       IF getnum(srcDRV) <> normal THEN
+          EXIT ( moveok );
+       Sloc.Driveno := SrcDRV;
+
+       WRITE ('   Enter starting block of source volume drive: ');
+       IF getnum(srcBLK) <> normal THEN
+          EXIT ( moveok );
+       Sloc.Blkno := SrcBLK;
+       WRITELN;
+
+       Noblks := 2048;
+       WRITE ('   Enter number of blocks to transfer: ');
+       IF getnum (Noblks) <> normal THEN
+          EXIT ( moveok );
+
+       dstSLT := Dloc.Slotno;
+       dstDRV := Dloc.Driveno;
+       dstBLK := Dloc.Blkno;
+
+       WRITELN;
+       WRITELN ('From volume  at slot ',srcSLT:1,' drive ',srcDRV:1,' block ',srcBLK:5);
+       WRITELN ('TO new CCSYS at slot ',dstSLT:1,' drive ',dstDRV:1,' block ',dstBLK:5);
+       WRITELN ('                 for ',Noblks:5,' blocks');
+       WRITELN;
+       WRITE ('OK to copy? N',chr(8));
+       IF getbyte <> 'Y' THEN
+          EXIT ( moveok );
+       moveok := TRUE;
+       END;   { moveok }
+
+
+
+    PROCEDURE Copyvol ( VAR Sloc, Dloc: CDaddr; TotBlks:INTEGER);
+
+    VAR
+       Blkcnt:   INTEGER;
+
+       BEGIN
+       Blkcnt := 0;
+       WRITELN;
+       REPEAT
+          GnIORead  ( Sloc, 1, Buf );
+          GNIOWrite ( Dloc, 1, Buf );
+          Sloc.Blkno := Sloc.Blkno + 1;
+          Dloc.Blkno := Dloc.Blkno + 1;
+          IF (Blkcnt MOD 80) = 0 THEN
+             BEGIN
+             WRITELN;
+             WRITE ('[',Blkcnt:4,'] ');
+             END;
+          WRITE ('.');
+          Blkcnt := Blkcnt + 1;
+          UNTIL Blkcnt = TotBlks;
+       END;  { CopyVol }
+
+
+
+
+
+    PROCEDURE CopyFlex( VAR ErrCode:INTEGER; Dloc: CDaddr; TotBlks:INTEGER);
+
+       VAR
+          CheckOK  : BOOLEAN;           { loop flag }
+          d        : STRING[6];
+          v        : STRING[4];
+          i        : INTEGER;
+
+       FUNCTION CopyIt: BOOLEAN;
+
+          VAR
+             blocks,i,j,t: INTEGER;
+             bufsize     : INTEGER;
+
+          BEGIN
+          bufsize := (CDBuf_Max+1) DIV Blocksize;
+          blocks := index.blocks;  i := 0;  j := Dloc.Blkno;
+          writeln('copying ',blocks:1,' blocks ');
+          ErrCode := 0;
+          WHILE (blocks > 0) AND (ErrCode = 0) DO BEGIN
+             IF blocks < bufsize THEN t := blocks ELSE t := bufsize;  { select minimum }
+             UNITREAD(flexunit, buf, t*512, i+startblk+1, mode );
+             ErrCode := IORESULT;
+             IF ErrCode = 0 THEN ErrCode := CDWRITE(Dloc, buf, t*512 );
+             IF (i MOD 80) = 0 THEN BEGIN
+                WRITELN; WRITE ('[',i:4,'] ');
+                END;
+             WRITE('.');
+             Dloc.Blkno := Dloc.blkno + t; { index into corvus volume }
+             i := i + t;          { index into floppy volume }
+             blocks := blocks-t;  { number of blocks remaining }
+             END;
+          WRITELN;
+          IF ErrCode = 0 THEN CopyIt := TRUE ELSE
+             BEGIN CopyIt := FALSE;  Dloc.Blkno := j; END;
+          END;  { function CopyIt }
+
+       BEGIN  { procedure CopyFlex }
+
+       { ready to loop, reading all floppies }
+       REPEAT
+          REPEAT
+             WRITELN; WRITELN('Insert floppy #',count:1);
+             CrtPause(ch);  IF ch='!' THEN BEGIN ErrCode := 1; EXIT(CopyFlex); END;
+             CheckOK := TRUE;
+             UNITREAD(flexunit, index, BlockSize, startblk, mode );
+             IF IORESULT <> 0 THEN CheckOK := FALSE;
+             d := '      ';  FOR i := 1 TO 6 DO d[i] := index.date[i];
+             v := '    ';    FOR i := 1 TO 4 DO v[i] := index.vers[i];
+             IF (d <> date) OR (index.total <> total) OR (v <> vers) THEN BEGIN
+                WRITELN('Floppy is not part of this release, or is no good');
+                CheckOK := FALSE;
+                END
+             ELSE BEGIN
+                IF index.thisone <> count THEN BEGIN
+                   WRITELN('Floppy out of sequence.');
+                   CheckOK := FALSE;
+                   END;
+                END;
+           UNTIL CheckOK;     { TRUE when we've got the right floppy }
+
+          IF CopyIT THEN Count := Count + 1;
+        UNTIL Count > Total;
+
+       END;      { CopyFlex }
+
+
+
+    BEGIN     { procedure OSCopy }
+    WRITELN;
+    WRITE ('Copy Operating System from F(lexible Disk or D(rive: ');
+    Istr := 'F';
+    Inputok := GetString ( Istr );
+    IF Istr[1] = 'F' THEN
+       BEGIN
+       {                                               }
+       { Copy operating system from flexible disk to   }
+       { to the new drive...                           }
+       {                                               }
+       GoToXY (0,8);
+       CrtAction ( ErasEOS );
+    1:
+       WRITELN('Insert distribution floppy #1');
+       CrtPause(ch);
+       IF ch='!' THEN EXIT(OSCopy);
+
+       UNITREAD(flexunit, index, BlockSize, startblk, mode );
+       vers := '    ';    FOR i := 1 TO 4 DO vers[i] := index.vers[i];
+       date := '      ';  FOR i := 1 TO 6 DO date[i] := index.date[i];
+       count := index.thisone;  total := index.total;
+
+       IF (count <> 1) THEN BEGIN
+          WRITELN(beep,'You have inserted floppy #',count:1);
+          GOTO 1;
+          END;
+
+       WRITELN('Installing system version ',vers,' with release date ',date,'.');
+       WRITELN('There are ',total:1,' floppies in the set.');
+       WRITE  ('Continue? [Y/N] ');
+       IF Getbyte = 'Y' THEN BEGIN
+          WRITELN;
+          Dloc := Loc;
+          CopyFlex ( ErrCode, Dloc ,NoBlks);
+          IF ErrCode = 0 THEN WRITELN('System installed.');
+          END;
+       END
+    ELSE
+    IF Istr[1] = 'D' THEN
+       BEGIN
+       {                                               }
+       { Copy operating system from one corvus drive   }
+       { to the new drive...                           }
+       {                                               }
+       Dloc := Loc;
+       IF moveok (Sloc, Dloc) THEN
+          BEGIN
+          GoToXY (0,8);
+          CrtAction ( ErasEOS );
+          Copyvol ( Sloc, Dloc, NoBlks );
+          END;
+       WRITELN;
+       END;
+
+    END;   { OScopy }
+
+
+
+
+

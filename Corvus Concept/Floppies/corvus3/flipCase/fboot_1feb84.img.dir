@@ -1,0 +1,29 @@
+
+Directory of UCSD disk image file 'fboot_1feb84.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FBOOT has 21 files,  0 to 6 (6), eov 500, size 46, free 21
+
+ 1: CC.KERNEL       Data  1-Feb-84    6-  60(  54), 27648+512= 28160 bytes
+ 2: CC.FILMGR       Data  1-Feb-84   60- 112(  52), 26624+512= 27136 bytes
+ 3: CC.EXEC         Data  1-Feb-84  112- 128(  16),  8192+512=  8704 bytes
+ 4: CC.DISPAT       Ux2005  1-Feb-84  128- 157(  29), 14848+512= 15360 bytes
+ 5: CC.SETDCP       Data  1-Feb-84  157- 209(  52), 26624+512= 27136 bytes
+ 6: CC.SETUP        Data  1-Feb-84  209- 246(  37), 18944+512= 19456 bytes
+ 7: CC.WNDMGR       Data  1-Feb-84  246- 282(  36), 18432+512= 18944 bytes
+ 8: CSD.DEFAULT     Data  1-Feb-84  282- 284(   2),  1024+512=  1536 bytes
+ 9: CSK.DEFAULT     Data  1-Feb-84  284- 286(   2),  1024+512=  1536 bytes
+10: ASSIGN          Data  1-Feb-84  286- 299(  13),  6656+512=  7168 bytes
+11: DRV.ADISK       Data  1-Feb-84  299- 305(   6),  3072+512=  3584 bytes
+12: DRV.DISPVT      Data  1-Feb-84  305- 316(  11),  5632+512=  6144 bytes
+13: DRV.FDISK1      Data  1-Feb-84  316- 320(   4),  2048+512=  2560 bytes
+14: DRV.FDISK2      Data  1-Feb-84  320- 325(   5),  2560+512=  3072 bytes
+15: DRV.DISPHZ      Data  1-Feb-84  325- 336(  11),  5632+512=  6144 bytes
+16: DRV.KYBD        Data  1-Feb-84  336- 341(   5),  2560+512=  3072 bytes
+17: DRV.OMNINET     Data  1-Feb-84  341- 344(   3),  1536+512=  2048 bytes
+18: DRV.SYSTRM      Data  1-Feb-84  344- 351(   7),  3584+512=  4096 bytes
+19: DRV.TIMER       Data  1-Feb-84  351- 355(   4),  2048+512=  2560 bytes
+20: KEYS.ISYS       Data  1-Feb-84  355- 388(  33), 16896+512= 17408 bytes
+21: CCDRAW          Data 11-Mar-84  388- 454(  66), 33792+512= 34304 bytes

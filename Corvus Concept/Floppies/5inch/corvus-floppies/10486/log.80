@@ -1,0 +1,9 @@
+/home/fmc/rfloppy300 version $Revision: 1.11 $
+Copyright 2002 Eric Smith <eric@brouhaha.com>
+Attempting automatic disk characteristics discovery.
+neither FM nor MFM data on cylinder 0 head 0
+neither FM nor MFM data on cylinder 1 head 0
+track contains discontiguous sector numbers
+can't find data on cylinder 0, head 0
+auto detect failed
+sector order: 1 2 3 4 5 6 7 8 9

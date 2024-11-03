@@ -1,0 +1,16 @@
+
+Directory of UCSD disk image file 'fdemo3.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FDEMO3 has 8 files,  0 to 6 (6), eov 500, size 11, free 8
+
+ 1: LANG1.HPIC      Data 26-Nov-82    6-  80(  74), 37888+512= 38400 bytes
+ 2: LANG2.HPIC      Data 26-Nov-82   80- 157(  77), 39424+512= 39936 bytes
+ 3: LOGI.HPIC       Data 24-Nov-82  157- 252(  95), 48640+512= 49152 bytes
+ 4: LOGO1.HPIC      Data  7-Aug-82  252- 294(  42), 21504+512= 22016 bytes
+ 5: NETWORK.HPIC    Data 12-May-82  294- 358(  64), 32768+512= 33280 bytes
+ 6: PLUG.HPIC       Data 23-Nov-82  358- 375(  17),  8704+512=  9216 bytes
+ 7: VEGAS.HPIC      Data 12-May-82  375- 426(  51), 26112+512= 26624 bytes
+ 8: ZOOM2.HPIC      Data  1-May-82  426- 489(  63), 32256+512= 32768 bytes

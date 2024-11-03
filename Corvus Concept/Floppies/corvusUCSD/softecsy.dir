@@ -1,0 +1,51 @@
+
+Directory of UCSD disk image file 'softecsy.raw'
+
+Unknown density, disk image size 677376, 1323 blocks of 512 bytes each
+
+Volume SYSTEM has 44 files,  0 to 10 (10), eov 1440, size 0, free 501
+
+ 1: SYSTEM.PASCAL   Data 22-Nov-83   10- 139( 129), 66048+512= 66560 bytes
+ 2: SYSTEM.INTERP   Data 18-May-84  139- 163(  24), 12288+512= 12800 bytes
+ 3: SYSTEM.MISCINFO Data 13-Jan-83  163- 164(   1),   512+512=  1024 bytes
+ 4: SYSTEM.FILER    Code 28-Jul-83  164- 203(  39), 19968+512= 20480 bytes
+ 5: SYSTEM.EDITOR   Code  8-Jul-83  203- 254(  51), 26112+512= 26624 bytes
+ 6: SYSTEM.FONT     Code 10-Feb-83  254- 256(   2),  1024+512=  1536 bytes
+ 7: SYSTEM.LIBRARY  Data 12-Jan-84  256- 275(  19),  9728+512= 10240 bytes
+ 8: SYSTEM.LINKER   Code 20-May-83  275- 302(  27), 13824+512= 14336 bytes
+ 9: SYSTEM.ASSMBLER Code  8-Jul-83  302- 357(  55), 28160+512= 28672 bytes
+10: 68000.ERRORS    Data  8-Aug-83  357- 366(   9),  4608+512=  5120 bytes
+11: 68000.OPCODES   Data  2-Aug-83  366- 370(   4),  2048+512=  2560 bytes
+12: 68000.NCG.CODE  Code 17-Nov-82  370- 459(  89), 45568+512= 46080 bytes
+13: LIBRARY.CODE    Code 10-Dec-82  459- 472(  13),  6656+512=  7168 bytes
+14: DISKSIZE.CODE   Code 18-May-83  472- 475(   3),  1536+512=  2048 bytes
+15: COPYDUPDIR.CODE Code  7-Apr-82  475- 478(   3),  1536+512=  2048 bytes
+16: MARKDUPDIR.CODE Code  7-Apr-82  478- 482(   4),  2048+512=  2560 bytes
+17: ABSWRITE.CODE   Code 18-May-82  482- 486(   4),  2048+512=  2560 bytes
+18: REALCONV.CODE   Code 18-May-83  486- 491(   5),  2560+512=  3072 bytes
+19: RECOVER.CODE    Code  1-Sep-82  491- 500(   9),  4608+512=  5120 bytes
+20: REMTALK.CODE    Code 14-Jul-83  500- 506(   6),  3072+512=  3584 bytes
+21: SETUP.CODE      Code  7-Jun-82  506- 542(  36), 18432+512= 18944 bytes
+22: PRINT.CODE      Code 14-Dec-82  542- 559(  17),  8704+512=  9216 bytes
+23: QUICKSTART.CODE Code 24-Aug-83  559- 583(  24), 12288+512= 12800 bytes
+24: DECODE.CODE     Code 10-Jun-82  583- 617(  34), 17408+512= 17920 bytes
+25: COMPRESS.CODE   Code 22-Sep-82  617- 627(  10),  5120+512=  5632 bytes
+26: TURTLE2.CODE    Code 10-Feb-83  627- 650(  23), 11776+512= 12288 bytes
+27: TURTLE4.CODE    Code 10-Feb-83  650- 673(  23), 11776+512= 12288 bytes
+28: REALOPS2.CODE   Code  2-Nov-82  673- 683(  10),  5120+512=  5632 bytes
+29: REALOPS4.CODE   Code  2-Nov-82  683- 695(  12),  6144+512=  6656 bytes
+30: WILD.CODE       Code  1-Apr-82  695- 701(   6),  3072+512=  3584 bytes
+31: SYS.INFO.CODE   Code  1-Apr-82  701- 706(   5),  2560+512=  3072 bytes
+32: FILE.INFO.CODE  Code  1-Apr-82  706- 713(   7),  3584+512=  4096 bytes
+33: XREF.CODE       Code 13-Nov-81  713- 741(  28), 14336+512= 14848 bytes
+34: CHKSUMOPS.CODE  Code 18-Jan-83  741- 747(   6),  3072+512=  3584 bytes
+35: DIR.INFO.CODE   Code 25-Jan-83  747- 765(  18),  9216+512=  9728 bytes
+36: COMMANDIO.CODE  Code 26-Apr-82  765- 768(   3),  1536+512=  2048 bytes
+37: SCREENOPS.CODE  Code 16-Jun-82  768- 776(   8),  4096+512=  4608 bytes
+38: KERNEL.CODE     Code 20-May-83  776- 807(  31), 15872+512= 16384 bytes
+39: PATCH.CODE      Code 10-May-83  807- 846(  39), 19968+512= 20480 bytes
+40: ERRORHANDL.CODE Code  7-Jun-82  846- 849(   3),  1536+512=  2048 bytes
+41: PEDGEN.CODE     Code 17-May-83  849- 875(  26), 13312+512= 13824 bytes
+42: 0WORD.INTERP    Data 18-May-84  875- 893(  18),  9216+512=  9728 bytes
+43: 2WORD.INTERP    Data 18-May-84  893- 915(  22), 11264+512= 11776 bytes
+44: 4WORD.INTERP    Data 18-May-84  915- 939(  24), 12288+512= 12800 bytes

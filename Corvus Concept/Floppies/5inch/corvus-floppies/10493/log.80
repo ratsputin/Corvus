@@ -1,0 +1,12 @@
+/home/fmc/rfloppy300 version $Revision: 1.11 $
+Copyright 2002 Eric Smith <eric@brouhaha.com>
+Attempting automatic disk characteristics discovery.
+sector order: 1 6 2 7 3 8 4 9 5
+sector order: 1 6 2 7 3 8 4 9 5
+sector order: 1 6 2 7 3 8 4 9 5
+sector order: 1 6 2 7 3 8 4 9 5
+double sided
+cylinder 0 head 0: double density, 512 byte sectors numbered from 1 to 9
+cylinder 0 head 1: double density, 512 byte sectors numbered from 1 to 9
+cylinder 1 head 0: double density, 512 byte sectors numbered from 1 to 9
+cylinder 1 head 1: double density, 512 byte sectors numbered from 1 to 9

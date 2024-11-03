@@ -1,0 +1,21 @@
+B      0      xApple2
+B      4      xConcept
+B      9      xIBMPC
+B     18      xPrintsrv
+B     21      xTIPC
+H      1      xUserWorkstation
+H      2      xDiskServer
+H      3      xPrintServer
+H      6      xBank
+O      1      .2       12      xA2Pascal
+O      4      .1       10      xMSDOS
+O      7      .1       16      xCP/M-80
+O     15      .1       16      xCP/M-86
+O     16      .2       29      xCCOS
+O     17      .2       12      xUCSDIV.0
+O     18      .1       16      xCP/M-68
+V      1      xUCSD
+V      2      xCPM
+V      3      xMSDOS
+V     14      xCCOS
+

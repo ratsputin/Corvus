@@ -1,0 +1,327 @@
+{$S wksp }
+{
+.PG
+}
+{.IX} function NamFtch;
+var Len: integer;
+    Buf: array[1..80] of Byte;
+begin
+  NamFtch := false;
+  if RecHead( DictFid ) then begin
+    Nam := concat( '<', Nam, '> ' );
+    if RecFndNxt( DictFid, Nam ) then begin
+      if RecGet( DictFid, 0, Len, Buf[1] ) then begin
+        NamFtch := true;
+        moveleft( Buf, Val, 2 );
+      end;
+    end;
+  end;
+end;
+
+{
+.PG
+}
+function NamStor;
+var Len, I: integer;
+    Buf: array[1..80] of Byte;
+begin
+  NamStor := false;
+  Nam := concat( '<', Nam , '> ' );
+  Len := length( Nam );
+  if Len>2 then begin
+    DictFid.Loc := 1;
+    for I := 1 to Len do
+      Buf[I+2] := ord( Nam[I] );
+    moveleft( Val, Buf, 2 );
+    Len := Len + 2;
+    if RecHead( DictFid ) then begin
+      if RecFndNxt( DictFid, Nam ) then begin
+        NamStor := RecPut( DictFid, 0, Len, Buf[1] );
+      end else
+        NamStor := RecQ( DictFid, Len, Buf[1] );
+    end;
+  end;
+end;
+
+{$S wksp2 }
+{
+.PG
+}
+function WkSpInit;
+var S: StrTyp;
+    p: pStrTyp;
+    B: Byte;
+    Lim, I , J: integer;
+begin
+  WkSpErr := 0;
+  p := AsStr( Siz, 10 );
+  S := concat( Nam, '[', p^, ']' );
+  rewrite( WkSpFil, S );
+  if ioresult=0 then begin
+    VInit;
+    DskFreeBlk := Siz - 1;
+    if VLock( FreeBlk, DskFreeBlk, T, F ) then begin
+      if VLock( FilBlk, DskFilBlk, T, F ) then begin
+        PriBlk := -1;
+        SecBlk := -1;
+        RecBlk := -1;
+        fillchar( V[FreeBlk], 512, chr(255) );
+        fillchar( V[FilBlk], 512, chr(0) );
+        V[FreeBlk].Bks := Siz;
+        V[FilBlk].Bks := Siz;
+        V[FilBlk].Sync := true;
+        V[FreeBlk].Map := V[FreeBlk].Map - [DskFreeBlk] - [DskFilBlk];
+        VInfo[FreeBlk].Drty := true;
+        VInfo[FilBlk].Drty := true;
+        CurFil.Loc := 0;
+        OldFreeBlk := V[FreeBlk];
+        if FilCreate( DictFid ) then begin
+          if DictFid.Loc=1 then begin
+            if FilOpen( DictFid ) then begin
+              if RecQ( DictFid, 0, B ) then begin (* dummy rec *)
+              if WkSpPost then begin end;
+              end;
+            end;
+          end else err(26);
+        end;
+        close( WkSpFil, lock );
+      end;
+    end;
+  end else err(20);
+  WkSpInit := WkSpErr = 0;
+end;
+
+{
+.PG
+}
+function WkSpClose;
+begin
+  WkSpErr := 0;
+  V[FilBlk].Sync := true;
+  if WkSpPost then begin
+    close( WkSpFil );
+  end;
+  WkSpClose := WkSpErr = 0;
+end;
+
+{
+.PG
+}
+procedure BadWkSp;
+begin
+  writeln;
+  WrtMsg( MGWKSP, 2 );
+  WrtMsg( MGWKSP, 3 );
+  WrtMsg( MGWKSP, 4 );
+  WrtMsg( MGWKSP, 5 );
+  writeln;
+  if not WkSpVfy then begin
+     WrtMsg( MGWKSP, 6 );
+  end;
+  WaitForRtn;
+end;
+
+{
+.PG
+}
+function WkSpOpen;
+var I: integer;
+    p: pStrTyp;
+    Ans: StrTyp;
+begin
+  WkSpErr := 0;
+  reset( WkSpFil, Nam );
+  if ioresult=0 then begin
+    DictFid.Loc := 1;
+    DictFid.Key := 0;
+    VInit;
+    PriBlk := -1;
+    SecBlk := -1;
+    RecBlk := -1;
+    if VLock( FilBlk, DskFilBlk, T, T ) then begin
+      I := V[FilBlk].Bks - 1;
+      if (0<=I) and (I<=LstBlk) then begin
+        DskFreeBlk := I;
+        if VLock( FreeBlk, DskFreeBlk, T, T ) then begin
+          if V[FilBlk].Bks=V[FreeBlk].Bks then begin
+            VInfo[FilBlk].Drty := true;
+            VInfo[FreeBlk].Drty := true;
+            OldFreeBlk := V[FreeBlk];
+            if not V[FilBlk].Sync then begin
+              Bell( BelWrn ); Bell( BelWrn );
+              WrtMsg( MGGENL,16 );
+              if Confirm( Msg(MGWkSp,7), true ) then begin
+                writeln;
+                WrtMsg( MGWKSP, 8 );
+                Bell( BelErr );
+                WkSpOpen := false;
+                exit( WkSpOpen );
+              end;
+              BadWkSp;
+            end;
+            V[FilBlk].Sync := false;
+            CurFil.Loc := 0;
+          end else err(12);
+        end else err(13);
+      end else err(12);
+    end else err(13);
+  end else err(2);
+  WkSpOpen := WkSpErr=0;
+end;
+
+{
+.PG
+}
+function WkSpVfy;
+var Tmp: FilId;
+    I, J: integer;
+    ErrCnt : integer;
+    Used: MapTyp;
+
+  {.IX} procedure Chk( I: integer );
+  begin
+    if I in Used then begin
+      WrtpMsg( Subst( AsStr(I,10), Msg(MGWKSP,9) ));
+      WkSpVfy := false;
+      ErrCnt := ErrCnt + 1;
+    end;
+    Used := Used + [I];
+    if I in V[FreeBlk].Map then begin
+      WrtpMsg( Subst( AsStr(I,10), Msg(MGWKSP,10) ));
+      V[FreeBlk].Map := V[FreeBlk].Map - [I];
+      ErrCnt := ErrCnt + 1;
+    end;
+  end;
+
+begin {.IX WkSpVfy}
+  WkSpVfy := true;
+  WrtMsg( MGWKSP, 11 );
+  WrtpMsg( Subst( AsSTr(V[FreeBlk].Bks,10), Msg(MGWKSP,12) ));
+  writeln;
+  Used := [];
+  Chk(0);
+  Chk(V[FreeBlk].Bks-1);
+  WrtMsg( MGWKSP, 13 );
+  ErrCnt := 0;
+  for I := 1 to V[FreeBlk].Bks-2 do begin
+    if I in V[FilBlk].Map then begin
+      Tmp.Loc := I;
+      Tmp.Key := 0;
+      if UseFile( Tmp ) then with V[PriBlk] do begin
+        Chk(I);
+        Chk(AltNdx);
+        for J := 0 to NumBlks-1 do
+          Chk( BlkInfo[J].Adr );
+      end else
+        WrtMsg( MGWKSP, 16 );
+    end;
+  end;
+  if ErrCnt=0 then
+    WrtMsg( MGWKSP, 17 )
+  else
+    WrtpMsg( Subst( AsStr(ErrCnt,10), Msg(MGWKSP,19) ));
+  writeln;
+  WrtMsg( MGWKSP, 14 );
+  ErrCnt := 0;
+  for I := 0 to V[FreeBlk].Bks-1  do begin
+    if not(I in (Used+V[FreeBlk].Map+OldFreeBlk.Map)) then begin
+      ErrCnt := ErrCnt + 1;
+      if ErrCnt=1 then writeln;
+      WrtpMsg( Subst( AsStr(I,10), Msg(MGWKSP,10) ));
+      V[FreeBlk].Map := V[FreeBlk].Map + [I];
+    end;
+  end;
+  if ErrCnt=0 then
+    WrtMsg( MGWKSP, 17 )
+  else
+    WrtpMsg( Subst( AsStr(ErrCnt,10), Msg(MGWKSP,19) ));
+end;
+
+{$S WKSP }
+{
+.PG
+}
+function WkSpSpace;
+var I: integer;
+begin
+  WkSpSpace := false;
+  if CurFil.Loc<>0 then begin
+    WkSpSpace := true;
+    Siz := V[FreeBlk].Bks;
+    Fil := 0;
+    Free := 0;
+    for I := 1 to Siz-2 do begin
+      if I in V[FreeBlk].Map then Free := Free + 1;
+      if I in V[FilBlk].Map then Fil := Fil + 1;
+    end;
+  end;
+end;
+
+{
+.PG
+function DictFind( var K, R: str255 ): boolean;
+}
+function DictFind;
+var B: array [1..255] of byte;
+    Len,i: integer;
+    Nam: StrTyp;
+begin
+  DictFind := false;
+  if RecHead( DictFid ) then begin
+    Nam := concat( '\E', K, '\F' );
+    if RecFndNxt( DictFid, Nam ) then begin
+      if RecGet( DictFid, 0, Len, B[1] ) then begin
+        DictFind := true;
+        i := length(Nam)+1;
+        R := '';
+        while i<=Len do begin
+          R := concat( R, ' ' );
+          R[length(R)] := chr(B[i]);
+          i := i + 1;
+        end;
+      end;
+    end;
+  end;
+end;
+
+{
+.PG
+procedure DictSave( K,D: str255 );
+}
+procedure DictSave;
+var Len, I: integer;
+    B: array [0..255] of byte;
+    Dum: boolean;
+begin
+  if length(K)>0 then begin
+    K := concat( '\E', K, '\F' );
+    D := concat( K, D );
+    Len := length( D );
+    DictFid.Loc := 1;
+    moveleft( D, B, 256 );
+    if RecHead( DictFid ) then begin
+      if RecFndNxt( DictFid, K ) then begin
+        Dum := RecPut( DictFid, 0, Len, B[1] );
+      end else
+        Dum := RecQ( DictFid, Len, B[1] );
+    end;
+  end;
+end;
+
+
+{
+.PG
+function WkPdSiz( Fil: FilId; var Siz, Lim: integer ): boolean;
+}
+function WkPdSiz;
+begin
+  WkSpErr := 0;
+  Lim := MaxLogBlk + 1;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    Siz := NumBlks;
+  end else begin
+    Siz := 0;
+  end;
+  WkPdSiz := WkSpErr = 0;
+end;
+

@@ -1,0 +1,87 @@
+;
+; file : e80pm.asm.text
+; date : 17-August-1983 kb
+;
+; must add to OS and to System Vector :
+;
+;   1) address of protocol dispatcher (SVprtdsp)
+;   2) address of the 6 protocol manager routers
+;        - SVpmatch
+;        - SVpmdtch
+;        - SVpmsend
+;        - SVpmrecv
+;        - SVpmdpnd
+;        - SVpmstat
+;
+;   include '/ccos/os.gbl.asm.text'   (not listed)
+         list      0
+         include   '/ccos/os.gbl.asm.text'
+         list      1
+
+; temp defs - for development
+;
+pSysVec  EQU       $1BA                ;ptr to temp sys vector ptr
+
+
+SVprtdsp EQU        0                  ;ptr to protocol dispatcher
+SVpmatch EQU        4                  ;ptr to pmgr Attach router
+SVpmdtch EQU        8                  ;ptr to pmgr Detach router
+SVpmsend EQU       12                  ;ptr to pmgr Send router
+SVpmrecv EQU       16                  ;ptr to pmgr Receive router
+SVpmdpnd EQU       20                  ;ptr to pmgr Dependent router
+SVpmstat EQU       24                  ;ptr to pmgr Status router
+
+; function and procedures
+;
+         GLOBAL    xPDuser,xAttach,xDetach,xSend,xRecv,xDpndnt,xStatus
+;
+;xPDuser - call protocol dispatcher via the System Vector
+;
+xPDuser  MOVEQ     #SVprtdsp, D0
+         BRA.S     CallSystem
+
+;xAttach - call protocol manager Attach router via the System Vector
+;
+xAttach  MOVEQ     #SVpmatch, D0
+         BRA.S     CallSystem
+
+;xDetach - call protocol manager Detach router via the System Vector
+;
+xDetach  MOVEQ     #SVpmdtch, D0
+         BRA.S     CallSystem
+
+;xSend - call protocol manager Send router via the System Vector
+;
+xSend    MOVEQ     #SVpmsend, D0
+         BRA.S     CallSystem
+
+;xRecv - call protocol manager Receive router via the System Vector
+;
+xRecv    MOVEQ     #SVpmrecv, D0
+         BRA.S     CallSystem
+
+;xDpndnt - call protocol manager Dependent router via the System Vector
+;
+xDpndnt  MOVEQ     #SVpmdpnd, D0
+         BRA.S     CallSystem
+
+;xStatus - call protocol manager Status router via the System Vector
+;
+xStatus  MOVEQ     #SVpmstat, D0
+
+;
+; goto system function via System Vector specified
+;
+;   Enter: D0 = system vector index to function address
+;
+CallSystem
+         MOVEA.L   pSysVec.W, A0       ;**temp
+
+;;;;     MOVEA.L   pSysCom.W, A0       ;get address of system vector
+;;;;     MOVEA.L   SCjtable(A0), A0    ;from syscom table
+
+         MOVEA.L   0(A0,D0), A0        ;addr of procedure or function
+         JMP       (A0)                ;call it then exit
+
+         END
+

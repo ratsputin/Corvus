@@ -1,0 +1,23 @@
+MODULE pipes;
+{
+  This is a version of the pipes utility that is intended to run in a 
+  CP/M enviroment.  The code has been or organized to allow sharing of 
+  source files between the versions for an LSI and CP/M.  The main 
+  differences between the 2 pascals are:
+        1. OREGON SOFTWARE(LSI) allows multiple LABEL, CONST, TYPE,
+           VAR declaration blocks.
+        2. The syntax for declaring EXTERNALS differs.
+        3. O.S. requires that all externals be unique within
+	   6 chars.
+        4. O.S. - the subrange for the ORD(char) is -128..127
+}
+
+{$E+}
+{$I d:piped.pas }
+{$P}
+{$I d:pipec.pas }
+{$P}
+{$I d:pipes.pas }
+
+MODEND.
+

@@ -1,0 +1,27 @@
+
+Directory of UCSD disk image file 'conceptUtilPgms.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 19 files,  0 to 6 (6), eov 500, size 36, free 19
+
+ 1: TYPEWRITE       Data 17-Apr-82    6-  11(   5),  2560+512=  3072 bytes
+ 2: ETCHER          Data  8-Oct-82   11-  15(   4),  2048+512=  2560 bytes
+ 3: SAVEWINCH       Data 10-Jan-83   15-  25(  10),  5120+512=  5632 bytes
+ 4: CALC            Data  8-Oct-82   25-  55(  30), 15360+512= 15872 bytes
+ 5: STARTUP.TEXT    Text 23-Feb-83   55-  59(   4),  2048+512=  2560 bytes
+ 6: COMPRESS        Data  8-Oct-82   59-  76(  17),  8704+512=  9216 bytes
+ 7: DECOMP          Data  8-Oct-82   76-  86(  10),  5120+512=  5632 bytes
+ 8: DIFF            Data 17-Aug-82   86- 108(  22), 11264+512= 11776 bytes
+ 9: VOLUTIL         Data 23-Jan-83  108- 203(  95), 48640+512= 49152 bytes
+10: USERKEYS.TEXT   Text 11-Mar-83  203- 207(   4),  2048+512=  2560 bytes
+11: LOGOFF.TEXT     Text 28-Feb-83  207- 211(   4),  2048+512=  2560 bytes
+12: LC.CONVERT      Data 10-Jan-83  211- 226(  15),  7680+512=  8192 bytes
+13: DIRECTORY.TEXT  Text 29-Mar-83  226- 232(   6),  3072+ 19=  3091 bytes
+14: SPOOL           Data  4-Nov-82  232- 298(  66), 33792+512= 34304 bytes
+15: MOVE            Data  4-Nov-82  298- 323(  25), 12800+512= 13312 bytes
+16: ZAP             Data  4-Nov-82  323- 363(  40), 20480+512= 20992 bytes
+17: MEMO            Data 10-Jan-83  363- 432(  69), 35328+512= 35840 bytes
+18: FFRMT           Data  4-Nov-82  432- 444(  12),  6144+512=  6656 bytes
+19: FDIAG           Data  4-Nov-82  444- 464(  20), 10240+512= 10752 bytes

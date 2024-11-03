@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 655360, 1280 blocks of 512 bytes each
+
+Volume BACKUP3 has 7 files,  0 to 6 (6), eov 1280, size 770, free 7
+
+ 1: C2.MENU.TEXT    Ux7df3 11-Nov-85    6-  16(  10),  5120+512=  5632 bytes
+ 2: BOOTMGR         Ux7df5 11-Nov-85   16- 116( 100), 51200+512= 51712 bytes
+ 3: FFRMT           Ux7df5 11-Nov-85  116- 130(  14),  7168+512=  7680 bytes
+ 4: VSIXRF          Ux3e5  4-Jun-83  130- 178(  48), 24576+512= 25088 bytes
+ 5: BANK.DIAG.OLD   Ux3e5  1-Feb-84  178- 182(   4),  2048+512=  2560 bytes
+ 6: MDIAG           Ux3e5 12-Feb-86  182- 363( 181), 92672+512= 93184 bytes
+ 7: XFRMGR          Ux3e5 12-Feb-86  363- 510( 147), 75264+512= 75776 bytes

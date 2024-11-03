@@ -1,0 +1,327 @@
+
+
+         file: flop.man.text
+         date: 21-June-1983
+
+
+         System interface and functions of Rev B floppy controller
+         device driver.
+
+
+
+         8 inch floppy formats
+
+               The standard single density format is the IBM 3740
+         format.  The standard double density format is the
+         System 34 format.  The driver can handle most variations
+         of the standard single and double density formats.  For
+         single density, it can use 128, 256 or 512 byte sectors
+         and any number of sectors per track; the standard is 26
+         128 byte sectors per track.  For double density, it can
+         use 256 or 512 byte sectors and any number of sectors
+         per track; the standard is 26 256 byte sectors per
+         track.  It can use any number less than 128 as the
+         number of tracks per side.  The standard is 77 for both
+         densities.  It also can use single and double sided
+         diskettes in either format.
+
+               A double sided diskette can be distinguished from
+         a single sided diskette by the location of the index on
+         the diskette.  Single sided diskettes have index holes
+         in the center of the diskette, while double sided
+         diskette, have the index hole off-center.
+
+               When the driver finds that a new diskette has been
+         placed in the drive, it will determine the density, the
+         sector size and the number of sides used without any
+         action from the user.  The driver can also determine the
+         number of sectors per track based on the sector size if
+         the user is using standard diskettes.
+
+         The standard sectors per track are as follows :
+
+         Density | Bytes per sector | sectors per track
+
+         Single  |   128            |      26
+         Single  |   256            |      15
+         Single  |   512            |       8
+
+         Double  |   256            |      26
+         Double  |   512            |      15
+
+
+         5-1/4 inch floppy formats
+
+               There is no standard 5-1/4 inch floppy format.
+         Our controller only allows us to use the standard single
+         and double density formats used by the 8 inch drive.
+         The driver can handle the same variations of the
+         standard single and double density formats on 5-1/4 inch
+         diskettes that it can handle on the 8 inch diskettes.
+         However, the number of sectors per track is less than on
+         the 8 inch diskette.
+
+         The standard sectors per track are as follows :
+
+         Density | Bytes per sector | sectors per track
+
+         Single  |   128            |      16
+         Single  |   256            |       8
+         Single  |   512            |       4
+
+         Double  |   256            |      16
+         Double  |   512            |       9
+
+         It can use any number less than 128 as the number of
+         tracks per side.  The standard is 80 tracks with 96
+         tracks per inch (TPI) selected and 40 tracks with 48 TPI
+         selected.  It also can use diskettes formatted on one or
+         two sides with either density.
+
+               Because 5-1/4 inch drives do not have a DISK
+         CHANGED line, the driver cannot automatically
+         reconfigure itself when a different format diskette is
+         placed in the drive.  The user must run the CONFIGURE
+         function of the FLPYUTIL program to reconfigure the
+         driver.
+
+
+         Logical interleave, skew, and track offset
+
+         Interleave is the logical reordering of physical sector
+         numbers on a single track.  Skew is the varying physical
+         sector number used as the first logical sector on the
+         track.  Track offset is the physical track number, from
+         0 to number of tracks per side, used as logical track 0.
+
+
+
+         System Interface and driver operation
+
+               The driver uses slot static RAM for it's static
+         local tables.  Each slot has it's own page (256 bytes of
+         RAM) but drives in the same slot have the same tables,
+         i.e.  interleave, skew, etc.  The driver allocates its
+         local temporary data area on the stack.
+
+
+         Unitinstall
+
+               The install procedure must be called at least
+         twice for every controller card in the system.  For the
+         first call, the drive number in the device table for the
+         unit must be set to zero(0) and the slot number field
+         set to the correct slot number.  The unitinstall
+         procedure will then determine the number of drives
+         connected to the controller card.  Drive addresses range
+         from 0 to 3.  The driver starts searching at drive
+         address 0 and looks to find the first drive number that
+         does not respond.  It reports the number of drives found
+         in the number of drives field of the slot array in the
+         system slot table.
+
+               The unitinstall procedure is then called with a
+         different unit number for each drive to be mounted.
+         The calling program must fill in the slot number and
+         drive number fields in the unit's device table entry
+         before calling the install procedure.  The drive
+         numbers range from 1 to 4, inclusive.
+
+               One copy of the driver can be used for all the
+         floppy units.  The driver keeps the static information
+         on each controller in the slot's RAM page in the static
+         RAM.  Therefore, multiple drives attached to different
+         controller cards can have different parameters.
+
+               If the unit is a 5-1/4 inch drive then the motor
+         is left on continuously.
+
+
+         Unitunmount
+
+               If the unit is a 5-1/4 inch drive then the motor
+         is turned off.
+
+
+         Unitread
+
+         Reads blocks from floppy.  It reads single or double
+         density and single or double sided.  Reads partial
+         blocks.  Returns to user only the number of bytes
+         requested starting at the START BLOCK parameter passed
+         to driver.  Partial blocks start at beginning of a block
+         not in middle of a block.
+
+
+         Unitwrite
+
+         Writes blocks from floppy.  It writes single or double
+         density and single or double sided.  Writes partial
+         blocks.  Takes from user only the number of bytes
+         requested and writes starting at the START BLOCK
+         parameter passed to driver.  Partial blocks start at
+         beginning of a block not in middle of a block.
+
+
+         Unitbusy
+
+         Always true.
+
+
+         Unitclear
+
+         Initializes the floppy disk controller then restores
+         drive to track zero and determines type of floppy in
+         drive.  A Unitclear call will reconfigure the driver
+         when a different format (density, sector size, etc.)
+         5-1/4 inch diskette is placed in the drive.
+
+
+         Unitstatus
+
+         1) change logical sector interleave
+
+            function code :  0
+            Parameter Block :
+              Interleave = word, range = 1..(sectors per track).
+            Default value :  1
+
+         2) change logical skew
+
+            function code :  1
+            Parameter Block :
+              Skew = word, range = 1..(sectors per track).
+            Default value :  0
+
+         3) change track offset
+
+            function code :  2
+            Parameter Block :
+              StartTrack = word, range = 0..(tracks per side).
+            Default value :  0
+
+         4) change step rate
+
+            function code :  3
+            Parameter Block :
+              StepRate = word, range = 1..16.
+            Default value :  4
+
+         5) change number of sectors per track
+
+            function code :  4
+            Parameter Block :
+              Sectors per track = word, range = 0..127.
+            Default value :  0
+
+            A value of 0 means use the default internal table
+            based on density, sector size and drive type.
+
+         6) change number of tracks per side
+
+            function code :  5
+            Parameter Block :
+              Tracks per side = word, range = 0..127.
+            Default value :  0
+
+            For 8 inch : A value of 0 means use the default 48
+            TPI standard number of tracks, 77.
+
+            For 5-1/4 inch : A value of 0 means use the 80 if 96
+            TPI is selected and 40 if 48 TPI is selected.
+
+         7) change timeout counter for waiting for drive to come Ready.
+
+            function code :  6
+            Parameter Block :
+              TimeOut = longint, range = positive integer.
+            Default value :  10000 hexadecimal
+
+         8) change number of tracks per inch
+
+            function code :  7
+            Parameter Block :
+              Tracks per inch = word, range = 0..1.
+            Default value :  0
+
+            A value of 0 means 96 TPI and a value of 1 means
+            48 TPI.
+
+         9) change number of sides
+
+            function code :  8
+            Parameter Block :
+              Sides = word, range = 0..2.
+            Default value :  0
+
+            A value of 0 means the driver must calculate the
+            number of sides.  1 means only 1 sided and 2 means 2
+            sided.  Function must be used to force the driver to
+            correctly read a double sided diskette on a single
+            sided drive or a double sided diskette formatted one
+            side 1 only.
+
+         10) get driver state.  the function returns :
+
+              all changeable attributes
+                 a) interleave
+                 b) skew
+                 c) track offset
+                 d) step rate
+                 e) sectors per track
+                 f) tracks per side
+                 g) Ready wait timeout
+                 h) tracks per inch selection
+
+              and driver determined diskette states
+               (queries floppy to find out)
+                 a) presence of a floppy in drive
+                 b) density
+                 c) sides
+                 d) sector size
+
+            function code :  9
+            Parameter Block :  all fields set by driver.
+
+               record
+                 intrlv,             {interleave}
+                 skew,
+                 StartTrack,
+                 StepRate,
+                 spt,                {sectors per track}
+                 tps,                {tracks per side}
+                 SectorSize : integer;
+                 TimeOut : longint;
+                 Diskette,           {true if diskette in drive}
+                 OneSided,           {true if 1 side only}
+                 SnglDensity,        {true if single density}
+                 UserSPT,            {true if user set spt}
+                 tpi48,              {true if 48 TPI selected}
+                 EightInch : boolean;{true if 8 inch drive}
+                 end;
+
+            The Diskette field must be true to have valid OneSided,
+            SectorSize and SnglDensity field values.
+
+            The EightInch field must be false to have a valid
+            tpi48 field value.
+
+
+         IOresult codes returned by driver
+
+           Name       Value   Comment
+
+           IOEcrcer     1     CRC error
+           IOEioreq     3     Invalid I/O request
+           IOEnebhrd    4     Nebulous hardware error
+           IOEoffln     5     Drive off line
+           IOEwrprot   16     Device write protected
+           IOEinvblk   18     Invalid block number
+           IOEflpto    24     Timeout error
+           IOEnoT0     25     Cannot restore to track 0
+           IOEnfmtd    26     Disk not formatted
+           IOEinvsct   27     Invalid sector length error
+           IOEwrngC    28     Read wrong track
+           IOEbdtrk    29     Track marked as bad (IBM spec)
+           IOEuiopm    54     Invalid unit I/O parameter
+           IOEfnccd    56     Invalid function code

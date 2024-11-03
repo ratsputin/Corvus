@@ -1,0 +1,497 @@
+{$S MAIN }
+
+procedure CvtToNdx( var L, R: integer );
+begin
+  L := BAColToNdx( L, NewTxt );
+  R := BAColToNdx( R+1, NewTxt );
+end;
+
+
+procedure SetTypeOver;
+begin
+  if InsMod then begin
+    write( '\1Bv' );                  { eASete@ eAblocke@ eAcursor.e@ }
+    InsMod := false;
+    TellUsr( Msg( MGEDIT,13));        { eA"Typeovere@ eAmode."e@ }
+  end;
+end;
+
+
+procedure DoScroll( Lns: integer );
+begin
+  FlushNewTxt;
+  Scroll( Lns );
+  if CurLin<WinTop then SetUpNewTxt( WinTop );
+  if CurLin>WinBot then SetUpNewTxt( WinBot );
+end;
+
+
+procedure AppendToEof;
+begin
+  if WrtOK then begin
+    FlushNewTxt;
+    if RecQ( TxtFid, 0, BlkStr[1] ) then begin
+      ShowLine( LstLin );
+      SetUpNewTxt( LstLin );
+    end else warn(Msg(MGEDIT,4) );
+  end;
+end;
+
+
+procedure GoHome( Col, Lin: integer );
+begin
+  SetUpNewTxt( Lin );
+  CurCol := Col
+end;
+
+
+procedure Home;
+var Lin, Col: integer;
+begin
+  TellUsr( Msg(MGEDIT,20) );
+  NextCmd;
+  case Cmd of
+    KCSRU: GoHome( CurCol, max( 1, WinTop ) );
+    KCSRD: GoHome( CurCol, min( LstLin, WinBot ) );
+    KCSRL: If ProgFlg Then GoHome(LftMar,CurLin)       { eALefte@ eAmargine@ eAfore@ eAproge@ eAmodee@ }
+             Else GoHome( FirstNB(NewTxt), CurLin );
+    KCSRR: Begin
+             GoHome( LastNB(NewTxt)+1, CurLin );
+             PutCursor( CurLin, LastNB(NewTxt)+1)
+             End;
+    otherwise: ClrMsg
+  end
+end;
+
+{
+.PG
+procedure WrapWords;
+
+Checks the text in NewTxt and wraps it to the next line if
+necessary.
+}
+procedure WrapWords;
+
+var Txt:BA;
+    CompRMar,
+    Ind, Brk, CurNdx, RMarNdx: integer;
+
+begin
+  CompRMar := RhtMar;
+  If CompRMar = 0 Then CompRMar := MaxLinLen-3;
+  if ((Key<>' ') and (CurCol>CompRMar)) or
+     (InsMod and (NewTxt[BAColToNdx(CompRMar+1,NewTxt)]<>Blnk ))
+  then begin                           { eALinee@ eAoverflowed,e@ eAwrape@ eAwords...e@ }
+    CurNdx := BAColToNdx( CurCol, NewTxt );
+    RMarNdx := BAColToNdx( CompRMar, NewTxt );
+    GetLine( Txt, CurLin+1 );
+
+       { eAINDe@ eAise@ eAthee@ eAlefte@ eAmargine@ eAORe@ eAthee@ eApositione@ eAofe@ eAthee@ eAfirste@ eAnonblanke@ eAcharactere@ }
+       { eAine@ eAthee@ eAline,e@ eAwhichevere@ eAise@ eAgreater.e@ eAThise@ eAallowse@ eAfore@ eAeasye@ eAtypinge@ eAofe@ eAin-e@ }
+       { eAdentede@ eAtext.e@ }
+
+    Ind := max(BAColToNdx(LftMar,NewTxt), FirstNB(Txt)) - 1;
+
+       { eANowe@ eAwee@ eAstarte@ eAlookinge@ eAfore@ eAae@ eAplacee@ eAtoe@ eAbreake@ eAthee@ eAline...e@ }
+
+    Brk := SpanEQ( NewTxt, max(FirstNB(NewTxt), CurNdx), ' ' );
+    if Brk>RMarNdx then Brk := BkSpanEQ( NewTxt, RMarNdx+1, ' ' );
+
+(*  Brk := SpanNE( NewTxt, Brk+1, ' ' ) - 1;      *)
+
+    if Brk<=Ind then Brk := Min( CurNdx, RMarNdx );
+
+    if Brk<CurNdx then begin
+      CurCol := BANdxToCol( CurNdx, NewTxt ) -
+                BANdxToCol( Brk, NewTxt ) + Ind;
+      SplitNewTxt( Brk+1, Ind );
+      SetUpNewTxt( CurLin + 1 )
+      end
+    else SplitNewTxt( Brk+1, Ind )
+  end
+end;
+
+
+{
+.PG
+procedure ForceEnh;
+
+This procedure is called when a text character has been typed
+in.  The procedure ensures that the enhancement of the typed in
+character at CURCOL matches the current enhancement mode, CurEnh.
+}
+procedure ForceEnh;
+var ColEnh: EnhSetTyp;
+    Enh: array[1..3] of byte;
+    I: integer;
+begin
+  EnhAtCol( NewTxt, CurCol, ColEnh );
+  if ColEnh<>CurEnh then begin
+    Enh[1] := ord(EnhCod[1]);
+    Enh[2] := ord(EnhCod[2]);
+    I := BAColToNdx( CurCol, NewTxt );
+    CnvEnhByt( CurEnh, Enh[3] );
+    if BAMatch( NewTxt, I, EnhCod ) then {alter existing enh}
+      NewTxt[I+2] := Enh[3]
+    else
+      BAInsByt( NewTxt, I, 3, Enh[1] );
+
+    {leave enh unchanged for next char}
+    I := BAColToNdx( CurCol+1, NewTxt );
+    if not BAMatch( NewTxt, I, EnhCod ) then begin
+      CnvEnhByt( ColEnh, Enh[3] );
+      BAInsByt( NewTxt, I, 3, Enh[1] );
+    end;
+  end;
+end;
+
+
+Procedure SetEnhance(En : EnhTyp; Toggle : Boolean);
+
+Begin
+  If Toggle Then Begin                         { eAEnhancemente@ eAONe@ }
+    If Not(En In CurEnh) Then Begin
+      CurEnh := CurEnh + [En];
+      FollowEnh := False
+      End
+    End
+  Else Begin                                   { eAEnhancemente@ eAOFFe@ }
+    CurEnh := CurEnh - [En];
+    FollowEnh := True
+    End
+End;
+
+
+Procedure ToggleBold;
+
+Begin
+  If (Bold In CurEnh) Then Begin
+    SetEnhance(Bold,False);
+    Bell(BelAck);
+    TellUsr(Msg(MGENH,16))
+    End
+  Else Begin
+    SetEnhance(Bold,True);
+    Bell(BelAck);
+    TellUsr(Msg(MGEnh,15))
+    End
+End;
+
+
+Procedure ToggleULine;
+
+Begin
+  If (ULine In CurEnh) Then Begin
+    SetEnhance(ULine,False);
+    Bell(BelAck);
+    TellUsr(Msg(MGEnh,14))
+    End
+  Else Begin
+    SetEnhance(ULine,True);
+    Bell(BelAck);
+    TellUsr(Msg(MGEnh,13))
+    End
+End;
+
+
+{
+procedure PutChar( Key: char );
+
+Takes the character in Key and puts it into the workpad at the
+current cursor position.  Is responsible for handling text
+insertion.  Is also responsible for making sure directory text
+is protected.
+}
+procedure PutChar( Key: char );
+
+var
+  LegEnt,
+  Ind,Brk,CurNdx,i: integer;
+  NxtEnh, PrvEnh, ColEnh: EnhSetTyp;
+  EnhByt, Byt: byte;
+
+begin
+  If ProgFlg Then Begin
+    If Key = '}' Then SetEnhance(Bold,False)
+    End;
+  Byt := CnvIB(ord(Key));
+  Key := chr(Byt);
+  CurNdx := BAColToNdx( CurCol, NewTxt );
+
+  if TxtFid.Loc=DirFid.Loc then begin
+    If InSubDir Then LegEnt := 0
+      Else LegEnt := 2;
+    if (CurLin>(DESelf+LegEnt)) and (CurCol<DETyp-1) and (CurCol<>DETtl-1) then begin
+      if CurCol<DETtl then
+        if Key in LCase then Key := chr( Byt-32 );
+      NewTxtMty := false;
+      write( Key );
+      NewTxt[ CurNdx ] := ord(Key);
+      end
+    else TellUsr( Msg(MGGENL,9) );   { eA"Keypresse@ eAignored."e@ }
+    end
+
+  else begin
+    if (TabMod=SymDTab) or (TabMod=SymRTab) or CntrTxt then begin
+       i := BkSpanEQ( NewTxt, BAColToNdx(CurCol-1,NewTxt), ' ' );
+       if (i>0) and not BAMatch(NewTxt,i-2,EnhCod) and (Key<>' ') then begin
+         BADelChr( NewTxt, i, 1 );
+         PutCursor( CurLin, max( ScrLft, BANdxToCol( i, NewTxt )));
+         write( C_DelChr );
+         end
+       else begin
+         CurCol := min( MaxLinLen, CurCol+1 );
+         TabMod := 0;
+         CntrTxt := false;
+         end;
+       PutCursor( CurLin, CurCol );
+       end;
+    if Key=' ' then TabMod := 0;
+    if FollowEnh then
+      EnhAtCol( NewTxt, CurCol, ColEnh )
+    else
+      ColEnh := CurEnh;
+    if Key=' ' then begin
+      if [ULine,DblULine,StrkOut] * ColEnh = [] then
+        ColEnh := [];
+      end;
+    CnvEnhByt( ColEnh, EnhByt );
+    write( EnhCod, chr(EnhByt) );
+    CurNdx := BAColToNdx( CurCol, NewTxt );
+    if InsMod or CntrTxt or (TabMod=SymDTab) or (TabMod=SymRTab) then
+      write( C_InsrtChr)
+    else
+      BADelChr( NewTxt, CurNdx, 1 );
+
+    if (Key='.') and (TabMod=SymDTab) then
+      TabMod := 0;
+
+    EnhAtCol( NewTxt, CurCol-1, PrvEnh );
+    EnhAtCol( NewTxt, CurCol, NxtEnh );
+    if BAMatch( NewTxt, CurNdx, EnhCod ) and (ColEnh=NxtEnh) then
+      BAInsByt( NewTxt, CurNdx+3, 1, Byt ) {minimize enh seqs}
+    else
+      BAInsByt( NewTxt, CurNdx, 1, Byt );
+
+    write( Key );
+    NewTxtMty := false;
+    WrapWords;
+    if (PrvEnh<>ColEnh) and (NxtEnh<>ColEnh) then ForceEnh
+    end;
+  if (CurCol<MaxLinLen) and ((TabMod<>SymCTab) or CntrTxt) and (TabMod<>SymDTab)
+    and (TabMod<>SymRTab) then CurCol := CurCol + 1;
+  if TabMod=SymCTab then CntrTxt := not CntrTxt;
+  if BelTone and (CurCol+5=RhtMar) then note( 30, 1 );
+  If ProgFlg Then If (PrevChar = '{') and (Key = ' ') Then SetEnhance(Bold,True);
+  PrevChar := Key
+end;
+
+{
+.PG
+}
+procedure CsrLft;
+begin
+  CurCol := CurCol - 1;
+  if CurCol<1 then begin
+    if CurLin>1 then begin
+      SetUpNewTxt( CurLin - 1 );
+      CurCol := LastNB( NewTxt ) + 1;
+      if CurCol>MaxLinLen then CurCol := 1
+      end
+    else begin
+      TellUsr( Msg(MGEDIT,21) );    { eA"Ate@ eAtope@ eAofe@ eAworkpad."e@ }
+      CurCol := 1
+      end
+  end
+end;
+
+{
+.PG
+}
+procedure BkSpace;
+var i: integer;
+begin
+  if (TabMod=SymDTab) or (TabMod=SymRTab) then begin
+    BADelChr( NewTxt, BAColToNdx(CurCol,NewTxt), 1 );
+    i := BkSpanEQ( NewTxt, BAColToNdx(CurCol-1,NewTxt), ' ' );
+    BAInsByt( NewTxt, max(1,i), 1, BlkStr[1] );
+    NewTxtMty := false;
+    ShowLine( CurLin );
+  end else begin
+    if InsMod and WrtOK and (CurCol>1) then begin
+      BADelChr( NewTxt, BAColToNdx(CurCol-1,NewTxt), 1 );
+ (*     write( chr(8), ScrDelChr );  *)
+      ShowLine(CurLin);
+      NewTxtMty := false
+    end;
+    CsrLft;
+  end;
+end;
+
+{
+.PG
+}
+procedure CsrUp;
+begin
+  if CurLin=1 then begin
+    TellUsr( Msg(MGEDIT,21) );           { eA"Ate@ eAtope@ eAofe@ eAworkpad."e@ }
+  end else begin
+    if CurLin=WinTop then If OSvrtCRT Then Scroll(-5)
+                                      Else Scroll(-1);
+    SetUpNewTxt( CurLin - 1 )
+  end;
+If Not ProgFlg Then SetTypeOver
+end;
+
+{
+.PG
+}
+procedure CsrRht;
+begin
+  if CurCol<MaxLinLen then
+    CurCol := CurCol + 1;
+If Not ProgFlg Then SetTypeOver
+end;
+
+{
+.PG
+}
+procedure CsrDn;
+begin
+  if CurLin=WinBot then if OSvrtCRT Then Scroll(min(CtrRow,5))
+                                    Else Scroll(min(CtrRow,1));
+  if (CurLin=LstLin) and (DirFid.Loc <> TxtFid.Loc) Then AppendToEof
+    else SetUpNewTxt( CurLin+1 );
+If Not ProgFlg Then SetTypeOver;
+end;
+
+
+procedure CrLf;
+var Lft: integer;
+begin
+   If ProgFlg Then Begin
+     If (Bold In CurEnh) Then CurEnh := CurEnh - [Bold];
+     FollowEnh := True    { Turn off boldfacing }
+     End;
+
+   { eANotee@ eAthate@ eAwee@ eAdon'te@ eAallowe@ eAae@ eAblanke@ eAlinee@ eAtoe@ eAbee@ eAtackede@ eAone@ eAtoe@ eAthee@ eAende@ eAofe@ eAae@ eAdire@ }
+
+   if (CurLin=LstLin) and (DirFid.Loc<>TxtFid.Loc) then AppendLine( LstLin, BlkStr );
+   Lft := max( LftMar, FirstNB( NewTxt ) );
+
+   if InsMod then begin
+      if Lft>=CurCol then Lft := 1;
+      if WrtOK then begin
+        if SpanNE( NewTxt, CurCol, ' ' )>MaxLinLen then begin
+          FlushNewTxt;
+          AppendLine( CurLin, BlkStr );
+          end
+        else SplitNewTxt( BAColToNdx(CurCol, NewTxt), Lft-1 );
+        SetUpNewTxt( LinNewTxt + 1 )
+      end;
+      CurCol := Lft;
+      if (CurLin>WinBot-2) and (CurLin<=WinBot) then Scroll( CtrRow );
+      end
+
+    else begin
+      SetUpNewTxt( CurLin + 1 );
+      If ProgFlg Then Begin
+        If BlankLine(CurLin) then CurCol := Lft
+          Else CurCol := FirstNB(NewTxt)
+          End
+        Else CurCol := LftMar;
+      end;
+
+   if (CurLin>=WinBot) and (WinBot<=LstLin) and (LstLin<=WinBot+2) then
+      Scroll( min(CtrRow,5) );
+end;
+
+{
+.PG
+}
+procedure Tab;
+var I: integer;
+begin
+  I := SpanNE( TabAra, CurCol+1, chr(12) );
+  if I<=MaxLinLen then TabMod := TabAra[i];
+  if TabMod<>SymLTab then SetTypeOver;
+  if I>=MaxLinLen then I := RhtMar;
+  if CurCol=I then begin
+     Bell(BelErr);
+     TellUsr( Msg(MGEDIT,22) );
+  end else begin
+     while CurCol<I do begin
+       if InsMod then begin
+         write( C_InsrtChr, ' ' );
+         BaInsByt(NewTxt,BAColToNdx(CurCol,NewTxt),1,BlkStr[1]);
+         NewTxtMty := false;
+       end;
+       CurCol := CurCol + 1;
+     end;
+  end;
+end;
+
+{
+.PG
+}
+procedure BTab;
+var I: integer;
+begin
+   I := BkSpanNE( TabAra, CurCol-1, chr(12));
+   if I>0 then begin
+      CurCol := I;
+      TabMod := TabAra[i];
+      if TabMod<>SymLTab then SetTypeOver;
+   end else begin
+      CurCol := 1;
+   end;
+end;
+
+{
+.PG
+}
+procedure ScrollHoriz( Cols: integer );
+begin
+   if (ScrLft+Cols<1) or (ScrLft+Cols+ScrWid>MaxLinLen) then Bell(BelErr)
+   else begin
+      ScrLft := ScrLft + Cols;
+      CurCol := max( ScrLft, min( CurCol, ScrLft+ScrWid-1 ));
+      Refresh
+      end;
+   If Not ProgFlg Then SetTypeOver
+end;
+
+{
+.PG
+}
+function LocalEdit: boolean;
+
+Var
+  OldX, OldY,
+  MX,MY : Integer;
+  Valid, LB,MB,RB : Boolean;
+
+begin {LOCALEDIT}
+  LocalEdit := true;
+  case Cmd of
+    KSCRL: ScrollHoriz( -15 );
+    KSCRR: ScrollHoriz( 15 );
+    KSCRU: DoScroll( -SclHgt );
+    KSCRD: DoScroll( SclHgt );
+    KCSRU: CsrUp;
+    KCSRD: CsrDn;
+    KCSRL: CsrLft;
+    KCSRR: CsrRht;
+    KTAB:  Tab;
+    KSTX:  ToggleBold;
+    KNak:  ToggleULine;
+    KBTAB: BTab;
+    KHOME: Home;
+    KCR:   CrLf;
+    KTEXT: PutChar( Key );
+    KBS:   BkSpace;
+    otherwise: begin
+        LocalEdit := false;
+      end;
+  end;
+end;

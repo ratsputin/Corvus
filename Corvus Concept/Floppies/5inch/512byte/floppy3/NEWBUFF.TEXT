@@ -1,0 +1,121 @@
+PROGRAM NewBuffer;
+
+USES {$U /CCUTIL/CCLIB} CCdefn, CCcrtIO;
+
+CONST
+       versDATE   = '12-14-82';
+       versNUMB   = '[1.0b]';
+
+       { datacom function codes}
+       SETHIWATER =  9;   {set read high water mark}
+       SETLOWATER = 10;   {set read low water mark}
+       READALT    = 19;   {switch read buffer}
+       WRITEALT   = 20;   {switch write buffer}
+
+       BadNoParams = 0;
+       InvSize     = 1;
+       InvUnitNo   = 2;
+       NoRoom      = 3;
+       IOerror     = 4;
+       InvRW       = 5;
+
+VAR    PB : RECORD
+               Address : pBytes;
+               Size    : INTEGER;
+               END;
+
+       ch : CHAR;
+       unitno, fc, ior, parm : INTEGER;
+       s : String80;
+       pptr : ^pBytes;
+       Save108, Save10C, OLDSave108 : pBytes;
+
+PROCEDURE die(ErrType : INTEGER; Form : BOOLEAN);
+BEGIN
+  CASE ErrType OF
+    BadNoParams : WRITELN('Incorrect number of parameters.');
+    InvSize     : WRITELN('Invalid Size parameter.');
+    InvUnitNo   : WRITELN('Invalid Unit number parameter.');
+    NoRoom      : WRITELN('Not enough space.');
+    IOerror     : WRITELN('Failed, IORESULT = ',ior:1);
+    InvRW       : WRITELN('Must be an "R" or "W"');
+    END;
+
+  IF Form THEN
+     WRITELN('Command has form :  NEWBUFF <Size integer> <unit number integer>  R|W');
+
+  EXIT(NewBuffer);
+END; {die}
+
+BEGIN
+  CCcrtIOinit;   CrtAction(DefStrOn);
+  WRITELN;
+  WRITELN('NEWBUFF',versNUMB,' - allocate a new DataCom Read or Write Buffer   ',versDATE);
+
+  pptr := POINTER($10C);
+  Save10C := pptr^;
+  pptr := POINTER($108);
+  OLDSave108 := pptr^;
+
+  WRITELN('Have ',(ORD4(Save10C) - ORD4(OLDSave108)):1,' bytes available.');
+
+  WITH PB DO
+     BEGIN
+
+     IF argc <> 0 THEN
+          IF argc = 3 THEN
+               BEGIN
+               s := argv[1]^;
+               IF Error = CvStrInt(s, Size) THEN die(InvSize, TRUE);
+               s := argv[2]^;
+               IF Error = CvStrInt(s, unitno) THEN die(InvUnitNo, TRUE);
+               ch := argv[3]^[1];
+               IF (ch = 'R') or (ch = 'r') THEN fc := READALT
+               ELSE IF (ch = 'W') or (ch = 'w') THEN fc := WRITEALT
+                                                ELSE die(InvRW, TRUE);
+               END
+          ELSE BEGIN
+               die(BadNoParams, TRUE)
+               END
+     ELSE BEGIN
+          WRITE('Enter buffer size :  '); Size := 1024;
+          IF GetNum(Size) = Escape THEN EXIT(NewBuffer);
+          WRITE('Enter unit number :  '); unitno := 31;
+          IF GetNum(unitno) = Escape THEN EXIT(NewBuffer);
+          WRITE('For Read or Write [R/W] :  ');  s := 'R';
+          IF GetString(s) = Escape THEN EXIT(NewBuffer);
+          IF LENGTH(s) = 0 THEN EXIT(NewBuffer);
+          ch := s[1];
+          IF (ch = 'R') or (ch = 'r') THEN fc := READALT
+          ELSE IF (ch = 'W') or (ch = 'w') THEN fc := WRITEALT
+               ELSE BEGIN
+                    die(InvRW, FALSE);
+                    EXIT(NewBuffer);
+                    END;
+          END;
+
+     Save108 := POINTER( ORD4(OLDSave108) + Size );
+     IF (ORD4(Save108) < ORD4(Save10C)) THEN
+          BEGIN
+          Address := OLDSave108;
+          pptr^ := Save108;
+
+          UNITSTATUS(unitno,PB,fc); ior := IORESULT;
+          IF ior <> 0 THEN
+              BEGIN
+              pptr^ := OLDSave108;
+              die(IOerror, FALSE);
+              END
+          ELSE
+              IF fc = READALT THEN
+                 WITH PB DO BEGIN
+                 parm := (Size DIV 3) * 2;
+                 UNITSTATUS(unitno,parm,SETHIWATER);
+                 parm := Size DIV 3;
+                 UNITSTATUS(unitno,parm,SETLOWATER);
+                 END;
+          END
+     ELSE die(NoRoom, FALSE);
+     END;
+END.
+

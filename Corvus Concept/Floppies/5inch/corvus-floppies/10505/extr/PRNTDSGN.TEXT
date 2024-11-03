@@ -1,0 +1,184 @@
+
+file :  prnterdsgn.text
+date :  07-Apr-1982    kb
+
+This is the printer driver design document.
+
+
+********  Description of driver and User interfaces
+
+The printer driver supports serial printers connected to either DataCom 0 or 1 (Ports
+1 & 2).  It can use 3 different busy handshake protocols, Line, XON/XOFF, or ENQ/ACK.
+The Line protocols supported are DSR (Data Set Ready), CTS (Clear To Send), and DCD
+(Data Carrier Detect).  These Lines can be normal ( 1 means busy) or inverted (0 means
+busy.  The driver can also send 2 character sizes (7 or 8 bits) with various parities
+at different baud rates.  These states are not dynamically changed but must be
+configured by calls to the driver via the UnitStatus driver interface.
+
+The user calls the Printer driver via the Unit Write command with the characters to be
+printed.  The driver maintains a 256 byte internal buffer.  The user's characters are
+moved into this buffer until it is full.  If more characters are in the user's buffer
+than will fit in the printer buffer the driver waits until there is room to place
+these extra characters.  The driver is interrupt driven and will feed characters to
+the DataCom from the driver buffer in the interrupt routine.  Therefore, the driver
+may return to the user before all the characters sent by the user are sent to the
+printer.
+
+                UnitWrite( Printer,Buffer,BufferLengthInBytes );
+
+The printer is initially configured to work with an Epson MX-80 or MX-100 with the
+Epson 8150 Serial Interface.  The default states are :
+
+                Baud Rate  :  4800
+                Parity     :  Disabled
+                DataCom    :  1 (Port 2)
+                Word Size  :  8 bits
+                Handshake  :  Line/DSR/normal (Busy)
+
+To configure the driver for the NEC printer change the default table values to :
+
+                Baud Rate  :  1200              * changed
+                Parity     :  Disabled
+                DataCom    :  1 (Port 2)
+                Word Size  :  8 bits
+                Handshake  :  XON/XOFF (Busy)   * changed
+
+For each of the above driver configurations, make sure the printer is also configured
+to work in the same manner.
+
+All the above default states can be changed by a call to the UnitStatus command of
+the driver with the corresponding Function Code for the desired printer state and the
+defined parameter block.  The Printer driver Function Codes :
+
+               Buffer Free Space  :   0
+               Baud Rate          :   1
+               Parity             :   2
+               DataCom            :   3
+               Word Size          :   4
+               Handshake          :   5
+               Get Table States   :   6
+
+*** Buffer Free Space **
+
+This routine returns to the caller the number of bytes (characters) of available
+space in the driver buffer.  It has a single integer parameter block.  The parameter
+is set by the driver to the number of free bytes in the buffer.
+
+        FunctionCode := 0;
+        UnitStatus( Printer,FreeBytes,FunctionCode );
+        writeln('Free Space in Printer Buffer = ',FreeBytes);
+
+
+*** Baud Rate ***
+
+This routine allows the user to select the transmit and receive baud rate for the
+DataCom being used.  The allowable Baud Rates are 300, 600, 1200, 2400, 4800, 9600,
+and 19200 baud.  This routines parameter block is also an integer with a range of 0
+to 6.  The parameter value of 0 selects 300 baud while the value of 6 selects 19200
+baud.
+
+        FunctionCode := 1;
+        BaudRate := 3; {<=== selecting 2400 baud}
+        UnitStatus( Printer,BaudRate,FunctionCode );
+        if IORESULT<>0 then ERROR;
+
+
+*** Parity ***
+
+This routine allows the user to select the transmit and receive Parity used by the
+DataCom.  The allowable Parities are Disabled, Odd, Even, Mark Xmit/No Rcv, Space
+Xmit/No Rcv.  This routines parameter block is also a single integer with a range of
+0 to 4.  The parameter value of 0 selects Disabled while a value of 4 selects Space
+Xmit/No Rcv.
+
+        FunctionCode := 2;
+        Parity := 2; {<=== selecting Even Parity}
+        UnitStatus( Printer,Parity,FunctionCode );
+        if IORESULT<>0 then ERROR;
+
+
+*** Data Com ***
+
+This routine allows the user to select the DataCom to be used.  Only 2 DataComs
+exist, 0 and 1.  The parameter block is a single integer with a value of 0 or 1.
+DataCom 0 corresponds to Port 1 and DataCom 1 corresponds to Port 2.
+
+        FunctionCode := 3;
+        DataCom := 1; {<=== selecting DataCom 1 (Port 2) }
+        UnitStatus( Printer,DataCom,FunctionCode );
+        if IORESULT<>0 then ERROR;
+
+*** Word Size ***
+
+This routine allows the user to select the word size of the character transmitted and
+received by the DataCom.  Word sizes allowed are 7 and 8.  The parameter block is a
+single integer with a value of 0 ( for 8 bits) and 1 ( for 7 bits ).
+
+        FunctionCode := 4;
+        WordSize := 1; {<=== selecting Word Size of 7 bits}
+        UnitStatus( Printer,WordSize,FunctionCode );
+        if IORESULT<>0 then ERROR;
+
+
+*** Handshake ***
+
+This routine allows the user to select the type of handshake protocol the driver must
+use to communicate reliable with the printer.  The handshake protocol tells the driver
+when it is ok to send characters to the printer.  Printers like the MX-100 use RS-232C
+lines to tell the computer (driver) when they are BUSY.  The NEC 5150 uses characters
+it sends to the computer ( driver) to tell it that it cannot receive anymore
+characters.  3 RS-232C lines can be utilized for BUSY lines by the driver.  They are
+DSR, CTS, and DCD.  These lines may be normal, where a logcal value of 1 means the
+printer is Busy, or inverted, where a logical value of 0 means the printer is Busy.
+The other 2 protocols are character send and receive methods.  XON/XOFF protocol is
+where the printer sends a XOFF when it cannot receive anymore characters and a XON
+when it can receive more characters.  The third protocol is ENQ/ACK.  The driver
+sends an ENQ character to the printer every 80 characters to ENQuire whether the
+printer is able to receive more characters.  The printer sends an ACK to ACKnowledge
+it's capability of receiving more characters.
+
+Which protocol used is not determined by the user's desire to use one but by which
+protocol the printer uses.  The Handshake protocol parameter is a single parameter
+with a value from 0 to 7. The allowable Protocol states are :
+
+        0  :   Line/CTS/Inverted
+        1  :   Line/CTS/Normal
+        2  :   Line/DSR/Inverted
+        3  :   Line/DSR/Normal
+        4  :   Line/DCD/Inverted
+        5  :   Line/DCD/Normal
+        6  :   XON/XOFF
+        7  :   ENQ/ACK
+
+
+        FunctionCode := 5;
+        Handshake := 6; {<=== selecting XON/XOFF WHICH IS USED BY THE NEC 5150}
+        UnitStatus( Printer,Handshake,FunctionCode );
+        if IORESULT<>0 then ERROR;
+
+*** Get Table States ***
+
+With this routine the user can get the parameter values for the current states of the
+Printer Control Table.  The user must pass a parameter block consisting of 10 bytes
+(5 integers) to the driver.  The values are filled in by the driver.  The parameter
+block has the following form :
+
+        ParameterBlock = record
+                           BaudRate   : integer;
+                           Parity     : integer;
+                           DataCom    : integer;
+                           WordSize   : integer;
+                           HandShake  : integer;
+                         end;
+
+The ranges of the values returned by this routine are the same as defined for the
+routines which change the table states.
+
+        FunctionCode := 6;
+        UnitStatus( Printer,ParmBlock,FunctionCode );
+        if IORESULT<>0 then ERROR;
+        with ParmBlock do begin
+          writeln('Baud Rate = ',BaudRate,'  Parity = ',Parity);
+          writeln('DataCom = ',DataCom,'  Word Size = ',WordSize);
+          writeln('HandShake = ',HandShake);
+        end; {with}

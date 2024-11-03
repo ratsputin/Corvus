@@ -1,0 +1,10 @@
+;
+; test of parameter substitution
+;
+; comment substitution : file name = #0
+;
+; list file
+catt #0
+#1 #2
+echo ##3 #3
+

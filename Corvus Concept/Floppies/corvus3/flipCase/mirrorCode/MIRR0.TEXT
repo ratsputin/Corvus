@@ -1,0 +1,387 @@
+   { file MIRR0   }
+  
+  segment procedure MirERR;
+  begin
+  direcOK:=false;                       {oh, oh ?!?}
+  writeln;
+  writeln(beep,'Mirror ERROR: ',XCV.int[1],', ',XCV.int[2]);
+  writeln;
+  case XCV.int[2] of
+    1: writeln('File ID mismatch');
+    2: writeln('Illegal RESTORE command');
+    3: writeln('Illegal RETRY command');
+    4: writeln('Image SIZE mismatch');
+    5: writeln('Illegal COMMAND');
+    134: writeln('Tape DROPOUT during playback');
+    7: writeln('No image found');
+   end;
+  end;
+
+  segment procedure HELP;
+  begin
+  writeln; writeln;
+  writeln  ('   I(dent   = read ID record of an image');
+  writeln  ('   B(ackup  = record data from disk to tape');
+  writeln  ('   R(estore = read tape and transfer data to disk');
+  writeln  ('   V(erify  = read tape and report error status');
+  if not manual then
+    begin
+    writeln('   reW(nd   = rewind tape and clear directory buffer');
+    writeln('   L(ist    = list tape directory');
+    writeln('   F(rmat   = initialize tape directory');
+    writeln('   P(urge   = remove the last image from the directory');
+    end;
+  writeln  ('   Q(uit    = exit program');
+  end;
+
+segment procedure wait(TenthSec: INTEGER);
+var i:INTEGER;
+begin
+if debug then writeln(' wait ',tenthsec);
+for i:=1 to TenthSec*WTime do;
+end;
+
+
+   {$P}
+   segment procedure Messages(optype:ops);  
+   
+   begin
+   writeln('Error Status:');
+   writeln;
+   
+   case optype of
+     aBackup :  writeln('         Disk Errors: ',XCV.int[5]);
+     aRestore:  begin
+                writeln('    Recovered Errors: ',XCV.int[1] + 256*XCV.int[2]);
+                writeln('    Tape Read Errors: ',XCV.int[3]);
+                writeln('   Disk Write Errors: ',XCV.int[4]);
+                end;
+     aVerify :  begin
+                writeln('    Recovered Errors: ',XCV.int[1] + 256*XCV.int[2]);
+                writeln('    Tape Read Errors: ',XCV.int[3]);
+                end;
+     aRetry  :  begin
+                writeln('    Rebuild Attempts: ',XCV.int[1]);
+                writeln('    Rebuild Failures: ',XCV.int[3]);
+                writeln('       Search misses: ',XCV.int[2]);
+                writeln('   Disk Write Errors: ',XCV.int[4]);
+                end;
+    end;
+
+   end; { messages }
+   
+
+{$P*******************************************************}
+{                                                       }
+{       assorted numeric routines                       }
+{                                                       }
+{*******************************************************}
+
+function min(x,y:integer):integer;
+begin
+if x>y then min:=y else min:=x;
+end;
+  
+function max(x,y:integer):integer;
+begin
+if x>y then max:=x else max:=y;
+end;
+  
+{ a royal kludge }
+
+function lsb(x:integer): integer;
+var y:integer;
+begin
+y:=x mod 256;
+if x<0 then y:=256-y;
+if y=256 then y:=0;
+lsb:=y;
+end;
+
+function msb(x:integer): integer;
+var y:integer;
+begin
+y:=x div 256;
+if x<0 then if lsb(x)=0 then y:=256+y else y:=255+y;
+msb:=y;
+end;
+
+
+{$P***********************************************************}
+{                                                       }
+{     linkages to assembly routines to talk to drive    }
+{                                                       }
+{*******************************************************}
+
+
+PROCEDURE SEND( var ST:LONGSTR ); 
+var i: integer;
+
+begin 
+if debug then
+  begin
+  write('send ',XCV.len,': ');
+  for i:=1 to min(XCV.len,10) do write(XCV.int[i],', ');
+  writeln;
+  end;
+if AltSlot then FSEND(ST) else CDSEND(ST); 
+end;
+
+PROCEDURE RECV( var ST:LONGSTR ); 
+var i:integer;
+begin 
+if AltSlot then FRECV(ST) else CDRECV(ST); 
+if debug then
+  begin
+  write('recv ',XCV.len,': ');
+  for i:=1 to min(XCV.len,10) do write(XCV.int[i],', ');
+  writeln;
+  end;
+end;
+
+
+{$P**************************************************************}
+{                                                               }
+{       Mirror Positioning commands:
+                    STOP   .EQU     3 
+                    PLAY   .EQU     0 
+                    REC    .EQU     15 
+                    ClrREC .EQU     14 
+                    FF     .EQU     1 
+                    REW    .EQU     2 
+
+Masks for recorder status indicators:
+                    REC    .equ    04H
+                    PLAY   .equ    08H
+                    REW    .equ    10H
+                    TpSt   .equ    80H     ;hi when not at start
+                
+ ***************************************************************}
+  
+  procedure push( button:integer );
+  begin
+  
+  { mirror command =   10, 4, Operation, 0 }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=4; XCV.int[3]:=button; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  end;
+  
+
+  function status(state:integer):boolean;
+  begin
+  
+  { mirror command =   10, 5, 0, 0 }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=5; XCV.int[3]:=0; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  if ((XCV.int[1] mod (state*2)) div state) mod 2=1 then   { logical AND }
+      status:=true else status:=false;
+  end;
+  
+  
+{$P}
+procedure dispatch;
+
+{***********************************************************************}
+{                                                                       }
+{       fatal error checks                                              }
+{                                                                       }
+{***********************************************************************}
+
+procedure MirCHK;
+begin
+if XCV.int[1]>127 then
+  begin
+  MirERR;
+  writeln;write('type <esc> to continue');
+  if getbyte<>'!' then exit(Mirror) else exit(dispatch);
+  end;
+end;
+
+  procedure prompt(comment:STRING);
+  begin
+  writeln;writeln('Position Recorder and Start ',comment);
+  write('Press <return> when ready');
+  if getbyte='!' then exit(dispatch);
+  writeln;
+  end;
+
+
+
+  {$P} {*********************************************************************}
+  {                                                                      }
+  {             read  the tape directory                                 }
+  {                                                                      }
+  {**********************************************************************}
+  
+  procedure ReadID;
+  begin
+  
+  { mirror identify command               }
+  {    = 10, 0, ID, 0                     }
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=0; XCV.int[3]:=ImID; XCV.int[4]:=0;
+  Send(XCV);
+  Recv(XCV);
+  MirCHK;
+  end;
+  
+  
+  
+  procedure readdir;
+  var i: INTEGER;
+  begin
+  if direcOK then exit(readdir);        { directory in memory -- return }
+  writeln(' Reading Tape Directory...');
+  push(REW);                                    { rewind tape }
+  
+  while status(rewinding) do wait(9);     { wait til tape rewound }
+  
+  ImID:=0;
+  ReadID;
+  if XCV.int[2]<>0 then
+    begin
+    writeln; writeln(' **** WARNING this tape has no directory ****');
+    writeln(         ' **** It will be treated as a tape with  ****');
+    writeln(         ' ****         a single image !           ****');
+    WRITELN;WRITELN;
+    NoDir:=true;
+    end
+   else
+    NoDir:=false;
+  moveleft(XCV.int[5],Direc,512);
+  direcOK:=true;                        { mark the Direc buffer good }
+  end;
+  
+  
+  {$P} {*********************************************************************}
+  {                                                                      }
+  {             write out the tape directory                             }
+  {                                                                      }
+  {**********************************************************************}
+  
+  procedure writedir( longtail:boolean );
+  var i: INTEGER;
+  begin
+  push(REW);                                    { rewind tape }
+  
+  writeln; writeln('Writing tape directory');
+  while status(rewinding) do wait(11);    { wait til tape rewound }
+  
+  { mirror format command is equivalent to a backup command with file ID=0 }
+  {    = 8, 1, 0, 0, 0, 0, 0, longtail, header [512]                       }
+  {                                     header = image directory           }
+  {                       if longtail=1 then a longer tail is recorded     }
+  
+  XCV.len:=520;
+  XCV.int[1]:=8; XCV.int[2]:=1; XCV.int[3]:=0; XCV.int[4]:=0;
+  XCV.int[5]:=0; XCV.int[6]:=0; XCV.int[7]:=0;
+  if longtail then XCV.int[8]:=1 else XCV.int[8]:=0;
+  moveleft(Direc,XCV.int[9],512);
+  Send(XCV);
+  Recv(XCV);
+  MirCHK;
+  direcOK:=true;                { it must be good, I just wrote it }
+  NoDir:=false;
+  end;
+
+
+
+{$P}{*******************************************************************}
+{                                                                       }
+{       Mirror error reporting following various operations             }
+{                                                                       }
+{***********************************************************************}
+
+procedure ReportErr(optype:ops);
+var i : INTEGER;
+
+
+begin
+
+{ mirror report errors command =  12, drive, 1, 0       }
+
+XCV.len:=4;
+XCV.int[1]:=12; XCV.int[2]:=Drive; XCV.int[3]:=1; XCV.int[4]:=0;
+Send(XCV);
+Recv(XCV);
+if XCV.len<5 then MirChk;                               {2.0}
+writeln; writeln; writeln;
+
+Messages(optype);
+
+BadBlocks:=XCV.int[5];
+if BadBlocks=0 then
+  begin
+  writeln; writeln;
+  LastErr:=0;
+  if optype=aBackup then writeln('      --- ALL DATA STORED ---')
+     else writeln('      --- ALL DATA RECEIVED ---');
+  end
+ else
+  begin
+  if optype<>aBackup then
+     writeln('     Blocks in error:  ',XCV.int[5]);                {2.0}
+  writeln; writeln;
+  write('List blocks in error? N',chr(8));
+  if getbyte='Y' then
+    for i:=1 to BadBlocks do 
+      begin
+      writeln('  block # ',XCV.int[4+2*i] + 256*XCV.int[5+2*i]);
+      if i mod 23=0  then 
+        begin
+        write('type <space> to continue');
+        if getbyte<>' ' then exit(ReportErr);
+        end;
+      end;
+  LastErr:=XCV.int[4+2*BadBlocks] + 256*XCV.int[5+2*BadBlocks];
+  end;
+end;
+
+{$P}{*********************************************************************}
+{                                                                     }
+{       format -- record an empty image directory onto a tape         }
+{                                                                     }
+{*********************************************************************}
+
+  procedure format;
+  var  i : INTEGER;
+  begin
+  writeln; writeln;
+  write('Erase this tape? N'); crt(left);
+  if getbyte<>'Y' then exit(format);
+  push(REW);
+  
+  writeln; 
+  write('              Tape title: ');
+  if getstring(AString)<>normal then exit(dispatch);
+  for i:=1 to 12 do if i>length(AString) then
+    Direc[0].name[i]:=' '
+   else
+    Direc[0].name[i]:=AString[i];
+  
+  i:=30;
+  write('Tape length (in minutes): ');
+  if getnum(i)<>normal then exit(dispatch);
+  Direc[0].len:=i*120;                  { length of tape is divided by 10 }
+  write('                    Date: ');
+  if getdate(today)<>normal then exit(dispatch);
+  Direc[0].dt:=Today;
+  
+  for i:=1 to 31 do
+    begin
+    Direc[i].name:='            ';
+    Direc[i].len:=0;
+    Direc[i].dt:=Today;
+    end;
+  
+  writedir(TRUE);
+  push(REW);
+  end;
+

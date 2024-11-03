@@ -1,0 +1,165 @@
+Program timertest;
+
+ const timer = 34; {timer unit #}
+       Bell = 0; {bell routine #}
+       Create = 1; {Create routine #}
+       Delete = 2; {delete rtn #}
+       Disable = 3; {disable rtn #}
+       Enable = 4;  {enable rtn #}
+       ONESHOT = 2; {continuous/1shot mode flag - 1 SHOT}
+       SKIP1ST = 4; {skip first call flag TRUE}
+       ok = FALSE;
+
+ type byte = -128..127;
+      bytes = array[0..9999] of byte;
+      proutine = ^bytes;
+      tblID = integer;
+      PBlockCre8 = record
+                    case INTEGER of
+                      0  : (BLAH : record
+                              address : proutine;
+                              count : integer;
+                              flags : integer;
+                              tableID : tblID;
+                            end);
+                      1  : (tableID : tblID);
+                      2  : (BellBlock : record
+                                  freq : integer;
+                                  speaker : byte;
+                                  fill : byte;
+                                  duration : integer;
+                            end);
+                   end;
+
+  var ParameterBlockCre8 : PBlockCre8;
+      RestParameterBlock : PBlockCre8;
+      ForBell : PBlockCre8;
+      i,j,a,q : integer;
+      answer : string[80];
+
+ procedure DoNada; external;
+
+ procedure Wait; external;
+
+ procedure Clear; external;
+
+ function Test : boolean; external;
+
+ procedure UnitSt(unitno: integer;var somevar: PBlockCre8;func: integer); external;
+
+ procedure Hello;
+   begin
+    if q<>0 then begin
+      writeln('Hello there!!!!  ',q);
+      q := q+1;
+    end;
+   end;
+
+ BEGIN
+ write('Want timer table test? (y/n)  '); readln(answer);
+ if(answer[1]='y')or(answer[1]='Y') then begin
+   {call timer driver to create an entry}
+   ParameterBlockCre8.BLAH.address := @DoNada;
+   ParameterBlockCre8.BLAH.count := 1; {call every 50 milliseconds}
+   ParameterBlockCre8.BLAH.flags := 0; {do a continuous entry}
+   ParameterBlockCre8.BLAH.tableID := $00FF; {give value to make sure correct}
+   writeln('address of ParameterBlockCre8 = ',ord4(@ParameterBlockCre8));
+   with ParameterBlockCre8.BLAH do begin
+     write('address = ',ord4(address),'  count = ',count);
+     writeln('  flags = ',flags,'   tableID = ',tableID);
+   end;
+   UnitSt(timer,ParameterBlockCre8,Create);
+   writeln(' tableID = ',ParameterBlockCre8.BLAH.tableID);
+   RestParameterBlock.tableID := ParameterBlockCre8.BLAH.tableID;
+
+   Clear;
+   for i := 1 to 5 do begin
+     Wait;
+     writeln('Flag set ',i,' times');
+   end;
+
+   UnitSt(timer,RestParameterBlock,Disable);
+
+   Clear;  {in case interrupt during Disable operation}
+   for i:= 1 to MAXINT do
+     for j := 1 to 10 do;
+   writeln('Waited ',ord4(MAXINT)*10,' iterations');
+   if Test then writeln('After Disable flag set')
+           else writeln('After Disable flag clear');
+
+   UnitSt(timer,RestParameterBlock,Enable);
+
+   for i := 1 to 5 do begin     {flag should be clear from before Enable}
+     Wait;
+     writeln('After Enable, Flag set ',i,' times');
+   end;
+
+   UnitSt(timer,RestParameterBlock,Delete);
+
+   Clear;  {in case interrupt during Delete operation}
+   for i:= 1 to MAXINT do;
+   for j := 1 to 10 do;
+   writeln('Waited ',ord4(MAXINT)*10,' iterations');
+   if Test then writeln('After Delete flag set')
+           else writeln('After Delete flag clear');
+ end;{timer table test}
+
+{do timer table test with Pascal program}
+  q := 0;   {make sure Hello doesn't write until ready}
+  ParameterBlockCre8.BLAH.address := @Hello;
+  ParameterBlockCre8.BLAH.count := 10; {call every 500 milliseconds}
+  ParameterBlockCre8.BLAH.flags := 0; {do a continuous entry}
+  ParameterBlockCre8.BLAH.tableID := $00FF; {give value to make sure correct}
+  writeln('address of ParameterBlockCre8 = ',ord4(@ParameterBlockCre8));
+  with ParameterBlockCre8.BLAH do begin
+    write('address = ',ord4(address),'  count = ',count);
+    writeln('  flags = ',flags,'   tableID = ',tableID);
+  end;
+  UnitSt(timer,ParameterBlockCre8,Create);
+  writeln(' tableID = ',ParameterBlockCre8.BLAH.tableID);
+  RestParameterBlock.tableID := ParameterBlockCre8.BLAH.tableID;
+
+  q := 1; {allow Hello to start}
+  a := 2; {wait till q=a}
+  for i:=1 to 10 do begin
+   while (q<a) do;   {wait for change}
+   a := a+1;
+  end;
+  q := 0;{turn off Hello}
+  UnitSt(timer,RestParameterBlock,Delete);
+
+write('Want Bell test? (y/n)  '); readln(answer);
+if(answer[1]='y')or(answer[1]='Y') then begin
+ repeat
+   {make a bell sound}
+   with ForBell.BellBlock do begin
+     speaker := $55;
+     fill := 0;
+     duration := 10; {1/2 second}
+     writeln( 'enter 0 to get defaults' );
+     write('Enter speaker (a single byte) :  '); readln(a);
+     if a<>0 then speaker := a;
+     write('Enter duration in 50 millisecond ticks :  '); readln(a);
+     if a<>0 then duration := a;
+     freq := 1000;  {defaults}
+     write('Enter frequency :  '); readln(a);
+     if a<>0 then freq := a;
+     write('Enter number of times : ');readln(a);
+   end;
+
+   for i:=1 to a do
+    with ForBell.BellBlock do begin
+      write('freq = ',freq,'   spkr = ',speaker);
+      writeln('dur. = ',duration);
+      freq := freq + 1;
+      UnitSt(timer,ForBell,Bell);
+    end;
+  write('Done? (y/n)  '); readln(answer);
+ until ((answer[1]='y')or(answer[1]='Y'));
+end;
+END.
+
+
+
+
+

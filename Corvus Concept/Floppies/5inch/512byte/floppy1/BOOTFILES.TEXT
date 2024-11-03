@@ -1,0 +1,303 @@
+
+date :  16-JUN-82
+file :  /dsgn/bootfiles.text
+
+info from volume CCSYS on concept room network as of June 9.
+  OS version V 0.0f (beta96)
+
+
+Files needed on disk used for Sysgen boot :      (volume name : CCSYS)
+
+  - must write boot blocks onto this floppy's blocks 0 and 1.
+    Use WFLOPBOOT program on Apple, which needs file BOOTCODE.DATA.
+
+no.  | file name  | blocks
+
+  1)   ASSIGN         9
+  2)   CC.DISPAT     16
+  3)   CC.FILMGR     31
+  4)   CC.KERNEL     56
+  5)   CC.SETUP      24
+  6)   CC.WNDMGR     27
+  7)   DRV.CONSOL     2
+  8)   DRV.DISPHZ     8    name next week of DRV.DISPUD
+  9)   DRV.DISPVT     8
+ 10)   DRV.KYBD       5
+ 11)   DRV.SYSTRM     5
+ 12)   DRV.TIMER      3    must be new timer driver w/ clock changes
+ 13)   CSK.DEFAULT    2    must be for revision 3 keyboard
+ 14)   CSH.DEFAULT    4    name next week of CSU.DEFAULT
+ 15)   CSV.DEFAULT    4
+                    ---
+   TOTAL........... 205 blocks  fits on one 280 block 5 1/4" Apple drive floppy.
+
+
+
+Files on seperate Sysgen disk:        (volume name : CCSYS)
+
+ 1) the Sysgen program
+ 2) program to write firmware onto
+    the hard disk.
+ 3) data files for both programs, if any.
+
+
+Files needed on CCSYS image on floppies used by Sysgen program :
+
+no.  | file name  | blocks
+
+  1)   ASSIGN           9
+  2)   CC.DISPAT       16
+  3)   CC.FILMGR       31
+  4)   CC.HELP          7
+  5)   CC.KERNEL       56
+  6)   CC.SETPRT       16
+  5)   CC.SETUP        24
+  7)   CC.SYSMGR       16
+  8)   CC.WNDMGR       27
+  9)   SHELL           12
+ 10)   WRITEBOOT        5
+
+ 11)   DRV.CONSOL       2
+ 12)   DRV.DISPUD       8
+ 13)   DRV.DISPVT       8
+ 14)   DRV.KYBD         5
+ 15)   DRV.PRNTR        3
+ 16)   DRV.SYSTRM       5
+ 17)   DRV.TIMER        3    must be new timer driver w/ clock changes
+
+ 18)   CSK.DEFAULT      2    must be for revision 3 keyboard
+ 19)   CSH.DEFAULT      4    name next week of CSU.DEFAULT
+ 20)   CSH.ALTCHARSET  13    must get reworked char set from Mike
+ 21)   CSV.DEFAULT      4
+
+ 22)   H.DISPAT.TEXT    4
+ 23)   H.FILMGR.TEXT    4
+ 24)   H.SYSMGR.TEXT    4
+ 25)   H.WNDMGR.TEXT    4
+
+ 26)   CC.EDCHAR       28    must be Mary's latest and best
+ 27)   OTEST           41
+                     ----
+   TOTAL...........   361
+
+
+Each floppy in image set has it's first block (block 0) dedicated to Sysgen useage.
+It does not have CCSYS image on it.  Control info for Sysgen process is get there.
+It has the following structure and meaning :
+
+ 1) Date  - 6 bytes of ASCII representing the date the image floppies were made.
+            They are in mmddyy form. For example, 9 June 1982 is 060982.
+
+ 2) OS version number - integer ( 2 bytes which represent the numbers in x.x).
+
+ 3) Number of floppies in image - integer.
+
+ 4) This floppies number - integer.
+
+ 5) The number of valid blocks on this floppy - integer.
+
+ 6) Copyright info - 40 bytes of a Pascal string constant
+                     string := "(c) Copyright 1982 Corvus Systems, Inc."
+                     length of string := 39
+
+
+The following floppies are standard Merlin volumes.  The files are moved from
+the floppies to the system volumes with the standard File Manager copy routine.
+
+7 extra disks with files added by user:
+
+1) Pascal disk     Comes with basic system
+
+   - volume names:  PASCAL1,PASCAL2
+
+   - In order to use the compiler, the User must put these files, except
+     for PASLIB.OBJ and CCLIB.OBJ, in volume CCSYS.
+
+  PASCAL          190    disk1
+  CODE             88    disk2
+  PASCTERRS.TEXT   14    disk2
+  PASLIB.OBJ       53    disk1
+  CCLIB.OBJ       167    disk2 in volume CCLIB
+
+2) Assembler disk  Comes with basic system
+
+   - volume name:  CCASM
+
+   - User must put files in volume CCSYS to use with system.
+
+  ASM68K           73
+  DEBUG            12
+  LIBRARY          25
+  LINKER           51
+  LOADER.IMAGE      1
+
+3) CONSTELLATION II disks  Comes with basic system
+
+   - User must put file SPOOL in volume CCSYS to use with system.
+
+  ?????  - denise knows
+  must also include :
+  DDDIAG
+  DIAG.DATA
+  SPOOL
+
+4) Fortran disk
+
+   - volume names:  FRTRN1,FRTRN2,FRTRN3
+
+   - In order to use the compiler, the User must put these files, except
+     for FTNLIB.OBJ and PASLIB.OBJ, in volume CCSYS.
+
+  FORTRAN         190   disk 1
+  CODE             88   disk 3  same as Pascal disk CODE file
+  FTNCTERRS.TEXT   28   disk 1
+  FTNRTERRS.TEXT   14   disk 1
+  FTNLIB.OBJ      220   disk 2
+  PASLIB.OBJ       53   disk 2  same as Pascal disk PASLIB.OBJ file
+
+5) EdWord disk
+
+   - volume name:  CCWP
+
+   - User must put files in volume CCSYS to use with system.
+
+  ED              211     make sure final version from Karl
+  EDINIT.TEXT      10
+
+6) LogiCalc disk
+
+   - volume name:  CCLC
+
+   - User must put files in volume CCSYS to use with system.
+
+  CC.LGICLC       140     make sure final version from SPI
+  LCDUMP           32     in volume CCLC on network
+
+7) CP/M disk
+
+   - volume name:  CCCPM
+
+   - User must put files in volume CCSYS to use with system.
+
+  CC.CPM           23
+  CC.CPM1          26    current one is Apple cp/m must
+                         have a clean!!! CP/M from Digital Research
+
+
+PROCEDURE TO CREATE DISTRIBUTION DISK MASTERS :
+
+All disks for 5 1/4" can only be created on an Apple computer.
+
+All the disks, except for the CCSYS image built for the Sysgen program are built
+by copying the specified files to Apple floppies from the volumes they reside
+on.  After copying the files to a given floppy flip the directory to a Merlin
+readable structure.  Make sure the floppies have the correct volume names.  The
+Sysgen image floppies are created by using a program called BUILDIMAGE.
+
+Image building Procedure :
+
+1) On the Concept, create an image volume of CCSYS and name it SYSMAKE.
+   It must have all the files specified for the image floppies in it,
+   but no others.  Crunch the volume SYSMAKE after all the files are
+   copied to it.
+
+2) Logon to an Apple Pascal system connected to the same network that the
+   volume SYSMAKE is on.  Mount the volume and flip the directory so the
+   Apple Pascal system has access to it.  Make sure this Apple has a floppy
+   disk drive connected and accessable to the system as Unit #9.
+
+3) Format enough floppies as is neccessary to hold the CCSYS image on it.
+
+4) Run the program BUILDIMAGE.
+
+5) Run the program CMPIMAGE to verify image written is correct.
+
+
+
+DESIGN FOR PROGRAM BUILDIMAGE :
+
+Get control info from user :
+   - Date
+   - OS version number
+
+open volume SYSMAKE:
+read directory - 2028 bytes starting at block 2.
+close volume SYSMAKE:
+
+calculate last block of volume which contains valid
+  data.
+calculate number of floppies needed and tell user.
+  - each floppy has 279 blocks available to use for image.
+
+ask user if have enough and should continue.
+if user says Yes then
+
+  build control block to be written to block 0 of each floppy.
+   - force valid blocks to 279.
+   - Put in Date, OS version number, number of floppies in image,
+     and copyright string.
+   - zero fill rest of block
+   - floppy number leave for write loop.
+
+  open volume SYSMAKE:.
+  flopnumb := 1;
+  j := 0;
+
+  tell user to insert first diskette into disk drive.
+  write the control block for this floppy onto block(j) -- zero
+    - put flopnumb into floppy number field of control block.
+    - flip all integers.
+  j := j+1;
+
+  for i:=0 to 1 do
+    read in block i of volume SYSMAKE: .
+    write it out to block j of floppy.
+    j := j+1;
+  end;
+
+  read in directory off of SYSMAKE: - 2028 bytes starting at block 2
+  flip all integer values in the directory and file entries.
+    - each entry is 26 bytes long.
+    - maximum of 78 entries including the directory entry, which has a
+      variant structure to the other entries.
+    - for all entries change the following fields:
+       1) firstblock - index = 0
+       2) nextblock  - index = 2
+       3) misc. data - index = 4
+    - for the directory entry flip the following fields:
+       1) deovblock  - index = 14
+       2) dnumfiles  - index = 16
+       3) dlastboot  - index = 20
+    - for all the file entries flip the following fields:
+       1) dlastbyte  - index = 22
+       2) daccess    - index = 24
+  write directory to floppy starting at block j.
+
+  j := 7; <== First available block on floppy after directory is
+              written. 1 control block, 2 boot blocks, and the
+              directory is 4 blocks.
+
+  do i:=6 to last block number valid on SYSMAKE:
+    if  j=0 then
+       tell user to put in next floppy.
+       wait for user to do so.
+       flopnumb := flopnumb+1;
+       put flopnumb in floppy number of control block.
+       write control info to block (j) of floppy.
+       j := j+1;
+       blockcnt := 0;
+    end;{if}
+    read block(i) of volume SYSMAKE:
+    write it to block(j) of floppy.
+    blockcnt := blockcnt+1;
+    if j=279{last block on floppy} then j:=0 else j:=j+1;
+  end;{do}
+  if blockcnt<>279 then
+    put blockcnt in valid block field of control block.
+    write control block to block 0 of floppy.
+  end;{if}
+  close volume SYSMAKE:.
+  tell user done.
+end;{if}
+
+DONE.

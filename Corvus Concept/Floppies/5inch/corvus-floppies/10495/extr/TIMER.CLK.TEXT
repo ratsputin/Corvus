@@ -1,0 +1,514 @@
+;
+; file : timer.clk.text
+; date : 05-January-1984  kb
+;
+; FILE IS AN INCLUDE FILE FOR TIMER.DRV.TEXT , THE TIMER DRIVER.
+; THIS IS THE UNITREAD AND UNITWRITE CODE FOR THE CALANDER CLOCK IN THE
+; TIMER DRIVER.
+;
+; 04-23-82  kb  Changed IORESULT definitions to use the global file definitions
+; 06-07-82  kb  Changed for new rev. 4 processor board changes, will find the
+;                  correct address to use (either $30FE1 or $30F81)
+; 07-07-82  kb  Changed error in RV3 and RV4 address equates, were reversed
+; 09-20-82  lf  Changed write clock to stop/start clock in order to zero
+;                  seconds and tenths fields
+; 10-22-82  kb  Changed READCR so it reads 4 times with a MOVEP.L instruction.
+;                  Checks to make sure the low order 3 bytes, all except the
+;                  first read are the same.  If they are not it rereads the
+;                  register.
+; 07-22-83  kb  Added code to have read fail retries, up to ten (10) then
+;                  returns an IOresult of Clock hardware failed.
+; 01-05-84  kb  Changed RDCLOCK and READCR to catch all ticks (reg. = $0F).
+;
+  page
+;
+; EQUATES FOR THE CLOCK ROUTINES
+; PARAMTER BLOCK INDICES - RANGE FOR PARAMETER IN PARENTHESIS
+;
+DAYOFWK     EQU        0                         ;DAY OF THE WEEK (1-7)
+MONTH       EQU        DAYOFWK+2                 ;MONTH (1-12)
+DAY         EQU        MONTH+2                   ;DAY (1-31)
+HOUR        EQU        DAY+2                     ;HOURS (0-23)
+MINS        EQU        HOUR+2                    ;MINUTES (0-59)
+SECS        EQU        MINS+2                    ;SECONDS (0-59)
+TENTHS      EQU        SECS+2                    ;TENTHS OF SECONDS (0-9)
+LEAPYR      EQU        TENTHS+2                  ;LEAP YEAR (0-3)
+;
+LENPBR      EQU        TENTHS+2                  ;LENGTH OF READ PARAMETER BLOCK
+NUMRP       EQU        LENPBR/2                  ;NUMBER OF READ PARAMETERS
+;
+LENPBW      EQU        LEAPYR+2                  ;LENGTH OF WRITE PARAMETER BLOCK
+NUMWP       EQU        LENPBW/2                  ;NUMBER OF WRITE PARAMETERS
+;
+; CLOCK REGISTERS
+;
+RV4ADDR     EQU        $30F81                    ;SELECT/ADDRESS LATCH   **new board address
+RV3ADDR     EQU        $30FE1                    ;SELECT/ADDRESS LATCH  **old board address
+RWREG       EQU        $30D01                    ;READ/WRITE CLOCK REGISTERS
+INTREG      EQU        15                        ;CLOCK INTERRUPT REG ADDR
+STRTSTOP    EQU        14                        ;START/STOP REGISTER
+LYREG       EQU        13                        ;LEAP YEAR REGISTER
+TENTHSC     EQU         1                        ;TENTH OF SECONDS REGISTER {change 6/7}
+;
+RDERR       EQU        $0F                       ;REGISTER VALUE WHEN READ WHEN UPDATE
+DSELCT      EQU        $10                       ;DESELECT CHIP
+;
+; IORESULT CODES
+;
+PBLENER     EQU        IOEprmln                  ;PARAMETER BLOCK WRONG LENGTH
+CLOCKERR    EQU        IOEclkmf                  ;CLOCK NOT WORKING
+;
+  page
+;
+; TIMRD - UNITREAD OF CLOCK
+;
+; RETURN TO THE USER THE TIME IN THE REAL-TIME-CLOCK.
+; USER PASSES PARAMETER BLOCK POINTER IN D1 OF WHERE TO PUT THE TIME INFO.
+; TIME IS RETURNED IN BINARY, INTEGERS.   THE PARAMETER BLOCK HAS THE FORM :
+;
+; type ReadClockParameter = record
+;                             DayofWeek :integer;
+;                             Month : integer;
+;                             Day : integer;
+;                             Hour : integer;
+;                             Mins : integer;
+;                             Secs : integer;
+;                             Tenths : integer;
+;                           end;
+;
+TIMRD
+            MOVE.L     D1,A6                     ;A6 = PARAMETER BLOCK PTR
+            MOVE.L     D2,D4                     ;SAVE USER LENGTH
+            BSR.S      RDCLOCK                   ;READ THE CLOCK
+            TST.W      D7
+            BNE.S      TRDEXIT                   ;CAN'T READ CLOCK
+;
+; CONVERT AND PUT RESULT IN PARAMETER BLOCK
+;
+            CMPI.W     #LENPBR,D4                ;IS PARAMETER BLOCK LONG ENOUGH
+            BCS.S      TRDERR                    ;NO
+            LEA        NUMBER,A5                 ;# OF NIBBLES IN PARAMETER
+            LEA        DETAIL,A4                 ;REGISTER ARRAY INDICES
+            LEA        REGARRAY,A3               ;REGISTER ARRAY
+            CLR.L      D3                        ;INDEX INTO PARAM BLOCK
+            CLR.L      D4                        ;INDEX INTO NUMBER ARRAY
+            CLR.L      D6                        ;INDEX INTO DETAIL ARRAY
+;
+TRDGETP     MOVE.B     0(A5,D4.W),D0             ;# OF NIBBLES PARAMETER
+            BSR.S      CVTOUT                    ;CONVERT - RETURNS IN D1
+            MOVE.W     D1,0(A6,D3.W)             ;STORE PARAMETER
+            ADDQ.W     #2,D3                     ;NEXT PARAMETER
+            ADDQ.B     #1,D4                     ;DO 7 PARAMETERS
+            CMPI.W     #NUMRP,D4
+            BNE.S      TRDGETP                   ;DO AGAIN
+TRDEXIT     RTS
+;
+; ERROR - PARAMETER BLOCK THE WRONG LENGTH
+;
+TRDERR      MOVEQ      #PBLENER,D7
+            RTS
+  page
+;
+; RDCLOCK - READ ALL THE CLOCK REGISTERS INTO THE REGISTER ARRAY
+;
+RDCLOCK     BSR.S      LDADDR                    ;GET CHIP ADDRESSES IN A0&A1
+            MOVEQ      #7,D6                     ;COUNT OF FAILURES
+;
+; READ REGISTERS INTO ARRAY
+;
+RDCRST      SUBQ.B     #1,D6
+            BMI.S      RDCERR                    ;RETRIED TO MANY TIMES
+            MOVEQ      #RARDLEN,D0               ;D0 = REGISTER #    *kb 1/5/84*
+            LEA        REGARRAY+RARDLEN,A2       ;DO REG=12 TO 1     *kb 1/5/84*
+;
+RDCREG      BSR.S      READCR                    ;READ A SINGLE REGISTER RETURNS IN D2
+            BNE.S      RDCexit                   ;failed to read *kb 7/22/83*
+
+; IF ANY REGISTER READ = $0F THEN READ REGISTERS WHEN TICKED AND MUST RESTART
+;
+            CMPI.B     #RDERR,D2                 ;got a tick         *kb 1/5/84*
+            BEQ.S      RDCRST                    ;YES, Restart read  *kb 1/5/84*
+            MOVE.B     D2,-(A2)                  ;PUT IN ARRAY       *kb 1/5/84*
+            SUBQ.B     #1,D0                     ;STOP WHEN D0 = 0   *kb 1/5/84*
+            BNE.S      RDCREG                    ;DO AGAIN
+
+RDCexit     RTS                                  ;*kb 7/22/83*
+;
+; ERROR - CHIP NOT WORKING
+;
+RDCERR      MOVEQ      #CLOCKERR,D7
+            RTS
+;
+; LDADDR - GET LATCH ADDRESS IN A0 AND R/W CLOCK ADDRESS IN A1
+;
+LDADDR      MOVEA.L    ADDRREG,A0                ; GET saved address {change 6/7}
+            MOVE.L     A0, D0                    ; {change 6/7}
+            BEQ.S      RDCERR                    ;NO CLOCK CHIP - ERROR EXIT {change 6/7}
+            LEA        RWREG.L,A1
+            RTS
+  page
+;
+; CVOUT - CONVERT REGISTERS TO 1 PARAMETER
+;           ENTRY : (D0) = # OF REGISTERS TO USE (# OF DETAIL ELEMENTS)
+;                   DETAIL(D6) = REGISTER TO USE TO MAKE PARAMETER
+;                   (A4) = ADDRESS OF THE INDICES OF REGARRAY FOR EACH PARAMETER
+;                   (A3) = ADDRESS OF THE REGISTER ARRAY
+;           EXIT  : (D1) = PARAMETER CONVERTED
+;                   (D6) = UPDATED TO NEXT DETAIL ELEMENT FOR NEXT PARAMETER
+;
+CVTOUT      CLR.L      D2
+            CLR.L      D1
+            MOVE.B     0(A4,D6.W),D2             ;GET REGARRAY INDEX
+            ADDQ.B     #1,D6                     ;UPDATE INDEX
+            MOVE.B     0(A3,D2.W),D1             ;FIRST NIBBLE
+;
+            SUBQ.B     #1,D0                     ;IF NUMBER OF REGS=1  THEN
+            BEQ.S      CVOEXIT                   ;THEN DONE-IS VALID BINARY
+;
+            LSL.B      #4,D1                     ;MOVE TO HI NIBBLE
+            MOVE.B     0(A4,D6.W),D2             ;INDEX TO NEXT REGISTER
+            ADDQ.B     #1,D6                     ;UPDATE INDEX
+            OR.B       0(A3,D2.W),D1             ;PUT IN LOW NIBBLE
+;
+            BSR.S      CBCDBIN                   ;CONVERT BCD TO BINARY
+CVOEXIT     RTS
+  page
+;
+; CBCDBIN - CONVERT 1 BYTE OF BCD (2 DIGITS) TO 1 BYTE OF BINARY
+;           ENTRY : (D1) = BCD BYTE OF DIGITS
+;           EXIT  : (D1) = BINARY BYTE
+;
+CBCDBIN     CLR.L      D2
+            MOVE.B     D1,D2                     ;COPY OF BCD
+            ANDI.B     #$0F,D2                   ;LOW ORDER DIGIT
+            LSR.W      #4,D1                     ;MOVE OVER HI DIGIT
+            MULU       #10,D1                    ;MAKE 10*DIGIT
+            ADD.W      D2,D1                     ;MAKE FULL NUMBER
+            RTS
+  page
+;
+; Changed routine on 10/22/82 kb
+; READCR - READ CLOCK REGISTER
+;       ENTRY : (A0) = LATCH ADDRESS
+;               (A1) = R/W CLOCK ADDRESS
+;               (D0) = REGISTER ADDRESS
+;       EXIT  : (D2) = REGISTER VALUE READ
+;               (D7) = IOresult
+;
+;  The movep.l instruction works because the I/O address space for the
+;  clock is not fully decoded.
+;
+READCR      MOVEM.L    D3-D6,-(SP)               ;save regs                      *kb 10/22/82*
+            MOVEQ      #10, D3                   ;do it 10 times *kb 7/22/83*
+
+RDCR10      MOVEQ      #CLOCKERR,D7              ;failed to read                 *kb 1/5/84*
+            SUBQ.W     #1, D3                    ;did do all tries *kb 7/22/83*
+            BMI.S      RDCRexit                  ;yes, error                     *kb 1/5/84*
+            CLR.L      D7                        ;no error                       *kb 1/5/84*
+            BSR.S      SELREG                    ;DESELECT THEN SELECT ADDRESS   *kb 10/22/82*
+            MOVEP.L    0(A1),D2                  ;read reg 4 times               *kb 10/22/82*
+            MOVE.B     #DSELCT,(A0)              ;DESELECT CHIP
+            ANDI.L     #$0F0F0F0F,D2             ;clear hi nibbles of all bytes  *kb 10/22/82*
+;                                                                                *kb 10/22/82*
+; make sure all bytes read are the same                                          *kb 10/22/82*
+;                                                                                *kb 10/22/82*
+            MOVEQ      #1, D4                    ;ignore hi order byte, 1st read *kb 10/22/82*
+            MOVE.L     D2,D5                     ;save read value                *kb 10/22/82*
+            CMPI.B     #RDERR,D5                 ;read a tick?                   *kb 1/5/84*
+            BEQ.S      RDCRerr1                  ;yes, return tick result        *kb 1/5/84*
+            MOVE.B     D5, D6                    ;compare all to last read       *kb 10/22/82*
+RDCR20                                           ;                               *kb 10/22/82*
+            LSR.L      #8, D5                    ;chk next byte                  *kb 10/22/82*
+            CMPI.B     #RDERR,D5                 ;read a tick?                   *kb 1/5/84*
+            BEQ.S      RDCRerr1                  ;yes, return tick result        *kb 1/5/84*
+            CMP.B      D5, D6                    ;are they the same?             *kb 10/22/82*
+            BNE.S      RDCR10                    ;No, read reg again             *kb 10/22/82*
+            DBF        D4, RDCR20                ;Do until checked all 3 bytes   *kb 10/22/82*
+            BRA.S      RDCRexit                  ;*kb 7/22/83*
+RDCRerr1    MOVE.B     D5,D2                     ;return tick register value     *kb 1/5/84*
+RDCRexit    MOVEM.L    (SP)+,D3-D6               ;restore regs                   *kb 10/22/82*
+            TST.W      D7                        ;set error state *kb 7/22/83*
+            RTS
+;
+; SELREG - DESELECT THEN SELECT CHIP REGISTER
+;           ENTRY : (D0) = CLOCK REGISTER ADDRESS
+;                   (A0) = LATCH ADDRESS
+;
+SELREG      MOVEQ      #DSELCT,D1
+            OR.B       D0,D1
+            MOVE.B     D1,(A0)                   ;DESELECT CHIP BY SETTING D4
+            MOVE.B     D1,(A0)                   ;*kb 11/7/83* give uniplex more time
+            MOVE.B     D0,(A0)                   ;SELECT ADDRESS
+            MOVE.B     D0,(A0)                   ;*kb 11/7/83* give uniplex more time
+            RTS
+  page
+;
+; INITCLK - PROCEDURE CALLED BY UNITINSTALL CODE (TIMINST) TO INITIALIZE
+;           THE CLOCK CHIP.
+;   ASSUMES THAT THE FOLLOWING CODE DOES NOT RESET THE CLOCK.???????
+;
+INITCLK
+;
+; START CLOCK - MUST DO IT FOR BOTH ADDRESSES
+;
+            LEA        RWREG.L, A1               ;R/W ADDRESS           {change 6/7}
+            LEA        RV3ADDR.L, A0             ;DO OLD ADDRESS FIRST  {change 6/7}
+            BSR.S      STRTCLK                   ;                      {change 6/7}
+            LEA        RV4ADDR.L, A0             ;DO NEW ADDRESS        {change 6/7}
+            BSR.S      STRTCLK                   ;                      {change 6/7}
+;                                                                       {change 6/7}
+; FIND CORRECT ADDRESS OF THIS MACHINES PROCESSOR BOARD                 {change 6/7}
+;                                                                       {change 6/7}
+            BSR.S      FINDADDR                  ;                      {change 6/7}
+            BNE.S      INITEXIT                  ;ERROR - NO CHIP       {change 6/7}
+;
+; INITIALIZE CHIP
+;
+            BSR        LDADDR                    ;GET CLOCK REGISTER ADDRESES
+            CLR.L      D0                        ;REG ADDRESS
+            CLR.L      D2                        ;DATA
+            BSR        WRITECR                   ;PUT IN NON-TEST MODE
+;
+; CLEAR INTERRUPTS
+;
+            MOVEQ      #INTREG,D0                ;ADDRESS
+            CLR.L      D2                        ;DATA
+            BSR        WRITECR
+            BSR        READCR                    ;READ 3 TIMES TO RESET
+            BSR        READCR
+            BSR        READCR
+INITEXIT    RTS                                  ;{change 6/7}
+  page
+;
+; STOPCLK - STOP CLOCK PROCEDURE                                        {09-20-82}
+;       ASSUMES A0 AND A1 ARE INITIALIZED.                              {09-20-82}
+;                                                                       {09-20-82}
+STOPCLK     MOVEQ      #0,D2                     ;DATA                  {09-20-82}
+            BRA.S      ST10                      ;                      {09-20-82}
+;                                                                       {09-20-82}
+; STRTCLK - START CLOCK PROCEDURE                                       {06-07-82}
+;       ASSUMES A0 AND A1 ARE INITIALIZED.                              {06-07-82}
+;                                                                       {06-07-82}
+STRTCLK     MOVEQ      #1,D2                     ;DATA                  {06-07-82}
+                                                 ;                      {09-20-82}
+ST10        MOVEQ      #STRTSTOP,D0              ;ADDRESS               {09-20-82}
+            BSR.S      WRITECR                   ;                      {06-07-82}
+            RTS                                  ;                      {06-07-82}
+;
+; RDTENTHS - read the tenths register of clock
+;       EXIT - (NC) = READ OK
+;              (C)  = ERROR - WRONG ADDRESS
+;              (D2) = REGISTER VALUE READ
+;
+RDTENTHS
+            MOVEQ      #3,D5                     ;CHECK MAX. 4 TIMES FOR CLOCK TURNING
+
+RDT10       MOVEQ      #TENTHSC,D0               ;read tenth of seconds register
+            BSR        READCR
+            CMPI.B     #RDERR, D2                ;do until (no read error) or
+            DBNE       D5, RDT10                 ; (tried 4 times)
+
+            CMPI.B     #9, D2                    ;if not a BCD digit then wrong address
+            BHI.S      RDTERR                    ;USE OTHER Address
+            CLR.L      D5
+            RTS
+
+RDTERR      MOVE.W     #CARRYST, CCR
+            RTS
+  page
+; FINDADDR - FIND ADDRESS OF CHIP'S ADDRESS LATCH. IT IS EITHER RV3ADDR OR RV4ADDR
+;            DEPENDING ON THE VERSION OF THIS PROCESSOR BOARD.
+; routine added with 6/7 change.
+;
+FINDADDR
+            LEA        ADDRREG, A3               ;WHERE TO SAVE CORRECT ADDRESS
+            LEA        RWREG.L,A1
+            LEA        RV4ADDR.L,A0              ;START WITH REV 4 ADDRESS
+            MOVEQ      #1,D4                     ;TRY ONLY TWO ADDRESSES
+
+; CHECK IF ADDRESS IN A0 IS CORRECT
+;
+FA10
+            BSR.S      RDTENTHS                  ;GET STARTING VALUE
+            BCS.S      FANXT                     ;WRONG CHIP TRY NEXT ADDRESS
+            CMPI.B     #9, D2                    ;WAIT UNTIL TENTH OF SECONDS
+            BEQ.S      FAZERO                    ;IS NEXT TENTH ==> D3.B
+            MOVE.B     D2,D3
+            ADDQ.B     #1,D3
+            BRA.S      FA20
+FAZERO      CLR.L      D3
+FA20        MOVE.W     #30000,D6                 ;MUST READ AT LEAST TENTH SEC.
+
+; READ TENTHS UNTIL IT CHANGES OR UNTIL IT TRIED TO LONG
+;
+FA30
+            BSR.S      RDTENTHS                  ;GET NEXT VALUE
+            BCS.S      FANXT                     ;WRONG CHIP TRY NEXT ADDRESS
+            CMP.B      D2,D3                     ;HAS TIME TICKED
+            BEQ.S      FAFNDIT                   ;YES, FOUND CORRECT ADDRESS
+            DBF        D6, FA30                  ;READ AGAIN
+;
+; NOT THIS ADDRESS TRY OTHER ADDRESS
+;
+FANXT       LEA       RV3ADDR.L, A0
+            DBF       D4, FA10
+
+; ERROR - NEITHER ADDRESS WORKED
+;
+            CLR.L     (A3)                       ;SHOW NO CHIP ADDRESS
+            MOVE.W    #CLOCKERR, D7
+            RTS
+
+; FOUND CORRECT ADDRESS
+;
+FAFNDIT     MOVE.L    A0, (A3)
+            CLR.L     D7
+            RTS
+  page
+;
+;  WRITECR - WRITE A CLOCK REGISTER
+;           ENTRY : (D0) = REGISTER ADDRESS
+;                   (D2) = DATA
+;
+WRITECR     BSR        SELREG                    ;DESELECT THEN SELECT REG.
+            MOVE.B     D2,(A1)                   ;WRITE DATA
+            MOVE.B     D2,(A1)                   ;*kb 11/7/83* for uniplex
+            MOVE.B     #DSELCT,(A0)              ;DESELECT CHIP
+            RTS
+;
+; WRITEREGS - WRITE THE CLOCK REGISTERS FROM THE REGISTER ARRAY
+;
+WRITEREGS   BSR        LDADDR                    ;GET CHIP ADDRESSES
+;
+; WRITE REGISTERS
+;
+            MOVEQ      #1,D0                     ;REGISTER ADDRESS
+            LEA        REGARRAY,A2
+;
+WRONER      MOVE.B     (A2)+,D2                  ;REGISTER DATA
+            BSR.S      WRITECR                   ;WRITE DATA
+            ADDQ.B     #1,D0                     ;NEXT REGISTER ADDRESS
+            CMPI.B     #STRTSTOP,D0              ;STOP AT START/STOP REG.
+            BNE.S      WRONER
+            RTS
+  page
+;
+; TIMWR - SET CLOCK FROM PARAMETER BLOCK
+;           PARAMETER BLOCK FOR UNITWRITE :
+;
+; type WriteClockParameter = record                     range
+;                             DayofWeek : integer;       1-7
+;                             Month : integer;           1-12
+;                             Day : integer;             1-31
+;                             Hour : integer;            0-23
+;                             Mins : integer;            0-59
+;                             Secs : integer;            0-59
+;                             Tenths : integer;          0-9
+;                             LeapYear : integer;        0-3
+;                            end;
+;
+TIMWR       MOVE.L     D1,A3                     ;ADDRESS OF PARAMETER BLOCK
+;
+; PROCESS BINARY PARAMETERS
+;
+            BSR.S      VALBIN                    ;VALIDATE PARAMS
+            BCS.S      TWRERR                    ;NO GOOD
+            BSR.S      CVTBINR                   ;CONVERT BINARY TO BCD OF REGISTERS
+;
+; ZERO SECONDS AND TENTHS OF SECONDS                                    {09-20-82}
+;                                                                       {09-20-82}
+            BSR        LDADDR                    ; GET CLOCK ADDRESSES  {09-20-82}
+            BSR        STOPCLK                   ;                      {09-20-82}
+            BSR        STRTCLK                   ;                      {09-20-82}
+;
+; WRITE OUT REGISTER ARRAY
+;
+            BSR.S      WRITEREGS
+            RTS
+;
+; ERROR - INVALID CLOCK PARAMETER
+;
+TWRERR      MOVE.W     #INVPRM,D7
+            RTS
+  page
+;
+; VALBIN - VALIDATE BINARY PARAMETER BLOCK
+;           ENTRY : (A3) = ADDRESS OF PARAMETER BLOCK
+;           EXIT  : (NC) = GOOD PARAMETERS
+;                   (C)  = ERROR, OUT OF RANGE
+;
+VALBIN      MOVEA.L    A3,A4                     ;SAVE PB ADDRESS
+            MOVEQ      #NUMWP-1,D4               ;DO ALL 8 PARAMETERS
+            LEA        RANGES,A5                 ;LIST OF PARAMETER RANGES(BYTES)
+;
+; COMPARE EACH PARAMETER TO IT'S LOW AND HI RANGE VALUE
+;
+VBCHK       CLR.L      D0
+            MOVE.B     (A5)+,D0                  ;GET LOW BOUND RANGE
+            CMP.W      (A4),D0                   ;PARAM>=LOW BOUND THEN OK
+            BHI.S      VBERR                     ;ERROR, TO LOW
+            MOVE.B     (A5)+,D0                  ;GET HI BOUND RANGE VALUE
+            CMP.W      (A4),D0                   ;PARAM<=HI BOUND THEN OK
+            BCS.S      VBERR                     ;ERROR, TO HIGH
+            ADDQ.L     #2,A4                     ;NEXT PARAMETER LOW BYTE
+            DBF        D4,VBCHK
+            CLR.L      D0                        ;SHOW NO ERROR
+            RTS
+;
+; ERROR EXIT - OUT OF RANGE
+;
+VBERR       MOVE.W     #CARRYST,CCR              ;SHOW ERROR
+            RTS
+  page
+;
+; CVTBINR - CONVERT VALID PARAMETER BLOCK FROM BINARY INTO REGARRAY BCD NIBLES
+;           ENTRY : (A3) = ADDRESS OF PARAMETER BLOCK
+;
+CVTBINR     LEA        HI,A4                     ;HI NIBBLE HOLD ARRAY
+            LEA        LOW,A5                    ;LOW NIBBLE HOLD ARRAY
+            MOVEQ      #NUMWP-1,D4               ;FOR i := 8 to 1 do
+            MOVEQ      #LEAPYR+1,D3              ;INDEX TO PARAMETER
+;
+CBRNIBS     CLR.L      D0
+            MOVE.B     0(A3,D3.W),D0             ;GET PARAMETER[i]
+            MOVE.L     D0,D1
+            DIVU       #10,D1                    ;HI NIBBLE := PARAM DIV 10
+            MOVE.L     D1,D0                     ;LOW IS REMAINDER FROM DIV
+            SWAP       D0                        ;LOW := PARAMETER-(HI*10)
+            MOVE.B     D1,0(A4,D4.W)             ;SAVE HI
+            MOVE.B     D0,0(A5,D4.W)             ;SAVE LOW
+            SUBQ.W     #2,D3                     ;NEXT PARAMETER INDEX
+            DBF        D4,CBRNIBS                ;DOWNTO 0
+;
+; SETUP REGISTER ARRAY
+;
+            CLR.L      D3                        ;REMOVE GARBAGE
+            LEA        REGARRAY,A3
+            MOVEQ      #RAWRLEN-1,D4             ;MOVE TO 13 REGISTERS
+            LEA        NIBBLE,A2                 ;WHICH NIBBLE FOR THIS REG.
+            LEA        INREGB,A1                 ;WHICH PARAMETER IS REG FROM
+;
+CBRREGS     MOVE.B     0(A1,D4.W),D3             ;INDEX TO HI & LOW FOR THIS REG.
+            MOVE.B     0(A5,D3.W),D0             ;ASSUME LOW NIBBLE
+            TST.B      0(A2,D4.W)                ;IF 0 THEN USE LOW NIBBLE
+            BEQ.S      CBRULOW                   ;IS LOW
+            MOVE.B     0(A4,D3.W),D0             ;ELSE GET HI NIBBLE
+CBRULOW     MOVE.B     D0,0(A3,D4.W)             ;PUT NIBBLE IN REGISTER HOLD
+            DBF        D4,CBRREGS
+;
+            BSR.S      CVTLPYR                   ;CONVERT LEAP YEAR REG
+            RTS
+  page
+;
+; CVTLPYR - CONVERT LEAP YEAR PARAMETER TO THE REGISTER VALUE FOR THE
+;           CLOCK CHIP.  8,4,2,1 WHERE 8 IS FOR LEAP YEAR AND THE OTHER NUMBERS
+;           ARE FOR THE YEARS AFTER THE LEAP YEAR.  THEREFORE, 4 IS LEAP YEAR+1,
+;           2 IS LEAP YEAR+2, 1 IS LEAP YEAR+3.
+;
+CVTLPYR     MOVE.B     LYREG-1(A3),D0            ;LEAP YEAR REG. = 13(INDEX=12)
+            MOVEQ      #3,D1                     ;D0 IS PARAMETER (RANGE 0-3)
+            SUB.B      D0,D1                     ;CALCULATE WHICH BIT TO SET
+            CLR.L      D0                        ;BIT# := 3-PARAMETER
+            BSET       D1,D0                     ;D0 IS LEAP YEAR VALUE
+            MOVE.B     D0,LYREG-1(A3)            ;PUT IN REGISTER ARRAY
+            RTS

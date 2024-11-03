@@ -1,0 +1,200 @@
+Unit Mouse;
+
+{-------------------------------------------------------------------------}
+{ LogiMouse R-5 interface unit                                            }
+{                                                                         }
+{ Assumed: Serial port 1 set t0 9600 baud, odd parity, no protocol, 8 data}
+{          bits.                                                          }
+{                                                                         }
+{ Mouse Data format:    7    6    5    4    3    2    1    0    | Bit #   }
+{                                                                         }
+{             Byte 1    1    0    0    SX   SY   LB   MB   RB             }
+{             Byte 2    0    X6   X5   X4   X3   X2   X1   X0             }
+{             Byte 3    0    Y6   Y5   Y4   Y3   Y2   Y1   Y0             }
+{                                                                         }
+{ SX = 1 if X increment in byte #2 is positive, 0 if negative             }
+{ SY = 1 if Y increment in byte #3 is positive, 0 if negative             }
+{ LB,MB,RB = 1 if left, middle, or right button is down, 0 if up          }
+{                                                                         }
+{ The mouse does not generate a report until it moves or a button is      }
+{ pressed or released. Note that pressing and releasing a button gener-   }
+{ ates TWO reports!                                                       }
+{                                                                         }
+{ InitMouse - Clears datacomm buffer (unit 31), sets mouse data format.   }
+{ SetScale  - Sets scaling factor for X and Y. 1 is 200 points/inch.      }
+{ MouseBusy - TRUE if there's some data in the datacomm buffer.           }
+{ MouseData - Returns current mouse position, status of buttons.          }
+{             Mouse X and Y values range as integers, -32768 to 32767.    }
+{ SetMouse  - Sets current mouse position.                                }
+{ MouseMode - Sets text or graphics mode for mouse X and Y data. In       }
+{             text mode, the mouse position is returned in character cell }
+{             units that can be passed directly to GOTOXY. In graphics    }
+{             mode (default), mouse position is returned in pixels.       }
+{-------------------------------------------------------------------------}
+
+INTERFACE
+
+Uses {$U /ccutil/cclib}
+  ccdefn,
+  ccwndio;
+
+Type
+  MMode = (Txt,Grf);
+
+Procedure InitMouse;
+{ Clear datacomm buffer, init mouse and set default MM series data format }
+
+Procedure SetScale(ScaleX,ScaleY:Integer);
+{ Sets scaling factor for X and Y counters }
+
+Procedure MouseMode(MD : MMode);
+
+Function MouseBusy : Boolean;
+{ TRUE if mouse has data waiting for us }
+
+Procedure MouseData(Var Valid, LB,MB,RB : Boolean; Var MX,MY : Integer);
+{ Read mouse data. Left, right, and middle buttons return as Booleans;
+  current mouse position as integers }
+
+Procedure SetMouse(MX,MY : Integer);
+{ Set mouse to known position }
+
+
+IMPLEMENTATION
+
+Const
+  MousePort = 31;
+
+Var
+  CellHt,
+  CellWd,
+  XScale,
+  YScale,
+  MouseX,
+  MouseY : Integer;
+  LeftButton,
+  MiddleButton,
+  RightButton : Boolean;
+  Mode : MMode;
+
+Function BitTest(Data,BitNum : Integer):Boolean; EXTERNAL;
+Function pOScurWND : pWndRcd;                    EXTERNAL;
+
+Procedure InitMouse;
+
+Var
+  MouseCommand : Packed Array[0..1] of Char;
+  CSPtr        : pCharSet;
+  CurWnd       : pWndRcd;
+
+Begin
+  MouseX := 0;
+  MouseY := 0;
+  XScale := 1;
+  YScale := 1;
+  Mode := Grf;
+  CurWnd := pOScurWND;
+  CSPtr := curWND^.CharPt;
+  CellHt := CSPtr^.lpch;                       { Char cell height }
+  CellWd := CSPtr^.bpch;                       { Char cell width }
+  UnitClear(MousePort);
+  MouseCommand[0] := ' ';
+  UnitWrite(MousePort,MouseCommand,1);
+  MouseCommand[0] := 'S';
+  UnitWrite(MousePort,MouseCommand,1)
+End;
+
+
+Function MouseBusy;
+
+Begin
+  MouseBusy := UnitBusy(MousePort)
+End;
+
+
+Procedure MouseData;
+
+Const
+  SXMask = 239;
+  SYMask = 247;
+
+
+Var
+  XPlus,                       { TRUE if X disp. is positive }
+  YPlus : Boolean;             { TRUE if Y disp. is positive }
+  Raskin,
+  Counter : Integer;           { Retry counter }
+
+
+  Procedure GetByte(Var Byt: Integer);
+
+  Var
+    MData : Packed Array[0..1] Of Char;
+
+  Begin
+    Repeat Until UnitBusy(MousePort);
+    UnitRead(MousePort,MData,1);
+    Byt := Ord(MData[0])
+  End;
+
+
+Begin                  { MouseData }
+  Valid := True;
+  Counter := 0;
+  Repeat
+    GetByte(Raskin);
+    Counter := Counter + 1
+  Until (Raskin > 127) Or (Counter > 10);
+  If Counter > 10 Then Begin
+    Valid := False;
+    Exit(MouseData)
+    End
+  Else Begin
+    XPlus := BitTest(Raskin,4);
+    YPlus := BitTest(Raskin,3);
+    LB := BitTest(Raskin,2);
+    MB := BitTest(Raskin,1);
+    RB := BitTest(Raskin,0);
+    GetByte(Raskin);           { Get X displacement }
+    If XPlus Then MouseX := MouseX + Raskin Else
+                  MouseX := MouseX - Raskin;
+    GetByte(Raskin);
+    If Mode = Txt Then YPlus := Not(YPlus);
+    If YPlus Then MouseY := MouseY + Raskin Else
+                  MouseY := MouseY - Raskin;
+    MX := MouseX DIV XScale;
+    MY := MouseY DIV YScale;
+    If Mode = Txt Then Begin       { Text mode }
+      MX := MX DIV CellWd;
+      MY := MY DIV CellHt
+      End
+    End
+End;
+
+
+Procedure SetMouse;
+
+Begin
+  MouseX := MX * XScale;
+  MouseY := MY * YScale
+End;
+
+
+Procedure SetScale;
+
+Begin
+  XScale := ScaleX;
+  YScale := ScaleY
+End;
+
+
+Procedure MouseMode;
+
+Begin
+  Mode := MD
+End;
+
+End.
+
+
+

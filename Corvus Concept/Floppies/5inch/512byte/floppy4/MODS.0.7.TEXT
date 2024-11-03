@@ -1,0 +1,41 @@
+File: 07.MODS.TEXT
+Date: 07-Jun-83
+
+
+Corvus Concept Boot PROM Modifications -- Version 0.7
+
+
+Removed Apple 5" floppy disk driver.
+
+Removed Apple 5" floppy disk boot.
+
+All address equates moved to one file (CC.PROM.EQ.TEXT).
+
+Added Corvus 8" DSDD floppy disk driver.
+
+Added Corvus 8" DSDD floppy disk boot.
+
+Added Corvus 5" DSDD floppy disk driver.
+
+Added Corvus 5" DSDD floppy disk boot.
+
+Keyboard buffer overflow problem fixed.
+
+Turn off motor of SSSD floppy disk drive during system
+initialization.
+
+Local disk driver waits 50% longer for disk to respond during
+boot processing.
+
+Local disk driver modifications for block numbers over 65k.
+
+Omninet disk driver modifications for multiple disk server
+environment.
+
+Omninet disk driver modifications for block numbers over 65k.
+
+If both boot switches are on (floppy boot setting) and the debug
+PROMs are installed, control is given to the debug PROMs without
+user intervention.  It is possible to boot to the debug PROMs
+without a keyboard, display or dynamic RAM.
+

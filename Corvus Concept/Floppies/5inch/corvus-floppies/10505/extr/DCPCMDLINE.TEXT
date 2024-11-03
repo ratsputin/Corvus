@@ -1,0 +1,123 @@
+Command line parameters for the Set DataCom and Printer program
+
+DATE : 20-January-1982   kb
+
+
+Command line parameter form :
+
+       KEYWORD=PARAMETER
+
+       1) No blanks are permitted within a parameter.
+
+       2) Parameters and keywords can be abbreviated to their shortest
+          unique string.
+
+KEYWORDS       PARAMETERS                              COMMENT
+--------       ----------                              -------
+
+1) UNIT        PRINTER, DC1, DC2                       PRINTER can be
+                                                       abbreviated to 1 letter
+
+2) BAUD        300, 600, 1200, 2400, 4800              can drop all zero (0)
+               9600, 19200                             digits
+
+3) PARITY      DISABLED, EVEN, ODD, MARK, SPACE        only need first letter
+
+4) HANDSHAKE   LINE/CTS/NORMAL, LINE/CTS/INVERTED,     Line parameters MUST have
+               LINE/DSR/NORMAL, LINE/DSR/INVERTED,     slash (/) between names.
+               LINE/DCD/NORMAL, LINE/DCD/INVERTED,     Inverted and Normal need
+               XONXOFF, ENQACK, ETXACK                 only first letters.
+
+5) DATACOM {ONLY FOR PRINTER}                          only need first letter
+               1, 2
+
+6) CHARSIZE    7, 8                                    Can be abbreviated to CH.
+
+7) ALTCHARTABLE <file name>                            Must be the complete file
+                                                       name.  Can be abbreviated
+                                                       to AL.
+
+8) ACTIONTABLE  <file name>                            Must be the complete file
+                                                       name.  Can be abbreviated
+                                                       to AC.
+
+9) CPI         10, 12                                  Can be abbreviated to CP.
+                                                       Only used after UNIT set
+                                                       to Printer.
+
+10) LPI        6, 8                                    Can be abbreviated to L.
+                                                       Only used after UNIT set
+                                                       to Printer.
+
+11) AUTOLINEFD ON, OFF                                 Sets auto line feed on or
+                                                       off.  Can be abbreviated
+                                                       to AU.
+.PG
+DEFAULTS:
+
+     1) DataCom 1
+
+               a) BAUD        9600
+               b) PARITY      DISABLED
+               c) HANDSHAKE   XONXOFF
+               d) CHARSIZE    8
+               e) AUTOLINEFD  ON
+
+     2) DataCom 2  without the Printer
+        (configured for the Epson printer)
+
+               a) BAUD        4800
+               b) PARITY      DISABLED
+               c) HANDSHAKE   LINE/DSR/NORMAL
+               d) CHARSIZE    8
+               e) AUTOLINEFD  ON
+
+     3) Printer  (configured for the NEC 7700 Spinwriter)
+
+               a) BAUD        1200
+               b) PARITY      SPACE
+               c) HANDSHAKE   XONXOFF
+               d) CHARSIZE    7
+               e) DATACOM     2
+               g) AUTOLINEFD  ON
+               h) CPI         10
+               i) LPI         6
+
+
+Requirements :
+
+       1) The UNIT parameter must be specified before any other parameters.
+
+       2) More than one UNIT may be configured on a command line.  It is
+          necessary only to change the UNIT parameter.
+.PG
+EXAMPLE OF COMMAND LINES
+
+       CC.SETDCP UNIT=DC1 BAUD=1200 PARITY=ODD HANDSHAKE=ENQACK
+
+               Configure DataCom 1 to 1200 baud with odd parity and
+               use the character handshake protocol Enq/Ack.
+
+
+       CC.SETDCP U=P D=1 B=24 P=S H=X CH=7
+
+               Configure the Printer to use DataCom 1 with the
+               Xon/Xoff character handshake protocol.  DataCom 1
+               is configured to 2400 baud, Space transmit and ignore
+               receive parity, and a character size of 7.
+
+
+       cc.setdcp unit=dc1 baud=1200 unit=dc2 h=xonxoff
+
+               Lower case is ok.  Configure DataCom 1 to 1200 baud
+               and DataCom 2 to use the Xon/Xoff character handshake
+               protocol.
+
+       cc.setdcp unit=printer altchartable=/myvol/alttable.data
+
+               The unit parameter must be specified as printer before either
+               the Alternate Character translation table or the Action table
+               are loaded.  This example loads the Alternate table file named
+               alttable.data from volume myvol.  It verifies the correctness of
+               the table before it attaches it to the driver.
+

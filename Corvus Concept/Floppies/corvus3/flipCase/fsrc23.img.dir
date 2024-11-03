@@ -1,0 +1,20 @@
+
+Directory of UCSD disk image file 'fsrc23.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FSRC23 has 12 files,  0 to 6 (6), eov 500, size 12, free 12
+
+ 1: P.C2UTIL2.TEXT  Text 21-Feb-83    6-  42(  36), 18432+512= 18944 bytes
+ 2: P.N.C2U2.TEXT   Text  4-Mar-83   42-  76(  34), 17408+512= 17920 bytes
+ 3: P.N.TBLRTN.TEXT Text  3-Mar-83   76- 156(  80), 40960+512= 41472 bytes
+ 4: OLD.NIUTIL.TEXT Text  4-Nov-82  156- 204(  48), 24576+512= 25088 bytes
+ 5: P.SEMA4.TEXT    Text 17-Jan-83  204- 218(  14),  7168+512=  7680 bytes
+ 6: OLD.DRVIO.TEXT  Text 23-Sep-82  218- 270(  52), 26624+512= 27136 bytes
+ 7: CVTNET.TEXT     Text 24-Jan-83  270- 306(  36), 18432+512= 18944 bytes
+ 8: NASTUFF.TEXT    Text 24-Jan-83  306- 332(  26), 13312+512= 13824 bytes
+ 9: CCDATES.TEXT    Text 27-Oct-82  332- 338(   6),  3072+512=  3584 bytes
+10: P.DRVIO.TEXT    Text 22-Mar-83  338- 400(  62), 31744+512= 32256 bytes
+11: P.CVTUTLS.TEXT  Text 21-Feb-83  400- 454(  54), 27648+512= 28160 bytes
+12: P.DEFN.TEXT     Text  4-Apr-83  454- 488(  34), 17408+512= 17920 bytes

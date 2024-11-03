@@ -1,0 +1,418 @@
+{$S WKSP 3}
+function WkSpPost;
+var cs: integer;
+begin
+  if debug then pcall( 8 );
+  cs := cursample;
+  cursample := 23;
+  WkSpErr := 0;
+  if VPost then begin
+    OldFreeBlk := V[FreeBlk];
+  end else err(14);
+  WkSpPost := WkSpErr=0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{$S WKSP}
+{
+.PG
+}
+function BlkAlloc( var NewBlk: DskBlk ): boolean;
+var Fnd: boolean;
+    cs: integer;
+
+  procedure GetBlk;
+  var FreeMap : MapTyp;
+  begin
+    if debug then pcall( 10 );
+    NewBlk := 0;
+    FreeMap := OldFreeBlk.Map * V[FreeBlk].Map;
+    while (NewBlk<OldFreeBlk.Bks) and not Fnd do
+      if NewBlk in FreeMap then begin
+        Fnd := true;
+      end else
+        NewBlk := NewBlk + 1;
+    if debug then pexit;
+  end;
+begin
+  if debug then pcall( 9 );
+  cs := cursample;
+  cursample := 24;
+  WkSpErr := 0;
+  Fnd := false;
+  GetBlk;
+  if not Fnd then begin
+    if WkSpPost then GetBlk;
+  end;
+  if Fnd then begin
+    V[FreeBlk].Map := V[FreeBlk].Map - [NewBlk];
+  end else err(1);
+  BlkAlloc := WkSpErr=0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function UseFile( Fil: FilId ): boolean;
+var cs: integer;
+begin
+  if debug then pcall( 11 );
+  cs := cursample;
+  cursample := 25;
+  WkSpErr := 0;
+  if Fil.Loc in V[FilBlk].Map then begin
+    if CurFil.Loc<>Fil.Loc then begin
+      if VUnLock( PriBlk ) then begin
+        if VLock( PriBlk, Fil.Loc, T, T ) then begin
+          VInfo[PriBlk].Drty := true;
+          CurFil := Fil;
+        end;
+      end;
+    end;
+    if WkSpErr=0 then begin
+      if V[PriBlk].AltNdx=0 then err(9);
+    end;
+  end else err(2);
+  UseFile := WkSpErr=0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+procedure ReleaseBlk( var B: InfoTyp );
+var cs: integer;
+begin
+  if debug then pcall(12);
+  cs := cursample;
+  cursample := 26;
+  with B do begin
+    if Dup then
+      Dup := false
+    else if Adr<>0 then begin
+      V[FreeBlk].Map := V[FreeBlk].Map + [Adr];
+      if VFree( Adr ) then begin end;
+    end;
+    Adr := 0;
+  end;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function BlkInsert( Fil: FilId; Blk: LogBlk ): boolean;
+var i: DskBlk;
+    j: integer;
+     cs: integer;
+begin
+  if debug then pcall(13);
+  cs := cursample;
+  cursample := 27;
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    if Blk<=NumBlks then begin
+      if NumBlks<MaxLogBlk then begin
+        if BlkAlloc( i ) then begin
+          NumBlks := NumBlks + 1;
+          j := (MaxLogBlk-Blk)*sizeof(InfoTyp);
+          if j>0 then moveright( BlkInfo[Blk], BlkInfo[Blk+1], j );
+          with BlkInfo[ Blk ] do begin
+            Dup := false;
+            Adr := i;
+          end;
+        end
+      end else err(8)
+    end else err(5)
+  end;
+  BlkInsert := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function BlkDelete( Fil: FilId; Blk: LogBlk ): boolean;
+var i: integer;
+    cs: integer;
+begin
+  if debug then pcall( 14 );
+  cs := cursample;
+  cursample := 28;
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    if (NumBlks>0) and (Blk<NumBlks) then begin
+      ReleaseBlk( BlkInfo[Blk] );
+      i := (MaxLogBlk-Blk) * sizeof(InfoTyp);
+      if i>0 then moveleft( BlkInfo[Blk+1], BlkInfo[Blk], i );
+      NumBlks := NumBlks - 1;
+    end else err(5)
+  end;
+  BlkDelete := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+(************* FILE MANAGEMENT ROUTINES *************)
+{$S WKSP3}
+{
+.PG
+}
+function FilOpen;
+var i,j: DskBlk;
+begin
+  if debug then pcall(15);
+  WkSpErr := 0;
+  if not UseFile( Fil ) then begin
+    if WkSpErr=9 then begin (* file not open *)
+      WkSpErr := 0;
+      with V[PriBlk] do begin
+        if BlkAlloc( i ) then begin
+          for j := 0 to NumBlks do
+            BlkInfo[ j ].Dup := true;
+          AltNdx := i;
+          if VLock( SecBlk, I, T, F ) then begin
+            V[SecBlk] := V[PriBlk];
+            VInfo[SecBlk].Drty := true;
+            if VUnLock( SecBlk ) then begin end;
+          end else err(17);
+        end;
+      end;
+    end;
+  end else err(19);
+  FilOpen := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function FilCreate;
+var i: LogBlk;
+begin
+  if debug then pcall( 16 );
+  WkSpErr := 0;
+  if BlkAlloc( Fil.Loc ) then begin
+    if VUnLock( PriBlk ) then begin
+      V[FilBlk].Map := V[FilBlk].Map + [Fil.Loc];
+      CurFil := Fil;
+      if VLock( PriBlk, CurFil.Loc, T, F ) then with V[PriBlk] do begin
+        VInfo[PriBlk].Drty := true;
+        NumBlks := 0;
+        AltNdx := 0;
+        CurBlk := 0;
+        CurByt := 1;
+        LstRec := 0;
+        CurRec := 1;
+        for I := 0 to MaxLogBlk do
+          BlkInfo[I].Adr := 0;
+      end;
+    end;
+  end;
+  FilCreate := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+procedure SyncDupBits;
+var i,j:integer;
+begin
+  if debug then pcall(17);
+  for J := 0 to V[SecBlk].NumBlks-1 do begin
+    V[SecBlk].BlkInfo[J].Dup := false;
+    for I := 0 to V[PriBlk].NumBlks-1 do begin
+      if V[PriBlk].BlkInfo[I].Adr =
+         V[SecBlk].BlkInfo[J].Adr then
+        V[SecBlk].BlkInfo[J].Dup := true;
+    end;
+  end;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function FilUndo;
+var Tmp: WkSpBlk;
+begin
+  if debug then pcall(18);
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    if VLock( SecBlk, AltNdx, T, T ) then begin
+      SyncDupBits;
+      Tmp := V[PriBlk];
+      V[PriBlk] := V[SecBlk];
+      V[SecBlk] := Tmp;
+      VInfo[SecBlk].Drty := true;
+      if VUnLock( SecBlk ) then begin
+        if WkSpPost then begin end;
+      end;
+    end;
+  end;
+  FilUndo := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+procedure FreeSecBlk;
+var i: integer;
+begin
+  if debug then pcall(19);
+  if V[PriBlk].AltNdx<>0 then begin
+    if VLock( SecBlk, V[PriBlk].AltNdx, T, T ) then begin
+      SyncDupBits;
+      with V[SecBlk] do begin
+       for i := 0 to NumBlks-1 do
+         ReleaseBlk( BlkInfo[I] );
+      end;
+      VInfo[SecBlk].Drty := true;
+      if VUnLock( SecBlk ) then begin end;
+    end else err(4);
+  end;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function FilClose;
+var i:integer;
+begin
+  if debug then pcall(20);
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    FreeSecBlk;
+    if VFree( AltNdx ) then begin
+      V[FreeBlk].Map := V[FreeBlk].Map + [AltNdx];
+      AltNdx := 0;
+      for i := 0 to NumBlks-1 do
+        BlkInfo[i].Dup := true;
+    end;
+  end;
+  FilClose := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{$S WKSP}
+{
+.PG
+}
+function FilClear;
+var i:integer;
+begin
+  if debug then pcall(21);
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    for i := 0 to NumBlks-1 do
+      ReleaseBlk( BlkInfo[I] );
+    NumBlks := 0;
+    CurBlk := 0;
+    CurByt := 1;
+    LstRec := 0;
+    CurRec := 1;
+  end;
+  FilClear := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{$S WKSP3}
+{
+.PG
+}
+function FilDelete;
+begin
+  if debug then pcall(22);
+  WkSpErr := 0;
+  if FilClear( Fil ) then with V[PriBlk] do begin
+    FreeSecBlk;
+    if VFree( AltNdx ) then begin
+      V[FreeBlk].Map := V[FreeBlk].Map + [AltNdx];
+      if VFree( Fil.Loc ) then begin
+        V[FilBlk].Map := V[FilBlk].Map - [Fil.Loc];
+        V[FreeBlk].Map := V[FreeBlk].Map + [Fil.Loc];
+        CurFil.Loc := 0;
+      end;
+    end;
+  end;
+  FilDelete := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function FilChkpt;
+var i: integer;
+begin
+  if debug then pcall(23);
+  WkSpErr := 0;
+  If UseFile( Fil ) then with V[PriBlk] do begin
+    FreeSecBlk;
+    for i := 0 to NumBlks-1 do
+      BlkInfo[i].Dup := true;
+    if VLock( SecBlk, AltNdx, T, F ) then begin
+      V[SecBlk] := V[PriBlk];
+      VInfo[SecBlk].Drty := true;
+      if VUnLock( SecBlk ) then begin
+        if WkSpPost then begin end;
+      end;
+    end;
+  end;
+  FilChkpt := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{$S WKSP}
+{
+.PG
+}
+function FilNumRecs;
+var cs: integer;
+begin
+  if debug then pcall(24);
+  cs := cursample;
+  cursample := 29;
+  WkSpErr := 0;
+  if UseFile( Fil ) then Val := V[PriBlk].LstRec;
+  FilNumRecs := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function FilNumBlks;
+begin
+  if debug then pcall(25);
+  WkSpErr := 0;
+  if UseFile( Fil ) then Val := V[PriBlk].NumBlks;
+  FilNumBlks := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function FilCurRec;
+var cs: integer;
+begin
+  if debug then pcall(26);
+  cs := cursample;
+  cursample := 30;
+  WkSpErr := 0;
+  if UseFile( Fil ) then Val := V[PriBlk].CurRec;
+  FilCurRec := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;

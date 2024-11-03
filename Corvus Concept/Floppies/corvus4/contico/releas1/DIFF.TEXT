@@ -1,0 +1,109 @@
+Output of NETCHECK program     7-Jan-82
+Input file is crcs.text
+
+
+Checking volume CF17
+File B.MR.VARS.TEXT is missing from volume CF17
+
+Error on file BOOT.CODE of volume CF17
+Current information is: 
+   BOOT.CODE                  3      7-Dec-81    1356   Codefile   132
+
+Error on file BOOT.TEXT of volume CF17
+Current information is: 
+   BOOT.TEXT                 18      7-Dec-81    1338   Textfile   242
+
+File CF17.2B.DATA is missing from volume CF17
+
+File MR.REST.TEXT is missing from volume CF17
+
+Error on file PSCLS.OBJ of volume CF17
+Current information is: 
+   PSCLS.OBJ                  2      7-Dec-81    1697   Datafile   183
+
+Error on file PSMAIN.CODE of volume CF17
+Current information is: 
+   PSMAIN.CODE                4      7-Dec-81    1685   Codefile   133
+
+Error on file PSMAIN.OBJ of volume CF17
+Current information is: 
+   PSMAIN.OBJ                 3      7-Dec-81    1689   Datafile   253
+
+Error on file PSMAIN.TEXT of volume CF17
+Current information is: 
+   PSMAIN.TEXT               30      7-Dec-81    1308   Textfile     5
+
+Error on file PSOPEN.CODE of volume CF17
+Current information is: 
+   PSOPEN.CODE                3      5-Dec-81    1808   Codefile    55
+
+Error on file PSOPEN.OBJ of volume CF17
+Current information is: 
+   PSOPEN.OBJ                 2      7-Dec-81    1695   Datafile    80
+
+Error on file PSOPEN.TEXT of volume CF17
+Current information is: 
+   PSOPEN.TEXT               28      5-Dec-81    1526   Textfile    81
+
+File PSUTIL.OBJ is missing from volume CF17
+
+
+Checking volume A3CODE
+File CORIII1L.TEXT is missing from volume A3CODE
+
+File CORIII2L.TEXT is missing from volume A3CODE
+
+File CORIII2LA.TEXT is missing from volume A3CODE
+
+File CORIII3L.TEXT is missing from volume A3CODE
+
+Error on file CORVUS.DRIVER of volume A3CODE
+Current information is: 
+   CORVUS.DRIVER              7     11-Jan-82     208   Codefile   172
+
+Error on file DIAGNOSTIC.CODE of volume A3CODE
+Current information is: 
+   DIAGNOSTIC.CODE           45     16-Dec-81     920   Codefile    62
+
+File FORMAT.DRIVER is missing from volume A3CODE
+
+Error on file LOGON.DRIVER of volume A3CODE
+Current information is: 
+   LOGON.DRIVER              12     11-Jan-82     215   Datafile   180
+
+
+Checking volume A3DEV
+Error on file CORVUS.A.TEXT of volume A3DEV
+Current information is: 
+   CORVUS.A.TEXT             32     11-Jan-82     984   Textfile   230
+
+Error on file CORVUS.B.TEXT of volume A3DEV
+Current information is: 
+   CORVUS.B.TEXT             46     11-Jan-82     898   Textfile   182
+
+File CORVUS.C.TEXT is missing from volume A3DEV
+
+Error on file CORVUS.D.TEXT of volume A3DEV
+Current information is: 
+   CORVUS.D.TEXT             20     11-Jan-82     878   Textfile   136
+
+Error on file CORVUS.TEXT of volume A3DEV
+Current information is: 
+   CORVUS.TEXT                4     16-Dec-81     814   Textfile   120
+
+Error on file DIAGNOSTIC.TEXT of volume A3DEV
+Current information is: 
+   DIAGNOSTIC.TEXT           24     16-Dec-81      18   Textfile    60
+
+File XCORVUS.A.TEXT is missing from volume A3DEV
+
+File XCORVUS.B.TEXT is missing from volume A3DEV
+
+File XCORVUS.C.TEXT is missing from volume A3DEV
+
+File XCORVUS.TEXT is missing from volume A3DEV
+
+
+Checking volume A3SOS
+
+Checking volume CPMAP1

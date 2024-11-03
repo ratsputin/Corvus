@@ -1,0 +1,122 @@
+
+
+
+
+
+CP/M Utilities                                      23-Jun-82
+
+This PCO covers CP/M Utilities for the Dec Robin.
+
+              ( 5 1/4" soft-sectored media  2035-1048 )
+
+This is a new release.  It includes support for pipes and spooling.
+
+This release includes firmware version 17.3.
+
+DR Utilities is the same as S-100 Utilities except for the
+CLINK files.
+
+CLINK2.ASM is set up as follows:
+
+  - link below
+  - Z80B
+  - 10 MB drive
+  - 2 pseudo drives
+  - pipes area starting at block 64
+  - block size of 8k
+  - memory size of 62k
+
+DELTA from a standard CP/M is 0.
+$P
+
+
+The floppy labels are listed below.
+
+
+5 1/4" floppies
+---------------
+
+  DR Utilities-vol 1 of 2               DR Source Utilities-vol 1 of 1
+  for CP/M 2.2                          for CP/M 2.2
+  Release date:  13-Apr-82              Release date:
+
+  DR Utilities-vol 2 of 2
+  for CP/M 2.2
+  Release date:  13-Apr-82
+
+To copy floppies:
+----------------
+
+  DR floppies are copied on the VT180 using the dual
+  floppy drives.
+
+  Boot from the VT180 CP/M boot disk.
+
+  Use DDFMT to format new floppies.
+
+  Use DDCOPY to copy.
+
+  Use CRCK4 to verify.
+
+
+$P
+Files on each floppy are shown below:
+
+ DR Utilities - vol 1         Version             CRC
+  VT18  --.1                                     00 00  0k
+  INDEX   .DOC              4 /13/82             3C 4A  5k
+  CERROR  .DOC               -   -               34 81  2k
+  PUTGET  .COM               1.4 S/TT            76 7F  2k
+  CLINK2FV.COM               -   -               94 EE  2k
+  CLINK2TN.COM               -   -               4F 11  2k
+  CLINK2TW.COM               -   -               C3 A0  2k
+  CLINK7FV.COM               -   -               48 36  2k
+  CLINK7TN.COM               -   -               EF 6C  2k
+  CLINK7TW.COM               -   -               20 C9  2k
+  CDIAGNOS.COM               2.3 S/TT            DE BC  9k
+  CDIAGNOS.DOC               -   -               6C BE  6k
+  CORVB173.CLR               17.3                A1 21 31k
+  MIRROR  .COM               1.32S/TT            D0 74  6k
+  SEMA4   .COM               1.3 S/TT            3A 16  3k
+  PMGR    .COM               1.1                 52 89 17k
+  SPOOL   .COM               2.0                 AA 8C 31k
+  DRIVEL  .COM               1.0                 22 D7 15k
+
+  Bytes remaining = 30k                      sum=FE 65
+
+DR Utilities - Vol 2
+  VT18  --.2                                     00 00  0k
+  CLINK2  .ASM               1.09S/TT            EE 61 31k
+  SEMA4   .ASM               1.3 S/TT            67 04 16k
+  SPOOLGEN.SUB               -   -               4A FF  1k
+  SPOOL   .SRC               -   -               74 75  1k
+  SPOOL   .DEF               -   -               40 8E  3k
+  SPOOLC  .PAS               -   -               D6 44  4k
+  SPOOL   .PAS               -   -               17 01 20k
+  SPOOLM  .PAS               -   -               17 51  2k
+
+  PIPEGEN .SUB               -   -               39 9F  1k
+  PIPES   .SRC               -   -               81 14  1k
+  PIPED   .PAS               -   -               FD 0D  4k
+  PIPEC   .PAS               -   -               C8 C0  4k
+  PIPES   .PAS               -   -               00 73  7k
+
+  CPMIO   .MAC               -   -               F6 43  9k
+  CLOADR  .ASM               1.4 S/TT            89 B7  4k
+  CBOOT   .ASM               1.3 S/TT            15 A4  3k
+  BIOSC   .ASM               1.22S/TT            B3 CF 20k
+
+  Bytes remaining = 38k                      sum=24 C8
+
+
+DR Source Utilities - Vol 1 of 1
+VT18/SRC1                                        00 00
+  MIRROR  .ASM               1.32                48 CA
+  CDIAGNOS.ASM               2.3                 53 8A
+  PUTGET  .ASM               1.4                 BA 36
+
+  Bytes remaining = 48k                      sum=56 8A
+
+
+
+

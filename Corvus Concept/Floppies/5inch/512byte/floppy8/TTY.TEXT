@@ -1,0 +1,38 @@
+{PASCAL PROGRAM TO MAKE CONCEPT LOOK LIKE A TERMINAL :
+        IT READS FROM THE KEYBOARD (USER INPUT)
+                AND WRITES TO THE DATACOM2 PORT
+        IT READS FROM THE DATACOM2 PORT
+                AND WRITES TO THE CONSOLE
+}
+PROGRAM TTY;
+
+
+CONST
+
+        KBRD  =   35;   {KEYBOARD UNIT }
+        DCOM  =   32;   {DATACOMM UNIT }
+        CONS  =   1;    {CONSOLE  CRT }
+VAR
+        CTRLC :CHAR;  { ETX }
+        CH:PACKED ARRAY[0..1] OF CHAR;        {CHARACTER THAT IS EITHER READ OR WRIT}
+        FREEZE:BOOLEAN; {IF TRUE, THEN USER HAS HIT ^S ELSE FALSE}
+
+      BEGIN
+        CTRLC := CHR(3);
+
+        REPEAT
+                IF(UNITBUSY(DCOM) AND (NOT FREEZE))
+                        THEN BEGIN
+                                UNITREAD(DCOM,CH,1);     {READ A CHAR}
+                                UNITWRITE(CONS,CH,1);      {WRITE TO SCREEN}
+                        END;
+
+                IF UNITBUSY(KBRD)
+                        THEN BEGIN
+                                UNITREAD(KBRD,CH,1);
+                                UNITWRITE(CONS,CH,1);      {WRITE TO SCREEN AS AN ECHO}
+                                UNITWRITE(DCOM,CH,1);
+                        END;
+        UNTIL  CH[0] = CTRLC;
+END.
+

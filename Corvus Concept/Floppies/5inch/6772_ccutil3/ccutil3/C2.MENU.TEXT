@@ -1,0 +1,41 @@
+01 10bD - Drive Management                  00DrvMgmt  02x                 -          /
+02 10bU - User/Device Manager               00UsrMgr   00USRMGR            Y          /
+02 20 V - Volume Manager                    01VolMgr   00VOLMGR            Y          /
+02 30 A - Access Manager                    02AccMgr   00ACCMGR            Y          /
+02 40bB - Boot Manager                      04BootMgr  00BOOTMGR           Y          /
+02 70bS - Select Drive                      05SelDrive 00x                 -          /
+02 80 L - List Drives                       07LstDrive 00x                 -          /
+02 90 E - Exit                              09Exit     01x                 -D         /
+
+01 20 B - Backup Utilities                  01Backup   03x                 -          /
+03 10bN - Network Mirror Server             00MirrSrvr 00MSMGR             -          /
+03 15bM - Mirror                            01Mirror   00MIRROR            YS         /
+03 20 A - Archival Storage                  02ArchStor 00MIRROR            YR         /
+03 30 R - Remote Backup                     03RmotBkup 00MBACKUP           -          /
+03 70bS - Select Drive                      05SelDrive 00x                 -          /
+03 80 L - List Drives                       07LstDrive 00x                 -          /
+03 90 E - Exit                              09Exit     01x                 -X         /
+
+01 30 M - Maintenance Utilities             02Maint    04x                 -          /
+04 10bD - Mass Storage Diagnostic           00StorDiag 00MDIAG             -          /
+04 15 O - Omninet Test                      01OmniTest 00OTEST             -          /
+04 20bP - Pipes Management                  02Pipes    00PARMGR            YP         /
+04 22 F - Semaphore Management              03Semaphor 00PARMGR            YS         /
+04 24 M - Multiplexer Management            04Mux      00PARMGR            YM         /
+04 50qX - Fixit                                        00FIXIT             -          /
+04 70bS - Select Drive                      05SelDrive 00x                 -          /
+04 80 L - List Drives                       07LstDrive 00x                 -          /
+04 90 E - Exit                              09Exit     01x                 -X         /
+
+01 50bU - Utility Server Manager            03UtilSrvr 06x                n-          /
+06 10bP - Printer Service                   00PrtrServ 00PSMGR             -          /
+06 20bT - Time Service                      02TimeServ 00TSMGR             -          /
+06 90bE - Exit                              09Exit     01x                 -X         /
+
+01 55 T - Transfer Manager                  04TranMgr  00XFRMGR            -          /
+01 60bI - Initialize Drive                  05InitDriv 00SYSGEN            -          /
+01 80 L - List Drives                       07LstDrive 00x                 -          /
+01 85 H - Help                              08Help     00x                 -          /
+01 90 E - Exit                              19Exit     00x                 -          /
+
+

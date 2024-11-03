@@ -1,0 +1,481 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                             File: LRDWR.TEXT                              *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               15-Nov-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+{ Does the work for %_ixlwr and %_ixlrd }
+
+procedure ixl(unitnum: longint);
+begin {ixl}
+errornumber := 0; InternalIO := FALSE;
+curunit := findunit(unitnum);
+if curunit = nil
+then error(30)
+else begin
+  if not curunit^.Seqen then error(94);
+  if curunit^.PastEndFile and (curunit <> consoleunit) then error(55);
+  if not curunit^.Formted then error(31);
+  end;
+end; {ixl}
+
+
+{ Initialize external write or print statement (sequential access) }
+
+procedure %_ixlwr{unitnum: longint};
+begin {%_ixlwr}
+Reading := FALSE; ixl(unitnum);
+{ Set certain format controls which do not need changing during list I/O }
+PrintOptionalPlus := TRUE; pval := 0; EdePresent := TRUE;
+{ Set up output buffer for record }
+recbufp := 1; lastwritten := 0; maxlastwritten := 0;
+putch(' '); NeedBlank := FALSE;
+end; {%_ixlwr}
+
+
+{ Terminate write or print statement }
+
+procedure %_tlwr{fiostat: plongint; errexit: pcodearray};
+begin {%_tlwr}
+if curunit <> nil then curunit^.lastop := WRITEOP;
+nextrec; termiostmt(fiostat,errexit);
+end; {%_tlwr}
+
+
+{ Initialize external read statement (sequential access) }
+
+procedure %_ixlrd{unitnum: longint};
+begin {%_ixlrd}
+Reading := TRUE; EofFlag := FALSE; ixl(unitnum); 
+if curunit <> nil 
+then 
+  if curunit^.Seqen then forceeofiflastwritten;
+nextrec;
+FirstItem := TRUE; itemcnt := 1; listch := ' '; { Harmless look ahead }
+end; {%_ixlrd}
+
+
+{ Terminate read statement }
+
+procedure %_tlrd{fiostat: plongint; errexit, endexit: pcodearray};
+begin {%_tlrd}
+if curunit <> nil
+then begin
+  if curunit^.Seqen and EofFlag then curunit^.PastEndFile := TRUE;
+  curunit^.lastop := READOP;
+  end;
+if EofFlag and (endexit[1] = nil) then error(-601);
+termiostmt(fiostat,errexit);
+if EofFlag and (endexit[1] <> nil) and (errornumber = 0)
+then begin
+  if fiostat <> nil then fiostat^ := -1;
+  endexit[0] := endexit[1];
+  end;
+end; {%_tlrd}
+
+
+(*****************************************************************************)
+(*                       List Directed Write                                 *)
+(*****************************************************************************)
+
+
+{ Sets up a field charcount wide to be written using list I/O.   }
+{ Needchars provides the blank separator if necessary and leaves }
+{ edw and NeedBlank in the state most often needed.              }
+
+procedure needchars(charcount: int2);
+begin {needchars}
+edw := charcount; { default }
+if NeedBlank then charcount := charcount + 3;
+if (recbufp + charcount) > 72 
+then begin nextrec; putch(' ') end
+else
+  if NeedBlank then putblanks(3);
+NeedBlank := TRUE; { default }
+end; {needchars}
+
+
+{ Write an integer }
+
+procedure %_wrli4{fint: int4};
+  var buf: packed array[1..10] of char; i, col, colcnt: integer;
+      Negative: Boolean;
+begin {%_wrli4}
+Negative := TRUE; { Unless otherwise discovered }
+if (fint < 0) and ((fint - 1) > 0)
+then begin buf := '2147483653'; col := 0; end
+else begin
+  if fint < 0 then fint := - fint else Negative := FALSE; 
+  col := 10; buf := '          ';
+  repeat
+    buf[col] := chr((fint mod 10) + ord('0'));
+    fint := fint div 10; col := col - 1;
+  until fint = 0;
+  end;
+if Negative then colcnt := 11 - col else colcnt := 10 - col;
+needchars(colcnt);
+if Negative then putch('-');
+for i := col + 1 to 10 do
+  putch(buf[I]);
+end; {%_wrli4}
+
+procedure %_wrli2{fint: int2};
+begin {%_wrli2}
+%_wrli4(fint);
+end; {%_wrli2}
+
+procedure %_wrli1{fint: int1};
+begin {%_wrli1}
+%_wrli4(fint);
+end; {%_wrli1}
+
+
+{ Write a real }
+
+procedure %_wrlr8{freal: real8};
+  var lreal: real4;
+begin {%_wrlr8}
+lreal := freal; lreal := abs(lreal); 
+if (1 <= lreal) and (lreal < 10)
+then begin needchars(17); edlet := 'F'; edd := 14; putreal8(freal); end
+else begin
+  pval := 1; needchars(22); edlet := 'E'; edd := 14; ede := 3;
+  putreal8(freal); pval := 0;
+  end;
+end; {%_wrlr8}
+
+procedure %_wrlr4{freal: real4};
+  var lreal: real4;
+begin {%_wrlr4}
+lreal := abs(freal); 
+if (1 <= lreal) and (lreal < 10)
+then begin needchars(9); edlet := 'F'; edd := 6; putreal4(freal); end
+else begin
+  pval := 1; needchars(13); edlet := 'E'; edd := 6; ede := 2;
+  putreal4(freal); pval := 0;
+  end;
+end; {%_wrlr4}
+
+
+{ Write a logical }
+
+procedure %_wrll4{flog: int4};
+begin {%_wrll4}
+needchars(1); if flog = 0 then putch('F') else putch('T');
+end; {%_wrll4}
+
+procedure %_wrll2{flog: int2};
+begin {%_wrll2}
+needchars(1); if flog = 0 then putch('F') else putch('T');
+end; {%_wrll2}
+
+procedure %_wrll1{flog: int1};
+begin {%_wrll1}
+needchars(1); if flog = 0 then putch('F') else putch('T');
+end; {%_wrll1}
+
+
+{ Write a complex }
+
+procedure %_wrlc8{fimag,freal: real4};
+begin {%_wrlc8}
+needchars(29); edw := 13; putch('('); 
+pval := 1; edlet := 'E'; edd := 6; ede := 2;
+putreal4(freal); putch(','); putreal4(fimag);
+putch(')'); pval := 0;
+end; {%_wrlc8}
+
+
+{ Write a character expression }
+
+procedure %_wrlch{fpac: ppac; paclen: integer};
+  var i: integer;
+begin {%_wrlch}
+for i := 1 to paclen do begin
+  if recbufp > 72 then begin nextrec; putch(' '); end;
+  putch(fpac^[i]);
+  end;
+NeedBlank := FALSE;
+end; {%_wrlch}
+
+
+(*****************************************************************************)
+(*                       List Directed Read                                  *)
+(*****************************************************************************)
+
+
+{ Read an integer }
+
+procedure %_rdli4{var fint: int4};
+begin {%_rdli4}
+if ListScan
+then
+  if itemtoken = INTITEM then fint := intval else error(101);
+end; {%_rdli4}
+
+procedure %_rdli2{var fint: int2};
+begin {%_rdli2}
+if ListScan
+then
+  if itemtoken = INTITEM then fint := intval else error(101);
+end; {%_rdli2}
+
+procedure %_rdli1{var fint: int1};
+begin {%_rdli1}
+if ListScan
+then
+  if itemtoken = INTITEM then fint := intval else error(101);
+end; {%_rdli1}
+
+
+{ Read a real }
+
+procedure %_rdlr8{var freal: real8};
+begin {%_rdlr8}
+if ListScan
+then
+  if itemtoken = INTITEM 
+  then freal := intval { Free float }
+  else
+    if itemtoken = REALITEM
+    then freal := realval 
+    else error(102);
+end; {%_rdlr8}
+
+procedure %_rdlr4{var freal: real4};
+begin {%_rdlr4}
+if ListScan
+then
+  if itemtoken = INTITEM 
+  then freal := intval
+  else
+    if itemtoken = REALITEM
+    then freal := realval
+    else error(102);
+end; {%_rdlr4}
+
+
+{ Read a logical }
+
+procedure %_rdll4{var flog: int4};
+begin {%_rdll4}
+if ListScan
+then
+  if itemtoken = LOGITEM then flog := intval else error(103);
+end; {%_rdll4}
+
+procedure %_rdll2{var flog: int2};
+begin {%_rdll2}
+if ListScan
+then
+  if itemtoken = LOGITEM then flog := intval else error(103);
+end; {%_rdll2}
+
+procedure %_rdll1{var flog: int1};
+begin {%_rdll1}
+if ListScan
+then
+  if itemtoken = LOGITEM then flog := intval else error(103);
+end; {%_rdll1}
+
+
+{ Read a complex }
+
+procedure %_rdlc8{var fcomplex: complex};
+begin {%_rdlc8}
+if ListScan
+then
+  if itemtoken = COMPLEXITEM then fcomplex := complexval else error(104);
+end; {%_rdlc8}
+
+
+{ Read a character variable }
+
+procedure %_rdlch{fpac: ppac; paclen: integer};
+  var i, chtomove: integer;
+begin {%_rdlch}
+if ListScan
+then 
+  if itemtoken = CHARITEM
+  then begin
+    if paclen <= charlen then chtomove := paclen else chtomove := charlen;
+    for i := 1 to chtomove do 
+      fpac^[i] := charval[i];
+    for i := chtomove + 1 to paclen do
+      fpac^[i] := ' ';
+    end
+  else error(105);
+end; {%_rdlch}
+
+
+(*****************************************************************************)
+(*                           Array List Directed Write                       *)
+(*****************************************************************************)
+
+
+procedure %_wali4{var fintarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_wali4}
+for ctr := 1 to count do
+  %_wrli4(fintarray[ctr]);
+end; {%_wali4}
+
+procedure %_wali2{var fintarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_wali2}
+for ctr := 1 to count do
+  %_wrli4(fintarray[ctr]);
+end; {%_wali2}
+
+procedure %_wali1{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wali1}
+for ctr := 1 to count do
+  %_wrli4(fintarray[ctr]);
+end; {%_wali1}
+
+procedure %_walr8{var frealarray: real8array; count: int4};
+  var ctr: longint;
+begin {%_walr8}
+for ctr := 1 to count do
+  %_wrlr8(frealarray[ctr]);
+end; {%_walr8}
+
+procedure %_walr4{var frealarray: real4array; count: int4};
+  var ctr: longint;
+begin {%_walr4}
+for ctr := 1 to count do
+  %_wrlr4(frealarray[ctr]);
+end; {%_walr4}
+
+procedure %_wall4{var flogarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_wall4}
+for ctr := 1 to count do
+  %_wrll4(flogarray[ctr]);
+end; {%_wall4}
+
+procedure %_wall2{var flogarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_wall2}
+for ctr := 1 to count do
+  %_wrll2(flogarray[ctr]);
+end; {%_wall2}
+
+procedure %_wall1{var flogarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wall1}
+for ctr := 1 to count do
+  %_wrll1(flogarray[ctr]);
+end; {%_wall1}
+
+procedure %_walc8{var fcomplexarray: complexarray; count: int4};
+  var ctr: longint;
+begin {%_walc8}
+for ctr := 1 to count do
+  %_wrlc8(fcomplexarray[ctr].imagpart,fcomplexarray[ctr].realpart);
+end; {%_walc8}
+
+procedure %_walch{fpac: pbyte; paclen: integer; count: int4};
+  var i: longint;
+begin {%_walch}
+for i := 1 to paclen * count do begin
+  if recbufp > 72 then begin nextrec; putch(' '); end;
+  putch(chr(fpac^));
+  fpac := pointer(ord(fpac) + 1);
+  end;
+NeedBlank := FALSE;
+end; {%_walch}
+
+
+(*****************************************************************************)
+(*                           Array List Directed Read                        *)
+(*****************************************************************************)
+
+
+procedure %_rali4{var fintarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_rali4}
+for ctr := 1 to count do
+  %_rdli4(fintarray[ctr]);
+end; {%_rali4}
+
+procedure %_rali2{var fintarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_rali2}
+for ctr := 1 to count do
+  %_rdli2(fintarray[ctr]);
+end; {%_rali2}
+
+procedure %_rali1{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rali1}
+for ctr := 1 to count do
+  %_rdli1(fintarray[ctr]);
+end; {%_rali1}
+
+procedure %_ralr8{var frealarray: real8array; count: int4};
+  var ctr: longint;
+begin {%_ralr8}
+for ctr := 1 to count do
+  %_rdlr8(frealarray[ctr]);
+end; {%_ralr8}
+
+procedure %_ralr4{var frealarray: real4array; count: int4};
+  var ctr: longint;
+begin {%_ralr4}
+for ctr := 1 to count do
+  %_rdlr4(frealarray[ctr]);
+end; {%_ralr4}
+
+procedure %_rall4{var flogarray: int4array; count: int4};
+  var ctr: longint;
+begin {%_rall4}
+for ctr := 1 to count do
+  %_rdll4(flogarray[ctr]);
+end; {%_rall4}
+
+procedure %_rall2{var flogarray: int2array; count: int4};
+  var ctr: longint;
+begin {%_rall2}
+for ctr := 1 to count do
+  %_rdll2(flogarray[ctr]);
+end; {%_rall2}
+
+procedure %_rall1{var flogarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rall1}
+for ctr := 1 to count do
+  %_rdll1(flogarray[ctr]);
+end; {%_rall1}
+
+procedure %_ralc8{var fcomplexarray: complexarray; count: int4};
+  var ctr: longint;
+begin {%_ralc8}
+for ctr := 1 to count do
+  %_rdlc8(fcomplexarray[ctr]);
+end; {%_ralc8}
+
+procedure %_ralch{fpac: pbyte; paclen: integer; count: int4};
+  var i,chtomove: integer; ctr: longint; p: ppac;
+begin {%_ralch}
+for ctr := 0 to count - 1 do
+  if ListScan
+  then 
+    if itemtoken = CHARITEM
+    then begin
+      p := pointer(ord(fpac) + ctr*paclen);
+      if paclen <= charlen then chtomove := paclen else chtomove := charlen;
+      for i := 1 to chtomove do 
+        p^[i] := charval[i];
+      for i := chtomove + 1 to paclen do
+        p^[i] := ' ';
+      end
+    else error(105);
+end; {%_ralch}
+

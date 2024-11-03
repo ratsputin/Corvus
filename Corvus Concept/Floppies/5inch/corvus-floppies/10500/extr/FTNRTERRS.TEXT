@@ -1,0 +1,127 @@
+-2 File: ftnrterrs.text
+-2 Date: 09-Mar-84
+-1 End of file found on a READ with no END= option
+600 FORMAT statement missing final ')'
+601 Sign not expected in input
+602 Sign not followed by digit in input
+603 Digit expected in input
+604 Missing N or Z after B in format
+605 Unexpected character in format
+606 Zero repetition factor in format not allowed
+607 Integer expected for w field in format
+608 Positive integer required for w field in format
+609 '.' expected in format
+610 Integer expected for d field in format
+611 Integer expected for e field in format
+612 Positive integer required for e field in format
+613 Positive integer required for w field in A format
+614 Hollerith field in format must not appear for reading
+615 Hollerith field in format requires repetition factor
+616 X field in format requires repetition factor
+617 P field in format requires repetition factor
+618 Integer appears before '+' or '-' in format
+619 Integer expected after '+' or '-' in format
+620 P format expected after signed repetition factor in format
+621 Maximum nesting level (10 levels) for formats exceeded
+622 ')' has repetition factor in format
+623 Integer followed by ',' illegal in format
+624 '.' is illegal format control character
+625 Character constant must not appear in format for reading
+626 Character constant in format must not be repeated
+627 '/' in format must not be repeated
+628 '\', '$', ':', 'S', 'SP' and 'SS' in format must not be repeated
+629 BN or BZ format control must not be repeated
+630 Attempt to perform input-output on unknown unit number
+631 Formatted or list-directed input-output attempted on file
+631 opened as unformatted
+632 Format fails to begin with '('
+633 I format expected for integer read
+634 F, D, G or E format expected for real read
+635 Two '.' characters in formatted real read
+636 Digit expected in formatted real read
+637 L format expected for logical read
+639 T or F expected in logical read
+640 A format expected for character read
+641 I format expected for integer write
+642 w field in F format not greater than d field + 1
+643 Scale factor out of range of d field in E format
+644 E, D, G or F format expected for real write
+645 L format expected for logical write
+646 A format expected for character write
+647 Attempt to do unformatted input-output to a file opened
+647 as formatted
+648 Unable to write blocked output - possibly no room on
+648 output device
+649 Unable to read blocked input
+650 Error in formatted text file - no carriage-return in last
+650 512 bytes
+651 Integer overflow on input
+652 T, TL or TR in format must not be repeated
+653 Positive integer expected for c field in T, TL
+654 or TR format
+654 Attempt to open direct-access unit on unblocked device
+655 Attempt to do external input-output on a unit beyond
+655 end-of-file record
+656 Attempt to position a unit for direct-access on a non-positive
+656 record number
+657 Attempt to do direct-access on a unit opened as sequential
+658 Attempt to position direct-access unit on an unblocked device
+659 Attempt to position direct-access unit beyond end-of-file
+659 for reading
+660 Attempt to backspace unit connected to unblocked device
+660 or binary unformatted file
+661 Attempt to backspace sequential, unformatted unit
+662 Argument to ASIN or ACOS out of bounds - ABS(x) > 1.0
+663 Argument to SIN or COS too large 
+664 Attempt to do unformatted input-output to internal unit
+665 Attempt to put more than one record into an internal unit
+666 Attempt to write more characters to an internal unit than
+666 its length
+667 EOF called on unknown unit
+668 Direct-access formatted input files must not use DLE
+668 blank compression
+669 Error in opening file
+670 Error in closing file
+671 Can't specify KEEP in close if file opened SCRATCH
+672 Unrecognizable option specified as character value in
+672 input-output statement
+673 File name required unless status is SCRATCH
+674 Must not name file if status is SCRATCH
+675 Record length not allowed for sequential files
+676 Record length must be positive
+677 Record length must be sepcified for direct-access files
+678 BLANK option only for formatted files
+679 Rewind only allowed on sequential files
+680 Endfile only allowed on sequential files
+681 Backspace only allowed on sequential files
+682 Formatted records must be less than or equal to 512 characters
+683 More characters written to internal file record than record
+683 length
+684 Incorrect number of characters read in formatted record of
+684 direct-access file
+685 Attempt to write too many characters into formatted record of
+685 direct-access file
+686 No repeatable edit descriptor found and format exhausted
+687 Digit expected in input field exponent
+688 Too many digits in input real number
+689 Numeric field expected in input
+690 Unexpected character encountered in list-directed input
+691 Repeat factor in list-directed input must be positive
+692 ',' between reals for complex expected in list-directed input
+693 ')' expected to terminate complex in list-directed input
+694 Attempt to do list-directed input-output to direct-access file
+697 Integer variable not currently assigned a FORMAT label
+698 End-of-file encountered on a read with no END= option
+699 Integer variable not assigned a label used in assigned
+699 GOTO statement
+701 Integer input item expected for list-directed input
+702 Numeric input item expected for list-directed input
+703 Logical input item expected for list-directed input
+704 Complex input item expected for list-directed input
+705 Character input item expected for list-directed input
+706 Incorrect number of bytes read or written to direct-access
+     unformatted file
+707 Substring index range error
+708 Hex digit expected in input
+9999 
+

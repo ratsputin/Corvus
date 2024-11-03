@@ -1,0 +1,16 @@
+                     BURN-IN CHANGE DOCUMENT
+
+                           REVISION E3
+
+
+
+DATE: DEC. 6, '82
+
+
+       Change made to OBMSTR & OBINT to permanently record the
+number of "INVALID REPORTS" received during the burn-in run for
+each disk.  The older revision, E2, cleared the count when a
+valid report was received.
+
+       The display for number of invalid reports was moved over
+to prevent a collision with a large number of seeks.

@@ -1,0 +1,288 @@
+        .TITLE  "Secondary Bootstrap for 8086 Adaptable System"
+        .NOPATCHLIST
+        .NOASCIILIST
+        .PROC   SECBOOT
+;----------------------------------------------------------------------------;
+;                                                                            ;
+;                Secondary Bootstrap for 8086 SBIOS machines                 ;
+;                                                                            ;
+;----------------------------------------------------------------------------;
+;                                                                            ;
+;       This is an unpublished work copyright 1978, 1979 by                  ;
+;       The Regents of The University of California and                      ;
+;       1980, 1981 by SofTech Microsystems, Inc.                             ;
+;                                                                            ;
+;----------------------------------------------------------------------------;
+;                                                                            ;
+;       This item is the property of SofTech Microsystems, Inc.,             ;
+;       and it may be used, copied or distributed only as permitted          ;
+;       in a written license from that company.                              ;
+;                                                                            ;
+;----------------------------------------------------------------------------;
+
+        .REF    BIOSVC          ; Start of BIOS jump vector
+        .REF    BIOSTB          ; Start of BIOS info table
+        
+        .PAGE
+;********************************************************
+;*                                                      *
+;*              D E F I N I T I O N S                   *
+;*                                                      *
+;********************************************************
+
+;
+;       directory definitions
+;
+DNUMFIL .EQU    16.             ; offset into directory for # of files
+DENTSZ  .EQU    26.             ; length of a directory entry
+DTITLE  .EQU    6.              ; offset into directory entry of name
+;
+;       BIOS jump table offsets
+;
+BCONWR  .EQU    02H             ; console write
+BCONIN  .EQU    04H             ; console init
+BDSKRD  .EQU    10H             ; disk read
+BDSKIN  .EQU    14H             ; disk init
+BSYSHL  .EQU    2AH             ; system halt (actually a system write)
+BSYSIN  .EQU    2CH             ; system init
+;
+;       macros
+;
+        .MACRO  BIOS            ; call BIOS routine
+           MOV     BX,BIOSVC+%1
+           CALL    BX
+        .ENDM 
+
+        .PAGE
+;********************************************************
+;*                                                      *
+;*              D A T A                                 *
+;*                                                      *
+;********************************************************
+
+        JMP     SECBT           ; jump around data and routines
+;
+;       data for searching directory
+;
+DIRSEX  .BYTE                   ; 1 = same sex, 0 = different sex
+INTBLK  .WORD                   ; block number of interpreter
+INTSIZ  .WORD                   ; size in bytes of interpreter
+INTTLT  .BYTE   0DH             ; name of interpreter
+        .ASCII  "SYSTEM.INTERP  "
+DIRERR  .BYTE   26.             ; error message
+        .ASCII  "Can't find SYSTEM.INTERP"
+        .BYTE   0DH,0AH
+;
+;       miscellaneous
+;
+SYSBT   .WORD   0               ; boot off unit SYSBT
+SYSUNIT .WORD   4               ; pascal equivalent unit number
+;
+;       storage for stacked parametes
+;
+TABLE   .EQU    $
+
+INTERP  .WORD                   ; address to place interpreter
+SBIOS   .WORD                   ; pointer to base of SBIOS jump vector
+LORAM   .WORD                   ; address of lowest contig. RAM word
+HIRAM   .WORD                   ; address of highest contig. RAM word
+TRKNUM  .WORD                   ; number of tracks per disk
+SECNUM  .WORD                   ; number of sectors per track
+SECTSZ  .WORD                   ; number of bytes per sector
+INTLV   .WORD                   ; interleaving factor
+FRSTTR  .WORD                   ; first interleaved track
+SKEW    .WORD                   ; track to track skew
+MAXSCTRS.WORD                   ; max sectors per track for any disk on-line
+MAXBYTES.WORD                   ; max bytes per sector for any disk on-line
+
+NPARAMS .EQU    12.             ; number of parameters
+
+        .PAGE
+;********************************************************
+;*                                                      *
+;*              R O U T I N E S                         *
+;*                                                      *
+;********************************************************
+
+;
+;       Called from SBIOS on events. No events are handled
+;       until interpreter is in, so just return.
+;
+
+DUMMY   RET                     ; dummy event vector
+
+;
+;       Search the directory on the boot disk for the interpreter.
+;
+;       returns:  INTBLK -- number of first block of interpreter
+;                 INTSIZ -- number of bytes in interpreter
+;
+
+DIRSRCH MOV     BX,INTERP       ; get address of directory
+        XOR     AX,AX           ; determine and save sex of directory
+        CMP     (BX+2),255
+        JNL     $10
+        INC     AX
+$10     MOV     DIRSEX,AX
+        
+        MOV     DX,(BX+DNUMFIL) ; get number of files
+        CMP     AX,1
+        JE      $20
+        XCHG    DH,DL
+;
+;       examine next entry
+;
+;               BX -- pointer to current directory entry
+;               DI -- pointer to filename to test
+;               SI -- pointer to name of interpreter
+;               DX -- number of files left to test
+;
+$20     ADD     BX,DENTSZ       ; point at next directory entry
+        MOV     DI,BX
+        ADD     DI,DTITLE       ; point DI at title field
+        XOR     CH,CH
+        MOV     CL,(DI)         ; length
+        INC     CX
+        LEA     SI,INTTLT       ; point SI at desired title
+   REPE CMPSB                   ; compare titles (incl lengths)
+        JE      $40             ; jump if match found
+        DEC     DX
+        JNZ     $20             ; loop to test all files
+;
+;       no match in directory -- print error message
+;
+        LEA     BX,DIRERR       ; point to error message
+$30     MOV     AX,(BX)         ; get next character
+        PUSH    AX
+        PUSH    BX
+        BIOS    BCONWR          ; send char
+        POP     BX
+        POP     AX
+        INC     BX              ; point at next char
+        CMP     AL,10.
+        JNE     $30             ; until line feed output
+        JMP     $               ; halt
+;
+;       match found -- compute first block and length of interpreter.
+;
+$40     MOV     CX,(BX)         ; starting block
+        MOV     DX,(BX+2)       ; last block + 1
+        CMP     DIRSEX,1
+        JE      $41
+        XCHG    CH,CL           ; flip if opposite sex
+        XCHG    DH,DL
+$41     MOV     INTBLK,CX
+        SUB     DX,CX           ; number of blocks
+        XOR     AX,AX
+        MOV     AH,DL           ; times 512 for bytes
+        SHL     AX,1
+        MOV     INTSIZ,AX
+        RET
+        
+        .PAGE
+;********************************************************
+;*                                                      *
+;*              B O O T S T R A P                       *
+;*                                                      *
+;********************************************************
+
+;
+;       Step 0
+;
+;       Pop parameters from stack if STUBOOT. Allocate sector translate
+;       table and partial sector buffer. Copy parameters into BIOS.
+;
+
+SECBT   ; Real starting point of bootstrap
+        
+        MOV     AX,CS           ; segment register setup
+        MOV     DS,AX
+        MOV     ES,AX
+        CLD                     ; always copy forwards in this boot
+
+        MOV     SI,SP           ; copy parameters into table
+        LEA     DI,TABLE
+        MOV     CX,NPARAMS
+    REP MOVSW
+        
+        MOV     AX,HIRAM        ; high ram address
+        SUB     AX,MAXSCTRS     ; allocate sector translation table
+        MOV     MAXSCTRS,AX
+
+        SUB     AX,MAXBYTES     ; allocat partial read buffer
+        MOV     MAXBYTES,AX
+
+        MOV     HIRAM,AX        ; reset high ram address
+        MOV     SP,AX           ; reset stack to high ram address
+        
+        LEA     SI,TABLE        ; move parameters into BIOS table
+        LEA     DI,BIOSTB
+        MOV     CX,NPARAMS
+    REP MOVSW
+
+;
+;       Step 1
+;
+;       Initialize System, console and boot disk
+;
+        
+        LEA     AX,DUMMY
+        PUSH    AX              ; (dummy) event vector
+        BIOS    BSYSIN          ; initialize system
+        PUSH    AX              ; initialize console
+        PUSH    AX              ; set up dummy parameters
+        BIOS    BCONIN
+        MOV     CX,SYSBT        ; initialize disk
+        BIOS    BDSKIN
+
+;
+;       Step 2
+;
+;       Read directory from absolute block 2 into buffer
+;
+        
+        XOR     AX,AX           ; default CONTROL word
+        PUSH    AX
+        PUSH    SYSBT           ; unit number
+        PUSH    INTERP          ; buffer
+        MOV     AX,4*512.       ; length, 4 blocks
+        PUSH    AX
+        MOV     AX,2            ; directory starts at block 2
+        PUSH    AX
+        BIOS    BDSKRD
+
+;
+;       Step 3
+;
+;       Find and read interpreter
+;
+        
+        CALL    DIRSRCH         ; find interpreter
+        
+        XOR     AX,AX
+        PUSH    AX              ; control word
+        PUSH    SYSBT           ; unit number
+        PUSH    INTERP          ; buffer
+        PUSH    INTSIZ          ; length
+        PUSH    INTBLK          ; block of interpreter
+        BIOS    BDSKRD
+
+;
+;       Step 4
+;       
+;       stack system parameters and jump into interpreter
+;
+        
+        MOV     CX,NPARAMS      ; restack input params (adjusted)
+        LEA     BX,MAXBYTES
+$40     PUSH    (BX)
+        DEC     BX
+        DEC     BX
+        LOOP    $40
+        
+        PUSH    SYSUNIT         ; stack extra parameter for tertboot
+        MOV     BX,INTERP       ; start the tertiary bootstrap
+        JMP     (BX)
+        
+        .END
+

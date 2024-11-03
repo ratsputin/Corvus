@@ -1,0 +1,28 @@
+; File: pasmchk.text
+; Date: 05-May-82
+
+        ident   pasmchk
+
+        global  %_chkstk
+
+        extern  %_panic,%_prloc,%_halt,%_memav
+
+;
+; %_chkstk - check for stack overflow
+;
+
+%_chkstk
+        jsr     %_memav
+        cmpi.l  #600,(sp)+
+        blt.s   oops
+        rts
+oops    lea     stkmess,a0
+        moveq   #15,d0
+        jsr     %_panic
+        jsr     %_prloc
+        move.w  #-1,-(sp)
+        jsr     %_halt
+
+stkmess data.b  'Stack overflow ',0
+
+        end

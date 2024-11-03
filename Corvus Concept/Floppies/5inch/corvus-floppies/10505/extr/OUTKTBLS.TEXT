@@ -1,0 +1,150 @@
+
+date created :  23 September 1982
+date modified:  23 September 1982
+file         :  outktbls.text
+author       :  Keith Ball
+Title        :  Outline for "How to Build and Install Keyboard Translation Tables"
+
+
+
+        I.   The Keyboard and the Keycodes
+
+                A.  How the Keyboard and Keyboard driver work
+                        1.  Detachable keyboard has processor
+                        2.  queues up key closures and releases
+                        3.  sends keycodes describing which key is pressed
+                            or released to computer
+                        4.  keyboard driver is woken up each time a keycode
+                            is received by the computer
+                        5.  Uses translation tables to determine what to do
+                            with the keycode
+                        6.  Some keycodes say change how the driver generates
+                            character sequences like the Shift key
+                        7.  Some keycodes cause character sequences to be
+                            generated
+                        8.  It all depends on the tables
+
+                B.  What are Keycodes
+                        1.  Keycodes are 8 bits of data transmitted to the
+                            computer by the keyboard
+                        2.  Keycodes tell driver 2 things
+                                a.  whether a key has been pressed (closure)
+                                    or released
+                                        1. high order bit set means closure
+                                        2. high order bit clear means release
+                                b.  which key was pressed or released
+                                        1. other 7 bits of Keycode
+                                c.  does not tell value of key
+                        3.  The Keycode map
+                                a.  map of Key positions to Keycodes
+                                b.  Example Keycode map with Keys for
+                                    the version 3 (Selectric like)
+                                    keyboard
+
+
+        II.  Description of tables
+
+                A.  What are tables for
+                        1.  used by Keyboard driver to decide what
+                            to do with each keycode it receives
+
+                B.  The Translation Pointer Table
+                        1.  Table of pointers to the Translation Tables
+                        2.  Must be in the following defined order :
+                                a.  Shift Table
+                                b.  Regular Table
+                                c.  Caps Lock and Qualifier Flag Table
+                                d.  Escape Sharp Character Sequence Table
+                                e.  Standard Multiple Character Sequence Table
+                                f.  Release Table
+                                g.  Break Keycode Table
+
+                C.  Detailed description of each table
+                        1.  Shift and Regular Tables
+                                a.  organization
+                                        1.  Character codes
+                                        2.  Special codes designating
+                                            the use of the other tables
+                                b.  field description
+                                c.  Example for version 3 keyboard
+
+                        2.  Standard Multiple Character Sequence Table
+                                a.  description of character sequence
+                                b.  How keyboard driver uses table to
+                                    generate sequence
+                                c.  field description
+                                d.  key field is Keycode
+                                e.  Example for version 3 keyboard
+
+                        3.  Escape Sharp Character Sequence Table
+                                a.  description of character sequence
+                                b.  How keyboard driver uses table to
+                                    generate sequence
+                                c.  field description
+                                d.  key field is Keycode
+                                e.  Example for version 3 keyboard
+
+                        4.  Release Table
+                                a.  What is table for
+                                b.  Example of Command key
+                                c.  Possible negative impact on
+                                    system of other release sequences
+                                d.  field description
+                                e.  key field is Keycode
+                                f.  Example for version 3 keyboard
+
+                        5.  Break Keycode Table
+                                a.  What keycode is used for
+                                b.  Does not generate character sequence
+                                c.  Only 1 and make it out of the way
+                                d.  field description
+                                e.  Example for version 3 keyboard
+
+                        6.  Caps Lock and Qualifier Flag Table
+                                a.  Types of Qualifiers and what they do
+                                        1.  Shift
+                                        2.  Control
+                                        3.  Caps Lock
+                                        4.  Fast
+                                        5.  Alternate (ALT)
+                                        6.  Command
+                                b.  Qualifiers that generate character
+                                    sequences
+                                        1.  Use of Command key
+                                        2.  Why Shift, Control and
+                                            Caps Lock should not
+                                        3.  Possible impact on system
+                                c.  organization
+                                d.  field description
+                                e.  Example for version 3 keyboard
+
+        III. How to make tables
+
+                A.  The structure of the Keyboard Translation Tables File
+                        1.  ASM68K source file structure
+                        2.  Keyboard Translation Tables File header
+                            structure
+
+                B.  How to create source file
+                        1.  use edword to build source
+                        2.  Example of version 3 keyboard source
+                            file
+
+                C.  Assembling and linking to build loadable file
+                        1.  Example of command lines for assembling
+                            and linking
+
+
+        IV.  How to install a loadable Keyboard Translation Tables File
+
+                A.  Using the Window Manager to load a Keyboard
+                    Translation Tables File
+                        1.  Press Window Manager key
+                        2.  Press Load Keyboard Character Tables key
+                        3.  Enter file name of loadable Keyboard
+                            Translation Tables File
+                        4.  Press Exit key to get back to main line
+
+                B.  Making a Keyboard Translation Tables File the
+                    system default
+                        1.  put file in boot volume as CSK.DEFAULT

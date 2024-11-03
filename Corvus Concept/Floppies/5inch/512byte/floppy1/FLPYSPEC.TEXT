@@ -1,0 +1,73 @@
+
+file : /dsgn/flpyspec.text
+date : 31-Januay-1983
+
+Floppy driver functional specification.
+
+Functional requirements :
+
+      1) Driver must be able to read and write single and double density
+         diskettes.  It must determine if the diskette is single or
+         double density from the diskette.  It cannot depend on user or
+         system input to determine diskette density.
+
+      2) Driver must be able to switch between single and double density
+         on the same unit at any time.
+
+      3) Driver must support multiple drives on a single controller.
+
+      4) Driver must be slot independent.
+
+      5) 1 driver must work for all floppy device units.
+
+      6) The system must allocate each drive it's own unit number.
+
+      7) Driver need only support single sided diskettes.
+
+
+The floppy driver uses the following standard driver commands :
+
+      1) Unitread : Read n bytes from a sequential set of 1 or more
+            blocks starting at the block number specified.
+
+            a) Reads partial blocks.
+
+      2) Unitwrite : Write n bytes to a sequential set of 1 or more
+            blocks starting at the block number specified.
+
+            a) Writes partial blocks.
+
+      3) Unitbusy  :  always returns false.
+
+
+      4) Unitclear :  Home the head of the drive.
+
+
+      5) Unitinstall : Initializes the driver to its default
+                       state.
+
+            e) initialize internal tables
+            b) initialize device table
+            c) Home the head of the drive.
+            d) Get number of drives attached to controller.
+            e) determine density of diskette
+            f) determine number of sides of diskette
+
+      6) Unitunmount :  Deattach driver from system.
+
+      7) Unitstatus : used for several driver dependent functions.
+
+            a) Return the number of bytes per sector, sectors per
+               track, tracks per side, the number of sides, and the
+               number of blocks for current diskette in drive.
+            b) Read 1 sector.
+            c) Write 1 sector.
+            d) Get number of drives attached to controller.
+
+
+Comments :
+
+      1) Switch densities only if an operation fails, then retry
+         operation.  Do this only on failures related to media density
+         not lack of device readiness.
+

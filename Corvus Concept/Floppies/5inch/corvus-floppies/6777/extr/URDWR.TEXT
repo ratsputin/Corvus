@@ -1,0 +1,279 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                             File: URDWR.TEXT                              *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               01-Dec-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+procedure unextrec;
+  var lval: int1;
+begin {unextrec}
+if curunit <> nil
+then
+  if not curunit^.Seqen
+  then begin
+    while reclenctr < curunit^.reclen do
+      if Reading then uget(lval) else uput(0);
+    if reclenctr <> curunit^.reclen then error(106);
+    end;
+end; {unextrec}
+
+procedure uposition(rec: longint);
+  var targetposition: longint;
+begin {uposition}
+if curunit <> nil
+then 
+  with curunit^ do begin
+    rec := rec - 1; { Prefer to work with zero origin indexing }
+    if rec < 0 
+    then error(56)
+    else
+      if Seqen 
+      then error(57)
+      else begin
+        updatehighwatermark; targetposition := rec * reclen;
+        sysseek(targetposition);
+        end;
+    end;
+end; {uposition}
+
+
+{ Does the work for %_ixuwr and %_ixurd }
+
+procedure ixu(unitnum: longint);
+begin {ixu}
+errornumber := 0; reclenctr := 0;
+curunit := findunit(unitnum);
+if curunit = nil
+then error(30)
+else begin
+  if curunit^.PastEndFile then error(55);
+  if curunit^.Formted then error(47);
+  end;
+end; {ixu}
+
+
+(*****************************************************************************)
+(*                      Public Routines for UNFORMTED                        *)
+(*****************************************************************************)
+
+
+{ Initialize external write or print statement (without seek) }
+
+procedure %_ixuwr{unitnum: longint};
+begin {%_ixuwr}
+Reading := FALSE; ixu(unitnum);
+end; {%_ixuwr}
+
+
+{ Initialize external write or print statement (with seek) }
+
+procedure %_pxuwr{unitnum: longint; rec: longint};
+begin {%_pxuwr}
+Reading := FALSE; ixu(unitnum); uposition(rec);
+end; {%_pxuwr}
+
+
+{ Terminate write or print statement }
+
+procedure %_tuwr{fiostat: plongint; errexit: pcodearray};
+begin {%_tuwr}
+unextrec; 
+if curunit <> nil then curunit^.lastop := WRITEOP;
+termiostmt(fiostat,errexit);
+end; {%_tuwr}
+
+
+{ Initialize external read statement (without seek) }
+
+procedure %_ixurd{unitnum: longint};
+begin {%_ixurd}
+Reading := TRUE; EofFlag := FALSE; ixu(unitnum); 
+if curunit <> nil
+then
+  if curunit^.Seqen then forceeofiflastwritten;
+end; {%_ixurd}
+
+
+{ Initialize external read statement (with seek) }
+
+procedure %_pxurd{unitnum: longint; rec: longint};
+begin {%_pxurd}
+%_ixurd(unitnum); uposition(rec);
+end; {%_pxurd}
+
+
+{ Terminate read statement }
+
+procedure %_turd{fiostat: plongint; errexit, endexit: pcodearray};
+begin {%_turd}
+unextrec;
+if curunit <> nil
+then begin
+  If curunit^.Seqen and EofFlag then curunit^.PastEndFile := TRUE;
+  curunit^.lastop := READOP;
+  end;
+if EofFlag and (endexit[1] = nil) then error(-601);
+termiostmt(fiostat,errexit);
+if EofFlag and (endexit[1] <> nil) and (errornumber = 0)
+then begin 
+  if fiostat <> nil then fiostat^ := -1;
+  endexit[0] := endexit[1];
+  end;
+end; {%_turd}
+
+
+(*****************************************************************************)
+(*                       Unformatted Write                                   *)
+(*****************************************************************************)
+
+
+procedure %_wru1{fval: int1};
+begin {%_wru1}
+uput(fval); 
+end; {%_wru1}
+
+procedure %_wru2{fval: aint12};
+begin {%_wru2}
+uput(fval[1]); uput(fval[2]);
+end; {%_wru2}
+
+procedure %_wru4{fval: aint14};
+begin {%_wru4}
+uput(fval[1]); uput(fval[2]); uput(fval[3]); uput(fval[4]); 
+end; {%_wru4}
+
+procedure %_wru8{fvalmsbytes,fvallsbytes: aint14};
+begin {%_wru8}
+%_wru4(fvallsbytes); %_wru4(fvalmsbytes);
+end; {%_wru8}
+
+procedure %_wruch{var fpac: int1array; paclen: integer};
+  var i: integer;
+begin {%_wruch}
+for i := 1 to paclen do
+  uput(fpac[i]);
+end; {%_wruch}
+
+
+(*****************************************************************************)
+(*                       Unformatted Read                                    *)
+(*****************************************************************************)
+
+
+procedure %_rdu1{var fval: int1};
+begin {%_rdu1}
+uget(fval);
+end; {%_rdu1}
+
+procedure %_rdu2{var fval: aint12};
+begin {%_rdu2}
+uget(fval[1]); uget(fval[2]);
+end; {%_rdu2}
+
+procedure %_rdu4{var fval: aint14};
+begin {%_rdu4}
+uget(fval[1]); uget(fval[2]); uget(fval[3]); uget(fval[4]);
+end; {%_rdu4}
+
+procedure %_rdu8{var fval: aint18};
+  var i: integer;
+begin {%_rdu8}
+for i := 1 to 8 do
+  uget(fval[i]);
+end; {%_rdu8}
+
+procedure %_rduch{var fpac: int1array; paclen: integer};
+  var i: integer;
+begin {%_rduch}
+for i := 1 to paclen do
+  uget(fpac[i]);
+end; {%_rduch}
+
+
+(*****************************************************************************)
+(*                           Array Unformatted Write                         *)
+(*****************************************************************************)
+
+
+procedure %_wau8{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wau8}
+for ctr := 1 to count * 8 do
+  uput(fintarray[ctr]);
+end; {%_wau8}
+
+procedure %_wau4{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wau4}
+for ctr := 1 to count * 4 do
+  uput(fintarray[ctr]);
+end; {%_wau4}
+
+procedure %_wau2{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wau2}
+for ctr := 1 to count + count do
+  uput(fintarray[ctr]);
+end; {%_wau2}
+
+procedure %_wau1{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_wau1}
+for ctr := 1 to count do
+  uput(fintarray[ctr]);
+end; {%_wau1}
+
+procedure %_wauch{var fpac: int1array; paclen: integer; count: int4};
+  var i: longint;
+begin {%_wauch}
+for i := 1 to paclen * count do
+  uput(fpac[i]);
+end; {%_wauch}
+
+
+(*****************************************************************************)
+(*                           Array Unformatted Read                          *)
+(*****************************************************************************)
+
+
+procedure %_rau8{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rau8}
+for ctr := 1 to count * 8 do
+  uget(fintarray[ctr]);
+end; {%_rau8}
+
+procedure %_rau4{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rau4}
+for ctr := 1 to count * 4 do
+  uget(fintarray[ctr]);
+end; {%_rau4}
+
+procedure %_rau2{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rau2}
+for ctr := 1 to count + count do
+  uget(fintarray[ctr]);
+end; {%_rau2}
+
+procedure %_rau1{var fintarray: int1array; count: int4};
+  var ctr: longint;
+begin {%_rau1}
+for ctr := 1 to count do
+  uget(fintarray[ctr]);
+end; {%_rau1}
+
+procedure %_rauch{var fpac: int1array; paclen: integer; count: int4};
+  var i: longint;
+begin {%_rauch}
+for i := 1 to paclen * count do
+  uget(fpac[i]);
+end; {%_rauch}
+
+

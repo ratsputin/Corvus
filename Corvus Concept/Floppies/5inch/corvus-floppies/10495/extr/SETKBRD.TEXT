@@ -1,0 +1,5 @@
+/TEST/nullvec
+assign timer.drv 16 -b timer 34
+/TEST/setsr 2400
+assign kbrd.drv 29 -b kybd 35
+ls /

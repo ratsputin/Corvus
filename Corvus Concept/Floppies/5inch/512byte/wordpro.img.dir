@@ -1,0 +1,49 @@
+
+Directory of UCSD disk image file 'wordpro.img'
+
+Unknown density, disk image size 709632, 1386 blocks of 512 bytes each
+
+Volume FLOPPY has 42 files,  0 to 6 (6), eov 1440, size 257, free 42
+
+ 1: ADJUST.TEXT     Ux3c3 27-Sep-84    6-  26(  20), 10240+512= 10752 bytes
+ 2: BLKMGR.TEXT     Ux453  8-May-84   26-  44(  18),  9216+512=  9728 bytes
+ 3: BOUND.TEXT      Ux453 11-Jun-84   44-  54(  10),  5120+512=  5632 bytes
+ 4: CALC.TEXT       Ux453 18-Feb-84   54-  74(  20), 10240+512= 10752 bytes
+ 5: CALENDAR.TEXT   Ux453 28-Nov-83   74-  88(  14),  7168+512=  7680 bytes
+ 6: CALL.TEXT       Ux453 12-Jun-84   88-  94(   6),  3072+512=  3584 bytes
+ 7: CC.VSIXDBM.TEXT Ux453  3-Jun-84   94- 180(  86), 44032+512= 44544 bytes
+ 8: FORMS.TEXT      Ux453 28-May-84  180- 206(  26), 13312+512= 13824 bytes
+ 9: SORT.TEXT       Ux453 12-Jun-84  218- 248(  30), 15360+512= 15872 bytes
+10: USERIO.TEXT     Ux453 22-Apr-84  248- 324(  76), 38912+512= 39424 bytes
+11: UTIL.TEXT       Ux453 30-Jun-83  324- 340(  16),  8192+512=  8704 bytes
+12: WKSP.TEXT       Ux453 13-Jan-84  340- 370(  30), 15360+512= 15872 bytes
+13: WKSPMGR.TEXT    Ux453  2-Feb-83  370- 386(  16),  8192+512=  8704 bytes
+14: CLOCK.TEXT      Ux453 28-Nov-83  532- 550(  18),  9216+512=  9728 bytes
+15: DIAG.TEXT       Ux453  7-Jun-83  550- 556(   6),  3072+512=  3584 bytes
+16: DMS.TEXT        Ux453 19-Jun-84  556- 608(  52), 26624+512= 27136 bytes
+17: DSKMGR.TEXT     Ux453 18-Feb-84  608- 620(  12),  6144+512=  6656 bytes
+18: EDIT.TEXT       Ux453 28-Jul-84  620- 646(  26), 13312+512= 13824 bytes
+19: ENHANCE.TEXT    Ux453 15-Aug-84  646- 660(  14),  7168+512=  7680 bytes
+20: EXTASK.TEXT     Ux453 29-Jul-84  660- 670(  10),  5120+512=  5632 bytes
+21: FILE.TEXT       Ux453 10-Jan-84  670- 708(  38), 19456+512= 19968 bytes
+22: FORMAT.TEXT     Ux453 12-Jun-83  708- 728(  20), 10240+512= 10752 bytes
+23: GETLINE.TEXT    Ux453 21-Jul-83  728- 740(  12),  6144+512=  6656 bytes
+24: GG.TEXT         Ux453 20-Jun-84  740- 744(   4),  2048+512=  2560 bytes
+25: INIT.TEXT       Ux453 22-Apr-84  744- 762(  18),  9216+512=  9728 bytes
+26: IPC.TEXT        Ux453 14-Sep-83  762- 766(   4),  2048+366=  2414 bytes
+27: KERNEL.OBJ      Ux455 22-Apr-84  766- 858(  92), 47104+512= 47616 bytes
+28: KERNEL.TEXT     Ux453 22-Apr-84  858- 972( 114), 58368+512= 58880 bytes
+29: LAST.EX         Ux455 24-Jul-84  972- 973(   1),   512+ 10=   522 bytes
+30: LNK.TEXT        Ux453 22-Apr-84  973- 977(   4),  2048+512=  2560 bytes
+31: LNK1.TEXT       Ux453  2-Apr-84  977-1029(  52), 26624+512= 27136 bytes
+32: LNKMAP.TEXT     Ux453 23-Apr-84 1029-1093(  64), 32768+245= 33013 bytes
+33: LOCALEDIT.TEXT  Ux453 22-Jul-84 1093-1119(  26), 13312+512= 13824 bytes
+34: MAIN.TEXT       Ux453 18-Apr-84 1119-1129(  10),  5120+512=  5632 bytes
+35: MOUSE.TEXT      Ux453 25-Jul-84 1129-1143(  14),  7168+512=  7680 bytes
+36: MOVETEXT.TEXT   Ux453 21-Jun-84 1143-1167(  24), 12288+512= 12800 bytes
+37: PRGRMR.TEXT     Ux453  8-Jun-83 1167-1171(   4),  2048+512=  2560 bytes
+38: PRINT.TEXT      Ux453 23-Apr-84 1171-1237(  66), 33792+512= 34304 bytes
+39: PRTWND.TEXT     Ux453 29-Aug-84 1237-1263(  26), 13312+512= 13824 bytes
+40: RECMGR.TEXT     Ux453  4-Mar-84 1263-1303(  40), 20480+512= 20992 bytes
+41: SEARCH.TEXT     Ux453 21-Jun-84 1303-1325(  22), 11264+512= 11776 bytes
+42: SETTASK.TEXT    Ux453  4-Sep-84 1325-1341(  16),  8192+512=  8704 bytes

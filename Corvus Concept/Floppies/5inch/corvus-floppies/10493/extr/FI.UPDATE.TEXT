@@ -1,0 +1,24 @@
+ECHO OFF
+CLS
+ECHO ;
+ECHO ; File ID: A:UPDATE.BAT
+ECHO ;
+ECHO ; This UPDATE assumes the volume /IBMNSS exists and
+ECHO ; is mounted with read/write access on Drive D.
+ECHO ;
+ECHO Press return to continue or Control-C to stop.
+PAUSE
+REM delete the api files on drive D:
+DEL d:display.exe
+DEL d:appiin.pas
+DEL d:defs.pas
+DEL d:apilib.r86
+REM copy file from diskette in drive A:, FIBNSS1, to D:
+COPY A:*.* D:
+DEL d:update.bat
+ECHO ;
+ECHO ; UPDATE complete
+ECHO ;
+ECHO ON
+
+

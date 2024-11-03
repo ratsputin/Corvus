@@ -1,0 +1,255 @@
+; File: mertexto.text
+; Date: 01-Dec-82
+
+        IDENT   MERTEXTO
+        
+        GLOBAL  %W_LN,%W_C,%W_I,%W_B,%W_STR,%W_PAOC,%_PAGE
+        
+;
+; Some EQU's
+;
+
+PSYSCOM EQU     $180            ; Address of pointer to SYSCOM
+
+;
+; ASCII Character EQUs
+;
+
+RUBOUT  EQU     127
+BACKSP  EQU     8
+
+;
+; JSVECT - jump to routine in system vector
+;
+; Parameters: D0.W - routine offset (n*4)
+;
+
+JSVECT
+        MOVE.L  PSYSCOM.W,A0    ; (A0) = syscom
+        MOVE.L  8(A0),A0        ; (A0) = sysvect
+        MOVE.L  0(A0,D0.W),A0   ; (A0) = desired entry point
+        JMP     (A0)            ; Call routine
+
+;
+; FIB record offsets
+;
+
+FEOLN   EQU     4
+FEOF    EQU     5
+
+;
+; OUTCH - Display a character on the CRT
+;
+; Parameters:  D0.B - Character to be output
+;              A0.L - Address of output file
+;
+; Saves all registers.
+;
+
+OUTCH   MOVEM.L D0-D7/A0-A6,-(SP)
+        MOVE.L  A0,-(SP)        ; Push file address
+        MOVE.B  D0,-(SP)        ; Push character
+        MOVE.W  #1,-(SP)        ; Push count
+        MOVEQ   #36,D0          ; Fwritechar = routine #36
+        BSR.S   JSVECT
+        MOVEM.L (SP)+,D0-D7/A0-A6
+        RTS
+        
+;
+; %W_LN - WRITELN
+;
+; Parameters:  ST.L - Address of output file
+;
+
+%W_LN
+        MOVE.L  (SP)+,A2        ; Pop return address
+        MOVE.L  (SP)+,A0        ; Pop file address
+        MOVEQ   #13,D0          ; Get a <CR>
+        BSR.S   OUTCH           ; Go write it
+        JMP     (A2)
+
+;
+; %W_C - Display a character on the CRT
+;
+; Parameters:  ST.L - Address of output file
+;              ST.B - Character to be output
+;              ST.W - Size of field to print
+;
+; Scratches:   D1,D2,D3,A2
+;
+
+%W_C
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D2
+        MOVE.B  (SP)+,D3
+        MOVE.L  (SP)+,A0
+        BRA.S   WC_TEST
+WC_LOOP MOVEQ   #' ',D0
+        BSR.S   OUTCH
+WC_TEST SUBQ.W  #1,D2
+        BGT.S   WC_LOOP
+        MOVE.B  D3,D0
+        BSR.S   OUTCH
+        JMP     (A2)
+
+;
+; %W_STR - WRITE STRING
+;
+; Parameters:  ST.L - Address of output file
+;              ST.L - Address of string
+;              ST.W - Size of field to print
+;
+; Scratches:   D0,D2,D3,A2
+;
+
+%W_STR
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D3
+        MOVE.L  (SP)+,A1
+        MOVE.L  (SP)+,A0
+        CLR.W   D2
+        MOVE.B  (A1)+,D2        ; Get string size
+        SUB.W   D2,D3           ; Check for xtra blanks
+        BLE.S   S_TEST2
+        MOVEQ   #' ',D0
+S_LOOP  BSR.S   OUTCH
+        SUBQ.W  #1,D3
+        BNE.S   S_LOOP
+        BRA.S   S_TEST2
+S_LOOP2 MOVE.B  (A1)+,D0
+        BSR.S   OUTCH
+S_TEST2 SUBQ.W  #1,D2
+        BPL.S   S_LOOP2
+        JMP     (A2)
+
+;
+; %W_PAOC - WRITE PACKED ARRAY OF CHARACTER
+;
+; Parameters:  ST.L - Address of output file
+;              ST.L - Address of string
+;              ST.W - Acutal length
+;              ST.W - Size of field to print
+;
+; Scratches:   D0,D2,D3
+;
+
+%W_PAOC
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D3
+        MOVE.W  (SP)+,D2
+        MOVE.L  (SP)+,A1
+        MOVE.L  (SP)+,A0
+        TST.W   D3              ; Field width > 0?
+        BLE.S   P_DONE          ; No. Return
+        CMP.W   D2,D3           ; Any extra blanks?
+        BLE.S   P_LOOP2         ; No.
+        SUB.W   D2,D3           ; Yes. D3 = xtra blanks
+        MOVEQ   #' ',D0
+P_LOOP  BSR.S   OUTCH
+        SUBQ.W  #1,D3
+        BNE.S   P_LOOP
+        MOVE.W  D2,D3
+P_LOOP2 MOVE.B  (A1)+,D0
+        BSR.S   OUTCH
+        SUBQ.W  #1,D3
+        BGT.S   P_LOOP2
+P_DONE  JMP     (A2)
+
+;
+; %W_I - WRITE INTEGER
+;
+; Parameters:  ST.L - Address of output file
+;              ST.L - Value to print
+;              ST.W - Size of field
+;
+; Scratches:   D2,D3,D4,D5,D6
+;
+
+%W_I
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D1
+        MOVE.L  (SP)+,D0
+        MOVE.L  (SP)+,A0
+        CLR.W   D2              ; # of chars on stack
+        MOVE.L  D0,D6
+        BGE.S   I_POS
+        NEG.L   D0
+I_POS   MOVE.L  D0,D3
+I_LOOP  MOVE.L  D3,D4
+        CLR.W   D4
+        SWAP    D4              ; D4 = 0000 MSHV
+        DIVU    #10,D4          ; D4 = MSHR MSHQ
+        MOVE.L  D4,D5           ; D5 = MSHR MSHQ
+        MOVE.W  D3,D5           ; D5 = MSHR LSHV
+        DIVU    #10,D5          ; D5 = REMN LSHQ
+        SWAP    D4              ; D4 = MSHQ MSHR
+        MOVE.L  D4,D3           ; D3 = MSHQ MSHR
+        MOVE.W  D5,D3           ; D3 = MSHQ LSHQ
+        SWAP    D5
+        ADDI.W  #'0',D5
+        MOVE.W  D5,-(SP)
+        ADDQ.W  #1,D2
+        TST.L   D3
+        BNE.S   I_LOOP
+        TST.L   D6
+        BGE.S   I_POS2
+        ADDQ.W  #1,D2
+        MOVE.W  #'-',-(SP)
+I_POS2  MOVE.W  D1,D3
+        SUB.W   D2,D3
+        BLE.S   I_LOOP3
+I_LOOP2 MOVEQ   #' ',D0
+        JSR     OUTCH
+        SUBQ.W  #1,D3
+        BGT.S   I_LOOP2
+I_LOOP3 MOVE.W  (SP)+,D0
+        JSR     OUTCH
+        SUBQ.W  #1,D2
+        BGT.S   I_LOOP3
+        JMP     (A2)
+
+;
+; %W_B - WRITE BOOLEAN
+;
+; Parameters:  ST.L - Address of output file
+;              ST.B - Value to print
+;              ST.W - Size of field
+;
+
+%W_B
+        MOVE.L  (SP)+,A2
+        MOVE.W  (SP)+,D2        ; Size of field
+        MOVE.B  (SP)+,D3        ; Value to print
+        BEQ.S   B_FALSE
+        SUBQ.B  #1,D3           ; See if it was a 1
+        BEQ.S   B_TRUE
+        PEA     C_UNDEF         ; Print 'UNDEF'
+        BRA.S   B_GOON
+B_TRUE  PEA     C_TRUE          ; Print 'TRUE'
+        BRA.S   B_GOON
+B_FALSE PEA     C_FALSE         ; Print 'FALSE'
+B_GOON  MOVE.W  D2,-(SP)
+        MOVE.L  A2,-(SP)
+        JMP     %W_STR
+
+C_FALSE DATA.B  5,70,65,76,83,69        ; 5,'FALSE'
+C_TRUE  DATA.B  4,84,82,85,69,0         ; 4,'TRUE'
+C_UNDEF DATA.B  5,85,78,68,69,70        ; 5,'UNDEF'
+
+;
+;
+; %_PAGE - PAGE
+;
+; Parameters:  ST.L - Address of output file
+;
+
+%_PAGE
+        MOVE.L  (SP)+,A1        ; Pop return address
+        MOVE.L  (SP)+,A0        ; Pop file address
+        MOVEQ   #12,D0          ; ASCII FF
+        MOVE.L  A1,-(SP)
+        JSR     OUTCH
+        RTS
+        
+        END
+

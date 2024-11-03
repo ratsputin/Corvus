@@ -1,0 +1,31 @@
+
+Directory of UCSD disk image file 'fsysgen.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FSYSGEN has 23 files,  0 to 6 (6), eov 500, size 65, free 23
+
+ 1: DEBUG           Data  4-Feb-83    6-  18(  12),  6144+512=  6656 bytes
+ 2: SYSGEN          Data  4-Feb-83   18- 106(  88), 45056+512= 45568 bytes
+ 3: BOOT.CONCEPT    Data  4-Feb-83  106- 116(  10),  5120+512=  5632 bytes
+ 4: VOLUTIL         Data  4-Feb-83  116- 186(  70), 35840+512= 36352 bytes
+ 5: TERMINAL        Data  4-Feb-83  186- 221(  35), 17920+512= 18432 bytes
+ 6: BLDACT          Data  4-Feb-83  221- 256(  35), 17920+512= 18432 bytes
+ 7: BLDALT          Data  4-Feb-83  256- 293(  37), 18944+512= 19456 bytes
+ 8: CSD.06.10       Data  4-Feb-83  293- 295(   2),  1024+512=  1536 bytes
+ 9: CSD.06.10.ALT   Data  4-Feb-83  295- 300(   5),  2560+512=  3072 bytes
+10: CSD.07.11       Data  4-Feb-83  300- 303(   3),  1536+512=  2048 bytes
+11: CSD.07.11.ALT   Data  4-Feb-83  303- 308(   5),  2560+512=  3072 bytes
+12: CSD.09.14.ALT   Data  4-Feb-83  308- 321(  13),  6656+512=  7168 bytes
+13: CSK.REV3        Data  4-Feb-83  321- 323(   2),  1024+512=  1536 bytes
+14: CSK.REV4        Data  4-Feb-83  323- 325(   2),  1024+512=  1536 bytes
+15: PAT.CITOH       Data  4-Feb-83  325- 326(   1),   512+512=  1024 bytes
+16: PAT.DIABLO630   Data  4-Feb-83  326- 327(   1),   512+512=  1024 bytes
+17: PAT.NOENHANCE   Data  4-Feb-83  327- 328(   1),   512+512=  1024 bytes
+18: CITOH.TEXT      Text  4-Feb-83  328- 332(   4),  2048+512=  2560 bytes
+19: DIABLO.TEXT     Text  4-Feb-83  332- 336(   4),  2048+512=  2560 bytes
+20: FIXIT           Data  4-Feb-83  336- 365(  29), 14848+512= 15360 bytes
+21: OS.1.1A.TEXT    Text  4-Feb-83  365- 387(  22), 11264+512= 11776 bytes
+22: MAKEDIST.TEXT   Text  4-Feb-83  387- 431(  44), 22528+512= 23040 bytes
+23: SYSTEM.UPDATE   Text  4-Feb-83  431- 435(   4),  2048+512=  2560 bytes

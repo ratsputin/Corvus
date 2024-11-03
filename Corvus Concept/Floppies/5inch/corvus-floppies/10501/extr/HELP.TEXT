@@ -1,0 +1,212 @@
+
+DISPAT CLRWNDOW [ClrWndow] clears everything from the current window.
+
+DISPAT CONSTII  [Const II] enters the Constellation II level which is used
+DISPAT CONSTII  exclusively by system managers.
+
+DISPAT CP/M     [CP/M] enters the optional CP/M operating system.  The current
+DISPAT CP/M     volume must be set to a CP/M volume.  (See [SetVol])
+
+DISPAT CREWNDOW [CreWndow] creates new windows within the System window area.
+DISPAT CREWNDOW To create a new window press [CreWndow] and follow the
+DISPAT CREWNDOW directions given.  The new window is cleared and becomes the
+DISPAT CREWNDOW current window.  To regain the original window as current
+DISPAT CREWNDOW press [SelWndow] until the full-sized window reappears.
+
+DISPAT EDWORD   [EdWord] enters the Concept editor/word processor.
+
+DISPAT EXECFILE [ExecFile] allows you to execute any Exec file entered on the
+DISPAT EXECFILE command line, or run the command interpreter by typing %.
+DISPAT EXECFILE To leave the command interpreter you must use [CTRL]-D.
+
+DISPAT FILEMGR  [FileMgr] enters the File Manager level.  To return to
+DISPAT FILEMGR  the Dispatcher level from the File Manager press [Exit].
+
+DISPAT HELP     [Help] is left by pressing the [ESC] key.
+
+DISPAT ISYS     [ISYS] enters the Concept integrated system.
+
+DISPAT LISTVOL  [ListVol] lists volumes on-line or file names in a volume.
+DISPAT LISTVOL  Type the volume name and press [ListVol] to list the files
+DISPAT LISTVOL  in a particular volume.  Type / or ! for listings of volumes
+DISPAT LISTVOL  and devices on-line and other volume information.
+
+DISPAT LOGICALC [LogiCalc] enters the optional Concept spreadsheet program.
+
+DISPAT MOUNTMGR [MountMgr] runs the Constellation II Mount Manager program
+DISPAT MOUNTMGR allowing you to manage your volume access.
+
+DISPAT P-SYSTEM [p-System] enters the UCSD Pascal runtime operating system.
+DISPAT P-SYSTEM The current volume must be a UCSD volume.  You can use H(alt
+DISPAT P-SYSTEM to return to the CCOS from the p-System.
+
+DISPAT RESTART  [Restart] causes the CCOS to execute the last command that
+DISPAT RESTART  was performed.
+
+DISPAT REVBKGND [RevBkgnd] reverses the background of the current window from
+DISPAT REVBKGND black to white, and vice versa.
+
+DISPAT REBOOT   [Reboot] automatically reinitializes the system.
+
+DISPAT SELWNDOW [SelWndow] allows you to choose one of your defined windows
+DISPAT SELWNDOW and make it the current window.
+
+DISPAT SETVOL   [SetVol] allows you to set a volume as the current volume.
+DISPAT SETVOL   The current volume is the one where your work is being done.
+
+DISPAT SYSUTILS [SysUtils] enters the System Utilities level.  To return to the
+DISPAT SYSUTILS Dispatcher level from the System Utilities level press [Exit].
+
+DISPAT TMPWNDOW [TmpWndow] allows you to create a temporary window inside
+DISPAT TMPWNDOW the System window.  The window is not cleared at inception.
+
+DISPAT USERKEYS [Userkeys] enters the user-definable function key level.
+DISPAT USERKEYS These labels are defined in the file USERKEYS.TEXT and can
+DISPAT USERKEYS be modified with EdWord to contain any commands you want.
+
+DISPAT WNDOWMGR [WndowMgr] enters the Window Manager level.  To return to the
+DISPAT WNDOWMGR Dispatcher level from the Window Manager level press [Exit].
+
+
+
+FILMGR CHNGVOL  [ChngVol] toggles a designated volume between the CCOS and
+FILMGR CHNGVOL  the UCSD volume types.
+
+FILMGR CLRWNDOW [ClrWndow] clears everything from the current window.
+
+FILMGR CONCFILE [ConcFile] combines two or more files into one continuous file.
+FILMGR CONCFILE It can also be used to copy a single file and assign it a
+FILMGR CONCFILE different destination file name.
+
+FILMGR COPYFILE [CopyFile] copies a file from one volume to another.  To copy
+FILMGR COPYFILE a file press [CopyFile] and answer the questions.
+
+FILMGR CREWNDOW [CreWndow] creates new windows within the System window area.
+FILMGR CREWNDOW To create a new window press [CreWndow] and follow the
+FILMGR CREWNDOW directions given.  The new window is cleared and becomes the
+FILMGR CREWNDOW current window.  To regain the original window as current
+FILMGR CREWNDOW press [SelWndow] until the full-sized window reappears.
+
+FILMGR CRUNCH   [Crunch] moves all files in a volume so that all unused space
+FILMGR CRUNCH   is combined into one large empty space at the end of the volume.
+
+FILMGR DLETFILE [DletFile] deletes a file, or files, from a volume.  It may
+FILMGR DLETFILE not be possible to retrieve a file after it has been deleted.
+
+FILMGR DLETTEMP [DletTemp] deletes a temporary file, or files, from a volume.
+FILMGR DLETTEMP A temporary file shows up in a volume listing with ??? where the
+FILMGR DLETTEMP month normally appears.
+
+FILMGR EXIT     [Exit] returns you to the Dispatcher level of functions.
+
+FILMGR HELP     [Help] is left by pressing the [ESC] key.
+
+FILMGR LISTFILE [ListFile] lists the contents of a text file in the current
+FILMGR LISTFILE window.  Data files can not be listed.
+
+FILMGR LISTVOL  [ListVol] lists volumes on-line or file names in a volume.
+FILMGR LISTVOL  To list the files in a particular volume press [ListVol], and
+FILMGR LISTVOL  type the volume name.  Type / or ! for listings of devices
+FILMGR LISTVOL  on-line, volumes mounted and other volume information.
+.pg
+FILMGR MOUNTMGR [MountMgr] runs the Constellation II Mount Manager program
+FILMGR MOUNTMGR allowing you to manage your volume access.
+
+FILMGR MAKEFILE [MakeFile] creates a file, and asks for the name and size.
+
+FILMGR REVBKGND [RevBkgnd] reverses the background of the current window from
+FILMGR REVBKGND black to white, and vice versa.
+
+FILMGR RNAMFILE [RnamFile] renames a file or a volume.  Press [RnamFile] and
+FILMGR RNAMFILE answer the questions appropriately.
+
+FILMGR SELWNDOW [SelWndow] allows you to choose one of your defined windows
+FILMGR SELWNDOW and make it the current window.
+
+FILMGR SETVOL   [SetVol] allows you to set a volume as the current volume.
+FILMGR SETVOL   The current volume is the one where your work is being done.
+
+FILMGR SPOOL    [Spool] runs the Concept spool program.  This program allows
+FILMGR SPOOL    you to write files to a special volume named Pipes.  These
+FILMGR SPOOL    files can be despooled by a station with a local printer using
+FILMGR SPOOL    the [Spool] function.
+
+FILMGR TMPWNDOW [TmpWndow] allows you to create a temporary window inside
+FILMGR TMPWNDOW the System window.  The window is not cleared at inception.
+
+
+
+SYSMGR ASGNDRVR [AsgnDrvr] assigns a driver to a logical device.  The general
+SYSMGR ASGNDRVR format is:  "/CCSYS/DRV.EPRNT PRINTER 6 [AsgnDrvr]."  Refer to
+SYSMGR ASGNDRVR the Workstation User Guide for detailed instructions.
+
+SYSMGR DRVRVRSN [DrvrVrsn] lists all the assigned drivers, and their devices.
+
+SYSMGR EDCHRSET [EdChrSet] enters the Corvus Concept character set editor.  Here
+SYSMGR EDCHRSET you may edit, or create, your own display character sets.
+
+SYSMGR EXIT     [Exit] returns you to the Dispatcher level of functions.
+
+SYSMGR HELP     [Help] is left by pressing the [ESC] key.
+
+SYSMGR SETDATE  [SetDate] sets or displays the current date.  To set the date,
+SYSMGR SETDATE  type the new date with the same format as follows:
+SYSMGR SETDATE
+SYSMGR SETDATE                     20-JUN-82
+SYSMGR SETDATE
+SYSMGR SETDATE  then press [SetDate].  The new date appears above the System
+SYSMGR SETDATE  window.
+
+SYSMGR SETDTACM [SetDtaCm] allows you to set printer parameters for a local
+SYSMGR SETDTACM printer, or assign parameters for data communication with
+SYSMGR SETDTACM other devices connected to the RS-232 ports.
+.pg
+SYSMGR SETTIME  [SetTime] sets or displays the current time.  To set the time
+SYSMGR SETTIME  use the following format:
+SYSMGR SETTIME
+SYSMGR SETTIME                      HH:MM:SS
+SYSMGR SETTIME
+SYSMGR SETTIME  then press [SetTime].  The first field is hours in military time
+SYSMGR SETTIME  (0 - 23), the next field is minutes, and the third field is
+SYSMGR SETTIME  seconds.  The next time you reach the Dispatcher level the new
+SYSMGR SETTIME  time will appear above the System window.
+
+
+
+WNDMGR CLRWNDOW [ClrWndow] clears everything from the current window.
+
+WNDMGR CREWNDOW [CreWndow] creates new windows within the System window area.
+WNDMGR CREWNDOW To create a new window press [CreWndow] and follow the
+WNDMGR CREWNDOW directions given.  The new window is cleared and becomes the
+WNDMGR CREWNDOW current window.  To regain the original window as current
+WNDMGR CREWNDOW press [SelWndow] until the full-sized window reappears.
+
+WNDMGR DELWNDOW [DelWndow] deletes the current window.  After selecting the
+WNDMGR DELWNDOW window you want to delete, press [DelWndow].
+
+WNDMGR EXIT     [Exit] returns you to the Dispatcher level of functions.
+
+WNDMGR HELP     [Help] is left by pressing the [ESC] key.
+
+WNDMGR LdKybdCh [LdKybdCh] loads a keyboard character set.  After pressing
+WNDMGR LdKybdCh [LdKybdCh] type the file name of the character set to be used.
+
+WNDMGR LDDISPCH [LdDispCh] loads a display character set.  After pressing
+WNDMGR LDDISPCH [LdDispCh] type the file name of the character set to be used.
+
+WNDMGR REVBKGND [RevBkgnd] reverses the background of the current window from
+WNDMGR REVBKGND black to white, and vice versa.
+
+WNDMGR SCRLMODE [ScrlMode] toggles the screen to display in either scroll mode
+WNDMGR SCRLMODE or page mode.  In page mode you must depress [CTRL]-S for each
+WNDMGR SCRLMODE new page.
+
+WNDMGR SELWNDOW [SelWndow] allows you to choose one of your defined windows
+WNDMGR SELWNDOW and make it the current window.
+
+WNDMGR TMPWNDOW [TmpWndow] allows you to create a temporary window inside
+WNDMGR TMPWNDOW the System window.  The window is not cleared at inception.
+
+WNDMGR TESTPTRN [TestPtrn] enters a test pattern program to display test patterns
+WNDMGR TESTPTRN on screen.
+

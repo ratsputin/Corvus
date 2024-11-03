@@ -1,0 +1,98 @@
+
+         To  : Distribution
+         From: Keith Ball
+
+         file: VOLLCK.DC3.TEXT
+         date: January 6, 1984
+
+         Re: 3rd proposal on implementation of volume protection
+
+
+         Volumes will be of three types 1) read only (RO), 2)
+         read and write (RW) and 3) controlled read/write access
+         (CA).  Controlled read/write access is defined by a new
+         flag in the volume table, called the lock volume flag.
+         When the flag is set the mount manager and boot must
+         mount the volume read only. When the user wishes to
+         write to a controlled access type volume they must run a
+         lock program which will change the user's access to RW
+         if no other user has already locked the volume.  When
+         the user is finished with a volume the user runs an
+         unlock program to reset their access to read only and
+         unlock the volume.
+
+         The system utilities, especially the drive manager, must
+         be changed to allow for this third type of volume for
+         adds and changes.
+
+         One program, LOCK, is needed to lock one or more CA
+         volumes the user has mounted.  LOCK will check the
+         volume's lock flag.  If it is locked then LOCK will
+         check to see if the user has locked it.  If the user did
+         then LOCK treats the volume as if it were unlocked.  If
+         it is locked by another user then LOCK will report which
+         user has locked the volume.  If it is unlocked, LOCK
+         will lock the volume for this user and then change the
+         user's access to RW.
+
+         Two programs, UNLOCK and LOGOFF, are necessary to unlock
+         a CA volume no longer needed by the user.  UNLOCK
+         releases one or more volumes the user has locked by
+         clearing the lock flag and setting the user's access for
+         that volume in the mount table to read only.  LOGOFF
+         unlocks all the user's locked volumes and sets their
+         access to RO, as well as broadcasting a Goodbye message.
+         It must be executed before a user turns off their
+         workstation.
+
+         All three programs must be command line driven.  For
+         example, LOCK VOL1 VOL2, or UNLOCK V12.  LOGOFF
+         requires no parameters.
+
+         Volumes are locked by setting bit 7 (msb) of byte
+         indexed by 26 in block 2 of the volume.  The lock flag
+         is in the directory file entry of the UCSD P-system
+         directory that is the header in every Constellation II
+         volume.  If the bit is clear then the volume is
+         unlocked.  If the bit is set then the volume is locked.
+         When locked, the remaining 7 bits of byte 26 and all of
+         byte 27 are the user number from the drive.user table
+         for the user who has the volume locked.
+
+         How to lock volume in LOCK program when volume is of
+         type controlled read/write access.
+
+           1) Do drive command test and set on volume's lock
+              flag.
+
+           2) If the volume is locked then do not give user
+              read/write access.  The LOCK program should read in
+              the directory block (volume block 2) and get the
+              user number of the user who has the volume locked.
+              Then it looks up the user name in the drive.user
+              table and displays it.
+
+           3) If the volume is unlocked then the LOCK program
+              must write the user's number into the volume's
+              directory's user number field.  The user number is
+              available from the drive.user table.  If the OS is
+              MSDOS 2.0 then LOCK should read in the FAT.
+
+         How to unlock a volume.
+
+           1) If the OS is MSDOS 2.0, flush the FAT.
+
+           2) Change the user's access to the volume in the mount
+              table to RO.
+
+           3) Do drive command test and clear on volume's lock
+              flag.
+
+
+         For future considerations :
+
+         The LOCK program can broadcast a Constellation II lookup
+         "Where are you?" message to find if the user who has
+         locked the volume is still active.  If the user is
+         inactive then the LOCK program can lock the volume for
+         it's user.

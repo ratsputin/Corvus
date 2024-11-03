@@ -1,0 +1,29 @@
+
+         To  : Distribution
+         From: Keith Ball
+
+         Re  : Device types for non-booting disk servers
+
+         In order to make system software feasible, I have added a new
+         generic device type, $0010.  This device type represents all
+         non-booting disk servers.  These are like the Bank but the
+         Bank will not use this device type.  Therefore, the total
+         device types needed to find all the disk servers on a net are
+         1, 5, and $10.
+
+         Any new disk server that does not boot should respond to
+         a Constellation II lookup protocol message with the $0010
+         device type.
+
+
+
+         Distribution:
+
+         Curt Burg
+         Eugene Heil
+         Jim Lieb
+         John Nguyen
+         John Piccone
+
+         Network Architecture Group
+         System Software Group

@@ -1,0 +1,39 @@
+
+Directory of UCSD disk image file 'fpsys3.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FPSYS3 has 31 files,  0 to 6 (6), eov 500, size 10, free 31
+
+ 1: SYSTEM.FILER    Code 27-May-82    6-  44(  38), 19456+512= 19968 bytes
+ 2: SETUP.CODE      Code 14-Apr-82   44-  80(  36), 18432+512= 18944 bytes
+ 3: FMUNITS.CODE    Code  1-Apr-82   80- 113(  33), 16896+512= 17408 bytes
+ 4: DECODE.CODE     Code  1-Apr-82  113- 141(  28), 14336+512= 14848 bytes
+ 5: XREF.CODE       Code  7-Dec-81  141- 169(  28), 14336+512= 14848 bytes
+ 6: PCDOS.CODE      Code 18-Oct-82  169- 196(  27), 13824+512= 14336 bytes
+ 7: SYSTEM.LINKER   Code  1-Apr-82  196- 223(  27), 13824+512= 14336 bytes
+ 8: SYSTEM.INTERP   Data  1-Feb-84  223- 247(  24), 12288+512= 12800 bytes
+ 9: TURNKEY.CODE    Code 29-Mar-83  247- 271(  24), 12288+512= 12800 bytes
+10: CC.PSYSTEM      Data  1-Feb-84  271- 294(  23), 11776+512= 12288 bytes
+11: CONFIG.CODE     Code  7-Jan-82  294- 315(  21), 10752+512= 11264 bytes
+12: SYSTEM.SYNTAX   Data  4-Dec-80  315- 329(  14),  7168+512=  7680 bytes
+13: FORMATTER.CODE  Code  7-Jan-82  329- 343(  14),  7168+512=  7680 bytes
+14: LIBRARY.CODE    Code  1-Apr-82  343- 356(  13),  6656+512=  7168 bytes
+15: SCREENTEST.CODE Ux382  7-Dec-81  356- 369(  13),  6656+512=  7168 bytes
+16: SCREENOPS.CODE  Code 19-Jul-81  369- 382(  13),  6656+512=  7168 bytes
+17: LINKMAP.TEXT    Text  7-Mar-84  382- 394(  12),  6144+512=  6656 bytes
+18: IV.ZAP.CODE     Code 19-Jul-83  394- 406(  12),  6144+512=  6656 bytes
+19: 8086.ERRORS     Data  8-May-81  406- 417(  11),  5632+130=  5762 bytes
+20: COMPRESS.CODE   Code 24-May-82  417- 427(  10),  5120+512=  5632 bytes
+21: COMMANDIO.CODE  Code 19-Jul-81  427- 437(  10),  5120+512=  5632 bytes
+22: FINDPARAMS.CODE Code  7-Dec-81  437- 446(   9),  4608+512=  5120 bytes
+23: IVCRCLIST.CODE  Code  2-Aug-83  446- 454(   8),  4096+512=  4608 bytes
+24: RECOVER.G.CODE  Code  7-Apr-82  454- 462(   8),  4096+512=  4608 bytes
+25: SYSTEM.LIBRARY  Data  1-Feb-84  462- 469(   7),  3584+512=  4096 bytes
+26: SETPRINTER.CODE Code 28-Jan-83  469- 476(   7),  3584+512=  4096 bytes
+27: 8086.OPCODES    Data  6-Oct-82  476- 481(   5),  2560+ 64=  2624 bytes
+28: COPYDUPDIR.CODE Code  7-Apr-82  481- 484(   3),  1536+512=  2048 bytes
+29: MN.CODE         Code  5-Aug-83  484- 487(   3),  1536+512=  2048 bytes
+30: SYSTEM.IBM      Data 20-Jun-83  487- 489(   2),  1024+512=  1536 bytes
+31: SYSTEM.MISCINFO Data  2-Oct-84  489- 490(   1),   512+512=  1024 bytes

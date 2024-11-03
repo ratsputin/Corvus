@@ -1,0 +1,37 @@
+
+Directory of UCSD disk image file 'te1000_diffVer.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume TE1000 has 29 files,  0 to 6 (6), eov 500, size 16, free 29
+
+ 1: ASSIGN          Data  4-Nov-82    6-  16(  10),  5120+512=  5632 bytes
+ 2: BOOT2           Data  7-May-82   16-  18(   2),  1024+512=  1536 bytes
+ 3: BOOT4           Data  7-May-82   18-  20(   2),  1024+512=  1536 bytes
+ 4: BOOT5           Data  7-May-82   20-  22(   2),  1024+512=  1536 bytes
+ 5: CBI             Data 19-Jul-82   22-  31(   9),  4608+512=  5120 bytes
+ 6: CC.DISPAT       Data  4-Nov-82   31-  49(  18),  9216+512=  9728 bytes
+ 7: CC.EXEC         Data  4-Nov-82   49-  63(  14),  7168+512=  7680 bytes
+ 8: CC.FILMGR       Data  4-Nov-82   63- 107(  44), 22528+512= 23040 bytes
+ 9: CC.KERNEL       Data  4-Nov-82  107- 157(  50), 25600+512= 26112 bytes
+10: CC.SETUP        Data  4-Nov-82  157- 202(  45), 23040+512= 23552 bytes
+11: CC.SYSMGR       Data  4-Nov-82  202- 223(  21), 10752+512= 11264 bytes
+12: CC.WNDMGR       Data  4-Nov-82  223- 252(  29), 14848+512= 15360 bytes
+13: CF18.4.DATA     Data  9-Dec-81  252- 292(  40), 20480+512= 20992 bytes
+14: CSH.DEFAULT     Data  4-Nov-82  292- 301(   9),  4608+512=  5120 bytes
+15: CSK.DEFAULT     Data  6-Jul-82  301- 303(   2),  1024+512=  1536 bytes
+16: CSK.REV0        Data  6-Jul-82  303- 305(   2),  1024+512=  1536 bytes
+17: CSV.DEFAULT     Data  4-Nov-82  305- 308(   3),  1536+512=  2048 bytes
+18: DDIAG           Data 22-Dec-82  308- 397(  89), 45568+512= 46080 bytes
+19: DIAG.DATA       Data 14-Sep-82  397- 398(   1),   512+512=  1024 bytes
+20: DRV.ADISK       Data  4-Nov-82  399- 405(   6),  3072+512=  3584 bytes
+21: DRV.DISPHZ      Data  4-Nov-82  405- 413(   8),  4096+512=  4608 bytes
+22: DRV.DISPVT      Data  4-Nov-82  413- 421(   8),  4096+512=  4608 bytes
+23: DRV.FDISK       Data  4-Nov-82  421- 425(   4),  2048+512=  2560 bytes
+24: DRV.KYBD        Data  4-Nov-82  425- 430(   5),  2560+512=  3072 bytes
+25: DRV.PRNTR       Data  4-Nov-82  430- 433(   3),  1536+512=  2048 bytes
+26: DRV.SYSTRM      Data  4-Nov-82  433- 439(   6),  3072+512=  3584 bytes
+27: DRV.TIMER       Data  4-Nov-82  439- 443(   4),  2048+512=  2560 bytes
+28: OLDCSK.DEFAULT  Data  4-Nov-82  443- 445(   2),  1024+512=  1536 bytes
+29: CF18.4AP.DATA   Data 14-Dec-82  445- 485(  40), 20480+512= 20992 bytes

@@ -1,0 +1,99 @@
+-
+-     PROGRAM USERMGR  (* USER MANAGER *)
+-
+
+Enter system name:  <enter response>
+
+ERROR***
+  System <name> not found.  Reenter.
+
+Enter system password:  <enter response>
+
+ERROR***
+  Incorrect password.  Reenter.
+  Program currently in use.  Program aborted.
+
+
+USER MANAGER [Vx.x]:  L(ist users    A(dd user        R(emove user
+                      C(hange user   Q(uit
+
+
+USER MANAGER - LIST USERS
+
+List user information
+
+  The default listing device is <default device>.
+  Enter the device to send the listing to. <enter response>
+
+  ERROR***
+    Listing device <name> cannot be accessed.  Reenter.
+
+  User information for system <system name>.   <date if available>
+
+          User name    Password    Boot type   Boot system
+       1  DENISEU      XYZ         UCSD        R&D
+       2  BRUCE        X           UCSDIV      R&D
+       3  KEITH                    CPM         R&D
+          ...
+
+
+USER MANAGER - ADD USER
+
+Add a user to the system.
+
+  Enter user name: <enter response>
+
+  ERROR***
+    User <name> already exists.  Reenter.
+    Invalid user name.  Legal characters are A..Z,0..9.  Reenter.
+
+  Enter password: <enter response-NOT echoed>
+
+  Enter boot system name: <enter response>
+
+  WARNING***
+    System <name> is not currently active.  Do you wish to
+    respecify the system name? <enter response>
+    If y, then reenter.
+
+  User <name> added.
+
+
+USER MANAGER - REMOVE USER
+
+Remove a user from the system.
+
+  Enter user name to remove: <enter response>
+
+  ERROR***
+    User <name> was not found.  Reenter.
+
+  User <name> removed.
+
+
+USER MANAGER - CHANGE USER
+
+Change the user information.
+
+  Enter user name to be changed: <enter response>
+
+  ERROR***
+    User <name> was not found.  Reenter.
+
+  Enter new user name: <enter response>
+
+  ERROR***
+    User <name> already exists.  Reenter.
+
+  Enter new password: <enter response>
+
+  The current boot system is <system name>.
+  Enter boot system name: <enter response>
+
+  WARNING***
+    System <name> is not currently active.  Do you wish to
+    respecify the system name? <enter response>
+    If y, then reenter.
+
+  Information for user <name> has been updated.
+

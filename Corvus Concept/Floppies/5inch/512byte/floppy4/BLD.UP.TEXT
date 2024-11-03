@@ -1,0 +1,15 @@
+clrwnd
+;
+; BLD.UP -- Build Corvus Uniplex Boot PROM
+;
+delfil -q up.prom.text up.prom.obj up.prom
+crunch -q /icsys
+vsippp prom up -a
+asm68k up.prom
+crunch -q /icsys
+linker up.prom
+delfil -q up.prom.obj
+crunch -q /icsys
+;
+; Finished ....
+;

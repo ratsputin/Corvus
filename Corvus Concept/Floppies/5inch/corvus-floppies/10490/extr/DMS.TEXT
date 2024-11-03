@@ -1,0 +1,958 @@
+{ P.VSIDMS.TEXT -------------------------------------------------------}
+{
+{       VSIDMS -- VSI Dictionary Management System
+{
+{       (c) Copyright 1981 Valley Systems International
+{                          Sunnyvale, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  07-20-81  LEF  Original program
+{       v 1.1  04-20-83  LEF  Ported to Corvus Concept
+{       eAve@ eA1.2e@  eA05-xx-84e@  eAjdre@  eAIntegratede@ eAintoe@ eAWordProce@ }
+{
+{       Still need:
+{           internal program request processing
+{           word key generation
+{
+{ Corvus CONCEPT version
+{----------------------------------------------------------------------}
+
+{$S Spell}
+Procedure SpellTask(top,bot : Integer);
+
+CONST
+      DictKey    = 'DictKey';
+      version    = '1.2';      { eAIntegratede@ eAintoe@ eACC.WPe@ }
+      ESC        = 27;
+      DictFID    = '/dict/DICTIONARY';
+      cfIDline   = 4;   cfIDcol    = 24;
+      pfIDline   = 5;   pfIDcol    = 24;
+      FileLine   = 7;
+      addwdline  = 9;   addptline  = 10;
+      addawline  = 12;  addopline  = 17;
+      DotLine    = 26;  StatusLine = 27;
+
+TYPE
+      str16   = string[16];
+
+{$P}
+VAR
+      CurSlot :  CDAddr;
+      SKeys   :  SemKeyList;
+      SStat   :  Integer;
+      AddFlg,
+      EditFlg :  Boolean;
+      SemKey  :  SemStr;
+      pmt:       pStrTyp;
+(*    altwds:    array [1..12] of string[wdlen];  *)
+      dbID:      dbname;
+      key:       WordRcd;
+      dta:       WordRcd;
+      alt:       WordRcd;
+      ch:        char;
+      bx,ex:     integer;
+      PromptCol: integer;
+      Abort,
+      EndFile:   boolean;
+      FmtCmd:    boolean;
+      cap1,cap2: boolean;
+      HeapInfoSW:  boolean;
+      AltCnt,
+      AddCnt,
+      UpdCnt   : Integer;
+      DictVol:   str80;
+      progname:  str80;
+      CurWd:     strTyp;
+      CurFID:    str80;
+      dash:      str80;
+      ValidResp: str80;
+      Done     : Boolean;
+
+Procedure DictError;                            FORWARD;
+Procedure InitWdTbl;                            FORWARD;
+Procedure SetUpWord;                            FORWARD;
+
+Function LockDictKey : Boolean;
+
+Var
+  Counter : Integer;
+
+Begin
+  Counter := 0;
+  Repeat
+    SStat := SemLock(DictKey);
+    Counter := Counter + 1;
+    If (SStat = 253) or (SStat < 0 ) Then Begin
+      Bell(BelErr);
+      TellUsr(Msg(MGSpell,19));  { eA"Errore@ eAine@ eAsema4s..."e@ }
+      LockDictKey := False;
+      Exit(LockDictKey)
+      End
+  Until (Counter > 10) or (SStat = 0);
+  If Counter > 10 Then Begin
+    Bell(BelErr);
+    TellUsr(Msg(MGSpell,20));    { eA"Dictionarye@ eAverye@ eAbusy..."e@ }
+    LockDictKey := False;
+    Exit(LockDictKey)
+    End;
+  LockDictKey := True
+End;
+
+
+Function UnLockDictKey : Boolean;
+
+Begin
+  SStat := SemUnLock(DictKey);
+  If SStat = 0 Then UnLockDictKey := True
+    Else UnLockDictKey := False
+End;
+
+
+{ DMSdict -------------------------------------------------------------}
+{ Validate document text processing
+{ Add dictionary words processing
+{----------------------------------------------------------------------}
+PROCEDURE DMSdict (update: boolean);
+
+Const
+  MaxReps = 20;
+
+Type
+  RepRec = Record
+             Word : string[wdlen];
+             Repl : StrTyp
+             End;
+
+  var
+    GReps  :  Array[1..MaxReps] of RepRec;
+    GRepCnt:  Integer;
+    CurLn,                    { eALinee@ eAwe'ree@ eAworkinge@ eAone@ }
+    OCurLn,
+    LastLin,                   { eA#e@ eAofe@ eAthee@ eAlaste@ eAlinee@ eAine@ eAthee@ eAworkpade@ }
+    Row,
+    i,n   : integer;
+    st,
+    ch    : char;
+    CurPtr: wordptr; link: integer; KeepFile: boolean;
+    BCurRcd: BA;
+    SCurRcd,
+    CurRcd: TXTString;
+    Done  : Boolean;
+    Legals: Set Of Char;
+
+(*
+{ DMSdict.ExitDICT ----------------------------------------------------}
+{----------------------------------------------------------------------}
+    PROCEDURE ExitDICT;
+
+      begin
+        CrtAction (CursorOFF);
+        CrtAction (EchoOFF);
+        CrtAction (CursorInvrse);
+        exit (DMSdict);
+      end;
+*)
+{ DMSdict.DictDBerror -------------------------------------------------}
+{----------------------------------------------------------------------}
+    PROCEDURE DictDBerror;
+
+    begin
+      DictError;
+
+  (*  TXTclose (INfcb,INfile);
+      if update then CLOSE (OTfile,PURGE);  *)
+      Exit(DmsDict)
+    end;
+
+{$P}
+{ DMSdict.NextWord ----------------------------------------------------}
+{----------------------------------------------------------------------}
+  PROCEDURE NextWord;
+
+  var
+    l,
+    p       : integer;
+    Partial,
+    finished: boolean;
+    prevch  : char;
+
+  begin
+   Partial := False;
+   LblsOff;
+   finished := FALSE;
+   prevch := ' ';
+   while NOT finished do begin            { eAGete@ eAae@ eAword...e@ }
+
+     if bx > ex then begin                { eATimee@ eAfore@ eAae@ eAnewe@ eAlinee@ }
+       Repeat
+         CurLn := CurLn + 1;
+         if CurLn > LastLin then begin    { eAWe'ree@ eAdone...e@ }
+           EndFile := TRUE;
+           CurRcd := '';
+           bx := 1;
+           ex := 0;
+           exit (NextWord)
+           end;
+         GetLine (BCurRcd,CurLn);          { eAGete@ eAae@ eAlinee@ eAfrome@ eAthee@ eAworkpade@ }
+         L := BkSpanNE(BCurRcd,MaxLinLen,' ');
+         SpecBAToStr(BCurRcd,L,CurRcd);
+         UpdtGauge( CurLn, LastLin );
+       Until Pos('.',CurRcd) <> 1;         { eASkipe@ eAdote@ eAcommandse@ }
+       bx := 1;                            { eACurrente@ eAchare@ eApositione@ }
+       ex := length(CurRcd);               { eALengthe@ eAof eArecorde@ }
+       end { eAIfe@ eABXe@ eA>e@ eAEXe@ }
+
+     else if CurRcd[bx] IN Legals
+       then finished := TRUE
+     else begin
+       prevch := CurRcd[bx];
+       bx := bx+1;
+       if prevch = chr(ESC) then begin
+         if CurRcd[bx] = chr($50) then bx := bx+2;
+         if CurRcd[bx] = chr($65) then bx := bx+1;
+         bx := bx+1
+         end
+       end
+     end;
+   CurWd := '';
+   finished := FALSE;
+
+   while NOT finished AND (bx <= ex) do begin
+     ch := CurRcd[bx];
+     if ch = chr(ESC) then begin
+       if CurRcd[bx+1] = chr($50) then bx := bx+2;
+       if CurRcd[bx+1] = chr($65) then bx := bx+1;
+       bx := bx+1;
+       end
+   else     begin
+       if ch IN Legals then begin
+         If BrkPress Then Begin                { eAAborte@ eAspelle@ eAchecke@ }
+           Abort := True;
+           LblsOn;
+           Exit(NextWord)
+           End;
+         CurWd := concat (CurWd,' ');
+         CurWd[length(CurWd)] := ch;
+         bx := bx+1;
+         end
+       else finished := TRUE;
+       end;
+     end;
+
+   FmtCmd := FALSE;
+   p := length(CurWd);
+   if prevch= '.' then
+       if (p = 2) OR (p = 3) then FmtCmd := TRUE;
+ end;
+
+{$P}
+{ DMSdict.KeepWord ----------------------------------------------------}
+{----------------------------------------------------------------------}
+ PROCEDURE KeepWord (CurPtr: wordptr; result: integer);
+
+ const
+   heapsave = 2048;
+
+ var
+   i,n  : integer;
+   ma   : longint;
+   tmpwd: wordptr;
+
+ begin
+   if length(CurWd) > wdlen then exit (KeepWord);
+   ma := memavail - heapsave;
+   if ma < SIZEOF(wordsav) then InitWdTbl;
+   NEW (tmpwd);
+   KeepCnt := KeepCnt+1;
+
+   if HeapInfoSW (* AND (dbWndPtr <> NIL) *) then begin
+     ma := memavail - heapsave;
+     n := ma DIV sizeof(wordsav);
+(*   i := WinSelect (dbWndPtr^);
+     writeln ('memavail = ',ma:1, '  words = ',KeepCnt:1,'  avail = ',n:1);
+     i := WinSystem (WsysCurr);  *)
+     end;
+
+     with tmpwd^ do begin
+       ll := NIL;
+       rl := NIL;
+       wd := dta.wd;
+       end;
+     if CurPtr = NIL then wordque[ord(dta.wd[1])-ord('A')+1] := tmpwd
+       else if result < 0 then CurPtr^.ll := tmpwd
+         else CurPtr^.rl := tmpwd;
+   end;
+
+{ DMSdict.FindWord ----------------------------------------------------}
+{----------------------------------------------------------------------}
+   PROCEDURE FindWord (var CurPtr: wordptr; var result: integer);
+
+   var
+     n    : integer;
+     tmpwd: wordptr;
+
+   begin
+     CurPtr := NIL;
+     result := 1;
+     n := ord(dta.wd[1])-ord('A')+1;
+     if length(CurWd) <= wdlen then begin
+       tmpwd := wordque[n];
+       while (tmpwd <> NIL) AND (result <> 0) do begin
+         CurPtr := tmpwd;
+         if dta.wd < tmpwd^.wd then begin
+           tmpwd := tmpwd^.ll;
+           result := -1;
+           end
+         else if dta.wd > tmpwd^.wd then begin
+           tmpwd := tmpwd^.rl;
+           result := +1;
+           end
+         else result := 0;
+         end;
+       end;
+   end;
+
+{$P}
+{ DMSdict.Disposition -------------------------------------------------}
+{----------------------------------------------------------------------}
+   PROCEDURE Disposition;
+
+   var
+     Aw       : Integer;
+     ValidDisp: boolean;
+     AutoFlag : Boolean;
+
+{ DMSdict.Disposition.AddWord -----------------------------------------}
+{----------------------------------------------------------------------}
+     PROCEDURE AddWord;
+
+       Procedure DoAdd;
+
+       Begin
+         vsiDBM (dbID,dbcINS,@key,@dta);
+         if dbStat <> 0 then DictDBerror;
+         AddCnt := AddCnt+1;
+         KeepWord (CurPtr,link);
+         ValidDisp := TRUE
+       end;
+
+     begin
+       If PrivDict Then DoAdd
+         Else If LockDictKey Then Begin
+           DoAdd;
+           If UnLockDictKey Then;
+           End
+     end;
+
+{ DMSdict.Disposition.GetWdText ---------------------------------------}
+{----------------------------------------------------------------------}
+     PROCEDURE GetWdText (AltFlag: boolean);
+
+     var
+       Counter: Integer;
+       wd     : strTyp;
+       Raskin : Boolean;
+
+     begin
+       wd := '';
+
+       If Not(AutoFlag) Then Begin
+         Pmt := Msg(MGSpell,9);
+         CsrWid := 1;                   { eASete@ eAcursore@ eAfore@ eAusere@ eAinpute@ }
+         Raskin := PmtStr(Pmt,Wd)       { eAGete@ eAreplacemente@ eAworde@ eAfrome@ eAusere@ }
+         End
+       else Wd := GReps[aw].Repl;       { eAGeeAt replacemeneAt worde@ eAfrome@ eAarraye@ }
+
+       bx := bx-length(CurWd);
+       Delete (CurRcd,bx,length(CurWd));
+       if wd <> '' then INSERT (wd,CurRcd,bx);
+       LongStrToBA(BCurRcd,1,CurRcd);
+       ReplaceLine(XREP,CurLn,BCurRcd); { eAReplacee@ eAolde@ eAline...e@ }
+       LinNewTxt := CurLin - 1;
+       ShowLine(CurLn);                 { eAShowe@ eAlinee@ eAwithe@ eAreplacemente@ }
+
+        { eAChecke@ eAfore@ eAautoe@ eAworde@ eAreplacemente@ }
+
+       If Not AutoFlag Then
+         If GRepCnt < MaxReps Then
+           If Confirm(Subst(@CurWd,Msg(MGSpell,21)),True) Then Begin
+             GRepCnt := GRepCnt + 1;
+             GReps[GRepCnt].Word := CurWd;       { eAWorde@ eAtoe@ eAreplacee@ }
+             GReps[GRepCnt].Repl := Wd;          { eAWhate@ eAtoe@ eAreplacee@ eAite@ eAwithe@ }
+             End;
+
+       UpdCnt := UpdCnt+1;
+       bx := 1;
+       ex := length(CurRcd);
+       ValidDisp := TRUE
+     end;
+
+{$P}
+{ DMSdict.Disposition -------------------------------------------------}
+{----------------------------------------------------------------------}
+   begin {Disposition}
+     AutoFlag := False;
+     Done := false;
+     ValidDisp := False;
+     SetUpNewTxt(CurLn);
+     CurCol := BANdxToCol(bx-Length(CurWd),BCurRcd);
+     CsrWid := length(CurWD);
+
+     { eAChecke@ eAtoe@ eAseee@ eAife@ eAworde@ eAhase@ eAbeene@ eApreviouslye@ eAflaggede@ eAfore@ eAautoe@ eAreplacemente@ }
+
+     If GRepCnt > 0 Then Begin
+       For aw := 1 To GRepCnt Do
+         If GReps[Aw].Word = CurWd Then Begin  { eAYep,e@ eAite@ eAhase@ }
+           AutoFlag := True;
+           GetWdText(False);
+           Done := True
+           End
+       End;
+
+     If Not AutoFlag Then Begin
+       LoadLabels(WdDpFrame);
+       LblsOn;
+       TellUsr( Subst( @CurWd, Msg(MGSpell,10) ))
+       End;
+     while not Done do begin
+        NextCmd;
+        case Cmd of
+          KF1: Begin
+                 AddWord;
+                 Done := True
+                 End;
+          KF3: Begin
+                 KeepWord( CurPtr, link);
+                 ValidDisp := True;
+                 Done := True
+                 End;
+          KF5: Begin
+                 Done := True;
+                 ValidDisp := True
+                 End;
+          KF6: Begin
+                 GetWdText(False);
+                 Done := True
+                 End;
+          KF10:Begin
+                 CsrWid := 1;
+                 LoadLabels(SpellFrame);
+                 Bell(BelAck);
+                 Exit(DMSDict)
+                 End
+          end
+        end
+
+
+  (*
+     DisplayWord (TRUE {update}); ValidDisp := FALSE;
+     repeat
+       GoToXY (PromptCol,addptline); CrtAction (CursorON);
+       ch := GetByte;
+       GoToXY (PromptCol,addptline); CrtAction (CursorOFF);
+       if ch = ' ' then ch := 'B';
+       case ch of
+           'A': AddWord;
+           'K': begin KeepWord (CurPtr,link);
+                      ValidDisp := TRUE; end;
+           'R': if update then
+                    if AltCnt > 0 then GetWdText (TRUE);
+           'T': if update then GetWdText (FALSE);
+           'X': HeapInfoSW := NOT HeapInfoSW;
+           'Y': dbTrace := NOT dbTrace;
+           'Z': dbActive := NOT dbActive;
+           '!': EndFile := TRUE;
+           end; {case}
+       if ch in ['B','X','Y','Z','!'] then ValidDisp := TRUE
+     until ValidDisp;
+
+
+     GoToXY (0,FileLine); CrtAction (ErasEOL);
+     if length(CurRcd) > WndowCol then begin
+       GoToXY (0,FileLine+1);
+       CrtAction (ErasEOL)
+       end;                *)
+   end;
+
+{$P}
+{ DMSdict -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+
+      {eA----opene@ eAdatae@ eAbasee@ eA----e@}
+
+      vsiDBM (dbID,dbcOPN,@key,@dta);
+      if dbStat <> 0 then begin
+        DictError;
+        Exit(DmsDict)
+        end;
+      ccDRVioINIT;
+      InitSlot(CurSlot);
+      If CurSlot.SlotNo <> 5 Then Begin         { eAPrivatee@ eAdictionarye@ }
+        PrivDict := True;
+        TellUsr(Msg(MGSpell,21))         { eA"Privatee@ eAdictionarye@ eAassumed."e@ }
+        End
+      else ccSEMA4Init(CurSlot);         { eAInite@ eAsemaphorese@ }
+      CurRcd := '';
+      EndFile := FALSE;
+      Abort := False;
+      bx := 1;
+      ex := -1;
+      UpdCnt := 0;
+      CurLn := Top;
+      OCurLn := Top;
+      LastLin := Bot;
+      GRepCnt := 0;                    { eANoe@ eAglobale@ eAreplacementse@ eAyete@ }
+      Legals := UCase+LCase+[''''];    { eALegale@ eAcharacterse@ eAfore@ eAae@ eAworde@ }
+      AddCnt := 0;
+      TellUsr(Msg(MGSpell,8));         { eA"Presse@ eABREAKe@ eAtoe@ eAaborte@ eAspelle@ eAcheck"e@ }
+      NextWord;
+
+      {--- get words from text file -----------------------------------}
+
+      while NOT EndFile do begin
+          if NOT FmtCmd AND (length(CurWd) >= 2) then begin
+              SetupWord;
+              if length(CurWd) > wdlen
+                  then Disposition
+                  else begin
+                      FindWord (CurPtr,link);            { eASearche@ eAmemorye@ }
+                      if link <> 0 then begin
+                          vsiDBM (dbID,dbcGU,@key,@dta); { eASearche@ eAdatabasee@ }
+                          if dbStat = dbsNMR
+                              then Disposition
+                              else if dbStat = 0
+                                  then KeepWord (CurPtr,link)
+                                  else DictDBerror;
+                          end;
+                      end;
+              end;
+          if NOT EndFile then begin
+            NextWord;
+            If Abort Then Begin
+              Bell(BelAck);
+              TellUsr(Msg(MGSpell,11));                { eA"Spelle@ eAchecke@ eAaborted"e@ }
+              CsrWid := 1;
+              LoadLabels(SpellFrame);
+              Exit(DmsDict)
+              End
+            end
+          end; {while NOT EndFile}
+          CsrWid := 1;
+          SetUpNewTxt(OCurLn)                 { eARestoree@ eAoriginale@ eApositione@ }
+      end;
+
+{ DMSedit -------------------------------------------------------------}
+{ Edit dictionary words processing
+{----------------------------------------------------------------------}
+PROCEDURE DMSedit;
+      var n,blk,ofs,
+          func,wdline,
+          awline       : integer;
+          st           : str80;
+          Done         : Boolean;
+
+    PROCEDURE MakeWord;
+        var n: integer;
+        begin CurWd := ''; n := 1;
+        while dta.wd[n] <> ' ' do begin
+            CurWd[0] := chr(n);
+            CurWd[n] := dta.wd[n];
+            n := n+1; end;
+        end;
+
+    Procedure UpDate;
+
+    Begin
+      vsiDBM (dbID,func,@key,@dta);
+      if dbStat <> 0 then begin
+        Bell(BelErr);
+        TellUsr(Msg(MGSpell,3));
+        Done := True
+        end
+      else begin
+        MakeWord;
+        SetupWord;
+        TellUsr( Subst( @CurWd, Msg(MGSpell,15) ))   { eA"Currente@ eAword:"e@ }
+        end
+    end;
+
+    Procedure DeleteWord;
+
+    Begin
+      vsiDBM (dbID,dbcDEL,@key,@dta);
+      if dbStat <> 0 then begin
+        Bell(BelErr);
+        TellUsr(Msg(MGSpell,3))
+        end
+      else if func = dbcGN then vsiDBM (dbID,dbcGP,@key,@dta);
+      TellUsr( Subst( @CurWd, Msg(MGSpell,17) ));   { eA"Worde@ eAdeleted."e@ }
+      If Not PrivDict Then If UnLockDictKey Then;
+    End;
+
+
+    Procedure InsertWord;
+
+    Begin
+      vsiDBM (dbID,dbcINS,@key,@dta);
+      if dbStat <> 0 then begin
+          Bell(BelErr);
+          TellUsr(Msg(MGSpell,3))
+          End;
+      dbCurBlk := blk;
+      dbCurOfs := ofs;
+      TellUsr( Subst( @CurWd, Msg(MGSpell,18) )); { eA"Worde@ eAadded."e@ }
+      If Not PrivDict Then If UnLockDictKey Then;
+    End;
+
+
+begin                              {DMSedit}
+  LoadLabels(DEditFrame);
+  Done := False;
+  func := dbcGN;
+  CurWd := '';
+  vsiDBM (dbID,dbcOPN,@key,@dta);
+  if dbStat <> 0 then begin
+    Bell(BelErr);
+    TellUsr(Msg(MGSpell,3));
+    end;
+  Pmt := Msg(MGSpell,14);
+  If PmtStr(Pmt,CurWd) Then Begin       { eA"Entere@ eAstartinge@ eAword:e@ eA"e@ }
+    SetupWord;
+    vsiDBM (dbID,dbcGU,@key,@dta);
+    if dbStat <> 0 then vsiDBM (dbID,dbcGN,@key,@dta);
+    if dbStat <> 0 then vsiDBM (dbID,dbcGP,@key,@dta);
+    if dbStat <> 0 then begin
+      Bell(BelErr);
+      TellUsr(Msg(MGSpell,3));
+      LoadLabels(SpellFrame);
+      Exit(DmsEdit)
+      end;
+    MakeWord;
+    SetupWord;
+    Done := False;
+    TellUsr( Subst( @CurWd, Msg(MGSpell,15) ));  { eA"Currente@ eAword:"e@ }
+    While Not Done Do Begin
+      NextCmd;
+      Case Cmd Of
+        KF1: Begin
+               Func := dbcGP;
+               UpDate
+               End;
+        KF2: Begin
+               Func := dbcGN;
+               UpDate
+               End;
+        KF5: Begin
+               Pmt := Msg(MGSpell,16);
+               If PmtStr(Pmt,CurWd) Then Begin
+                 SetupWord;
+                 blk := dbCurBlk;
+                 ofs := dbCurOfs;
+                 If PrivDict Then InsertWord
+                   Else If LockDictKey Then InsertWord;
+                   CurWd := ''
+                 End
+               End;
+        KF6: Begin
+               If PrivDict Then DeleteWord
+                 Else If LockDictKey Then DeleteWord;
+                 CurWd := ''
+               End;
+        KF10: Done := True
+        End                      { eACasee@ eACMDe@ }
+      End;                       { eAIfe@ eAPmtStre@ }
+      LoadLabels(SpellFrame)
+    End
+End;
+
+(*
+
+        DisplayWord (TRUE);
+        CrtAction (CursorON);
+        CrtAction (EchoON);
+        while TRUE do begin
+            CurWd := '';
+            if GetString (CurWd) <> Normal then ExitEDIT;
+            CrtAction (CursorOFF);
+            CrtAction (EchoOFF);
+            GoToXY (0,StatusLine);
+            CrtAction (ErasEOL);
+            GoToXY (PromptCol,addptline);
+            if length(CurWd) = 1 then begin
+                if CurWd[1] IN ['N','>'] then func := dbcGN;
+                if CurWd[1] IN ['P','<'] then func := dbcGP;
+                if CurWd[1] = 'D' then begin
+                    vsiDBM (dbID,dbcDEL,@key,@dta);
+                    if dbStat <> 0 then begin
+                      GoToXY (0,StatusLine);
+                      write (dbStatmg);
+                      CrtAction (ErasEOL);
+                      end
+                    else if func = dbcGN then vsiDBM (dbID,dbcGP,@key,@dta);
+                    end;
+                CurWd := '';
+                end;
+
+{$P}
+            if length(CurWd) = 0
+                then begin
+                    vsiDBM (dbID,func,@key,@dta);
+                    if dbStat <> 0
+                        then begin
+                            GoToXY (0,StatusLine);
+                            write (dbStatmg); CrtAction (ErasEOL);
+                            end
+                        else begin
+                            MakeWord; SetupWord;
+                            DisplayWord (TRUE); CurWd := '';
+                            end;
+                    end
+                else if length(CurWd) > 2 then begin
+                    SetupWord; blk := dbCurBlk; ofs := dbCurOfs;
+                    vsiDBM (dbID,dbcINS,@key,@dta);
+                    if dbStat <> 0 then begin
+                        GoToXY (0,StatusLine);
+                        write (dbStatmg); CrtAction (ErasEOL);
+                        end;
+                    dbCurBlk := blk; dbCurOfs := ofs;
+                    end;
+            GoToXY (PromptCol,addptline); CrtAction (ErasEOL);
+            CrtAction (CursorON); CrtAction (EchoON);
+            end;
+        ExitEDIT;
+      end;
+*)
+
+(* {$S VSIinit} *)
+{ InitDict-------------------------------------------------------------}
+{ VSIDMS program initialization
+{----------------------------------------------------------------------}
+PROCEDURE InitDict;
+      var ch: char;
+(*
+{ InitDict.GetAlloc ----------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE GetAlloc;
+          begin
+          writeln ('Dictionary file does not exist.');
+          writeln; writeln;
+          writeln ('Dictionary file may be from 50 to 16,000 blocks.');
+          writeln;
+          while (dbAlloc < 50) OR (dbAlloc > 16000) do begin
+              write ('Enter number of blocks for dictionary file: ');
+              CrtAction (ErasEOL);
+              CrtAction (CursorON); CrtAction (EchoON);
+              if GetNum (dbAlloc) <> Normal then DMSexit;
+              CrtAction (CursorOFF); CrtAction (EchoOFF);
+              writeln; CrtAction (ErasEOL);
+              if (dbAlloc < 50) OR (dbAlloc > 16000) then begin
+                  writeln (beep,
+                          'Invalid number of blocks specified ....');
+                  CrtAction (CursorUp); CrtAction (CursorUp);
+                  CrtAction (CursorUp);
+                  end;
+              end;
+          end;
+
+
+{ InitDict.InitDB ------------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE InitDB;
+          var i: integer; dbptr: pFLDrcd; heapptr: ^integer;
+
+          PROCEDURE QueueDef (nam: dbfname; typ: dbftype; len: integer);
+              begin
+              NEW (dbptr);
+              with dbptr^ do begin
+                  with dbfrcd do begin
+                      dbfnam := nam; dbftyp := typ; dbflen := len; end;
+                  dbffpt := dbflsthd;
+                  end;
+              dbflsthd := dbptr;
+              end;
+
+      begin {InitDB}
+      vsiDBM (dbID,dbcOPN,@key,@dta);
+      if dbStat = 0
+          then dbStatmg := 'Dictionary data base already exists'
+          else if (dbStat = 10) OR (dbStat = dbsNDB) then begin
+              writeln; writeln ('Creating dictionary file ....');
+              MARK (heapptr); dbflsthd := NIL;
+              QueueDef ('SOURCE  ',fdta,1);
+              QueueDef ('WORD    ',fkey,wdlen);
+              QueueDef ('WORDKEY ',fkey,kylen);
+              vsiDBM (dbID,dbcDBC,@key,@dta);
+              RELEASE (heapptr);
+              if dbStat = 0
+                  then dbStatmg := 'Dictionary data base created';
+              end;
+      end;
+
+{ InitDict.ChkDBstatus -------------------------------------------------}
+{----------------------------------------------------------------------}
+      PROCEDURE ChkDBstatus;
+          begin
+          writeln; writeln (dbStatmg); CrtPause (ch);
+          if dbStat <> 0 then DMSexit;
+          end;
+
+*)
+{ InitDict-------------------------------------------------------------}
+      begin {InitDict}
+      dbID := 'VD';
+      HeapInfoSW := FALSE;
+      CurFID := '';
+      dash := '';
+      vsiDBM (dbID,dbcINT,@key,@dta);
+      if dbStat = 0 then begin
+          dbFileID := DictFID;
+          vsiDBM (dbID,dbcOPN,@key,@dta);
+          end;
+      if dbStat <> 0 then begin
+          Bell(BelErr);
+          TellUsr(Msg(MGSpell,2));     { eA"Can'te@ eAfinde@ eAdictionary!"e@ }
+          Exit(SpellTask)
+          End;
+
+(*
+          if (dbStat = 10) AND (DictVol = '')
+              then begin GetAlloc; InitDB; end;
+          ChkDBstatus;
+          end;
+*)
+
+      end;
+
+
+(*
+{ GoToAlt -------------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE GoToAlt (n: integer);
+      var lin,col: integer;
+      begin
+      lin := addawline+1 + ((n-1) MOD 4);
+      col := (((n-1) DIV 4) * (wdlen+8)) + 3;
+      GoToXY (col,lin);
+      end;
+
+{$P}
+{ DisplayWord ---------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DisplayWord {(DisplayAlt: boolean)};
+      var i,blk,ofs: integer; altwd: string[wdlen];
+
+      PROCEDURE LowerCase (n: integer);
+          begin
+          if alt.wd[n] IN ['A'..'Z'] then
+              alt.wd[n] := chr(ord(alt.wd[n])-ord('A')+ord('a'));
+          end;
+
+      begin
+      GoToXY (17,addwdline); CrtAction (VdoInv);
+      write (' ',CurWd,' '); CrtAction (VdoNor);
+      AltCnt := 0;
+      if DisplayAlt then begin
+          cap1 := TRUE; cap2 := TRUE;
+          if CurWd[1] IN ['a'..'z']
+              then begin cap1 := FALSE; cap2 := FALSE; end
+              else if length(CurWd) >= 2 then
+                  if CurWd[2] IN ['a'..'z'] then cap2 := FALSE;
+          blk := dbCurBlk; ofs := dbCurOfs;
+     FILLCHAR (key.wd,wdlen,'_');
+          GoToAlt (AltCnt+1);
+          vsiDBM (dbID,dbcGU,@key,@alt);
+          while (dbStat = 0) AND (AltCnt < 12)  do begin
+              if alt.wd <> dta.wd then begin
+                  if NOT cap1 then LowerCase (1);
+                  if NOT cap2 then for i := 2 to wdlen do LowerCase (i);
+                  AltCnt := AltCnt+1; i := 0;
+                  for i := 1 to wdlen do begin
+                      altwds[AltCnt,i] := alt.wd[i];
+                      if alt.wd[i] <> ' '
+                          then altwds[AltCnt,0] := chr(i);
+                      end;
+                  write (AltCnt:2,'. ',altwds[AltCnt]);
+                  GoToAlt (AltCnt+1); end;
+              vsiDBM (dbID,dbcGNK,@key,@alt);
+              end;
+          dbCurBlk := blk; dbCurOfs := ofs;
+          end;
+      GoToXY (PromptCol,addptline); CrtAction (ErasEOL);
+      end;
+
+*)
+{ SetupWord -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SetupWord;
+      var i,n: integer;
+      begin
+      n := length(CurWd); if n > wdlen then n := wdlen;
+      FILLCHAR (dta,kylen+wdlen+1,' ');
+      for i := 1 to n do dta.wd[i] := uppercase (CurWd[i]);
+      for i := 1 to kylen do dta.ky[i] := dta.wd[i];
+      dta.so := ord('U'); key := dta;
+      end;
+
+{ DictError -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE DictError;
+      begin
+        Bell(BelErr);
+        TellUsr(MSG(MGSpell,3))    {eA"Fatale@ eAdictionarye@ eAerror..."e@}
+      end;
+
+{ InitWdTbl -----------------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE InitWdTbl;
+
+var
+  n: integer;
+
+begin
+  for n := 1 to 26 do wordque[n] := NIL;
+  RELEASE (dictheapptr)
+end;
+
+
+{ eACheckDoce@ eA------------------------------------------------------------e@}
+{ eA---------------------------------------------------------------------e@}
+  Procedure CheckDoc;
+
+  Begin
+    DMSDict(True);
+    Bell(BelAck);
+    If AddCnt = 0 Then TellUsr(Msg(MGSpell,6))          { eA"Spelle@ eAchecke@ eAcomplete"e@ }
+      else begin
+        Bell(BelAck);
+        TellUsr( Subst( AsStr(AddCnt,10), Msg(MGSpell,5) )) { eA"Xe@ eAwordse@ eAaddede@ eAtoe@ eAdict"e@ }
+        End;
+    Wait100MS(20);
+    LoadLabels(SpellFrame)
+  End;
+
+{ vsiDMS --------------------------------------------------------------}
+{----------------------------------------------------------------------}
+begin
+  InitDict;
+  If KeepCnt = 0 Then Begin            { eANoe@ eAwordse@ eAone@ eAheap...yet!e@ }
+    MARK (dictheapptr);
+    InitWdTbl
+    End;
+  Done := false;
+  LoadLabels( SpellFrame );
+  If ShwBnd Then Begin          { eAAutoe@ eAdoce@ eAscane@ eAone@ eAmark/bounde@ }
+    CheckDoc;
+    Done := True
+    End;
+  while not Done do begin
+     NextCmd;
+     case Cmd of
+   (*  KF1: FindWord;  *)
+       KF3: CheckDoc;
+       KF5: DMSEdit;
+       Otherwise: Done := not LocalEdit
+       end
+     end
+end;

@@ -1,0 +1,10 @@
+
+Directory of UCSD disk image file 'pascal_lxp4b9.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume LXP4B9 has 2 files,  0 to 6 (6), eov 500, size 372, free 2
+
+ 1: SYSTEM.COMPILER Code  7-Apr-82    6- 114( 108), 55296+512= 55808 bytes
+ 2: SYSTEM.SYNTAX   Text 18-May-82  114- 128(  14),  7168+512=  7680 bytes

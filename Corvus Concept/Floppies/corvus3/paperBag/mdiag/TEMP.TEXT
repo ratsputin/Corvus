@@ -1,0 +1,689 @@
+; UP.MDIAG.TEXT-------½----------------------------------------
+; By Walter Lo
+;       UP.MEMDIAG -- Corvus Uniplex Workstation Diagnostic PROM
+;
+;       (c) Copyright 1983 Corvus Systems, Inc.
+;           San Jose, California
+;
+;
+; Corvus Uniplex Diagnostic Workstation equate table
+;
+;--------------------------------------------------------------
+;
+ROMbase  EQU       $010000
+DSccr    EQU       $0D
+DSlf     EQU       $0A
+Systack  EQU       $000FFC
+Exeptreg EQU       $200201
+TEMP     EQU       $000704
+Tflag    EQU       $000705
+PGflag   EQU       $000706
+Mcsbug   EQU       $000708
+SEGlo    EQU       $280601
+Contreg  EQU       $280201
+PAGlo    EQU       $280401
+PAGhi    EQU       $3FFC01
+SEGhi    EQU       $3FFE01
+Offset   EQU       $000800
+Mxbbase  EQU       $20000
+Mxbinit  EQU       Mxbbase+4
+Mxbentry EQU       Mxbbase+8
+P1memlo  EQU       $80000
+P1memhi  EQU       $80800
+SYSmem   EQU       $ff800
+MMUexcp  EQU       $280001
+Pgaddr   EQU       $FFF90
+SEG1     EQU       $280E01
+Rtabase  EQU       $000308
+Dtabase  EQU       $000310
+Atabase  EQU       $000318
+Rfail    EQU       $00031B
+Dfail    EQU       $00031C
+Afail    EQU       $00031D
+Sflag    EQU       $00031E
+Flag     EQU       $00031F
+Addr     EQU       $000320
+Dta      EQU       $000324
+Dfailed  Equ       $000325
+Rfailed  EQU       $000326
+Dflag    EQU       $000327
+Rflag    EQU       $000328
+Endflag  EQU       $000329
+Eflag    EQU       $00032A
+Base     EQU       $000000
+Dcovet   EQU       ROMbase+$00C
+; ***************************************************************
+; *                                                             *
+; *          THIS ROUTINE IS USED TO BOOT CONCEPT FROM          *
+; *          MEMORY DIAGNOSTIC BOOT ROM                         *
+; *                                                             *
+; ***************************************************************
+           ORG     ROMBASE
+SETUP      data.l  0
+           data.l  begin
+           data.l  0
+           data.l  intdco
+;
+; ***************************************************************
+; *                                                             *
+; *           THIS ROUTINE IS USED TO SET UP TSET AND           *
+; *           INITIALIZE THE UNIPLEX MACHINE AND INIT DCOM      *
+; *           DRIVER FOR EXTERNAL DTE( AT THIS STAGE, THE       *
+; *           ALTMAP IS EQUAL TO 0 ).                           *
+; *                                                             *
+; ***************************************************************
+
+BEGIN      move.w  #$2700,sr   ; disable all interrupts
+           movea.l #systack,a7 ; ,init stack pointer
+;
+; INITIALIZE VECTOR, SYSTEM AND OUTPUT DISPATCHER
+;
+           move.w  #$0000,pgflag.w
+           move.b  #$0,MMUexcp.l;zero exception reg to prevent
+                               ;parity error causing Bus error
+           move.b  #$00,mcsbug.w;init macsbug present flag
+           jsr     inuart      ;init uart
+           movea.l #$000400,a1 ;init macsbug area
+mcsinit    move.b  #$00,(a1)+
+           cmpa.l  #$00700,a1
+           bne.s   mcsinit
+           lea     mesg1,a5    ;output start message
+           jsr     string
+           lea     Mxbinit.l,a0
+           lea     Mxbbase+$c.l,a1
+           cmpa.l  (a0),a1
+           bne.s   nonbug
+           jsr     (a0)        ; init macsbug
+           move.b  #$01,mcsbug.w
+           bra.s   display
+nonbug     lea     nobug,a5
+           jsr     string
+display    move.l  #8,a0
+           move.l  #ROMbase+buseor-setup,d1
+           move.l  d1,(a0)
+           jmp     menu
+promt      jsr     initmmu
+           lea     pmes1,a5    ; output promt
+           jsr     string
+           jsr     inch        ;
+           jsr     ouch        ;
+           cmpi.b  #'M',d0     ; is menu?
+           beq     menu
+           cmpi.b  #'T',d0     ; is transparent memory test?
+           beq     trans
+           cmpi.b  #'E',d0     ; is exception logic circuit test?
+           beq     except
+           cmpi.b  #'U',d0     ; is memory maganment access?
+           beq     virtual
+           cmpi.b  #'V',d0     ; is virtual memory access simulation?
+           beq     system
+           cmpi.b  #'D',d0     ; see if it is macbug
+           beq     macsbug   ; yes, jump to debugger init routine
+           lea     games3,a5
+           jsr     string
+           bra.s   promt       ; go to promt
+
+TRANS
+           INCLUDE '/greg/trams' ; link memory diagnostic
+;
+;
+;
+;
+MENU       lea     mmesg1,a5
+           jsr     string
+           bra     promt
+;
+;
+;
+;
+;
+;
+;
+SYSTEM
+           lea     symesg1,a5
+           jsr     string
+           clr.b   d0
+           movea.l #p1memlo,a1
+           movea.l #p1memhi,a2
+           movea.l #sysmem,a3
+           move.l  a1,a4
+sysloop1   move.b  d0,(a4)+
+           cmpa.l  a2,a4
+           bne.s   sysloop1
+           move.b  #$ff,d0
+sysloop2   move.b  d0,(a4)+
+           cmpa.l  a3,a4
+           bne.s   sysloop2
+           jsr     reinit
+           move.l  a1,a4
+sysloop3   move.b  (a4)+,d0
+           cmpi.b  #$00,d0
+           bne.s   syseor
+           cmpa.l  a4,a3
+           bne.s   sysloop3
+           lea     symesg2,a5
+           jsr     string
+           bra     promt
+syseor     lea     symesg3,a5
+           jsr     string
+           bra     promt
+;
+; **************************************************************
+; *                                                            *
+; *           THIS ROUTINE IS USE TO SET UP DISPATCHER         *
+; *           FOR EXCEPTION LOGIC TEST                         *
+; *                                                            *
+; **************************************************************
+;
+BUSEOR     cmpi.b  #$01,pgflag.w
+           beq.s   buseor1
+           cmpi.b  #$01,pgflag+1.w
+           beq.s   buseor2
+           btst    #1,MMuexcp.l
+           bne     buseor3
+bus2       btst    #2,MMUexcp.l
+           bne     buseor4
+bus3       btst    #3,MMUexcp.l
+           bne     buseor5
+bus1       movea.l #Systack,a7
+           move.b  #$00,MMUexcp.l
+           move.w  #$0000,pgflag.w
+           bra     promt
+buseor1    lea     bumesg2,a5
+           jsr     string
+           move.b  #$00,pgflag.w
+           bra.s   bus1
+buseor2    lea     bumesg3,a5
+           jsr     string
+           bra.s   bus1
+buseor3    lea     busmsg4,a5
+           jsr     string
+           bra.s   bus2
+buseor4    lea     busmsg5,a5
+           jsr     string
+           bra.s   bus3
+buseor5    lea     busmsg6,a5
+           jsr     string
+           bra.s   bus1
+EXCEPT     lea     emesg1,a5
+           jsr     string
+           move.w  #$0000,pgflag.w
+           jsr     inch
+           jsr     ouch
+           cmpi.b  #'P',d0
+           beq     pgfault
+           cmpi.b  #'V',d0
+           beq     noaccess
+           cmpi.b  #'E',d0
+           beq     exit2
+           bra.s   except
+; **************************************************************
+; *                                                            *
+; *           THIS ROUTINE IS USED TO TEST FAGE FAULT          *
+; *           FUNCTION ON THE EXCEPTION LOGIC                  *
+; *                                                            *
+; **************************************************************
+;
+PGFAULT    lea     pgmesg1,a5
+           jsr     string
+           move.b  #$01,pgflag.w ;set page test fault flag
+           movea.l #PGaddr,a0    ;get page fault test address
+           move.b  (a0),d0       ;try to read it
+           lea     pgmesg2,a5    ;BUS ERROR!!!
+           jsr     string
+           bra     except
+; **************************************************************
+; *                                                            *
+; *           THIS ROUTINE IS USED TO TEST VIOLATION           *
+; *           ACCESS FUNCTION TEST                             *
+; *                                                            *
+; **************************************************************
+;
+NOACCESS   lea     nomesg1,a5
+           jsr     string
+           move.b  #$01,pgflag+1.w;set flag for violate access
+           move.b  #$00,seg1.l   ;go reinit seg1 to be no access
+           movea.l #$80000,a0    ;try to access it
+           move.b  (a0),d0       ;BUS ERROR!!!
+           lea     nomesg1,a5    ;
+           jsr     string
+           bra     except
+; **************************************************************
+; *                                                            *
+; *           THIS ROUTINE IS USED TO EXIT FROM TEST TO        *
+; *           MAIN DISPATCHER                                  *
+; *                                                            *
+; **************************************************************
+;
+EXIT2      lea     exmesg1,a5
+           jsr     string
+           move.w  #$0000,pgflag.w;reinit the flag
+           bra     promt
+;
+VIRTUAL    lea      vmesg1,a5
+           jsr      string
+           jsr      inch
+           jsr      ouch
+           cmpi.b   #'P',d0
+           beq      test
+           cmpi.b   #'C',d0
+           beq      context
+           cmpi.b   #'S',d0
+           beq      segment
+           cmpi.b   #'E',d0
+           beq      exit
+           bra.s    virtual
+; **************************************************************
+; *                                                            *
+; *          THIS ROUTINE IS USED TO TEST CONTEXT REGISTER     *
+; *          CIRCUIT FUNCTION                                  *
+; *                                                            *
+; **************************************************************
+;
+CONTEXT    lea      vmesg8,a5
+           jsr      string      ; output start message
+           movea.l  #contreg,a1 ; load a1 with context addr reg
+           move.b   #$00,d1     ; test context for context 1
+context2   move.b   d1,(a1)     ; write it out to context reg
+           move.b   (a1),d2     ; read it back
+           cmp.b    d1,d2       ; compare
+           bne.s    conterr     ; if not matched, then error
+           cmpi.b   #$f,d1      ; if the end of context
+           bne.s    context1    ; yes, is the end of test
+           bra.s    context2    ; no, keep on testing
+context1   lea      vmesg11,a5
+           jsr      string
+           move.b   #$01,(a1)   ;
+           bra      virtual
+conterr    lea      vmesg10,a5  ; context error, report message
+           jsr      string
+           move.b   #$01,(a1)
+           bra      virtual
+; **************************************************************
+; *                                                            *
+; *          THIS ROUTINE IS USED TO TEST MMU SEGMENT          *
+; *          REGISTER                                          *
+; *                                                            *
+; **************************************************************
+;
+SEGMENT    lea      vmesg2,a5   ; output start message
+           jsr      string
+           move.l   #Seglo,a0 ; load a0 with start pointer
+           move.b   #$00,tflag.l; set flag for seg test
+seg2       jsr      walk        ; jump to walk bit subroutine
+           cmpi.b   #$00,tflag.l
+           bne.s    segeor
+           adda.l   #Offset,a0
+           cmpa.l   #SEGhi,a0
+           bge.s    segend1
+           bra.s    seg2
+segend1    lea      vmesg3,a5
+           jsr      string
+           bra      virtual
+segeor     lea      vmesg4,a5
+           jsr      string
+           bra      virtual
+; **************************************************************
+; *                                                            *
+; *          THIS ROUTINE IS USE TO WALK BIT IN SEGMENT        *
+; *          REGISTER                                          *
+; *                                                            *
+; **************************************************************
+;
+WALK       move.b   #$FE,d0     ; load d0 with test pattern
+walk0      move.b   d0,(a0)     ; load test data into test loc
+           move.b   (a0),d1     ; load test data back
+           cmp.b    d0,d1
+           bne.s    setflag
+           rol.b    #1,d0
+           bcs      walk0
+           move.b   #$01,d0     ; load test data to walk 1
+walk1      move.b   d0,(a0)     ; load test data into test loc
+           move.b   (a0),d1     ; read it back
+           cmp.b    d0,d1       ; compare data
+           bne.s    setflag
+           asl.b    #1,d0       ; walk test data
+           bcc      walk1
+           rts
+setflag    move.b   #$01,tflag.l; set the test failed flag
+           rts
+;
+; **************************************************************
+; *                                                            *
+; *          THIS ROUTINE IS USED TO TEST UNIPLEX MMU          *
+; *          PAGE REGISTER                                     *
+; *                                                            *
+; **************************************************************
+;
+test
+           lea      vmesg5,a5
+           jsr      string
+           move.l   #Paglo,a0 ; load a0 with start pointer
+           move.b   #$00,tflag.l; init segment reg test flag
+                                ; this is used by walk & march t
+page2
+           jsr      walk        ; walk bit test
+           cmpi.b   #$01,tflag.l; see if glag set
+           beq.s    pageor
+           adda.l   #Offset,a0    ; march test
+           cmpa.l   #PAGhi,a0
+           bge.s    page1
+           bra.s    page2
+pageor     lea      vmesg7,a5
+           jsr      string
+           bra      virtual
+page1      lea      vmesg6,a5
+           jsr      string
+           bra      virtual
+; **************************************************************
+; *                                                            *
+; *          THIS ROUTINE IS USED TO EXIT FROM MMU TEST        *
+; *          LEVEL TO MENU LEVEL                               *
+; *                                                            *
+; **************************************************************
+;
+EXIT       lea      exmesg1,a5
+           jsr      string
+           bra      promt
+;
+;
+; ***************************************************************
+; *                                                             *
+; *                IF IT IS MACSBUG, GO DO IT                   *
+; *                                                             *
+; ***************************************************************
+;
+MACSBUG
+           cmpi.b  #$01,mcsbug.w
+           bne     nomacbug
+           lea     mcmsg1,a5
+           jsr     string
+           movea.l Mxbentry.l,a0
+           jmp     (a0)
+nomacbug   lea     nobug,a5
+           jsr     string
+           bra     promt
+; **************************************************************
+; *                                                            *
+; *            INIT MMU, MAKE IT LOOK LIKE CONCEPT             *
+; *                                                            *
+; **************************************************************
+;
+INITMMU
+           move.w  #$3f,d0
+           move.b  #$80,d1
+           clr.l   d2
+           move.l  #$8000,d2
+           movea.l #$280E01,a0
+init1      move.b  d1,(a0)
+           adda.l  d2,a0
+           addq    #1,d1
+           dbra    d0,init1
+           move.w  #$ff,d0
+           clr.l   d1
+           clr.l   d2
+           move.w  #$800,d2
+           movea.l #$200401,a0
+init2      move.b  d1,(a0)
+           adda.l  d2,a0
+           addq    #1,d1
+           dbra    d0,init2
+           rts
+REINIT     move.b  #$3f,d0
+           move.b  #$80,d1
+           clr.l   d2
+           move.l  #$8000,d2
+           movea.l #$280e01,a0
+init3      move.b d1,(a0)
+           adda.l  d2,a0
+           dbra    d0,init3
+           move.w  #$ff,d0
+           clr.l   d1
+           clr.l   d2
+           move.w  #$800,d2
+           movea.l #$200401,a0
+init4      move.b  d1,(a0)
+           adda.l  d2,a0
+           dbra    d0,init4
+           rts
+;
+;
+;             DATA AREA
+;
+;
+MESG1      DATA.B  ' CORVUS UNIPLEX MEMORY DIAGNOSTIC UTILITY'
+           DATA.B  DSCCR,DSLF,' VERSION [ 1-0 ]',DSCCR,DSLF,0
+GAMES3     DATA.B  DSCCR,DSLF,'*  NOT A VALID COMMAND',DSCCR,DSLF
+           DATA.B  0
+PMES1      DATA.B  '! ',0
+NOBUG      DATA.B  DSCCR,DSLF
+           DATA.B  ' NO MACSBUG PROM AVAILABLE'
+           DATA.B  DSCCR,DSLF,0
+;
+;
+;
+;             DATA AREA
+;
+MMESG1     DATA.B  DSCCR,DSLF
+           DATA.B  '--------------------------------------------'
+           DATA.B  DSCCR,DSLF
+           DATA.B  ' M -MENU',DSCCR,DSLF
+           DATA.B  ' T -MEMORY ARRAY TRANSPARENT TEST',DSCCR,DSLF
+           DATA.B  ' E -EXCEPTION CIRCUIT TEST',DSCCR,DSLF
+           DATA.B  ' U -MEMORY MANAGEMENT CIRCUIT TEST',DSCCR,DSLF
+           DATA.B  ' V -VIRTUAL MEMORY ACCESS TEST',DSCCR,DSLF
+           DATA.B  ' D -MACSBUG DEBUGER',DSCCR,DSLF
+           DATA.B  '--------------------------------------------'
+           DATA.B  DSCCR,DSLF,0
+;
+SYMESG1    DATA.B  DSCCR,DSLF
+           DATA.B  ' VIRTUAL MEMORY ACCESS TEST'
+           DATA.B  DSCCR,DSLF,0
+SYMESG2    DATA.B  DSCCR,DSLF
+           DATA.B  ' VIRTUAL ADDRESS TEST PASSED'
+           DATA.B  DSCCR,DSLF,0
+SYMESG3    DATA.B  DSCCR,DSLF
+           DATA.B  ' VIRTUAL ADDRESS TEST FAILED'
+           DATA.B  DSCCR,DSLF,0
+;
+EMESG1     DATA.B  DSCCR,DSLF
+           DATA.B  '-------------------------------------------'
+           DATA.B  DSCCR,DSLF
+           DATA.B  ' P -PAGE FAULT TEST',DSCCR,DSLF
+           DATA.B  ' V -VIOLATION ACCESS TEST',DSCCR,DSLF
+           DATA.B  ' E -EXIT',DSCCR,DSLF
+           DATA.B  '-------------------------------------------'
+           DATA.B  DSCCR,DSLF,'# ',0
+;
+NOMESG1    DATA.B  DSCCR,DSLF
+           DATA.B  ' VIOLATION ACCESS TEST'
+           DATA.B  DSCCR,DSLF,0
+;
+VMESG1     DATA.B   DSCCR,DSLF
+           DATA.B   '------------------------------------------'
+           DATA.B   DSCCR,DSLF
+           DATA.B   ' C -CONTEXT REGISTER TEST',DSCCR,DSLF
+           DATA.B   ' S -SEGMENT REGISTER TEST',DSCCR,DSLF
+           DATA.B   ' P -PAGE REGISTER TEST',DSCCR,DSLF
+           DATA.B   ' E -EXIT',DSCCR,DSLF
+           DATA.B   '------------------------------------------'
+           DATA.B   DSCCR,DSLF
+           DATA.B   '> ',0
+;
+VMESG8     DATA.B   DSCCR,DSLF
+           DATA.B   ' CONTEXT REGISTER TEST',DSCCR,DSLF,0
+VMESG11    DATA.B   DSCCR,DSLF
+           DATA.B   ' CONTEXT REGISTER TEST PASSED',DSCCR,DSLF,0
+VMESG10    DATA.B   DSCCR,DSLF
+           DATA.B   ' CONTEXT REGISTER TEST FAILED',DSCCR,DSLF,0
+;
+VMESG2     DATA.B   DSCCR,DSLF
+           DATA.B   ' SEGMENT REGISTER TEST',DSCCR,DSLF,0
+VMESG3     DATA.B   DSCCR,DSLF
+           DATA.B   ' SEGMENT REGISTER TEST PASSED',DSCCR,DSLF,0
+VMESG4     DATA.B   DSCCR,DSLF
+           DATA.B   ' SEGMENT REGISTER TEST FAILED',DSCCR,DSLF,0
+;
+VMESG5     DATA.B   DSCCR,DSLF
+           DATA.B   ' PAGE REGISTER TEST',DSCCR,DSLF,0
+VMESG6     DATA.B   DSCCR,DSLF
+           DATA.B   ' PAGE REGISTER TEST PASSED'
+           DATA.B   DSCCR,DSLF,0
+VMESG7     DATA.B   DSCCR,DSLF
+           DATA.B   ' PAGE REGISTER TEST FAILED'
+           DATA.B   DSCCR,DSLF,0
+;
+MCMSG1     DATA.B   DSCCR,DSLF
+           DATA.B   'MACSBUG I/O ON DATACOMM 0',0
+EXESG1     DATA.B   DSCCR,DSLF,0
+BUMESG1    DATA.B  DSCCR,DSLF
+           DATA.B  ' ***** BUS ERROR *****'
+           DATA.B  DSCCR,DSLF,0
+BUMESG2    DATA.B  DSCCR,DSLF
+           DATA.B  ' ***** BUS ERROR *****',DSCCR,DSLF
+           DATA.B  ' PAGE FAULT FUNCTION TEST PASSED'
+           DATA.B  DSCCR,DSLF,0
+BUMESG3    DATA.B  DSCCR,DSLF
+           DATA.B  ' ***** BUS ERROR *****',DSCCR,DSLF
+           DATA.B  ' VIOLATION ACCESS FUNCTION TEST PASSED'
+           DATA.B  DSCCR,DSLF,0
+BUSMSG4    DATA.B  ' ***** BUS ERROR *****',DSCCR,DSLF
+           DATA.B  ' PARITY ERROR ',DSCCR,DSLF,0
+BUSMSG5    DATA.B  ' ***** BUS ERROR *****',DSCCR,DSLF
+           DATA.B  ' VIOLATION ACCESS OR PAGE FAULT'
+           DATA.B  DSCCR,DSLF,0
+BUSMSG6    DATA.B  ' ***** BUS ERROR ******'
+           DATA.B  DSCCR,DSLF
+           DATA.B  ' PARITY ERROR OR VIOLATION ACCESS IN'
+           DATA.B  ' OMNINET CYCLE'
+           DATA.B  DSCCR,DSLF,0
+;
+PGMESG1
+           DATA.B  ' PAGE FAULT FUNCTION TEST',DSCCR,DSLF,0
+;
+EXMESG1    DATA.B  DSCCR,DSLF
+           DATA.B  'EXIT',DSCCR,DSLF,0
+PGMESG2    DATA.B  DSCCR,DSLF
+           DATA.B  ' PAGE FAULT FUNCTION TEST FAULT',DSCCR
+           DATA.B  DSLF,0
+NOMESG2    DATA.B  DSCCR,DSLF
+           DATA.B  ' VIOLATION ACCESS FUNCTION TEST FAILED'
+           DATA.B  DSCCR,DSLF,0
+;
+;
+;             DATA AREA
+;
+;
+PMES2      DATA.B  ': ',0
+;
+;
+;
+MMESG2     DATA.B  DSCCR,DSLF
+           DATA.B  '--------------------------------------------'
+           DATA.B  DSCCR,DSLF,' D -RUN MEMORY DATA AND REFRESH '
+           DATA.B  'CIRCUITY TEST',DSCCR,DSLF
+           DATA.B  ' A -RUN MEMORY ADDRESS BUS TEST',DSCCR,DSLF
+           DATA.B  ' S -SCOPELOOP TEST', DSCCR,DSLF
+           DATA.B  ' M -MENU FOR MEMORY DIAGNOSTIC',DSCCR,DSLF
+           DATA.B  ' E -EXIT',DSCCR,DSLF
+           DATA.B  '--------------------------------------------'
+           DATA.B  DSCCR,DSLF,0
+
+;
+;
+;                  DATA AREA
+DMES1      DATA.B  DSCCR,DSLF
+           DATA.B  '% ENTER TEST PATTERN FOR MEMORY REFRESH TEST'
+           DATA.B  ' :',0
+DMES2      DATA.B  ' REFRESH CIRCUITY TEST FAILED',DSCCR,DSLF,0
+DMES3      DATA.B  ' DATA TEST FAILED',DSCCR,DSLF,0
+DMES4      DATA.B  '% MEMORY BOARD DATA TEST PASSED',DSCCR,DSLF,0
+DMES5      DATA.B  ' REFRESH CIRCUITY TEST PASSED',DSCCR,DSLF,0
+;
+;
+FIRMSG     DATA.B  ' U116',0
+SECMSG     DATA.B  ' U109',0
+LASTMSG    DATA.B  ' U809',0
+;                  DATA AREA
+LMES1      DATA.B  '0',0
+LMES2      DATA.B  '1',0
+;
+;                  DATA AREA
+AMES1      DATA.B  ' A1',0
+AMES2      DATA.B  ' A',0
+AMES3      DATA.B  '% ADDRESS BUS TEST PASSED',DSCCR,DSLF,0
+AMES4      DATA.B  ' ADDRESS BUS TEST FAILED',DSCCR,DSLF,0
+;
+;
+;                   DATA AREA
+FMES1      DATA.B  ' U11',0
+FMES2      DATA.B  ' U21',0
+FMES3      DATA.B  ' U31',0
+FMES4      DATA.B  ' U41',0
+FMES5      DATA.B  ' U51',0
+FMES6      DATA.B  ' U61',0
+FMES7      DATA.B  ' U71',0
+FMES8      DATA.B  ' U81',0
+;
+;
+;
+;              DATA AREA
+;
+;
+SMES1    DATA.B      '% SCOPELOOP FUNCTION OPTIONS :',DSCCR,DSLF
+         DATA.B      '------------------------------',DSCCR,DSLF
+         DATA.B      ' 1 -READ FROM A SINGLE ADDRESS',DSCCR,DSLF
+         DATA.B      ' 2 -WRITE TO A SINGLE ADDRESS',DSCCR,DSLF
+         DATA.B      ' 3 -R/W TO A SINGLE ADDRESS',DSCCR,DSLF
+         DATA.B      ' 4 -EXIT TO PROMPT',DSCCR,DSLF
+         DATA.B      '------------------------------',DSCCR,DSLF
+         DATA.B      '% SELECT SCOPELOOP FUNCTION: ',0
+SMES2    DATA.B      DSCCR,DSLF
+         DATA.B      '% READ FROM A SINGLE ADDRESS',DSCCR,DSLF,0
+SMES3    DATA.B      DSCCR,DSLF
+         DATA.B      '% WRITE TO A SINGLE ADDRESS',DSCCR,DSLF,0
+SMES4    DATA.B      DSCCR,DSLF
+         DATA.B      '% R/W TO A SINGLE ADDRESS',DSCCR,DSLF,0
+;
+;
+;              DATA AREA
+;
+GMES1    DATA.B      '% LOOP ADDRESS? ',0
+GMES2    DATA.B      '% TEST PATTERN? ',0
+;
+;
+;
+;                  DATA AREA
+;
+;
+GAMES1    DATA.B     DSCCR,DSLF,'% INVALID INPUT',DSCCR,DSLF,0
+GAMES2    DATA.B     DSCCR,DSLF,0
+;
+;
+;
+;
+INEORMSG  DATA.B     DSCCR,DSLF
+          DATA.B     ' ***** MMU ERROR ******'
+          DATA.B     DSCCR,DSLF
+          DATA.B     ' SELECT U -MEMORY MANAGEMENT CIRCUIT TEST'
+          DATA.B     DSCCR,DSLF,0
+           END     BEGIN
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

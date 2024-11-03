@@ -1,0 +1,231 @@
+program Main;
+
+Uses {$U /ccutil/cclib}
+  ccDefn,
+  CCcrtIO;
+
+
+const BADSTRING = -1;
+
+type
+     LblKeyStr=string[8];
+     LblRtnStr=string[15];
+     lstring = record case boolean of
+           true:  (st:  string80);
+           false: (byt: array[0..80] of byte);
+        end;
+
+var FNam: string80;
+    OutFid: file;
+    CurFrm: integer;
+    CmdFrm: boolean;
+    FrameName: LblRtnStr;
+    FrmBuf: record
+          Key: array[1..20] of record
+                  Lbl: packed array[1..8] of char;
+                  Rtn: LblRtnStr;
+               end;
+          Nam: LblRtnStr;
+          Cmd: boolean;
+          Jnk: array [1..14] of byte;
+       end;
+
+function ULblsLoad(infilename: string80): integer;
+
+CONST
+  LBLKEYLEN=8;
+  LBLRTNLEN=15; { S/BE IN CCLBLIO }
+
+var
+  b,
+  frame,
+  pt,
+  nbyte,
+  key,
+  error: integer;
+  inf:      text;         { input file }
+  inline:   lstring;      { input line }
+  keyst:    LblKeyStr;
+  rtnst:    LblRtnStr;
+  str:      lstring;
+  endline:  boolean;
+
+   procedure nextbyte;
+   begin
+      nbyte := 0;
+      if pt > Ord(inline.st[0]) then begin
+         nbyte := 0;
+         endline := true;
+      end else begin
+         nbyte := ord(inline.st[pt]);
+         pt := pt+1;
+         if nbyte<0 then
+            nbyte := nbyte+256;
+      end;
+   end;
+
+   function GetNum : integer;
+   var n: integer;
+   begin
+      GetNum := -1;
+
+      while (not endline) and not (nbyte in [$30..$39]) do
+         nextbyte;
+
+      if nbyte in [$30..$39] then begin
+         n := nbyte-$30;
+         nextbyte;
+         if (nbyte in [$30..$39]) then begin
+            GetNum := n*10 + nbyte-$30;
+            nextbyte;
+         end else begin
+            GetNum := n;
+         end;
+      end;
+   end;
+
+   function ValOf( NByte: integer ): integer;
+   begin
+      if (nbyte in [$30..$39]) then begin
+         ValOf := nbyte-$30;
+      end else begin
+         ValOf := nbyte-$41+10;
+      end;
+   end;
+
+   procedure GetString(var str: lstring);
+   var k,n: integer;
+   begin
+      str.st := '';
+      while (not endline) and (nbyte<>$27) do
+         nextbyte;
+      if not endline then begin
+         k := 0;
+         repeat { until closing apostrophe }
+            nextbyte;
+            if nbyte<>$27 then begin
+               if nbyte=$5C then begin { '\': hex number }
+                  nextbyte; { get first hex digit }
+                  n := ValOf( NByte );
+                  nextbyte;
+                  n := n*16 + ValOf( NByte );
+                  nbyte := n mod 256;
+               end;
+               k := k+1;
+               str.st[k] := chr(nbyte);
+            end;
+         until (nbyte=$27) or (k>=80);
+         str.st[0] := Chr(k);
+         nextbyte;
+      end;
+   end;  { get string }
+
+   function ParseLabel: integer;
+   { sets vars key, keyst, rtnst, frame }
+   begin
+      parselabel := BADSTRING;
+      pt := 1;
+      nextbyte;
+      endline := false;
+      frame := GetNum;
+      if (frame>0) then begin
+         key := GetNum;
+         if (0<=Key) and (Key<=39) then begin
+            GetString(str);
+            keyst := copy(str.st,1,LblKeyLen);
+            GetString(str);
+            rtnst := copy(str.st,1,LblRtnLen);
+            parselabel := 0;
+         end;
+      end;
+   end; { parse label }
+
+   procedure ParseName;
+   { line starting with '#' followed by frame number, name }
+   begin
+      endline := false;
+      pt := 2;
+      nextbyte;
+      frame := GetNum;
+      if frame>0 then begin
+         CmdFrm := GetNum<>0;
+         GetString(str);
+         FrameName := copy(str.st,1,LblKeyLen);
+      end;
+   end; { parse name }
+
+   procedure FlushFrmBuf;
+   var i: integer;
+   begin
+      if CurFrm<>0 then begin
+         writeln( CurFrm:4, ' ', FrmBuf.Nam );
+         if blockwrite( OutFid, FrmBuf, 1, CurFrm-1 )<>1 then
+           writeln( 'unable to write block ', CurFrm-1 );
+      end;
+      fillchar( FrmBuf, 512, ' ' );
+      FrmBuf.Nam := FrameName;
+      FrmBuf.Cmd := CmdFrm;
+      for i := 1 to 20 do FrmBuf.Key[i].Rtn := '';
+      CurFrm := frame;
+   end;
+
+   procedure DefLbl;
+   var i: integer;
+   begin
+      if (frame<>CurFrm) then FlushFrmBuf;
+      write( '.' );
+      if (1<=Key) and (Key<=20) then begin
+         for i := 1 to length(keyst) do
+            FrmBuf.Key[Key].Lbl[i] := keyst[i];
+         FrmBuf.Key[Key].Rtn := rtnst;
+      end;
+   end;
+
+begin { ulbls load }
+   CurFrm := 0;
+   FrameName := '';
+   infilename := concat(infilename,'.TEXT');
+   {$I-} Reset(inf,infilename); {$I+}
+   error := IORESULT;
+   if error=0 then begin
+      repeat { until end of input file }
+         readln(inf,inline.st);
+         error := IORESULT;
+         if (error=0) and (inline.st <> '') then begin
+            if inline.st[1] = '#' then begin
+               ParseName { frame name }
+            end else if inline.st[1] <> ';' then begin { label }
+               error := ParseLabel;
+               if error=0 then DefLbl;
+            end;
+         end;
+      until (error<>0) or (eof(inf));
+      Close(inf);
+      FlushFrmBuf;
+   end;
+   ulblsload := error;
+end;
+
+begin
+  CCcrtIOinit;
+  CrtAction(EraseAll);
+  CrtTpgm := 'MakeLbl';
+  CrtTvrs := '2.0';
+  CrtTcpy := 'Copyright 1984 Corvus Systems, Inc.';
+  CrtTitle('System function key file builder utility');
+  write( 'Name of label file to be compiled? ' );
+  readln( Fnam );
+  writeln( 'Creating output file.' );
+  rewrite( OutFid, FNam );
+  writeln( 'Loading labels' );
+  if ULblsLoad(FNam)=0 then begin
+     writeln( 'Succesful compilation' );
+     close( OutFid, lock );
+  end else begin
+     writeln( 'Error in compiling function key file' );
+     close( OutFid, purge );
+  end;
+  writeln( 'End.' );
+end.
+
+

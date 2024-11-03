@@ -1,0 +1,386 @@
+{----------------------------------------------------------------------}
+{ File: DCOMM2.TEXT -- SendFile processing
+{----------------------------------------------------------------------}
+
+{$S SENDSEG}
+
+{ SendFile ------------------------------------------------------------}
+{ handles entry into file sending routines
+{----------------------------------------------------------------------}
+PROCEDURE SendFile;
+      var menu: boolean; choice: char;
+
+{ SendFile.LabelsSend -------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE LabelsSend;
+      begin
+      LblsInit;
+      iores := lblset (00, 'Text',     concat (pfx,'A'));
+      iores := lblset (01, 'Pacing',   concat (pfx,'B'));
+      iores := lblset (02, 'Binary',   concat (pfx,'C'));
+      iores := lblset (03, 'XMODEM',   concat (pfx,'D'));
+    { iores := lblset (04, 'KERMIT',   concat (pfx,'E')); }
+    { iores := lblset (08, 'Help  ',   concat (pfx,'H')); }
+      iores := lblset (09, 'Exit  ',   concat (pfx,'X'));
+      LblsOn;
+      LevelName := 'SendFile';
+      end;
+
+{ SendFile.Checksum ---------------------------------------------------}
+{ input is an integer, output is LSB
+{----------------------------------------------------------------------}
+FUNCTION Checksum (sum: integer): integer;
+      var trick: packed array [0..1] of char;
+      begin
+      trick[0] := chr(sum);
+      Checksum := ord(trick[0]);
+      end;
+
+{$P}
+{ SendFile.SendText ---------------------------------------------------}
+{ sends a file to the remote line
+{----------------------------------------------------------------------}
+PROCEDURE SendText (how : pacing);
+
+      var lines,j: integer; txtlin: string255; outfile: text;
+          st: string80;
+      begin
+      lines := 0;
+      repeat
+          ChgString (filename,'SendText','',
+                     'Enter name of TEXT file to be transmitted');
+          if (cst <> Normal) OR (filename = '') then exit (SendText);
+          iores := FileAgent (outfile,filename,opn,rd,txt);
+          until iores > 0;
+      StatMsg ('Press any key to start transmitting'); write (pbeep);
+      keychar := CR_GETKB;
+      StatMsg ('Press ESC to pause or abort');
+      ShortStat;
+      while not eof (outfile) do begin
+          readln (outfile,txtlin);
+          if p_escape ('Text File Transmit') then begin
+              iores := FileAgent (outfile,filename,cls,rd,txt);
+              exit (SendText);
+              end;
+          sendlin (txtlin,how);
+          lines := lines+1;
+          end;
+      if pace_ascii <> 0 then CR_PUTREM (CR);  { get TSO out of edit }
+      iores := FileAgent (outfile,filename,cls,rd,txt);
+      CvIntStr (lines,st,DecRdx);
+      StatMsg (concat('File ',filename,' has been sent and closed'));
+      StatMsg (concat(st,' lines were sent'));
+      write (pbeep);
+      end;
+
+{$P}
+{ SendFile.SendBin ----------------------------------------------------}
+{ sends a binary file to the remote line
+{----------------------------------------------------------------------}
+PROCEDURE SendBin;
+      var nbytes: longint; iores,k,n: integer; byt: byte; ch: char;
+          binfile: packed file of byte; outfile: text; st: string80;
+      begin
+      n := 0; nbytes := 0;
+      StatMsg ('');
+      StatMsg ('Note: For binary file transfer, the distant computer should');
+      StatMsg ('be set to 8 bits, no parity and XON_XOFF should be off.');
+      StatMsg ('DComm will set itself automatically.');
+      StatMsg ('');
+      repeat
+          ChgString (filename,'Binary','','Name of file to be transmitted');
+          if (cst <> Normal) OR (filename = '') then exit (SendBin);
+          iores := FileAgent (outfile,filename,opn,rd,bin);
+          until iores > 0;
+      close (outfile);
+      reset (binfile,filename);
+      databits[3] := 8; parity[3] := 'N'; XON_XOFF[3] := 'N';
+      SetComm (3);                          { set comm to bin xfer }
+      StatMsg ('Press any key to start transmitting'); write (pbeep);
+      keychar := CR_GETKB;
+      StatMsg ('Press ESC to pause or abort');
+      ShortStat;
+      while not eof (binfile) do begin
+          get (binfile);
+          byt := binfile^;
+          for k := 1 to throttle do if CR_REMSTAT then remchar := CR_GETREM;
+          if CR_CLEARTOSEND then unitwrite(DCPort+30,byt,1);
+          if p_escape ('Binary file transmit') then begin
+              close (binfile);
+              SetComm (2);      { return to orig comm settings }
+              exit (SendBin);
+              end;
+          nbytes := nbytes+1; n := n+1;
+          if n = 128 then begin n := 0; write ('.'); end;
+          end;
+      writeln;
+      close (binfile);
+      CvIntStr (nbytes,st,DecRdx);
+      StatMsg (concat('File ',filename,' has been transmitted'));
+      StatMsg (concat(st,' bytes were sent'));
+      write (pbeep);
+      SetComm (2);          { return to orig comm settings }
+      end;
+
+{$P}
+{ SendFile.SendXmodem -------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SendXmodem;
+
+      var xblknum,  blkseg, numtries, n, lastblock,
+             tick, k, sum, doubchk, endline: integer;
+          xblk: packed array [1..132] of char;
+          pblk: packed array [0..511] of char;
+          done, nomore, startflag, CANrcvd : boolean;
+          tempfile: text; xoutfile: file;
+
+{ SendFile.SendXmodem.GetXblk -----------------------------------------}
+{ gets a 512 byte block from input file and feeds program
+{ 4 128 byte blocks... flags when input reaches EOF.
+{ adds Christensen protocol's SOH, blknum and checksum
+{----------------------------------------------------------------------}
+PROCEDURE GetXblk;
+      var sum, k, n: integer;
+      begin
+      blkseg := succ(blkseg);   { if needed, read new 512 byte block from file }
+      if (not eof (xoutfile)) and (blkseg=5) then begin
+          blkseg := 1;
+          iores := blockread(xoutfile, pblk, 1);
+          end;
+      xblknum := xblknum+1; if xblknum = 256 then xblknum := 1;
+      xblk[1] := SOH;
+      xblk[2] := chr(xblknum);
+      xblk[3] := chr(255-xblknum);
+      sum := ord(xblk[1])+ord(xblk[2])+ord(xblk[3]);
+      for n := 4 to 131 do begin  { map pblk segs 1-4 to xblk }
+          xblk[n] := pblk[ n - 4 + ( blkseg - 1 ) * 128 ];
+          sum := sum + ord(xblk[n]);
+          end;
+      xblk[132] := chr(checksum(sum));
+      if (eof (xoutfile)) and (blkseg = 4)
+           then nomore := TRUE else nomore := FALSE;
+      end;
+
+{ SendFile.SendXmodem.SendXblk ----------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SendXblk;
+      var k: integer; w: WrBufStatus;
+      begin
+      for k := 1 to 10 do      { flush garbage from input line }
+          if CR_REMSTAT then remchar := CR_GETREM;
+      write (xblknum:4);
+      for k := 1 to 132 do
+          if CR_CLEARTOSEND then CR_PUTREM (xblk[k]);
+      k := 99;
+      while k > 1 do begin
+         iores := DCPwrStatus(w);       { don't exit till xmit of blk finis }
+         k := w.BufferSize-w.FreeSpace;
+         end;
+      iores := BellTone (1,1,5);     { click sound }
+      end;
+
+{ SendFile.SendXmodem.TimeOut -----------------------------------------}
+{ when used in a loop, causes timeout = TRUE after about 10 secs
+{----------------------------------------------------------------------}
+FUNCTION TimeOut: boolean;
+      begin
+      if not startflag then tick := 0;  {don't timeout till after first NAK}
+      tick := tick+1;
+      if tick >= 15000 then TimeOut := TRUE else TimeOut := FALSE;
+      end;
+
+{ SendFile.SendXmodem.Skip --------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Skip;
+      begin
+      endline := endline+1;
+      if endline=10 then begin endline := 0; writeln; end;
+      end;
+
+{ SendFile.SendXmodem.Xit ---------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE Xit (msg: string80);
+      begin
+      StatMsg ('');
+      StatMsg (msg);
+      close (xoutfile);
+      SetComm (2);
+      ShortStat;
+      exit (SendXmodem);
+      end;
+
+{ SendFile.SendXmodem -------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      blkseg := 4;   { ensure file blockread on first pass }
+      xblknum := 0;
+      endline := -1; { keeps margins even since first bad block not printed }
+      numtries := 0;           { tracks timeouts and bad blocks }
+      tick := 0;
+      done := FALSE;
+      nomore := FALSE;
+      startflag := FALSE;
+      CANrcvd := FALSE;
+
+      repeat
+          ChgString (filename,'XMODEM','',
+                     'Enter name of file to be transmitted');
+          if (cst <> Normal) OR (filename = '') then exit (SendXmodem);
+          iores := FileAgent (tempfile,filename,opn,rd,bin);
+          until iores > 0;
+      close (tempfile);
+      reset (xoutfile,filename);
+
+      databits[3] := 8; parity[3] := 'N'; XON_XOFF[3] := 'N';
+      SetComm (3);                          { set comm to bin xfer }
+      GetXblk;
+      while CR_REMSTAT do remchar := CR_GETREM; { flush input buffer }
+      StatMsg ('');
+      StatMsg (' . = receipt of block acknowledged');
+      StatMsg (' X = block not acknowledged');
+      StatMsg (' T = Timed out waiting for response from recipient');
+      StatMsg ('');
+      StatMsg ('Ready to send... waiting for go-ahead from receiver');
+      StatMsg ('Press ESC to pause or abort');
+      StatMsg ('');
+
+      while TRUE do begin
+        repeat
+
+          if CR_KBSTAT then         { escape from SendXmodem }
+             begin
+             keychar := CR_GETKB;
+             if keychar=ESC then Xit('XMODEM transmit aborting at your request.');
+           end;
+
+          if CR_REMSTAT then
+             begin
+             remchar := CR_GETREM;
+             if remchar=NAK then
+                begin
+                if startflag then write (' X ');
+                iores := BellTone (1,1,11);
+                startflag := TRUE;
+                numtries := succ(numtries);
+                tick := 0;
+                Skip;
+                CR_DELAY (10);  { take a 1 sec breather }
+                SendXblk;
+              end;
+             if remchar=ACK then
+                begin
+                write (' µ ');
+                iores := BellTone (1,1,8);
+                Skip;
+                if nomore then
+                 done := TRUE
+                else
+                   begin
+                  tick := 0;
+                  numtries := 0;
+                  GetXblk;
+                  SendXblk;
+                 end;
+              end;
+             if remchar=CAN then CANrcvd := TRUE;
+           end;
+        until ( done ) or ( CANrcvd ) or ( TimeOut );
+
+        if CANrcvd then Xit('XMODEM transmit aborting at request of recipient.');
+
+        if done then
+           begin
+          close (xoutfile);
+          if CR_CLEARTOSEND then CR_PUTREM (EOT);
+          writeln; writeln;
+          writeln (xblknum:5,' 128 byte blocks sent....');
+          writeln (' Transmit complete.. awaiting acknowledgement....');
+          writeln;
+          while TRUE do begin
+             if TimeOut then begin
+                tick := 0;
+                numtries := succ(numtries);
+                if CR_CLEARTOSEND then CR_PUTREM (EOT);
+                end;
+             if CR_REMSTAT then begin
+                remchar := CR_GETREM;
+                if remchar=ACK then
+                 Xit('Recipient acknowledges successful completion');
+                end;
+             if CR_KBSTAT then begin   { escape from SendXmodem }
+                keychar := CR_GETKB;
+                if keychar=ESC then
+                 Xit('XMODEM transmit aborting at your request.');
+                end;
+             end{ while };
+           end { done };
+
+        if numtries >= 10 then begin
+           writeln;
+           if p_escape ('Problems transmitting... SendXmodem ') then
+              Xit('XMODEM transmit aborting at your request.')
+           else begin
+              writeln;
+              tick := 0;
+              numtries := 0;
+              end;
+           end;
+
+        if TimeOut then begin
+           tick := 0;
+           numtries := numtries+1;
+           write (' T ');
+           SendXblk;
+           end;
+
+       end{ main while loop };
+      end;
+
+{$P}
+{ SendFile.SendKermit -------------------------------------------------}
+{----------------------------------------------------------------------}
+PROCEDURE SendKermit;
+      begin
+      StatMsg ('KERMIT send protocol not implemented yet');
+      end;
+
+{ SendFile ------------------------------------------------------------}
+{----------------------------------------------------------------------}
+      begin
+      HoldComm;
+      menu := FALSE;
+      LevelName := 'SendFile';
+      filename := '';
+      case how of
+
+      plaintext: if GetYN ('','Confirm - Send text file using NO protocols')
+                     then SendText (nopace) else menu := TRUE;
+       pacetext: if GetYN ('','Confirm - Send text file using pacing protocol')
+                     then SendText(pace) else menu := TRUE;
+         binary: if GetYN ('','Confirm - Send binary file')
+                     then SendBin else menu := TRUE;
+         xmodem: if GetYN ('','Confirm - Send file using XMODEM protocol')
+                     then SendXmodem else menu := TRUE;
+         kermit: if GetYN ('','Confirm - Send file using KERMIT protocol')
+                     then SendKermit else menu := TRUE;
+            any: menu := TRUE;
+            end; {case}
+
+      if menu then begin
+          LabelsSend;
+          repeat until CR_GETKB = FUNCPFX; choice := CR_GETKB;
+          LblsOff;
+          case choice of
+              'A': SendText (nopace);
+              'B': SendText (pace);
+              'C': SendBin;
+              'D': SendXmodem;
+            { 'E': SendKermit; }
+            { 'H': Help; }
+              'X': ;
+          end; {case}
+          LabelsMain;
+          end;
+      end;
+{$S}
+

@@ -1,0 +1,34 @@
+Processor board in base of drawer
+U403 is:
+  Signetics
+  82S181
+  label:
+    MAP
+U706/ROM0U is:
+  Hitachi
+  HN462532G
+  label:
+    CC0.8H
+    1423
+U708 is:
+  Hitachi
+  HN462732G
+  label:
+    MacsBug
+    2.0L
+    FABC
+U709 is:
+  Hitachi
+  HN462732G
+  label:
+    MacsBug
+    2.0H
+    6860
+U711 is:
+  Hitachi
+  HN462532G
+  label:
+    CC0.8L
+    08F8
+
+

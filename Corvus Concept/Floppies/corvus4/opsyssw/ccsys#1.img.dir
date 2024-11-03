@@ -1,0 +1,35 @@
+
+Directory of UCSD disk image file 'ccsys#1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 27 files,  0 to 6 (6), eov 500, size 19, free 27
+
+ 1: ASSIGN          Data 20-Sep-83    6-  19(  13),  6656+512=  7168 bytes
+ 2: CC.CPM          Data 12-May-83   19-  47(  28), 14336+512= 14848 bytes
+ 3: CC.DISPAT       Data 20-Sep-83   47-  76(  29), 14848+512= 15360 bytes
+ 4: CC.EXEC         Data 20-Sep-83   76-  92(  16),  8192+512=  8704 bytes
+ 5: ISYS            Data 20-Sep-83   92- 130(  38), 19456+512= 19968 bytes
+ 6: CC.KERNEL       Data 20-Sep-83  130- 184(  54), 27648+512= 28160 bytes
+ 7: CC.SETUP        Data 20-Sep-83  184- 222(  38), 19456+512= 19968 bytes
+ 8: CC.WNDMGR       Data 20-Sep-83  222- 258(  36), 18432+512= 18944 bytes
+ 9: CC.FILMGR       Data 20-Sep-83  258- 310(  52), 26624+512= 27136 bytes
+10: CPMD.DEFAULT    Data 27-Apr-83  310- 311(   1),   512+512=  1024 bytes
+11: CSD.DEFAULT     Data 20-Sep-83  311- 313(   2),  1024+512=  1536 bytes
+12: CSK.DEFAULT     Data 20-Sep-83  313- 315(   2),  1024+512=  1536 bytes
+13: DESPOOL.CODE    Code 20-Sep-83  315- 337(  22), 11264+512= 11776 bytes
+14: DRV.CDISK1      Data 20-Sep-83  337- 341(   4),  2048+512=  2560 bytes
+15: DRV.CDISK2      Data 20-Sep-83  341- 345(   4),  2048+512=  2560 bytes
+16: DRV.DISPHZ      Data 20-Sep-83  345- 356(  11),  5632+512=  6144 bytes
+17: DRV.DISPVT      Data 20-Sep-83  356- 367(  11),  5632+512=  6144 bytes
+18: DRV.FDISK       Data  4-Feb-83  367- 371(   4),  2048+512=  2560 bytes
+19: DRV.FDISK1      Data 20-Sep-83  371- 375(   4),  2048+512=  2560 bytes
+20: DRV.FDISK2      Data 20-Sep-83  375- 380(   5),  2560+512=  3072 bytes
+21: DRV.KYBD        Data 20-Sep-83  380- 385(   5),  2560+512=  3072 bytes
+22: DRV.OMNINET     Data 20-Sep-83  385- 388(   3),  1536+512=  2048 bytes
+23: DRV.SYSTRM      Data 20-Sep-83  388- 395(   7),  3584+512=  4096 bytes
+24: DRV.TIMER       Data 20-Sep-83  395- 399(   4),  2048+512=  2560 bytes
+25: CC.ISYS         Data 20-Sep-83  399- 437(  38), 19456+512= 19968 bytes
+26: KEYS.ISYS       Data 20-Sep-83  437- 470(  33), 16896+512= 17408 bytes
+27: CC.CPM1         Data  5-Nov-83  470- 481(  11),  5632+512=  6144 bytes

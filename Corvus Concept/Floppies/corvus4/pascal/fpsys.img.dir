@@ -1,0 +1,15 @@
+
+Directory of UCSD disk image file 'fpsys.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FPSYS has 7 files,  0 to 6 (6), eov 500, size 249, free 7
+
+ 1: CC.PSYSTEM      Data  4-Feb-83    6-  29(  23), 11776+512= 12288 bytes
+ 2: SYSTEM.INTERP   Data  4-Feb-83   29-  53(  24), 12288+512= 12800 bytes
+ 3: SYSTEM.PASCAL   Data  4-Feb-83   53- 175( 122), 62464+512= 62976 bytes
+ 4: SYSTEM.MISCINFO Data  4-Feb-83  175- 176(   1),   512+512=  1024 bytes
+ 5: SYSTEM.LIBRARY  Data  4-Feb-83  176- 183(   7),  3584+512=  4096 bytes
+ 6: CPLIB           Data  4-Feb-83  183- 247(  64), 32768+512= 33280 bytes
+ 7: SYSTEM.UPDATE   Text  4-Feb-83  247- 251(   4),  2048+512=  2560 bytes

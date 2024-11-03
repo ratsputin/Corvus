@@ -1,0 +1,216 @@
+{  file  MirrP.text   }
+        
+        VolList: array [1..DrMax] of VTarray;
+
+
+{*****************************************************************}
+{                                                                 }
+{               set various compile flags                         }
+{                                                                 }
+{*****************************************************************}
+
+
+        segment procedure initflags;
+        begin
+        ThisSyst:= 'XXAP  (PASCAL)  ';
+        end;
+  
+{*****************************************************************}
+{                                                                 }
+{       system dependent warning routine for extracts             }
+{                                                                 }
+{*****************************************************************}
+
+      segment procedure warn;
+      begin
+      writeln;writeln;
+      writeln('                 **** WARNING ****');
+      writeln;
+      writeln('    If either your volume table or virtual');
+      writeln('    drive offset table has changed since the');
+      writeln('    time this image was made, it may lead to');
+      writeln('    an erroneous extraction of data.');
+      writeln;write('Continue? N',chr(8));
+      if getbyte<>'Y' then exit(program);
+      end;
+
+
+{$P}
+{ ********************************************************************* }
+{                                                                       }
+{ procedures for getting the volume table.   (UCSD specific)            }
+{                                                                       }
+{ ********************************************************************* }
+
+segment procedure GetVT;
+
+type       { volume table }
+     
+     TRKADDR = PACKED RECORD
+           MSB : 0..31;
+           TOP3 : 0..7;
+           LSB : 0..255
+           END;
+     
+     VolTrack= record
+         Ftrk : trkaddr;
+         Ltrk : trkaddr;
+         end;
+         
+     DrVT= array [0..63] of VolTrack;
+
+     
+     PVolDirHead= RECORD
+           FTYPE, LBLK, FBLK: INTEGER;
+           VNAME : STRING [7];
+           NFILS, NBLKS : INTEGER;
+           END;
+     
+     
+VAR N:INTEGER;
+    TBUF : DrVT;
+    endVT : boolean;
+     
+        { a royal kludge }
+        
+        function lsb(x:integer): integer;
+        var y:integer;
+        begin
+        y:=x mod 256;
+        if x<0 then y:=256-y;
+        if y=256 then y:=0;
+        lsb:=y;
+        end;
+        
+        function msb(x:integer): integer;
+        var y:integer;
+        begin
+        y:=x div 256;
+        if x<0 then if lsb(x)=0 then y:=256+y else y:=255+y;
+        msb:=y;
+        end;
+
+      PROCEDURE IOCHK(errcode, drive, sector: integer);
+      BEGIN
+      IF ERRCODE>127
+         THEN
+         BEGIN
+         WRITELN;
+         crt(eraseos);                                  {2.0}
+         WRITELN(beep,'DISK ERROR: ',ERRCODE-160);
+         writeln('On drive ',drive,', at sector ',sector);             
+         write('Type <space> to continue');                            
+         if getbyte<>'!' then exit(program);                            
+         END;
+      END; { procedure IOChk }
+  
+      procedure DrvRd(Drive, sector: integer);
+      begin
+      XCV.len:=4;
+      XCV.int[1]:=2; XCV.int[2]:=Drive;
+      XCV.int[3]:=lsb(sector); XCV.int[4]:=msb(sector);
+      cdSend(XCV);
+      cdRecv(XCV);                        { %%%%% for testing $$$$$ }
+      IOChk(XCV.int[1],drive,sector);
+      end;
+  
+  
+  
+      function Track2Block(trk: trkaddr): INTEGER;
+      begin
+      Track2Block := trk.msb*256*8 + trk.lsb*8;
+      end;  { function TracktoBlock }
+  
+    
+    {$P}
+    procedure GetVname(Drive: integer; TRK:trkaddr; var Vname: vnametype);
+    
+    VAR LEN,ADDR : INTEGER;
+        TMPDIR: PVolDirHead;
+    
+    BEGIN
+    ADDR:=Track2Block(TRK)*2+4;    { get sector address of directory }
+    DrvRd(DRIVE,ADDR);
+    moveleft(XCV.int[2],TMPDIR,sizeof(PVolDirHead));
+    LEN:=LENGTH(TMPDIR.VNAME);
+    If (len>7) or (len<1) then 
+      begin
+      VNAME:='BADDIR!';
+      end
+     ELSE
+      begin
+      VName:=TMPDIR.VNAME;
+      if not (VName[1] in ['A'..'Z']) then Vname := 'ILLEGAL';
+      end;
+    END; { procedure GetVolumeName }
+    
+    
+  function VolExists(trk: VolTrack): boolean;
+  begin
+  if Trk.ftrk.Top3<>7 then VolExists := true else endVT:=true;
+  if endVT then VolExists := false;
+  end;  { function VolExists }
+  
+
+
+BEGIN
+writeln('  Scanning Volume table...');
+for Drive:=1 to NumDrives do
+  begin
+  DrvRd(DRIVE,15);
+  moveleft(XCV.int[2],TBUF,256);
+  endVT:=false;
+  for n:=0 to 63 do
+    with VolList [Drive,N] do
+      BEGIN
+      if VolExists( TBuf[n] ) 
+        then 
+         begin
+         GetVName(Drive,TBUF[N].Ftrk,Vname);
+         vstart:=Track2Block(TBUF[N].ftrk);
+         vsize:=Track2Block(TBUF[N].ltrk)-vstart;
+         end
+        else 
+         begin
+         Vname := '';
+         vstart:=0; vsize:=0;
+         end;
+      END;
+  end;
+END; { procedure GetVT }
+
+
+
+{$P*************************************************************}
+  {                                                             }
+  {     Find a volume (Pascal), volume # range (Basics)         }
+  {                                                             }
+  {*************************************************************}
+  
+  
+      
+      segment procedure Find(comment:STRING;
+                    var Drive,IStart,DStart,Size:INTEGER);
+      var i,j:integer;
+          Name:string;
+      
+      begin
+      writeln; writeln; write('  ',comment,' which Volume? ');
+      size:=0;
+      if getstring(Name)=normal then
+        begin
+        for i:=1 to NumDrives do
+          begin
+          for j:=0 to 63 do
+            with VolList[i,j] do
+              if Name=VName then 
+                begin 
+                Drive:=i;
+                DStart:= vstart;
+                Size:= vsize;
+                end;
+          end;
+        end;
+      end;
+        
+

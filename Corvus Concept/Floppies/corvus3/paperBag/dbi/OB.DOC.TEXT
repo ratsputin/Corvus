@@ -1,0 +1,459 @@
+.FT''OMNINET Burn-In Document'Nov.17'
+                     ************************
+                     *                      *
+                     *   OMNINET BURN-IN    *
+                     *  REFERENCE DOCUMENT  *
+                     *                      *
+                     ************************
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Document revision B
+Document date     11/29/82
+Document author   M. Tassano
+
+
+
+PURPOSE:
+       To provide both a general and a detailed description of
+the Omninet Burn-in and a guide to it's operation.
+
+
+ASSUMPTIONS
+DESCRIPTION
+  HARDWARE
+  SOFTWARE
+REPORTING
+ERROR MESSAGES
+POSSIBLE PROBLEMS
+
+
+
+ASSUMPTIONS ...
+
+
+
+DESCRIPTION OF HARDWARE ...
+
+       1. A Corvus Concept performing the duty of Burn-in
+Monitor is connected to the Omninet and addressed to 63 or some
+other address not used on the burn-in shelves.
+
+       2. The Concept will have a local disk drive attached via
+an Apple interface card.  This drive may be shared with another
+Concept through a Multiplexer as long as the Concepts are logged
+onto different volumes.
+
+       3. The Burn-in network is a legally wired Omninet.  There
+is a terminator resistor at each end of the net and each disk
+server has a unique address.  The servers have both the termin-
+ator and the bias switches in the off position.
+
+       4. Each disk server with the power on is connected to a
+disk drive by a flat cable. Any server without a drive should be
+turned off.
+
+       5. A printer should be attached to the Concept if a
+hard-copy of the reports generated is desired.  It is possible
+to share the printer among several Concepts in order to minimize
+capital expenditures.
+
+
+
+  NORMAL SEQUENCE
+       LOG-ON
+       SET SERIAL NUMBER
+       RUN 24 HOURS
+       GENERATE A REPORT
+       LOG-OFF
+       FORMAT & UPDATE
+       REMOVE FROM BURN-IN
+
+
+
+
+DESCRIPTION OF SOFTWARE BY FUNCTION KEY
+---------------------------------------
+
+       The programmed functions and their locations:
+
+
+          F1       F2       F3       F4        F5
+       ______________________________________________
+SHIFT  |SETSRL  |        |FORMAT  |        |        |
+       |LOGON   |RESUME  |LOGOFF  |AUTOFIL |REPORT  |
+       ----------------------------------------------
+
+
+
+          F6       F7       F8       F9        F10
+       ______________________________________________
+SHIFT  |        |        |        |        |        |
+       |MONITOR |OMNHELP |        |SHOWNET |EXIT    |
+       ----------------------------------------------
+
+
+
+
+LOGON
+-----
+
+       The LOGON key allows the operator to add a drive to the
+burn-in. This is the ONLY way to get a drive running the Burn-in
+program.  No other key will start up a drive.  The drive MUST
+have the Format switch.  After the drive has been attached to the
+disk server, turn on the power to the server and then the drive.
+When the drive ready light comes on, reset the drive.
+
+       Press LOGON
+
+       In response to
+       ENTER OMNINET ADDRESS:   enter the server address.
+
+       If the serial number contains unprintable characters, you
+will be asked for a new one.  This routine is terminated by
+pressing <return>.
+
+       In response to
+       MORE STATIONS TO LOG IN? (Y/N)   press 'Y' for yes to
+continue logging in other servers, or 'N' to return to the
+monitor routine.
+
+
+
+RESUME
+------
+
+       The RESUME key is a special facility added to allow
+recovery from a disaster such as the loss of the Concept running
+the Burn-in.  It shouldn't be used as a regular tool since it
+ONLY picks up data from drives already running the burn-in
+program.  It will NOT start a disk running.  LOGON the disk
+first. RESUME will attempt to establish contact with any active
+disk server on the net.
+
+       The RESUME function will always go through all available
+addresses and attempt to establish contact and create a record
+in the Concept memory for each address.  The record created will
+NOT show any time or date in.
+
+       A response of REPORT CONTAINS INVALID DATA means that the
+report received from the server is of questionable value.  This
+will happen if there is a problem with the communications
+between the drive and the server, but is most likely caused by
+the drive at the server in question not running the Burn-in
+program.  Reset the drive and LOGON.
+
+       A response of OMNINET ERROR 80 means the Concept had to
+wait beyond the normal time for the server to respond.  This can
+happen if the server isn't powered up or if the server isn't
+connected to a powered disk drive.
+
+
+
+LOGOFF
+------
+
+       The LOGOFF key terminates the execution of the burn-in
+program for a specific server's drive.
+
+       In response to
+       ENTER OMNINET ADDRESS TO LOG OFF (OR -1 FOR ALL)
+       enter the appropriate value and press <return>.
+
+       In response to
+       DO YOU WANT TO SAVE THE REPORT IN A TEXT FILE (Y/N)?
+       press 'Y' if you want the report saved for later review,
+or press 'N' if you just want to see how things are going.
+The result will appear on the screen.
+
+       If you wanted the text file,
+       In response to
+       ENTER OUTPUT FILE NAME :
+       Type the name of the text file you wish to create.
+
+       Whether or not you asked for the text file to be created,
+the Concept will now return to the Monitor function.
+
+
+AUTOFIL
+-------
+
+       The AUTOFIL key puts the Concept into a special monitoring
+mode that automatically writes a report to a text file
+approximately every 15 minutes.  Like RESUME, this function is
+meant as a safety device.  The AUTOFIL key should be used at the
+end of the day to make reports while there is no one in the
+plant.  It should NOT be used during working hours since the
+interruption of the Concept during the write process may cause
+the loss of data.  For instance, running AUTOFIL on Friday
+afternoon will ensure that even if there is a failure of the
+burn-in as a whole, there will always be a status report no more
+than fifteen minutes older than when the failure occurred.  This
+feature will allow the partial recovery of data after an
+otherwise fatal crash.
+
+       NOTE that it is a very bad idea to have two or more
+Concepts writing reports to the same volume.  Possible
+collisions of the writing process would cause the unrecoverable
+loss of all data.
+
+
+
+REPORT
+------
+
+       The REPORT key allows the operator to create a text file
+report of the status of any or all drives currently running on
+the Burn-in shelves or merely to view their status on the screen.
+NOTE that this neither interferes with the testing nor logs off
+the drive.
+
+       In response to
+       DO YOU WANT TO SAVE THE REPORT IN A TEXT FILE (Y/N)?
+       press 'Y' if you want the report saved for later review,
+or press 'N' if you just want to see how things are going.
+The result will appear on the screen.
+
+       If you wanted the text file,
+       In response to
+       ENTER OUTPUT FILE NAME :
+       Type the name of the text file you wish to create.  If
+you desire the report to go to a different volume ( to make it
+more accessible to a printer for instance) prefix the file name
+with the volume name in the form /REPORTVOL/FILENAME.  At this
+point you can also type /PRINTER/FILENAME.  This will send the
+output directly to a local printer.
+
+       Whether or not you asked for the text file to be created,
+the next step is
+       In response to
+       ENTER STATION ADDRESS FOR REPORT ( OR -1 FOR ALL )
+       type the server address you want a report for.  If you
+enter a -1, a report will be generated for all stations logged
+on.
+
+       In response to
+       ANY MORE REPORTS REQUIRED? (Y/N)?
+       answer 'Y' if there's more or 'N' to return to the
+Monitor function.
+
+
+MONITOR
+-------
+
+       The MONITOR key initiates the portion of the Burn-in
+program that keeps an updated record of Burn-in status in the
+Concept memory. For approximately 15 minutes, the Concept sits in
+an idle loop.  For operator convenience, during this time the
+display will print the word "running" over and over in the same
+place.  At the end of the delay loop, the program will look at
+each disk server that's been logged on and ask for a report.  At
+this time the report will have to pass a simple test to help
+insure the data is valid.  This is a check to see that the block
+of data sent from the server is the same length the data itself
+indicates it should be.  If this test fails, a flag is set in the
+record for that address.  When a report is generated, the message
+THE LAST XX REPORTS CONTAIN INVALID DATA will appear immediately
+after the the number of disk seeks performed. The number of
+consecutive invalid reports will be printed instead of the "XX".
+It's up to the operator to take appropriate action such as log
+off, reset, and log on again.  If the test passes, the record in
+the memory will be updated as appropriate
+
+       If the AUTOFIL mode has been set, when the delay loop
+finishes, the text file named (during the AUTOFIL setup) will be
+re-written.
+
+
+BI HELP
+-------
+
+       Pressing the BI HELP key will display a series of general
+help messages on the Concept screen such as a list of the most
+common error messages and their meanings.
+
+
+SHOWNET
+-------
+
+       Pressing the SHOWNET key will cause the Concept to send a
+'WHO ARE YOU?' command to each address on the network and display
+for the operator the address of every server that responds.  This
+is a handy function when trouble-shooting the network.  It will
+not interfere with the operation of the Burn-in since the
+command doesn't talk to the drive, only the server.
+
+EXIT
+----
+
+       The EXIT function allows the operator to neatly exit the
+program.  This key should be used before re-booting the Concept.
+
+
+SETSRL
+------
+
+       SETSRL allows the operator to set a serial number into the
+third block of the disk's firmware section if it hasn't been done
+in Prep.
+
+       In response to
+       ENTER STATION ADDRESS:  respond with the address of an
+active server number and press <return>.
+
+       If the serial number in block 3 of the firmware doesn't
+contain (or start with) a printable value, you will be asked to
+supply one at this point.
+
+       In response to
+       ENTER THE DRIVE SERIAL NUMBER(! TO QUIT):
+       type the new serial number with an '!' at the end.
+
+FORMAT
+------
+
+       The FORMAT key should be pressed when it's desired to
+format a drive on the Burn-in shelf.
+
+       In response to
+       FORMAT DRIVE:
+       enter the address of the server that is connected
+to the drive you want to format.  When you see the message
+
+       RESET THE DRIVE  AT STATION ADDRESS xx AND PRESS RETURN
+       reset the drive.  This will take the drive out of the
+Burn-in program and prepare it to accept formatting commands.
+
+       In a few minutes you will see
+       FORMAT COMPLETE - NOW UPDATING FIRMWARE
+       followed by
+       ENTER CONTROLLER CODE FILE: /CCUTIL/CF18.3
+       If this is the correct file, just press <return>.  If it
+isn't correct, type a '/', the correct volume name, '/', then
+the correct firmware name ( without the '.DATA' suffix ) and
+press <return>.
+
+       You should see
+       OPENING FIRMWARE FILE and the name echoed.  This
+indicates the update of firmware has begun.
+
+       You should then see
+       TURN FORMAT SWITCH OFF AND RESET DRIVE.
+
+       Format and update are now complete.
+
+
+
+
+NOTES
+
+       LOGGING ON AFTER POWERING UP THE CONCEPT
+
+       When the Concept has just been powered up, you are logged
+into a volume called 'CCSYS'.  Each Concept that monitors the
+Omninet Burn-in has it's own volume for writing reports so the
+first thing to do is set the appropriate volume.  Type the
+volume name ( i.e. 'REPORT', 'REPORT2' ) and press [SETVOL].
+The Concept is now expecting all transactions to deal with the
+new volume.
+       It's now necessary to load and run the Omninet Burn-in
+program.  To do this, type '/TEST/DBI.C' and press <return>.
+This will cause the Concept to load the program called 'DBI.C'
+from the volume 'TEST'.
+
+
+
+
+REPORTING
+---------
+
+        The DBI.C Program is designed to create two types of
+reports, either a temporary screen-only report or a permanent
+text file report that will allow printing at a later date.  The
+latter will also provide an input to a data extraction program
+now under test.
+
+        There three different times you can generate a report.
+        1. A report can be created by pressing the [Report] key
+at F5.  This will allow you to view the progress any or all
+stations have made so far.  The only caution here is that asking
+for a report should only be done after the first pass has been
+completed by the disk drive.  This will take 2-5 minutes
+depending  on the size of the disk.  Calling for a report before
+this first pass will restart the disk on the write cycle of it's
+test. Internal registers are only updated AFTER each pass.
+Check too soon and there won't be any data.
+
+        2. A report can be created by logging off a disk or
+disks.  You will be askked if you want the results saved as a
+text file and if so, what name you desire for the file.  This is
+the recommended way to create a report since it will be the most
+commonly useful report.
+
+
+
+
+
+
+
+
+
+
+OmniNet Error Descriptions:
+
+Error:  -2 - Aborted an OmniNet command when no response was
+             received in 5 seconds
+
+Error:-128 - Aborted a send command after the maximum number of
+             retries (This often means there is no disk server
+             there)
+
+Error: $FE - Aborted an OmniNet command when no response was
+             received in 5 seconds
+
+Error: $80 - Aborted a send command after the maximum number of
+             retries (This often means there is no disk server
+             there)
+
+The presence of OmniNet errors typically indicates something more
+than a superficial problem.  If these errors do occur, please get
+help from qualified individuals.
+
+
+

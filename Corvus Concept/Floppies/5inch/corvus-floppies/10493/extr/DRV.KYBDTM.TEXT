@@ -1,0 +1,111 @@
+;
+; KEYBOARD AUTO REPEAT TIMER CODE AND DATA
+; file : drv.kybdtm.text
+; date : 24-MAR-82 kb
+;
+; TIMER KEYBOARD AUTO REPEAT CODE
+; THIS CODE IS CALLED AS A USER TIMER SERVICE ROUTINE.
+; THE STARTING ADDRESS OF THE ROUTINE (the symbol TIMER) MUST BE ENTERED INTO
+; THE TIMER DRIVER TABLE BY UNITINSTALL.
+;
+MAXVAL      EQU        $FFFF                     ;MAXIMUM UNSIGNED WORD VALUE
+;
+TIMER       MOVEM.L    D0/A0,-(SP)               ;SAVE REGISTERS
+            LEA        WAIT,A0                   ;IF (WAIT<>$FFFF) THEN
+            MOVE.W     (A0),D0                   ;WAIT := WAIT + 1;
+            CMPI.W     #MAXVAL,D0
+            BEQ.S      TIMSAVE                   ;MAX VALUE DON'T INCREMENT
+            ADDQ.W     #1,D0
+TIMSAVE     MOVE.W     D0,(A0)
+;
+            LEA        SHRFLGS+1,A0
+            BSET       #REPEAT,(A0)              ;SHOW THAT TIMER TICKED
+;
+            MOVEM.L    (SP)+,D0/A0               ;RESTORE REGISTERS
+            RTS
+  page
+;
+; TIMINST - CREATE A TIMER TABLE ENTRY FOR THE KEYBOARD AUTO REPEAT TIMER ROUTINE.
+;
+TIMINST     BSR.S      GETTMR                    ;GET TIMER DRIVER UNIT # IN D0
+            BCS.S      TIERR                     ;DIDN'T FIND IT
+;
+; SETUP CREATE PARAMETER BLOCK
+;
+            LEA        TIMPBK,A0                 ;NEED ONLY TO PUT IN ADDR OF
+            LEA        TIMER,A1                  ;INTERRUPT SERVICE ROUTINE
+            MOVE.L     A1,(A0)
+;
+; SETUP REGISTERS FOR DIRECT DRIVER CALL (D0=UNIT #)
+;
+            MOVEQ      #CREATE,D2                ;FUNC (CONTROL)
+            MOVE.L     A0,D1                     ;BUFFER ADDRESS := @PARAMEER BLOCK
+            MOVEQ      #USTAT,D4                 ;COMMAND
+;
+            BSR.S      CALLTUST                  ;CALL TIMER DRIVER
+;
+; TEST IORESULT (D7.W) - IF NOT = 0 THEN ERROR
+;
+            TST.W      D7
+            BEQ.S      TIEXIT
+TIERR       MOVE.W     #NORPTER,D7               ;CAN'T DO REPEAT
+TIEXIT      RTS
+  page
+;
+; TIMUNMT - DELETE REPEAT TIMER FROM THE TIMER TABLE
+;
+TIMUNMT     BSR.S      GETTMR                    ;GET TIMER DRIVER UNIT # IN D0
+            BCS.S      TUEXIT                    ;IGNORE ERROR
+;
+; SETUP REGISTERS FOR DIRECT DRIVER CALL TO UNITSTATUS DELETE FUNCTION
+;
+            MOVEQ      #DELETE,D2                ;FUNC (CONTROL)
+            LEA        TABLEID,A0                ;CREATE PUTS TABLEID IN PARAMETER
+            MOVE.L     A0,D1                     ;BLOCK // BUFFER ADDRESS       OCK
+            MOVEQ      #USTAT,D4                 ;COMMAND
+;
+            BSR.S      CALLTUST                  ;CALL TIMER DRIVER
+TUEXIT      RTS                                  ;IGNORE ERROR
+  page
+;
+; GETTMR - GET UNIT NUMBER OF TIMER DRIVER FROM DEVICE TABLE.
+;
+;           EXIT : (D0) = UNIT NUMBER
+;                  (C)  = NO TIMER INSTALLED
+;                  (NC) = FOUND TIMER
+;                  (D6) = INDEX TO TIMER DRIVER ENTRY (NEEDED BY CALLTUST)
+; TIMER IS ALWAYS THE DRIVER W/ UNIT# = MAX_DEVICE_# -2.
+; MAX_DEVICE_# IS THE FIRST WORD OF THE DEVICE TABLE.
+;
+GETTMR      BSR.S      GETDVTBL                  ;A1 = ADDRESS OF DEVICE TABLE
+            MOVE.W     (A1)+,D0                  ;UPDATE PTR TO 1ST ENTRY
+            SUBQ       #2,D0                     ;D0 = UNIT #
+;
+; VERIFY DEVICE MOUNTED AT THE UNIT NUMBER
+;
+            MOVE.L     D0,D6                     ;USE TEMP
+            MULU       #DEVLEN,D6                ;INDEX TO TIMER ENTRY
+            TST.B      MOUNTED(A1,D6.W)          ;IS IT MOUNTED?
+            BNE.S      GTTEXIT                   ;MOUNTED
+            MOVE.W     #CARRYST,CCR              ;SHOW NO TIMER
+GTTEXIT     RTS                                  ;TST ALWAYS CLEARS CARRY
+  page
+;
+; CALLTUST - CALL TIMER UNITSTATUS DIRECTLY
+;           ENTRY : (D0) = UNIT #
+;                   (D1) = BUFFER ADDRESS
+;                   (D2) = CONTROL
+;                   (D4) = COMMAND
+;                   (D6) = INDEX TO TIMER DRIVER ENTRY
+;
+CALLTUST    BSR.S      GETDVTBL                  ;A1 = ADDRESS OF DEVICE TABLE
+            TST.W      (A1)+                     ;ADDRESS OF 1ST ENTRY
+            MOVE.L     DRVADDR(A1,D6.W),A1       ;ADDRESS OF DRIVER
+            JMP        (A1)
+;
+; GETDVTBL - GET DEVICE TABLE ADDRESS
+;           EXIT : (A1) = ADDRESS OF DEVICE TABLE
+;
+GETDVTBL    MOVE.L     PSYSCOM.W,A1              ;SYSCOM ADDRESS
+            MOVE.L     PDEVTAB(A1),A1            ;DEVICE TABLE ADDRESS
+            RTS

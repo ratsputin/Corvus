@@ -1,0 +1,23 @@
+;
+; File ID: /FPSERV/SYSTEM.UPDATE
+;
+; SYSTEM.UPDATE assumes volumes /PSERVER, /CCUTIL, and
+; /CCSYS exist and have read/write access
+;
+pause Continue
+;
+setvol /FPSERV
+krunch -q /PSERVER
+cpyfil -q -vPSERVER system.comsrv system.pascal system.miscinfo system.startup
+cpyfil -q -vPSERVER p.server.boot p.serv.tbl p.confg psmgr tsmgr
+krunch -q /PSERVER
+krunch -q /CCUTIL
+cpyfil -q -vCCUTIL bootmgr c2.menu.text c2.misc.text c2.help.text
+krunch -q /CCUTIL
+krunch -q /CCSYS
+cpyfil -q -vCCSYS cc.c2mgr
+krunch -q /CCSYS
+setvol /CCSYS
+;
+; SYSTEM.UPDATE complete
+;

@@ -1,0 +1,159 @@
+
+file :  /kb/simplekbrd.text
+date :  08-Feb-1982   kb
+
+This is the design for the simple keyboard driver for the Boot PROM.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+1) only returns single character ASCII sequences for keypresses.  NO release
+   character sequences either.
+2) only has control,shift, and shift-lock qualifiers.
+3) in key table, a value of $FF means ignore key.
+4) Release only process qualifiers.
+5) has type-ahead and interrupt driven.
+6) Get character routine returns one character at a time in register D0.B.
+7) Shift and Regular tables on external document.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Interrupt Routine :
+
+Get Keycode.    <--ignore errors??
+if (bit D7 of Keycode set) then begin {closure}
+  set Closure flag.
+  clear bit D7 of Keycode.
+end else clear Closure flag;
+
+if (Shift flag set) then char := Shift_table[Keycode]
+                    else char := Regular_table[Keycode];
+
+if (char <> $FF) then {have a good key}
+  if (char > $7F) then Qualifiers {process a qualifier key}
+  else
+    if (Closure flag set) then begin {put a character in the buffer}
+       if (Control flag set) then Clear bits D7,D6,D5 of char
+                                     - char := AND.B  #$1F,char
+       else if (Shift_lock flag set) then {if a lower case make upper case}
+         if ( (char>=$61) and (char<=$7A) ) then char := Shift_table[Keycode];
+
+       if (not Buffer_full) then begin
+         put char in Buffer at Rear.
+           Rear^ := char;
+         Rear := Rear+1;
+         if (Rear > (@Buffer)+BufferLength) then Rear := @Buffer;
+         if (Front=Rear) then Buffer_full := true;
+         Buffer_empty := false;
+       end;
+    end;
+do RTE.
+
+++++
+
+ Qualifiers :
+
+   if (char = $FE) then {shift}
+      if (Closure flag set) then set Shift flag
+                            else clear Shift flag;
+   if (char = $FD) then {control}
+      if (Closure flag set) then set Control flag
+                            else clear Control flag;
+
+   if (char = $FC) then {shift lock}
+      if (Closure flag set) then set Shift_lock flag
+                            else clear Shift_lock flag;
+
+   Return.
+
+---------------------------------------------------------------------------
+GetCharacter :
+
+ while (Buffer_empty) do;
+ Disable Keyboard Interrupt.
+ char := Front^;
+ Front := Front+1;
+ if (Front > (@Buffer)+BufferLength) then Front := @Buffer;
+ if (Front=Rear) then Buffer_empty := true;
+ Enable Keyboard Interrupt;
+ Return(char);
+
+---------------------------------------------------------------------------
+Initialize :      {can use portons of the Keyboard driver's Unitinstall code}
+
+ Turn off interrupts on Keyboard UART.
+    Set UART Command Register ($30F05) to $02.
+ BufferLength := 256;
+ Front := @Buffer;
+ Rear := @Buffer;
+ Buffer_empty := true;          {false means clear, true means set}
+ Buffer_full := false;
+ Closure flag := false;
+ All Qualifier flags := false;
+
+ Set baud rate and byte size for UART.
+    Reset UART by writing any byte value to the Status Register ($30F03)
+    Clear receive by writing any byte value to the Data Port ($30F01).
+    Write a $17 to the Control Register ($30F07) for 8 bit byte, 600 baud.
+ Put address of Interrupt routine entry point in Interrupt vector 6 ($78).
+ Turn on interrupts on Keyboard UART.
+    Force Break of Keyboard by writing $08 to the Command Register.
+    Wait about 34 milliseconds for Keyboard to Reset.
+    Write a $09 into Command Register to allow UART interrupt and receive data.
+ set 68000 interrupt level to at least 5 so Keyboard can interrupt.
+ Return.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Flags used :
+
+  1) Buffer_empty   :  interrupt routine, get character routine
+  2) Buffer_full    :  interrupt routine only
+  3) Closure flag   :  interrupt routine only
+  4) Control        :  qualifier flag - interrupt routine only
+  5) Shift          :  qualifier flag - interrupt routine only
+  6) Shift_lock     :  qualifier flag - interrupt routine only
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Code segment for GetChar :
+
+Register useage :  A0 = Front pointer
+                   A1 = address of end of buffer + 1
+                   A2 = updated Front pointer
+                   A3 = address of front pointer
+                   A4 = address of Flag byte
+; BUFMTY is the bit flag for Buffer_empty in the Flag byte.
+;
+; Exit : (D0.b)-next character in buffer.
+;
+GetChar         LEA     FLAGS,A4                ;address of Flag byte
+;
+; Wait for a character in the Buffer.
+;
+WAIT            BTST    #BUFMTY,(A4)            ;while (Buffer_empty) do;
+                BNE.S   WAIT
+;
+; have char, check for wrap around before get char
+;
+                LEA     FRONT,A3                ;pointer to Front save loc
+                MOVE.L  (A3),A0                 ;Front pointer
+                LEA     BUFFER+BUFLEN,A1        ;end of buffer + 1
+                MOVE.L  A0,A2
+                ADDQ.L  #1,A2                   ;add one to pointer to get next addr
+                CMP.L   A0,A2                   ;Front=end of buffer + 1 ?
+                BNE.S   NOWRAP                  ;No
+                LEA     BUFFER,A2               ;yes, then pointer wraps back to beginning
+;
+; get char - disable interrupts before hand
+;
+NOWRAP          ORI.W   #$0700,SR
+                MOVE.B  (A0),D0                 ;get char
+                MOVEA.L A2,(A3)                 ;save new Front value
+                CMPA.L  REAR,A2                 ;if Front=Rear then
+                BNE.S   ENBLINT                 ;Buffer_empty := true;
+                BSET    #BUFMTY,(A4)
+;
+; enable interrupts before exit
+;
+ENBLINT         ANDI.W  #$F500,SR
+                RTS

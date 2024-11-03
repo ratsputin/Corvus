@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'fccsys1.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FCCSYS1 has 6 files,  0 to 6 (6), eov 500, size 7, free 6
+
+ 1: CC.C2MGR        Data  4-Feb-83    6-  84(  78), 39936+512= 40448 bytes
+ 2: CC.MNTMGR       Data  4-Feb-83   84- 198( 114), 58368+512= 58880 bytes
+ 3: ACCMGR          Data  4-Feb-83  198- 306( 108), 55296+512= 55808 bytes
+ 4: BOOTMGR         Data  4-Feb-83  306- 377(  71), 36352+512= 36864 bytes
+ 5: DRIVEMGR        Data  4-Feb-83  377- 489( 112), 57344+512= 57856 bytes
+ 6: SYSTEM.UPDATE   Text  4-Feb-83  489- 493(   4),  2048+512=  2560 bytes

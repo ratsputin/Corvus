@@ -1,0 +1,128 @@
+
+
+Preliminary schedule for Keith Ball
+02-November-1982
+
+Note :  All time estimates are based on continuous work at the alloted
+        task with no other job interruptions.
+
+
+
+       1) Finish spec on printer driver with enhancements.  Includes
+          completion of experiment with Pascal program on methods to do
+          enhancements.  Very close to completion of Pascal experiment
+          and final spec.
+
+          Time : 1 week left   Confidence level : 80%
+                                                  too long
+
+       2) Implement the new printer driver.  Have it attach to the old
+          printer driver which will be assigned to a data com unit
+          number, e.g. /DTACOM1.
+
+          Time : 3 weeks       Confidence level : 70%
+
+       3) Evaluate Karasik's data com driver.  Determine work needed for
+          completion.  Must add handshake protocols at minimum, including
+          ETX/ACK protocol.  This should be bidirectional version.
+
+          Time : 3 days        Confidence level : 75%
+
+       4) Write spec on needed features to be added to or current
+          features to be changed for Karasik's data com driver.  Includes
+          what features exist and how they are done.  Evaluation of spec
+          may cause additional changes to the driver to become necessary.
+          This driver's interface must be upwards compatible to the old
+          printer driver, the one without enhancements.  This mainly
+          involves tthe unitstatus functions, its parameter blocks and
+          function codes.
+
+          Time : 1 week        Confidence level : 50%
+
+       5) Implement changes to data com driver.  Includes initial debug
+          time to make driver stable.
+
+          Time : 3 weeks       Confidence level : 40%
+                                                  truely unknown until
+                                                  complete evaluation and
+                                                  spec
+
+       6) Change new printer driver to attach to the data com driver.
+          This may include debug on data com driver.
+
+          Time : 1 week        Confidence level : 70%
+                                                  possibly short
+
+       7) Fix transporter driver.  Bug is currently undefined and very
+          serious.
+
+          Time : 1 week        Confidence level : 25%
+                                                  have no real grasp of
+                                                  problem at this time
+
+       8) Redesign omninet disk driver, local disk driver and slot I/O
+          driver.  Includes writing spec on all 3 drivers.  Needs a
+          major restructure of the slot I/O interface to the 2 disk
+          drivers.  The local disk driver needs only the slot I/O
+          interface change, unless problems arise during this
+          investigation.
+
+          Time : 2 weeks       Confidence level : 50%
+                                                  possibly short
+
+       9) Implement redesign of disk and slot I/O drivers.
+
+          Time : 4 weeks       Confidence level : 50%
+                                                  most likely short
+                                                  probably 6 wks.
+
+      10) Design and implement Network Manager.
+
+          Time : 4 weeks       Confidence level : 50%
+                                                  possibly short
+
+Next steps :
+
+       a) Firm up dates
+       b) build calendar time line
+       c) milestones on a real time basis
+
+
+
+Time line :  (tentative)
+
+
+October November                      December
+2   2             1  1   1  2   2  2          1  1   1  2   2  2   3
+5...9  1...5  8...2  5...9  2...6  9...3  6...0  3...7  0...4  7...1
+                               tt  ccccc                   vv  vvvvv
+   11  11111
+              22222  22222  222           22
+        7777                                333
+                                                 44444
+                                                        555
+
+--------------------------------------------------------------------
+
+January                     February                    March
+      1   1  1   2  2   2  3          1  1   1  2   2  2           1
+3...7 0...4  7...1  4...8  1...4  7...1  4...8  1...5  8...4   7...1
+
+55555 55555  55
+             66666
+                    77777
+                    88888  88888  99999  99999  99999  99999
+                                                          00   00000
+
+--------------------------------------------------------------------
+
+
+
+t = Thanksgiving
+c = COMDEX
+v = Christmas vacation
+
+The numbers correspond to the categories listed in the time estimate
+above.
+
+0 = category 10, the Network Manager

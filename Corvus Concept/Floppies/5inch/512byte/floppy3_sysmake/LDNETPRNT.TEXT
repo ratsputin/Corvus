@@ -1,0 +1,53 @@
+program LoadNetPrinter;
+
+type
+    pString80 = ^String80;
+    String80  = string[80];
+
+    pString20 = ^String20;
+    String20  = string[20];
+
+    stringtable = array[1..3] of pString20;
+
+var i: integer;
+
+function pOSdevNam(u: integer): pString80; external;
+
+function LoadDriver(drvr: integer): integer;
+    var p: pString80;  pm: ^boolean;
+        s1,s2,s3: string20; st: stringtable;
+    begin
+    st[1] := @s1; st[2] := @s2; st[3] := @s3;
+    case drvr of
+       0: begin
+          p := pOSdevNam (6);
+          pm := pointer(ord4(p)-1); {point at mount flag}
+          if pm^ then begin  {don't load if mounted}
+             LoadDriver := 0;
+             exit(LoadDriver);
+             end;
+          p^ := ''; s1 := '!DRV.EPRNT';
+          s2 := 'PRINTER'; s3 := '6';
+          end;
+       1: begin
+          p := pOSdevNam (3); p^ := '';
+          s1 := '!DRV.SPOOL'; s2 := 'SPOOLER';
+          s3 := '3';
+          end;
+       end;
+    LoadDriver := call ('!ASSIGN',input,output,st,3);
+    end;
+
+begin
+if LoadDriver(0) <> 0 then begin
+   writeln('Cannot load printer driver.');
+   exit(LoadNetPrinter);
+   end
+else if LoadDriver(1) <> 0 then begin
+        writeln('Cannot load spooler driver.');
+        exit(LoadNetPrinter);
+        end;
+i := 3;
+unitstatus(6,i,$82); i := ioresult; {attach eprnt to unit 3}
+if i <> 0 then writeln('Failed to attach printer driver to spooler driver.');
+end.

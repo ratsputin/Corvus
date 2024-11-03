@@ -1,0 +1,58 @@
+
+Directory of UCSD disk image file 'image.80'
+
+Unknown density, disk image size 655360, 1280 blocks of 512 bytes each
+
+Volume BACKUP1 has 51 files,  0 to 6 (6), eov 1280, size 0, free 51
+
+ 1: BLDACT          Ux7dc5 11-Nov-85    6-  35(  29), 14848+512= 15360 bytes
+ 2: BLDALT          Ux7dc5 11-Nov-85   35-  53(  18),  9216+512=  9728 bytes
+ 3: CSD.06.10       Ux7dc5  1-Feb-84   53-  55(   2),  1024+512=  1536 bytes
+ 4: CSD.07.11       Ux7dc5  1-Feb-84   55-  58(   3),  1536+512=  2048 bytes
+ 5: DSRV.DIAG.DATA  Ux7dc5  4-Jul-84   58-  59(   1),   512+512=  1024 bytes
+ 6: BOOT.CONCEPT    Ux7dc5  1-Feb-84   59-  69(  10),  5120+512=  5632 bytes
+ 7: BOOT.FLOPPY     Ux7df5  1-Feb-84   69-  71(   2),  1024+512=  1536 bytes
+ 8: C2.HELP.TEXT    Ux7df3 11-Nov-85   71-  75(   4),  2048+512=  2560 bytes
+ 9: CC.CPMUTIL      Data 12-May-83   75- 127(  52), 26624+512= 27136 bytes
+10: CITOH.TEXT      Text  1-Feb-84  127- 131(   4),  2048+512=  2560 bytes
+11: CMP             Data 27-Jul-83  131- 140(   9),  4608+512=  5120 bytes
+12: CPLIB           Data  1-Feb-84  140- 204(  64), 32768+512= 33280 bytes
+13: CSD.06.10.ALT   Ux7dc5  1-Feb-84  204- 209(   5),  2560+512=  3072 bytes
+14: CSD.07.11.ALT   Ux7dc5  1-Feb-84  209- 214(   5),  2560+512=  3072 bytes
+15: CSD.07.14.ALT   Ux7dc5  1-Feb-84  214- 221(   7),  3584+512=  4096 bytes
+16: CSD.08.13.ALT   Ux7dc5  1-Feb-84  221- 227(   6),  3072+512=  3584 bytes
+17: CSD.09.14.ALT   Ux7dc5  1-Feb-84  227- 240(  13),  6656+512=  7168 bytes
+18: CSD.DEFAULT     Ux7dc5  1-Feb-84  240- 242(   2),  1024+512=  1536 bytes
+19: CSD.IBM         Ux7dc5  1-Feb-84  242- 249(   7),  3584+512=  4096 bytes
+20: FIRM.BOOT.A2    Ux7dc5 24-Sep-84  249- 251(   2),  1024+512=  1536 bytes
+21: DIABLO.TEXT     Text  1-Feb-84  251- 255(   4),  2048+512=  2560 bytes
+22: DIFF            Data 17-Aug-82  255- 277(  22), 11264+512= 11776 bytes
+23: DISASM          Data 18-Jun-83  277- 335(  58), 29696+512= 30208 bytes
+24: PRTWND          Ux7df5 11-Nov-85  335- 338(   3),  1536+512=  2048 bytes
+25: WRITEBOOT       Ux7df5  1-Feb-84  338- 343(   5),  2560+512=  3072 bytes
+26: MBACKUP         Ux7df5 11-Nov-85  343- 414(  71), 36352+512= 36864 bytes
+27: MIRROR          Ux7df5 11-Nov-85  414- 522( 108), 55296+512= 55808 bytes
+28: MOVE            Data  1-Feb-84  522- 554(  32), 16384+512= 16896 bytes
+29: OTEST           Ux7dc5 11-Nov-85  554- 584(  30), 15360+512= 15872 bytes
+30: DIAG.INFO.TEXT  Ux3e3 31-Jan-86  584- 588(   4),  2048+512=  2560 bytes
+31: BANK.DIAG.DATA  Ux7dc5  1-Feb-84  588- 592(   4),  2048+512=  2560 bytes
+32: SYSGEN          Ux7dc5 11-Nov-85  592- 711( 119), 60928+512= 61440 bytes
+33: BOOT.CONCEPT2   Ux7dc5 22-Apr-85  711- 722(  11),  5632+512=  6144 bytes
+34: ODRV.DIAG.DATA  Ux7dc5  2-Aug-84  722- 724(   2),  1024+512=  1536 bytes
+35: SYSTEM.MISCINFO Ux7df5 10-Sep-85  724- 725(   1),   512+512=  1024 bytes
+36: SYSTEM.PASCAL   Ux7df5  1-Feb-84  725- 854( 129), 66048+512= 66560 bytes
+37: TERMINAL        Ux7dc5 11-Nov-85  854- 891(  37), 18944+512= 19456 bytes
+38: UNCAT           Data  1-Feb-84  891- 903(  12),  6144+512=  6656 bytes
+39: USERKEYS.TEXT   Ux7df3  1-Feb-84  903- 909(   6),  3072+512=  3584 bytes
+40: ZAP             Data  1-Feb-84  909- 951(  42), 21504+512= 22016 bytes
+41: ...NEW.STUFF... Data 17-Apr-84  951- 952(   1),   512+512=  1024 bytes
+42: FIXIT           Data  2-Apr-84  952-1003(  51), 26112+512= 26624 bytes
+43: DEVUTIL         Data 28-Oct-83 1003-1060(  57), 29184+512= 29696 bytes
+44: PSMGR           Data 22-Sep-83 1060-1144(  84), 43008+512= 43520 bytes
+45: TSMGR           Data 24-Jan-84 1144-1188(  44), 22528+512= 23040 bytes
+46: BLD.MAC.LOAD    Data  6-Jul-84 1188-1215(  27), 13824+512= 14336 bytes
+47: C2.MISC.TEXT    Ux7df3 11-Nov-85 1215-1219(   4),  2048+512=  2560 bytes
+48: BANK.CRVS.VOL   Ux3e5  2-Feb-86 1219-1227(   8),  4096+512=  4608 bytes
+49: BANK.DIAG.NEW   Ux3e5  6-Feb-86 1227-1230(   3),  1536+512=  2048 bytes
+50: DSRV.FIRMWARE   Ux7dc5 21-Sep-84 1230-1270(  40), 20480+512= 20992 bytes
+51: 1ODRV.FIRMWARE  Ux5c5 21-Sep-84 1270-1280(  10),  5120+512=  5632 bytes

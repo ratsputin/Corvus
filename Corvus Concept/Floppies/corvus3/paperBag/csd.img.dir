@@ -1,0 +1,25 @@
+
+Directory of UCSD disk image file 'csd.img'
+
+Error: File size is not modulo block size, odd 256
+Unknown density, disk image size 256256, 500 blocks of 512 bytes each
+
+Volume FLOPPY has 17 files,  0 to 6 (6), eov 500, size 413, free 17
+
+ 1: CSD.SET1        Data 11-Jan-84    6-   8(   2),  1024+ 72=  1096 bytes
+ 2: CSD.SET10       Data 12-Jan-84    8-  15(   7),  3584+  8=  3592 bytes
+ 3: CSD.SET11       Data 11-Jan-84   15-  21(   6),  3072+136=  3208 bytes
+ 4: CSD.SET12       Data 12-Jan-84   21-  28(   7),  3584+  8=  3592 bytes
+ 5: CSD.SET13       Data 12-Jan-84   28-  35(   7),  3584+  8=  3592 bytes
+ 6: CSD.SET14       Data 11-Jan-84   35-  37(   2),  1024+456=  1480 bytes
+ 7: CSD.SET2        Data 12-Jan-84   37-  39(   2),  1024+ 72=  1096 bytes
+ 8: CSD.SET3        Data 11-Jan-84   39-  41(   2),  1024+264=  1288 bytes
+ 9: CSD.SET4        Data 12-Jan-84   41-  43(   2),  1024+456=  1480 bytes
+10: CSD.SET5        Data 12-Jan-84   43-  46(   3),  1536+ 40=  1576 bytes
+11: CSD.SET6        Data 12-Jan-84   46-  50(   4),  2048+  8=  2056 bytes
+12: CSD.SET7        Data 12-Jan-84   50-  53(   3),  1536+232=  1768 bytes
+13: CSD.SET8        Data 12-Jan-84   53-  57(   4),  2048+392=  2440 bytes
+14: CSD.SET9        Data 12-Jan-84   57-  63(   6),  3072+136=  3208 bytes
+15: DEMO.HP.TEXT    Text 11-Mar-84   63-  67(   4),  2048+512=  2560 bytes
+16: PIC1.HP.TEXT    Text 17-Feb-84   67-  71(   4),  2048+512=  2560 bytes
+17: REVIEW.TEXT     Ux60e3  5-Jul-84   71-  87(  16),  8192+512=  8704 bytes

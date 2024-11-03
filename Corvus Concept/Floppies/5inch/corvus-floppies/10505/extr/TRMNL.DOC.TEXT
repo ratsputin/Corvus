@@ -1,0 +1,132 @@
+
+file :  trmnl.doc.text
+date :  11-May-1983
+
+Command Line interface for the terminal emulator program
+
+
+General form :
+
+TERMINAL [UnitNumber] [SendAutoLF] [RcvAutoLF] [PrinterAutoLF] [AutoEcho]
+
+Parameters can be specified in any order.  All parameters are keyword.
+Their general form is :
+
+       Keyword=Param_Value
+
+No blanks are allowed within a parameter.  Parameters may be in upper or
+lower case letters.  Parameters are seperated by blanks.  All parameters
+must appear on the same line as the TERMINAL program name.
+
+1) UnitNumber
+
+       Keyword : UNIT
+       Values  : DC1 or DC2
+
+                 DC1 means DataCom 1 is the primary terminal link.
+
+                 DC2 means DataCom 2 is the primary terminal link.
+
+       There is no default for this parameter.  If it is not specified
+       the program prompts the user for the correct value.  If the ESCAPE
+       key is pressed the program exits.
+
+2) SendAutoLF
+
+       Keyword : SENDALF
+       Values  : ON or OFF
+
+                 ON means Line Feed characters are sent out the primary
+                 terminal link automatically after Carriage Return
+                 characters.
+
+                 OFF means Line Feed characters are not automatically
+                 added to the character stream.
+
+       Default : If SENDALF is not specified on the command line the
+                 state is ON.
+
+3) RcvAutoLF
+
+       Keyword : RCVALF
+       Values  : ON or OFF
+
+                 ON means Line Feed operations are performed on the
+                 screen automatically after Carriage Return characters.
+
+                 OFF means Line Feed operations are not automatically
+                 performed after Carriage Return characters.
+
+       Default : If RCVALF is not specified on the command line the
+                 state is ON.
+
+4) PrinterAutoLF
+
+       Keyword : PRNTALF
+       Values  : ON or OFF
+
+                 ON means Line Feed characters are sent to the printer
+                 automatically after Carriage Return characters.
+
+                 OFF means Line Feed characters are not automatically
+                 sent after Carriage Return characters.
+
+
+       Default : If PRNTALF is not specified on the command line the
+                 state is ON.
+
+5) AutoEcho
+
+       Keyword : ECHO
+       Values  : ON or OFF
+
+                 ON means terminal echoes user input to the display
+                 and any other open output devices.  Used when in Half
+                 Duplex.
+
+                 OFF means display echoes are handled by other end of
+                 communication link.  Used when in Full Duplex.
+
+
+       Default : If PRNTALF is not specified on the command line the
+                 state is ON.
+
+
+Example command lines
+
+1)  TERMINAL UNIT=DC1 SENDALF=ON RCVALF=OFF PRNTALF=ON ECHO=OFF
+
+    This example shows all the possible keywords all on the same line as
+    the TERMINAL program name.
+
+2)  terminal u=DC1 send=ON Rcv=off
+
+    This example shows lower case and upper case.  The UNIT parameter is
+    abbreviated to it's shortest unique string.  SENDALF and RCVALF are
+    abbreviated but not to there shortest unique strings.
+
+
+Function of the terminal emulator program
+
+Generally, any characters typed at the keyboard are sent to the datacom
+connection. Conversely, any characters sent from the datacom are sent to
+the screen.
+
+Characters sent from the datacom can be saved in a text file while they
+are being displayed on the screen.  Just press the FILE function key and
+the program will ask for the file name.  If the [ESC] key is pressed the
+program does not use send characters to a file.  If just the [RETURN] key
+is pressed the program uses the default file name, "...ECHO.TEXT".
+
+Characters will be sent to the file until the user exits the program or
+presses the FILE function key again.  The file is closed and will be
+available for editing with EDWORD or spooling.
+
+If a local printer is available, the characters sent by the datacom may
+also be sent to the printer.  Press the PRINTER function key to send
+characters to the printer.  Press it again to stop.  Characters will
+then appear on the screen and the printer.
+
+Characters maybe sent to the printer and a file at the same time.
+
+To exit the program press the EXIT function key, F10.

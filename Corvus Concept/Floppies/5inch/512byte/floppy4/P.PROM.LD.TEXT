@@ -1,0 +1,276 @@
+; File: CC.PROM.LD.TEXT
+; Date: 25-Jan-84
+; By:   L. Franklin
+
+;
+; Lboot -- Local Corvus disk boot processing
+;
+Lboot   movea.l #CPsl1typ,a1        ;get pointer to slot 1 type
+        moveq   #1,d0               ;get initial slot number
+                                    ;
+Lboot10 move.b  -1(a1,d0),d1        ;get device type
+        cmp.b   #DTlocl,d1          ;is this a local disk interface?
+        beq.s   Lboot30             ;yes, use it for booting
+        addq    #1,d0               ;update slot number
+        cmp.w   #4,d0               ;have we looked at all slots?
+        ble.s   Lboot10             ;no, check next slot
+        moveq   #-1,d7              ;set error return code
+        bra.s   Lboot90             ;return (can not find local disk)
+                                    ;
+Lboot30 move.b  d0,CPbtslot.w       ;set boot slot number
+        clr.b   CPbtsrvr.w          ;set boot server number
+        lea     LDblkIO,a6          ;set boot disk blk i/o subr pointer
+        move.l  a6,CPblkio.w        ;*
+        lea     LDdskIO,a6          ;set boot disk i/o subr pointer
+        move.l  a6,CPdskio.w        ;*
+;
+; fall through to Lboot10 (used by OMNINET boot too)
+;
+    page
+;
+; Lboot80 -- Get 2 boot blocks from Corvus disk                  0.8
+;            (code shared by local disk boot and OMNINET disk boot)
+;      Entry :  A6 = address of disk I/O routine                 0.8
+;      Exit  :  lt = error                                       0.8
+;               ge = good                                        0.8
+;               A0 = if good then address of entry to boot code  0.8
+;
+Lboot80 movea.l #USRbase,a0     ;get block buffer pointer
+        move.b  CPbtsrvr.w,d6   ;get boot server number
+        blt.s   Lboot90         ;just return if invalid server number
+        lsl.w   #8,d6
+        move.b  CPbtslot.w,d6   ;get boot slot number
+                                ;setup boot command
+;for Const II boot use Concept2 boot file - *kb 1/25/84 1.0
+        move.w  #$4417,(a0)     ;put in opcode & computer type 1.0
+        moveq   #$01,d0         ;set boot block number         0.8
+        move.w  #$203,d1        ;read 2nd block first
+        bsr.s   LDgetBB         ;get next boot block
+        blt.s   Lboot90         ;just return if error
+
+        moveq   #$3,d1          ;read 1st block 2nd            0.8
+        bsr.s   LDgetBB         ;get next boot block
+        blt.s   Lboot90         ;just return if error
+        adda.w  #4+12,a0        ;get pointer to boot code      0.8
+                                ;  past cmd, rslt code and file header
+Lboot90 rts
+
+LDgetBB move.b  d0,2(a0)        ;set boot block number
+        moveq   #3,d2           ;get number of bytes to send
+        moveq   #DskWrit,d5     ;get "write" command
+        jsr     (a6)            ;send command
+        adda.w  d1,a0           ;adr where to put boot code
+        move.w  #513,d2         ;get number of bytes to receive
+        moveq   #DskRead,d5     ;get "read" command
+        jsr     (a6)            ;read results
+        blt.s   LDgetBX         ;just return if error
+        suba.w  d1,a0           ;point back at command
+        subq.l  #1,d0           ;update boot block number      0.8
+LDgetBX tst.b   d7
+        rts                     ;return
+   page
+;
+; LDblkIO - Read or write a local disk block subroutine
+;
+;       Enter:  A0.L - Buffer address
+;               D0.L - Block number                                     0.7
+;               D1.W - Drive number
+;               D5.W - Read ($32) or Write ($33) command
+;               D6.B - Slot number
+;
+;       Exit:   A0.L - Next free location in buffer
+;               D0.L - Updated block number                             0.7
+;               D7.W - IORESULT (disk controller status)
+;
+;       All other registers are preserved.
+;
+;       Corvus controller status register [3(a1)]:
+;
+;       bit 7: controller ready    off - ready          on - not ready
+;       bit 6: bus direction       off - host to cntlr  on - cntlr to host
+;
+LDblkIO movem.l a1/d0-d2,-(sp)  ;Save registers
+        bsr     SlotAdr         ;A1 = I/O port address
+        move.w  d5,d2           ;Send a read ($32) or
+        bsr.s   LDsend1         ;  write ($33) block command
+        move.l  d0,d2           ;Compute drive nmbr/MSN block nmbr      0.7
+        swap    d2              ;*                                      0.7
+        lsl.w   #4,d2           ;*                                      0.7
+        or.b    d1,d2           ;*                                      0.7
+        bsr.s   LDsend          ;Send drive number
+        move.w  d0,d2           ;
+        bsr.s   LDsend          ;Send LSB of block
+        lsr.w   #8,d2           ;
+        bsr.s   LDsend          ;Send MSB of block
+        cmpi.w  #DskWrit,d5     ;Are we reading or writing?
+        bne.s   LDrio1          ;Reading
+                                ;
+                                ;Write block processing
+                                ;
+        move.w  #$1FF,d2        ;Block size - 1
+LDwio1  btst    #7,3(a1)        ;Test controller status
+        bon.s   LDwio1          ;Wait until controller ready
+        move.b  (a0)+,1(a1)     ;Send a byte
+        dbra    d2,LDwio1       ;Loop until done
+        bsr.s   LDwait          ;Wait for line to turn
+        move.b  1(a1),d7        ;Fetch result code
+        bra.s   LDrtrn          ;Return
+
+        page
+                                ;
+                                ;Read block processing
+                                ;
+LDrio1  bsr.s   LDwait          ;Wait for the line to turn
+        move.b  1(a1),d7        ;Fetch result code
+                                ;
+LDrio3  btst    #7,3(a1)        ;Test controller status
+        bon.s   LDrio3          ;Wait until controller ready
+        btst    #6,3(a1)        ;Test bus direction
+        boff.s  LDrtrn          ;Finished if "host to controller"
+        move.b  1(a1),(a0)+     ;Store next byte
+        bra.s   LDrio3          ;Go get any more
+                                ;
+LDrtrn  movem.l (sp)+,a1/d0-d2  ;Restore registers
+        addq.l  #1,d0           ;Update block number                    0.8
+        move.b  d7,CPdiskRC.w   ;Save current disk return code          0.7
+        ext.w   d7              ;Set return condition code
+        rts                     ;Return
+
+        page
+;
+; LDsend -- Send a byte to the disk port subroutine
+;
+;       Enter:  A1.L - I/O port address
+;               D2.B - Byte to send
+;
+;       All registers are preserved.
+;
+LDsend  btst    #7,3(a1)        ;Test controller status
+        bon.s   LDsend          ;Wait until controller ready
+        move.b  d2,1(a1)        ;Send the byte
+        rts                     ;Return
+
+;
+; LDsend1 -- Send first byte to the disk port subroutine
+;
+;       Enter:  A1.L - I/O port address
+;               D2.B - Byte to send
+;
+;       All registers are preserved.
+;
+LDsend0 move.w  (sp)+,sr        ;enable interrupts
+        nop                     ;leave some time for interrupt processing
+LDsend1 move.w  sr,-(sp)        ;save interrupt level
+        ori.w   #$0700,sr       ;disable interrupts
+        btst    #7,3(a1)        ;test controller status
+        bon.s   LDsend0         ;wait until controller ready
+        move.b  d2,1(a1)        ;send first byte
+        move.w  (sp)+,sr        ;enable interrupts
+        rts                     ;return
+
+;
+; LDwait -- Wait for the line to turn subroutine
+;
+;       Enter:  A1.L - I/O port address
+;
+LDwait  move.l  d0,-(sp)        ;save register
+        moveq   #100,d0         ;wait a little bit
+LDwait1 dbra    d0,LDwait1      ;*
+        move.l  (sp)+,d0        ;restore register
+        bsr.s   LDwait2         ;check two times in case of glitch
+        nop                     ;*
+                                ;
+LDwait2 btst    #7,3(a1)        ;test controller status
+        bon.s   LDwait2         ;wait until controller ready
+        btst    #6,3(a1)        ;test bus direction
+        boff.s  LDwait2         ;wait until "controller to host"
+        rts                     ;return
+
+        page
+;
+; LDdskIO - Read from/Write to Corvus disk
+;
+;       Enter:  A0.L - Buffer address
+;               D2.W - Count
+;               D5.W - Read ($32) or Write ($33) command
+;               D6.B - Slot number
+;
+;       Exit:   D7.W - IORESULT (disk controller status)
+;
+;       All other registers are preserved.
+;
+LDdskIO movem.l d0-d3/a0-a1,-(sp);Save registers
+        bsr     SlotAdr         ;A1 = I/O port address
+        move.w  d2,d3           ;get count
+        subq.w  #1,d3           ;Set DBRA loop length
+        cmpi.w  #DskWrit,d5     ;Are we reading or writing?
+        bne.s   LDdsk2          ;Reading
+;
+; Write Corvus disk processing
+;
+        move.b  (a0)+,d2        ;get first byte
+        bsr.s   LDsend1         ;send first byte
+        bra.s   LDdsk1a         ;send rest of bytes
+LDdsk1  move.b  (a0)+,d2        ;get next byte
+        bsr     LDsend          ;send next byte
+LDdsk1a dbra    d3,LDdsk1       ;loop until done
+        moveq   #0,d7           ;force successful result code
+        bra.s   LDdsk9          ;finished
+;
+; Read Corvus disk processing
+;
+LDdsk2  bsr.s   LDwait          ;Wait for the line to turn
+        move.b  1(a1),d7        ;Fetch result code
+        move.b  d7,(a0)+        ;Store first byte
+                                ;
+LDdsk3  btst    #7,3(a1)        ;Test controller status
+        bon.s   LDdsk3          ;Wait until controller ready
+        btst    #6,3(a1)        ;Test bus direction
+        boff.s  LDdsk9          ;Finished if "host to controller"
+        move.b  1(a1),(a0)+     ;Store next byte
+        bra.s   LDdsk3          ;Go get any more
+                                ;
+LDdsk9  movem.l (sp)+,d0-d3/a0-a1;Restore registers
+        move.b  d7,CPdiskRC.w   ;Save current disk return code          0.7
+        ext.w   d7              ;Set return condition code
+        rts                     ;Return
+
+        page
+;
+; LDsync -- Synchronize with Corvus disk controller
+;
+;       Enter:  D6.B - slot number
+;
+;       Exit:   D7.W - 0 = no timeout (EQ), -1 = timeout (NE)
+;
+;       All other registers are preserved.
+;
+LDsync  movem.l d0/a1,-(sp)     ;save registers
+        bsr     SlotAdr         ;get slot address
+; ----  move.w  #2000,d7        ;set timeout counter                    0.7
+        move.w  #3000,d7        ;set timeout counter                    0.7
+                                ;
+LDsync1 move.b  #$FF,1(a1)      ;send invalid command to controller
+        move.w  #1024,d0        ;wait about 1 ms
+LDsync2 dbra    d0,LDsync2      ;*
+        btst    #6,3(a1)        ;test bus direction
+        bon.s   LDsync3         ;go on if "controller to host"
+        dbra    d7,LDsync1      ;send invalid command again
+        bra.s   LDsync5         ;set timeout error and return
+                                ;
+LDsync3 btst    #7,3(a1)        ;test controller status
+        boff.s  LDsync6         ;go on if controller ready
+        dbra    d7,LDsync3      ;check controller status again
+                                ;
+LDsync5 moveq   #-1,d7          ;indicate controller timeout
+        bra.s   LDsync9         ;return
+                                ;
+LDsync6 cmpi.b  #$8F,1(a1)      ;did controller respond with error?
+        bne.s   LDsync1         ;no, send invalid command again
+        moveq   #0,d7           ;indicate no controller timeout
+                                ;
+LDsync9 movem.l (sp)+,d0/a1     ;restore registers
+        tst.w   d7              ;set return condition code
+        rts                     ;return
+
+

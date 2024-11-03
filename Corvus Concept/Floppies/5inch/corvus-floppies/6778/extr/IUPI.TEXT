@@ -1,0 +1,21 @@
+program i_up_i;
+
+{$%+}
+function %i_up_i(a,b: longint): longint;
+  var answer: longint; Negate,Invert: Boolean;
+begin
+Negate := (a < 0) and odd(b);
+Invert := b < 0;
+a := abs(a); b := abs(b); answer := 1;
+while b > 0 do begin
+      if odd(b) then answer := answer*a;
+      a := a*a; b := b div 2;
+      end;
+if Negate then answer := -answer;
+if Invert then answer := 1 div answer;
+%i_up_i := answer;
+end; {%i_up_i}
+
+{$C-}
+begin
+end.

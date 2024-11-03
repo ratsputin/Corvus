@@ -1,0 +1,134 @@
+;
+; THIS FILE CONTAINS THE TABLES FOR THE KEYBOARD DRIVER FOR THE VERSION 03
+; KEYBOARD (Selectric style ASCII with ALT key).
+;
+; MADE CHANGES TO ALLOW TABLES TO BE LOADED INTO SYSTEM SEPERATE FROM DRIVER :  4-13-82  kb
+; added version dates and start address with garbage rts instruction : 4-13-82
+; added file length after translation table :  4-14-82  kb
+;
+; file : vrs3kbrd.text
+; date : 13-Apr-82  kb
+;
+;
+; TRANSLATION TABLE
+;
+TRANTBL
+            DATA.L     STABLE - TRANTBL          ;POINTER TO SHIFT TABLE
+            DATA.L     RTABLE - TRANTBL          ;POINTER TO REGULAR TABLE
+            DATA.L     ETABLE - TRANTBL          ;POINTER TO ESCAPE # TABLE
+            DATA.L     SMTABLE- TRANTBL          ;PTR TO STANDARD MULT CHAR TABLE
+            DATA.L     CQTABLE- TRANTBL          ;POINTER TO CAP/QUALIFIER TABLE
+            DATA.L     RLTABLE- TRANTBL          ;POINTER TO RELEASE TABLE
+            DATA.L     BKEYCOD- TRANTBL          ;POINTER TO BREAK KEYCODE TABLE
+;
+; LENGTH OF FILE DATA AFTER TRANSLATION TABLE
+;
+            DATA.W     LENGTH
+;
+; VERSION DATE
+;
+VERSION     DATA.B     '041382'
+;
+START       RTS
+;
+; THE SHIFT TABLE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE ENTRY FOR
+;        THE CORRESPONDING KEYCODE.
+;
+STABLE
+
+  DATA.B  $9E,$33,$39,$9E,$36,$2C,$2D,$9E,$9E,$31,$37,$9E,$34,$38,$35,$32
+  DATA.B  $2B,$00,$7B,$7C,$0D,$7D,$08,$00,$29,$3F,$50,$5F,$3A,$7E,$22,$9F
+  DATA.B  $9D,$9D,$9D,$9D,$9D,$00,$00,$00,$24,$25,$52,$54,$46,$47,$56,$42
+  DATA.B  $40,$23,$57,$45,$53,$44,$58,$43,$1B,$21,$9E,$51,$9F,$41,$9F,$5A
+  DATA.B  $5E,$26,$59,$55,$48,$4A,$4E,$4D,$9F,$9F,$9F,$20,$9F,$30,$9E,$2E
+  DATA.B  $2A,$28,$49,$4F,$4B,$4C,$3C,$3E,$9D,$9D,$9D,$9D,$9D,$9E,$9F,$9F
+;          0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  page
+;
+; THE REGULAR TABLE - UNSHIFTED OR LOWER CASE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE ENTRY FOR
+;        THE CORRESPONDING KEYCODE.
+;
+RTABLE
+
+  DATA.B  $9E,$33,$39,$9E,$36,$2C,$2D,$9E,$9E,$31,$37,$9E,$34,$38,$35,$32
+  DATA.B  $3D,$00,$5B,$5C,$0D,$5D,$08,$00,$30,$2F,$70,$2D,$3B,$60,$27,$9F
+  DATA.B  $9D,$9D,$9D,$9D,$9D,$00,$00,$00,$34,$35,$72,$74,$66,$67,$76,$62
+  DATA.B  $32,$33,$77,$65,$73,$64,$78,$63,$1B,$31,$09,$71,$9F,$61,$9F,$7A
+  DATA.B  $36,$37,$79,$75,$68,$6A,$6E,$6D,$9F,$9F,$9F,$20,$9F,$30,$9E,$2E
+  DATA.B  $38,$39,$69,$6F,$6B,$6C,$2C,$2E,$9D,$9D,$9D,$9D,$9D,$9E,$9F,$9F
+;          0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  page
+;
+; THE CAPS/QUALIFIER FLAG TABLE
+;        TABLE IS INDEXED BY KEYCODE.  EACH BYTE REPRESENTS THE ENTRY FOR
+;        THE CORRESPONDING KEYCODE.
+;
+CQTABLE
+
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$80,$00,$00,$00,$00,$01
+  DATA.B  $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$80,$80,$80,$80,$80,$80
+  DATA.B  $00,$00,$80,$80,$80,$80,$80,$80,$00,$00,$00,$80,$04,$80,$01,$80
+  DATA.B  $00,$00,$80,$80,$80,$80,$80,$80,$02,$08,$60,$00,$10,$00,$00,$00
+  DATA.B  $00,$00,$80,$80,$80,$80,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+;          0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+  page
+; ESCAPE SHARP(#) SEQUENCE TABLE
+;        FORMAT :  (KEYCODE,FILLER,US/UC,SHIFT,COMMAND,C/S)
+;
+ETABLE
+
+  DATA.B  $20,0,'00','0A','14','1E'                 ;FUNCTION KEY 1
+ETRLEN   EQU       %-ETABLE                      ;record length
+  DATA.B  $21,0,'01','0B','15','1F'                 ;FUNCTION KEY 2
+  DATA.B  $22,0,'02','0C','16','20'                 ;FUNCTION KEY 3
+  DATA.B  $23,0,'03','0D','17','21'                 ;FUNCTION KEY 4
+  DATA.B  $24,0,'04','0E','18','22'                 ;FUNCTION KEY 5
+  DATA.B  $4A,0,'FF','FF','FF','FF'                 ;LEFT COMMAND (CLOSURE)
+  DATA.B  $58,0,'05','0F','19','23'                 ;FUNCTION KEY 6
+  DATA.B  $59,0,'06','10','1A','24'                 ;FUNCTION KEY 7
+  DATA.B  $5A,0,'07','11','1B','25'                 ;FUNCTION KEY 8
+  DATA.B  $5B,0,'08','12','1C','26'                 ;FUNCTION KEY 9
+  DATA.B  $5C,0,'09','13','1D','27'                 ;FUNCTION KEY 10
+  DATA.B  $CA,0,'FE','FE','FE','FE'                 ;LEFT COMMAND (RELEASE)
+;
+; STANDARD MULTIPLE CHARACTER SEQUENCE TABLE
+;        FORMAT :  (KEYCODE,LENGTH,CHARACTER_SEQUENCE)
+SMTABLE
+
+  DATA.B  $00,2,$1B,$43                          ;CURSOR RIGHT
+  DATA.B  $03,2,$1B,$48                          ;HOME UP
+  DATA.B  $07,2,$1B,$64                          ;ENTER
+  DATA.B  $08,2,$1B,$44                          ;CURSOR LEFT
+  DATA.B  $0B,2,$1B,$42                          ;CURSOR DOWN
+  DATA.B  $3A,2,$1B,$69                          ;BACK TAB
+  DATA.B  $5D,2,$1B,$41                          ;CURSOR UP
+  DATA.B  $4E,2,$30,$30                          ;DOUBLE ZERO-( 00 KEY )
+  DATA.B  $FF,0                                  ;NULL KEYCODE - END OF TABLE
+  page
+;
+; RELEASE TABLE
+;        FORMAT :  (KEYCODE,ACTION_CODE)
+;
+RLTABLE
+
+  DATA.B  $1F,$9E                                ;RIGHT SHIFT
+RLRLEN   EQU       %-RLTABLE                     ;record length
+  DATA.B  $3C,$9E                                ;CAPS LOCK
+  DATA.B  $3E,$9E                                ;LEFT SHIFT
+  DATA.B  $48,$9E                                ;CONTROL
+  DATA.B  $49,$9E                                ;FAST
+  DATA.B  $4A,$9E                                ;LEFT COMMAND
+  DATA.B  $4C,$9E                                ;ALTERNATE
+  DATA.B  $FF,$00                                ;NULL KEYCODE - END OF TABLE
+;
+;
+; BREAK KEYCODE TABLE
+;        SINGLE BYTE TABLE.  THIS IS THE KEYCODE WHICH CAUSES START/STOP.
+;
+BKEYCOD  DATA.B    $DF,0                         ;BREAK CLOSURE KEYCODE,FILLER
+;
+LENGTH   EQU       %-VERSION                     ;LENGTH OF DATA AFTER TRANSLATION TABLE
+         END      START

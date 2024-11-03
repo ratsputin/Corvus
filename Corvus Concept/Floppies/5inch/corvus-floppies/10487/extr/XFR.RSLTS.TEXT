@@ -1,0 +1,10 @@
+Constellation II Transfer Manager Results -- 16-Apr-84
+
+Volume Transfer of 6000 blocks
+   Fm:  slt: 3  srv: SERVER0     drv: DRIVE1      vol: WORDPRO
+   To:  slt: 5  srv: BANKSRV     drv: BANKTAPE    vol: WP1.2
+13:47:40   Transfer starting ....
+13:53:50   Transfer complete ....
+13:54:25   Constellation II volume table entry update complete
+13:54:25   Transfer status: Successful
+

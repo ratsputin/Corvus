@@ -1,0 +1,224 @@
+
+
+
+                                            19-Apr-82
+
+
+This release supports 6MB, 10MB, and 20MB drives for the Apple III.
+
+THIS SOFTWARE WORKS ON FLAT CABLE ONLY; OMNINET IS NOT SUPPORTED ON 
+THE APPLE III.
+
+A3 Utilities
+------------
+
+There are three floppies for the A3 Utilities: CORIII1, CORIII2,
+and CORIII3. The contents of each volume are listed on the next page.
+
+All floppies have changed in this release.
+
+The files changed are listed below:
+
+        CF17.3.DATA - firmware file for CF17.3
+        
+        DIAGNOSTIC.CODE - changed to prompt for CF17.3.  Reports
+        error when it can't find the firmware file, instead
+        of terminating.
+
+        LOGON.CODE - prints version number; prints message at end
+        (either "Corvus link installed", or "You have logged on as user
+        xxxx".).  Will chain to #4:STARTUP.CODE or .C1/STARTUP.CODE if
+        either is found.
+
+        PSYSGEN.CODE - first volume on drive 1 is called 'CS1' instead
+        of 'APPLE3'. For 20MB drive, PSYSGEN creates a volume 'CS2'
+        that is 136 blocks long, on virtual drive 2.
+
+        VINIT .CODE - I(nit option creates a volume 'CSd' that is 136
+        blocks long, on the drive being initialized.
+        C)onst option no longer requires prefix to first volume  on
+        drive being initialized - prompt has changed.
+
+        DRIVERS
+        -------
+        FORMAT.DRIVER - deleted; function is now performed by
+        CORVUS.DRIVER or LOGON.DRIVER.
+
+        CORVUS.DRIVER - includes format function.
+
+        LOGON.DRIVER - includes format function, .CDRW is active.
+
+        SOS.DRIVER - includes new CORVUS.DRIVER.
+
+$P
+
+
+CORVUS.LIBRARY contains the following units.
+
+        DRVSEND    - -
+        DRIVEIO    - -
+        DRVUTILS   1.1a
+        SMARTIO    - -
+        PIPES      1.5b
+        SEMAPHOR   1.7b
+        DATES      - -
+        RWMTAB     - -
+        USERUTIL   1.1
+
+SYSTEM.LIBRARY is the standard Apple III Pascal SYSTEM.LIBRARY.
+
+Known problems:
+---------------
+
+1) Hangs system if drive is not in the right slot, or
+   is not powered on.
+
+2) Diagnostic does not report track # in CRC.
+
+Contents rearranged:
+--------------------
+1. SPOOL.CODE and SHARE.CODE moved to vol 3.
+
+2. SYSTEM.STARTUP deleted.
+
+3. CF17.3 on vol 3 instead of vol 2.
+
+To copy diskettes:
+------------------
+
+1. Boot Apple III with the Corvus system utilities diskette.
+2. Select option (D) for device handling.
+3. Choose option (C) for (copy one volume onto another).
+4. Place the master diskette into the source device .D2 (drive 2).
+5. Enter the source device name then the destination device name
+   or press <CR>.
+6. Insert the system diskette into the destination drive .D1.
+7. Press space to continue.
+8. Insert the blank diskette into the destination drive .D1.
+9. Press space to continue.
+10.Use the Apple II RDMAKEFLOP program to verify the contents.
+
+File changes:
+-------------
+
+File changes made to CORIII2: only.
+
+The files changed are:
+
+    CF17.3.DATA - firmware file for CF17.3.
+    DIAGNOSTIC.CODE - changed to prompt for CF17.3.
+
+
+$P
+Contents of A3 Utilities floppies:
+
+    CORIII1:           Size:  Version      Date         CRC
+
+        SOS.KERNEL      43      1.1      1-Feb-82       138
+        SOS.DRIVER      17      1.1     10-Apr-82       145
+        SOS.INTERP      33      1.1     10-Aug-81       235
+        CORVUS.DRIVER    7      1.1     11-Jan-82       172
+        LOGON.DRIVER    12      1.1     11-Jan-82       180
+        CORVUS.LIBRARY  72      nvn     16-Mar-82        24
+        SHARE.TEXT      10      1.2      6-Aug-81        44
+        SPOOL.TEXT      38      1.6a    18-Sep-81         5
+
+                                 8 files, 33 blocks available
+    CORIII2:
+        SYSTEM.MISCINFO  1      nvn     10-Aug-81       130
+        SYSTEM.PASCAL   64      1.0     10-Aug-81       240
+        SYSTEM.LIBRARY  28      nvn     10-Aug-81       252
+        APPLE2.BOOT      5      3.1     14-Sep-81       181
+        DIAG.DATA        1     17.3     31-Aug-81       247
+        DIAGNOSTIC.CODE 41      5.1     10-Apr-82       115
+        LOGON .CODE     14      1.1     10-Apr-82        81
+        MIRROR.CODE     47      2.0b    13-Oct-81       141
+        PSYSGEN.CODE    21      3.1     10 Apr-82         0
+
+                                 9 files, 40 blocks available
+        
+    CORIII3:
+        CF17.3.DATA     60     17.3      9-Nov-81       205
+        CMGR.CODE       40      1.0     10-Oct-81       203
+        DIAG.DATA        1     17.3     31-Aug-81       247
+        SHARE.CODE      21      1.2     10-Sep-81        48
+        SPOOL.CODE      26      1.6a    18-Sep-81       104
+        VINIT.CODE      44      3.1     10-Apr-82       123
+        VMGR.CODE       49      3.0     13-Oct-81       211
+
+                                7 files, 26 blocks available
+
+$P
+
+Labels for floppies should look like this:
+
+        +-------------------------------------------+
+        !   A3 Utilities-Vol 1 of 3 CORIII1: / SOS  |
+        !   Release Date:12-Apr-82 Part # 8100-08594|   CRC = 230
+        !   Copyright 1981,1982 Corvus Systems Inc  |
+        |           All Rights Reserved             |
+        |                                           |
+        |    Copyright 1980 Apple Computer, Inc.    |
+        +-------------------------------------------+
+
+
+        +-------------------------------------------+
+        !  A3 Utilities-Vol 2 of 3 CORIII2: / Pascal|
+        !  Release Date:12-Apr-82 Part # 8100-08595 |
+        !  Copyright 1981,1982 Corvus Systems Inc   |    CRC =  92
+        |          All Rights Reserved              |
+        |                                           |
+        |  Copyright 1981 Apple Computer, Inc.      |
+        +-------------------------------------------+
+
+
+        +---------------------------------- --------+
+        !  A3 Utilities-Vol 3 of 3 CORIII3: / Pascal|
+        !  Release Date:12-Apr-82 Part # 8100-08596 |
+        !  Copyright 1981,1982 Corvus Systems Inc   |    CRC = 195
+        !          All Rights Reserved              |
+        |                                           |
+        |  Copyright 1981 Apple Computer, Inc.      |
+        +-------------------------------------------+
+        
+
+
+$P
+
+Previous releases:
+------------------
+
+Corvus A3 Utilities  18-Nov-81,18-Nov-81,18-Nov-81.
+
+File changes made to CORIII2: only.
+
+The floppy labels are listed below.
+
+                  +-------------------------------------+
+                  |                                     |
+                  | CORVUS A3 UTILITIES - VOL 1 of 3    |CRC=249
+                  |         CORIII1: / SOS              |
+                  |                                     |
+                  | Release date:          18-Nov-81    |
+                  | COPYRIGHT 1980, APPLE COMPUTERS, INC|
+                  +-------------------------------------+
+
+                  +-------------------------------------+
+                  |                                     |
+                  | CORVUS A3 UTILITIES -  VOL 2 OF 3   |CRC=  9
+                  |          CORIII2: / PASCAL          |
+                  |                                     |
+                  | Release date:           18-Nov-81   |
+                  | COPYRIGHT 1981, APPLE COMPUTERS, INC|
+                  +-------------------------------------+
+
+                  +-------------------------------------+
+                  |                                     |
+                  | CORVUS A3 UTILITIES - VOL 3 of 3    |CRC=  4
+                  |         CORIII3: / PASCAL           |
+                  |                                     |
+                  | Release date:          18-Nov-81    |
+                  | COPYRIGHT 1981, APPLE COMPUTERS, INC|
+                  +-------------------------------------+
+
+$P

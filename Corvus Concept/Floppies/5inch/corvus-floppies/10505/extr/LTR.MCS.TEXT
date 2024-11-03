@@ -1,0 +1,83 @@
+
+         Microsoft Corporation
+         10700 Northup Way
+         Bellevue, Washington  98004
+
+         March 20, 1984
+
+
+         Colleagues :
+
+         We at Corvus Systems have reviewed the Microsoft Network
+         specifications.  We like the fact that they do not define the
+         internal structure of the transport and lower layers.
+         Although we like your general approach we find the
+         specifications vague and even confusing in several critical
+         areas.  For example, in the file sharing document, you side
+         stepped the file locking and sharing issue.  In the transport
+         document, the space allocated for addressing is more than
+         adequate.  However, Microsoft must define how network
+         addresses map into objects in the MSDOS world.  We realize
+         this is a difficult issue but a network independent facility
+         such as a message exchange could be defined.
+
+         Specifically with the transport document, the definition of a
+         fixed format TCB is excellent.  Within the TCB, the TCB_TD
+         definition is confusing.  We view it as a connection id.
+         Consequently, the ACB_TD should be defined as the connection
+         id for the operation complete indication.  Also, one byte may
+         be too small.  A word with 1 byte as the index and another as
+         a random number may be more useful.
+
+         To simplify the calling interface we suggest the interrupt
+         routine should not return error codes.  If an operation fails
+         the caller should be informed via the ANR.  This allows the
+         caller to localize the error processing within the ANR.
+
+         The specification's definition and requirement of a logical
+         packet stream for the connection mode is both inconsistent
+         and unacceptable.  Standard transport layer implementations
+         usually provide a byte stream.  If an application protocol
+         requires a record stream, such as a parameter block, the
+         presentation layer can provide them.
+
+         For the commands, timeouts are either not used or not
+         defined.  The defined send timeout, TCB_STO, is not used.  No
+         receive timeout is defined.  No timeout for listen is
+         defined. However, TCB_CTO could be used.
+
+         Since multiple commands are allowable on a connection
+         the cancel command must allow the caller to
+         specify transport command as well as connection id.
+
+         The status command only provides the status of the whole
+         network interface.  A status command based on connection is
+         also required.
+
+         Call should be a super set of listen.  Therefore, if two
+         session entities call each other the transport layer should
+         make a connection.
+
+         Broadcast is selected by network address.  Seperate send and
+         receive commands are unnecessary.  Addressing independence
+         can be achieved with a system call to the net interface which
+         returns the broadcast address.  Another useful function would
+         allow the caller to enable and disable the reception of
+         broadcast messages.
+
+         In the core file sharing protocol document a reference is
+         made to the core VC definitions document.  We do not have
+         this document and would appreciate seeing it.
+
+         Thank you for allowing us to review and comment on your
+         preliminary MSNET documentation.  We would be glad to meet
+         with you and discuss any points we have brought up as well as
+         any ideas we have on this topic.
+
+
+         Sincerely
+
+
+
+         Phil Belanger
+         Keith Ball

@@ -1,0 +1,11 @@
+Things to do on WordProc 2.0-
+
+[Adjust] knows about backslash commands.
+<Home> <right arrow> works correctly on long lines.
+
+Problem: Tabs stops overwrite margins on the title line.
+
+Problem: Since the COPY and PRINT workpads only exist in the
+root directory, the "protection" that prevents a user from
+modifying their names will prevent modification of the names
+of the first two workpads in a subdirectory...

@@ -1,0 +1,794 @@
+*
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                           User Guide
+                       File Management Aid
+                     for the Corvus Concept
+
+
+
+
+
+
+
+
+                  FMA ver 3.1          February 1985
+
+
+
+
+
+                  Program developed by Neil Everhart
+                  36631 Bridgepointe Dr., Newark, Ca.
+
+
+.PG
+
+                         FILE MANAGEMENT AID - USER GUIDE page 1
+
+
+          INDEX:  ...................................  1
+
+
+               DISCLAIMER ...........................  2
+
+               INTRODUCTION .........................  2
+
+               REQUIREMENTS .........................  2
+
+               CONVENTIONS  .........................  2
+
+               USING FMA - Operational Overview .....  4
+
+     LABEL DEFINITIONS
+
+                FILE MAINTENANCE LABELS .............  6
+
+                  Set Flag ..........................  6
+                  Vol Dir  ..........................  6
+                  UndoFlag ..........................  6
+                  ConcFile ..........................  6
+                  ViewFile ..........................  7
+                  AlphaDir - Norm Dir ...............  7
+                  Set Vol  ..........................  7
+                  Del-Temp ..........................  8
+                  Crunch   ..........................  8
+                  Spool    ..........................  8
+                  Calc     ..........................  8
+                  LocPrint ..........................  8
+                  Clock    .......................... 10
+                  Rename   .......................... 10
+                  CopyFile .......................... 10
+                  DELETE   .......................... 11
+                  RunPgms  .......................... 11
+                  FindFile .......................... 11
+                  Exit     .......................... 12
+                  Help     .......................... 12
+
+
+                VOLUME LABELS ....................... 12
+
+                  (List) New Vol .................... 12
+                  (Reset) Vol Dir ................... 12
+                  RenamVol  ......................... 12
+
+               FMA ERROR MESSAGES ................... 13
+
+               BUG REPORTS .......................... 14
+.PG
+
+                          FILE MANAGEMENT AID - USER GUIDE page 2
+
+
+eIDISCLAIMER:e@
+
+FMA is not warranted.  The user uses FMA at his or her own risk.
+Network users must check with the Network System Manager before
+installing and using FMA.
+
+
+eIINTRODUCTION:e@
+
+The FMA program provides the Corvus Concept user with an easy to
+use file management utility.  Using FMA, the user can perform the
+most common file maintenance operations in and between volumes on
+the network and local drives.
+
+The general concepts of the program are:
+
+      a.  to provide on a single screen a complete file directory
+          of a selected volume and a directory of the user's volumes
+          with as much status information as possible,
+
+      b.  to eliminate the need to type volume names and filenames
+          when performing common file operations,
+
+      c.  and to leave the users Concept in a graceful state
+          when FMA is exited and or when errors are encountered.
+
+
+The user should be familiar with the Corvus Concept and have a
+general understanding of the operating system and file structure
+before using the FMA program.  New users should read "The Corvus
+Concept Personal Workstation User Guide" before using FMA.
+
+
+
+
+eIREQUIREMENTS:e@
+
+To use FMA, the Corvus Concept Operating System, CCOS (ver 1.2a)
+must be correctly installed to the network or local drive and the
+user must have READ access to volumes CCSYS, CCUTIL and ISYS.  The
+System Manager should install FMA and HELP.FMA.TEXT to the CCSYS
+volume so that FMA can be accessed by all users.
+
+FMA does require that file names and volume names comply with the
+Operating System requirements, ref the Workstation User Guide.
+
+
+eICONVENTIONS:e@
+
+
+UPPERCASE - LOWERCASE -
+
+All keyboard entries may be entered in upper or lowercase.
+
+
+.PG
+
+                         FILE MANAGEMENT AID - USER GUIDE page 3
+
+
+
+CONVENTIONS cont.
+
+
+Type, Press and [RETURN] -
+
+Throughout this guide the word 'Type' is used to mean that
+two or more characters are to be entered from the keyboard.
+The word 'Press' is used to indicate that a single letter,
+number or label is to be entered from the keyboard. The
+[RETURN] symbol means the Return or Enter key should be pressed.
+
+
+
+EXIT -
+
+The general convention to exit operations within FMA is to
+press the ESCape, BREAK or F10 function key.  Which key is
+effective depends upon the specific operation.
+
+
+ARROW KEYS -
+
+The four arrow keys are used to position the cursor in the
+File and Volume directories.
+
+
+
+FILE DIRECTORY WINDOW -
+
+The larger window, located in the upper left portion of the
+screen, in which is displayed the volume attributes and the
+file directory.
+
+
+
+VOLUME DIRECTORY WINDOW -
+
+This smaller window, located either below or to the right of the
+File Directory Window, displays a directory of the user's volumes.
+An overview status of each volume is indicated; Read/Write or
+Read/Only, the number of open Read/Write blocks at the end of the
+volume, and the number of files currently in the volume.
+
+Should two volumes have the same name, only the volume that is
+mounted to the lowest unit number is read and the other volume,
+with the duplicate name, cannot be accessed unless one of the two
+volumes is renamed, see Rename Volume (RenamVol).
+
+.PG
+
+                        FILE MANAGEMENT AID - USER GUIDE page 4
+
+CONVENTIONS cont:
+
+
+COMMAND WINDOW -
+
+The Command Window is located above the Function Key Labels and
+usually displays a prompt for user input.  Also displayed in
+the Command Window are some status messages and error messages.
+
+
+INVERSE WINDOW -
+
+This window is opened to display program progress during several
+FMA operations.  The window overlays a portion of the File
+Directory Window and may display additional user prompts and or
+error messages.
+
+
+FUNCTION KEYS & LABELS -
+
+The Function Keys, labeled on the keyboard from F1 to F10, are
+associated with the ten Function Labels displayed along the
+lower portion of the screen.
+
+
+eIUSING FMA - Operational Overview:e@
+
+Assuming the FMA program has been transferred to the CCSYS volume
+or to the users current volume, and a 'Select Function:' prompt
+is displayed in the Command Window, then Type FMA [RETURN].
+
+FMA is read into the users Concept, the FMA window environment is
+established, the /CCUTIL/CSD.07.11.ALT character set is loaded
+and all* volume directories that the user has access to are read.
+
+
+  * Note:  FMA will not - cannot read the volume directory of a
+           volume if its volume name is identical to another
+           volume that has been mounted on a lower numbered unit.
+
+           This condition usually occurs when a user has access
+           to network volumes and local volumes (on a local drive).
+           Access to volumes, with identical names, can usually be
+           controlled by the selection of Local or Omninet boot.
+
+
+
+If the user has one or more floppy drives installed, FMA will
+check each drive and attempt to identify and read the directory
+of the floppy.  The time required for FMA to initialize can be
+improved by keeping a disk in each drive.
+.PG
+
+                       FILE MANAGEMENT AID - USER GUIDE page 5
+
+USING FMA cont.
+
+Once the FMA initialization process is complete, FMA displays
+the File Directory Window, Volume Directory Window and a set
+of FILE MAINTENANCE LABELS.  At this point, the file directory
+displayed is the user's current volume.
+
+  The FILE MAINTENANCE LABELS are:
+
+
+            F1         F2         F3         F4        F5
+          Vol Dir   ConcFile   AlphaDir   Del-Temp*  Spool
+          SetFLAG   UndoFLAG   ViewFile   Set Vol    Crunch*
+
+
+             F6          F7        F8         F9        F10
+         LocPrint**   RENAME*   DELETE*    FindFile    Help
+          Clock        Calc     CopyFile   Run Pgms    Exit
+
+
+
+    * These labels are not displayed if the current volume is
+      READ/ONLY access.
+
+   ** This label is not displayed unless the printer port has
+      been set; see Workstation User Guide.
+
+
+   The functional operation of each label is explained in detail
+   in the section titled LABEL DEFINITIONS.
+
+To display another file directory, the user must move the cursor
+to the Volume Directory, Press [Vol Dir].  The cursor is positioned
+to unit #4, CCSYS in the Volume Directory and a new set of VOLUME
+LABELS are displayed.
+
+  The VOLUME LABELS are:
+
+        F3        F4               F7               F10
+       (List)   (Reset)          RenamVol          Help
+      New Vol   Vol Dir                            Exit
+
+
+By using the up & down arrow keys, the user may position the cursor
+to a volume name and Press [(List) New Vol] (shifted or un-shifted).
+FMA will then display the file directory of the selected volume and
+redisplay the FILE MAINTENANCE LABELS.
+
+NOTE: When the monitor is in the landscape orientation, pressing the
+      right arrow key will also move the cursor to the right and into
+      the Volume Directory.  In the landscape mode, the left arrow
+      key  (and the up  arrow key from the page mode) will return
+      the cursor from the Volume Directory to the File Directory.
+
+.PG
+
+                       FILE MANAGEMENT AID - USER GUIDE page 6
+
+
+USING FMA cont:
+
+
+The actions implied by the labels are accomplished by either
+pressing a function key label or by first positioning the cursor,
+using the arrow keys, to the desired filename and pressing the
+[Set Flag] key.  (A visual indicator of a 'set flag' is the symbol
+'>' next to the filename.  To remove a 'set flag', position the
+cursor using the arrow keys to the flag and Press [UndoFlag] key.
+Multiple flags maybe set.)  The file maintenance action is then
+initiated on the 'flagged files' by pressing the appropriate
+function key.
+
+
+eILABEL DEFINITIONS - FILE MAINTENANCE LABELSe@
+
+
+eASet Flage@  (F1 unSHIFTed)
+
+  Pressing this key places the visual indicator '>' or 'flag'
+  along side the filename at the current cursor position.  The
+  cursor then steps to the next filename.
+
+  The number of bolcks contained in the flagged files are totaled
+  at the bottom of the File Directory Window along with a count
+  of the number of files flagged.
+
+
+eAVol Dire@  (F1 SHIFTed)
+
+  This label means Volume Directory and is used to move the
+  cursor (and program control) from the File Directory to the
+  Volume Directory.
+
+
+eAUndoFlage@  (F2 unSHIFTed)
+
+  This function key is used to remove flags from the File
+  Directory.  Note that holding the key depressed will step
+  the cursor through the complete directory, clearing all flags.
+
+  As flags are removed the totals for blocks and files flagged,
+  at the bottom of the window, are kept current.
+
+
+eAConcFilee@  (F2 SHIFTed)
+
+  This label means Concatenate Files and is used to combine two
+  or more files, of the same type (TEXT or DATA), into one
+  continuous file.  Also, this label can be used to make a copy
+  of a single file, within the same volume, with a different file
+  name.
+
+.PG
+
+                          FILE MANAGEMENT AID - USER GUIDE page 7
+
+ConcFile cont.
+
+
+  First set flags assuring that text and data files are not mixed
+  and then Press [ConcFile].
+
+  The labels are turned off and the user is prompted for a file
+  name.  FMA checks the new name and will reject incorrect
+  entries, see Workstation User Guide.
+
+  FMA then presents a prompt to select a destination volume for
+  the concatenated files.  The cursor appears at the top of the
+  Volume Directory and the F3 label reads TARGET.  Position the
+  cursor to the desired destination volume name and Press
+  [TARGET]. The selected volume must have READ/WRITE access.
+
+  FMA checks the destination volume for the presence of the new
+  file name, if a duplicate file name is found the user is
+  alerted that to proceed will overwrite the existing file.
+
+  FMA also checks the destination volume for available directory
+  space (two entries must be available) and adequate available
+  blocks.
+
+  FMA generates an Exec-File in the destination volume to perform
+  the concatenate files operation.  The system File Manager
+  utility is used to concatenate the first file with the second,
+  then the volume is crunched and the third file is concatenated
+  to the combined first and second files.  This cycle continues
+  until all flagged files are concatenated into one file.
+
+
+eAViewFilee@  (F3 unSHIFTed)
+
+  This label is used to list '.TEXT' files to the screen.  If no
+  files are flagged, FMA attempts to list the file at the current
+  cursor position.
+
+  Pressing any key will stop and start the screen scrolling. Press
+  ESC to immediately return to the File Directory Window.
+
+eAAlphaDir - Norm Dire@  (F3 SHIFTed)
+
+  Pressing the [AlphaDir] function key presents the filenames in
+  the File Directories in alphabetical order.  The label [Norm Dir]
+  replaces the [AlphaDir] label, when pressed this label returns
+  the order of the filenames as they actually appear in the volume.
+
+
+eASet Vole@  (F4 unSHIFTed)
+
+  This function label sets the volume currently being displayed
+  in the File Directory Window to the current volume by using the
+  system File Manager utility.
+
+.PG
+
+                     FILE MANAGEMENT AID - USER GUIDE page 8
+
+
+eADel-Tempe@  (F4 SHIFTed)
+
+  Temporary files are indicated in the File Directory with the
+  blocks in inverse video.  To delete the temporary files set
+  flags and Press [Del-Temp].  The system File Manager utility
+  provides 'delete file (Y N) ?' prompts in the Inverse Window
+  for each flagged file.
+
+  This function label is not displayed if the volume is READ/ONLY.
+
+
+eACrunch  e@(F5 unSHIFTed)
+
+  This function label moves files in the volume currently being
+  displayed in the File Directory Window so that all unused space
+  is combined at the end of the volume.  This operation is
+  performed by the system File Manager and the activity is
+  displayed in the Inverse Window.
+
+  This function label is not displayed if the volume is READ/ONLY.
+
+
+eASpoole@  (F5 SHIFTed)
+
+  Pressing this label spools flagged files to pipes named PRINTER.
+  FMA uses the /CCSYS/SPOOL (version 4.0) program and presets the
+  parameter LINEFEED to NO.  This FMA operation is intended for
+  use with text files only.
+
+
+
+eACalce@  (F6 unSHIFTed)
+
+  Pressing this label calls the /ISYS/CC.CALC program.  The desk
+  calculator runs in a full window.  To exit CC.CALC Press [Main].
+
+
+eALocPrinte@  (F6 SHIFTed)
+
+  This function label provides local printer support for Diablo
+  type printers.  Specifically the Diablo Model 620 SPI printer
+  does not support 'auto enhanced' character printing but can
+  be host controlled.  This utility implements the Diablo printer
+  control codes to support selected EDWORD enhancements, Bold,
+  Underline,  Bold  with  Underline  and  Double-Underline. The
+  Double-Underline is printed as Underline.
+
+  The LocPrint function label is not displayed unless the printer
+  port has been set, see Workstation User Guide.
+
+  The use of Printer Action Tables is not recommended with the
+  FMA printer utility.  This is because FMA is HOST control of a
+  printer (character by character) and Printer Action Tables
+  provide only translation of the enhancement switches.
+
+.PG
+
+                        FILE MANAGEMENT AID - USER GUIDE page 9
+
+
+LocPrint cont.
+
+  This function is also compatible with the Diablo Model 630, all
+  serial interface or API versions, and should be compatible with
+  the many printers that use the Diablo standard control codes.
+
+  Set flags at text files to print or move the cursor to a single
+  file to print and Press [LocPrint].  The screen will then display
+  the following:
+
+
+
+
+
+    PRINTER UTILITY...for EDWORD enhanced .TEXT files
+            Support for DIABLO SYSTEMS type printers.
+
+            Printer Action Tables not recommended with this utility
+
+            TURN-ON LOCAL PRINTER....AND LOAD PAPER
+            SET PAPER TO "TOP OF FORM"
+
+          ENTER:     1  for CONTINOUS FORM FEED
+                     2  for SINGLE SHEET, pause to change paper
+                     3  for CONTINOUS FORM without ENHANCEMENTS
+                     4  for SINGLE SHEET without ENHANCEMENTS
+                     5  to change form length to 8.5 inches
+                     6  to Quit
+
+
+
+
+
+     Selections 1 and 2 provide enhanced text as described above.
+
+     Selections 3 and 4 strip enhancements and is provided for
+                        incompatible printers and to print files
+                        where the EDWORD enhancements are
+                        incorrectly set.
+
+     Selection number 5 toggles between 8.5 and 11 form length.
+
+     Selection number 6 returns user to the main FMA screen.
+
+
+
+
+  DOT Commands:  The LocPrint function only detects and manages
+                 the '.PG' page break dot command.  No other Dot
+                 commands are supported.
+
+
+.PG
+
+                        FILE MANAGEMENT AID - USER GUIDE page 10
+
+
+LocPrint cont.
+
+
+  FORMAT: The LocPrint function is designed to strip the first 4
+          blank lines from text files.  If EDWORD is used to
+          format a text file, it inserts 4 blank lines after each
+          .PG command that it inserts.  This feature provides the
+          ability to position the paper in the printer at the
+          first line to be printed.
+
+          If the .PG command is not found by the 58th line
+          printed (or by the 43rd line when set for 8.5 inch form
+          length)  LocPrint function inserts a page break.  Note,
+          Diablo printers default to 6 lines per inch.
+
+
+
+
+eAClocke@  (F7 unSHIFTed)
+
+  Pressing this label calls the /ISYS/CC.CLOCK program.  The clock
+  program runs in a full window.  To exit CC.Clock Press [Main].
+
+
+eARenamee@  (F7 SHIFTed)
+
+  This function label is used to rename files.  Set flags at the
+  files to be renamed or position the cursor to a single file and
+  Press [Rename].  The user is then prompted for a new file name.
+  The new file name is checked for correctness and compared to
+  filenames already present in the volume.  The new filename is
+  then written to the volume directory and the prompt is repeated
+  for the next flagged file.
+
+  This function label is not displayed if the volume is READ/ONLY.
+
+
+eACopyFilee@  (F8 UnSHIFTed)
+
+  This function label is used to copy files from the currently
+  displayed File Directory to another volume that has READ/WRITE
+  access.  Set flags at files to be copied.  Note the number of
+  blocks and number of files flagged are totaled in the lower
+  portion of the window. Press [CopyFile].
+
+  FMA then presents a prompt to select a destination volume for
+  the files to be copied.  The cursor appears at the top of the
+  Volume Directory and the F3 label reads TARGET.  Position the
+  cursor to the desired destination volume name and Press
+  [TARGET]. The selected volume must have READ/WRITE access and
+  should not be the currently displayed volume.
+
+  FMA checks the destination volume for READ/WRITE access, available
+  directory space and adequate available blocks.
+.PG
+
+                    FILE MANAGEMENT AID - USER GUIDE page 11
+
+
+CopyFile cont.
+
+
+  Control is then passed to the system File Manager utility to
+  copy the flagged files to the destination volume.  Progress is
+  displayed in the Inverse Window along with any required prompts.
+
+
+eADELETEe@  (F8 SHIFTed)
+
+  This function label is used to remove (delete) files from the
+  currently displayed File Directory.  Set flags at the filenames
+  to be removed and Press [DELETE].
+
+  In the Inverse Window the system File Manager will present a
+  prompt for each file to be deleted.
+
+  This function label is not displayed if the volume is READ/ONLY.
+
+
+eARunPgmse@  (F9 unSHIFTed)
+
+  This function label is used to run programs from the FMA File
+  Directory Window.  Set flags at the filenames of the programs
+  or position the cursor to a single program and Press [RunPgms].
+
+  The flagged programs are run in the full screen window.  If
+  non program files are flagged the run programs operation will
+  generate a non fatal error message and return control to the
+  File Directory Window.
+
+
+eAFindFilee@  (F9 SHIFTed)
+
+  This function label is used to locate files.  Press [FindFile],
+  a prompt is presented in the Inverse Window to enter a file
+  name.  The user may enter a specific file name or an ambiguous
+  filename by using WILD CARDS.
+
+  The volume directories are searched for the requested file(s).
+
+  Note the search is of the record of the directories as they
+  were at FMA initialization.  If files have been deleted, renamed
+  or copied prior to using FindFile, a search for those files will
+  be invalid.  Use the [(Reset) VolDir] function, from the Volume
+  Labels, to re-establish a current record of the directories.
+
+  If the requested file is found, the File Directory of the lowest
+  numbered volume that contains the file is displayed.  The file
+  name of the requested file is displayed in inverse video.  All of
+  the volume names containing the requested file are presented in
+  inverse video.
+.PG
+                       FILE MANAGEMENT AID - USER GUIDE page 12
+
+
+eAExite@  (F10 unSHIFTed)
+
+  This function label initiates the termination of FMA.
+
+
+eAHelpe@  (F10 SHIFTed)
+
+  This function label directs the user to the 'HELP.FMA.TEXT' file.
+
+
+
+eILABEL DEFINITIONS - VOLUME LABELS: e@
+
+
+        F3        F4               F7               F10
+       (List)   (Reset)          RenamVol          Help
+      New Vol   Vol Dir                            Exit
+
+eA(List) New Vole@  (F3 SHIFTed or unSHIFTed)
+
+  This function label means display a new volume directory.  Using
+  the up/down arrow keys to position the cursor to the desired volume
+  name and Press [New Vol].
+
+
+eA(Reset) Vol Dire@  (F4 SHIFTed or unSHIFTed)
+
+  This function label is used to reinitialize FMA.
+
+
+eARenamVole@  (F7 SHIFTed)
+
+  This function is used to rename volumes (if R/W status).  Position
+  cursor to the desired volume name and Press [RenamVol].  The user
+  is prompted for a new volume name in the Inverse Window.
+
+  Renaming /CCSYS, /CCUTIL and /ISYS is not recommended.
+
+
+eAExite@ and eAHelpe@
+
+  See same label definitions above.
+
+
+
+.PG
+
+                        FILE MANAGEMENT AID - USER GUIDE page 13
+
+
+eIFMA ERROR MESSAGES:e@
+
+  FMA checks most IO (input - output) operations for an acceptable
+  completion indicator, IOresult, from the Corvus Concept Operating
+  System.  If the operating system indicates an error and if FMA is
+  programmed to handle it, the error message will be displayed in
+  the form ' message   ..Source Ref XX'.
+
+  The  '..Source Ref XX' (where XX is numeric) is a reference key to
+  the FMA source that initiated the test for the error condition.
+  This feature is provided to facilitate evaluation and debugging.
+
+  The Following is a list of the possible IO error messages.
+
+                     Parity or CRC Error         ..Source Ref  XX
+                     Invalid Device number       ..Source Ref  XX
+                     Invalid IO Request          ..Source Ref  XX
+                     Nebulous Hardware Error     ..Source Ref  XX
+                     Volume Went Off Line        ..Source Ref  XX
+                     File Lost In Directory      ..Source Ref  XX
+                     Bad File Name               ..Source Ref  XX
+                     No Room On Volume           ..Source Ref  XX
+                     Volume Not Found            ..Source Ref  XX
+                     File Not Found              ..Source Ref  XX
+                     Duplicate Directory Entry   ..Source Ref  XX
+                     File Already Open           ..Source Ref  XX
+                     File Not Open               ..Source Ref  XX
+                     Bad Input Information       ..Source Ref  XX
+                     Ring Buffer Overflow        ..Source Ref  XX
+                     Write Protected Volume      ..Source Ref  XX
+                     Error Of Unknown Origin     ..Source Ref  XX
+                     Error Setting Labels        ..Source Ref  XX
+                     Window system Error         ..Source Ref  XX
+                     Error  file not TEXT        ..Source Ref  XX
+                     Error Printer Port Not Set  ..Source Ref  XX
+                     Error undefined by SYSTEM   ..Source Ref  XX
+
+
+
+  FMA also provides a second set of error messages that are detected
+  by checks witin FMA.  These error messages are prefixed with FMA,
+  example  'FMA - Error - message'.
+
+  A third type of error message maybe encountered, these messages
+  are generated by the operating system utility (such as CC.FILMGR)
+  that has control during some FMA operations.
+
+  The above error conditions (usually) are not fatal to FMA.
+.PG
+
+                      FILE MANAGEMENT AID - USER GUIDE page 14
+
+
+
+
+
+
+eIBUG REPORTS:e@
+
+  Should you encounter fatal errors (where FMA stops or the system
+  hangs), please verify that your CCOS is installed  correctly and
+  the network is functionally sound.
+
+  Report 'bugs' with a complete description of the conditions and
+  the actions that caused the problem.  Please report any error
+  messages that are encountered with a specific 'bug'.
+
+  Report Bugs to      N. Everhart
+                      36631 Bridgepointe Dr.
+                      Newark, Ca. 94560

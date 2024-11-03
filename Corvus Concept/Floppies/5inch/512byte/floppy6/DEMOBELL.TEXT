@@ -1,0 +1,110 @@
+;
+; file :  /kb/demobell.text
+; date :  27-JAN-1982   kb
+;
+; THIS PROGRAM IS HOW TO CALL THE BELL PROCEDURE IN THE TIMER DRIVER TO MAKE
+; SOUNDS ON THE SPEAKER.
+; THE SPECIFIC VALUES USED AS PARAMETERS ARE SUGGESTED FOR CONTROL-G (BELL)
+; OUTPUT FOR THE DISPLAY DRIVER.
+;
+FREQ        EQU        80                        ;TIMER 2 FREQUENCY
+PATTERN     EQU        $0F                       ;SPEAKER ON/OFF PATTERN
+DURATN      EQU        5                         ;DURATION IN 50 MS. PERIODS
+;
+; SYSTEM COMMUNICATIONS AREA DEFINITIONS
+;
+PSYSCOM     EQU        $180                      ;POINTER TO SYS COM AREA
+SCUTABL     EQU        20                        ;INDEX TO PTR TO DEVICE TABLE
+;
+; DEVICE TABLE DEFINITIONS - USED BY KEYBOARD TIMER ROUTINES
+;
+DEVLEN      EQU        26                        ;LENGTH OF ENTRY
+DRVADDR     EQU        2                         ;INDEX TO DRIVER ADDRESS
+MOUNTED     EQU        7                         ;INDEX TO MOUNTED FLAG
+;
+; TIMER INTERFACE DEFINITIONS
+;
+USTAT       EQU        5                         ;UNIT STATUS COMMAND CODE
+BELL        EQU        0                         ;BELL FUNCTION NUMBER
+;
+CARRYST     EQU        $01                       ;CCR WITH CARRY SET
+FAILED      EQU        $FF                       ;FAILED ERROR??????
+;
+; CALL THE DRIVER DIRECTLY
+; FIRST FIND THE UNIT NUMBER AND INDEX TO IT'S ENTRY IN THE DEVICE TABLE
+;
+DEMOBELL    BSR.S      GETTMR                    ;GET TIMER DRIVER UNIT # IN D0
+            BCS.S      BELLERR                   ;DIDN'T FIND IT
+;
+; SETUP BELL PARAMETER BLOCK
+;
+            LEA        PRMBLK,A0                 ;ADDRESS OF BELL PARAMETER BLOCK
+            MOVEA.L    A0,A1                     ;SAVE ADDRESS
+            MOVE.W     #FREQ,(A0)+               ;PUT FREQUENCY IN PRM BLOCK
+            MOVE.B     #PATTERN,(A0)+            ;SPEAKER ON/OFF PATTERN
+            CLR.B      (A0)+                     ;FILLER
+            MOVE.W     #DURATN,(A0)              ;DURATION OF SOUND IN 50 MMS. PERIODS
+;
+; SETUP REGISTERS FOR DIRECT DRIVER CALL (D0=UNIT #)
+;
+            MOVEQ      #BELL,D2                  ;FUNC (CONTROL)
+            MOVE.L     A1,D1                     ;BUFFER ADDRESS := @PARAMEER BLOCK
+            MOVEQ      #USTAT,D4                 ;COMMAND
+;
+            BSR.S      CALLTUST                  ;CALL TIMER DRIVER
+;
+; TEST IORESULT (D7.W) - IF NOT = 0 THEN ERROR
+;
+            TST.W      D7
+            BEQ.S      BELLEXIT
+BELLERR     MOVE.W     #FAILED,D7                ;CAN'T DO REPEAT
+BELLEXIT    RTS
+  page
+;
+; GETTMR - GET UNIT NUMBER OF TIMER DRIVER FROM DEVICE TABLE.
+;
+;           EXIT : (D0) = UNIT NUMBER
+;                  (C)  = NO TIMER INSTALLED
+;                  (NC) = FOUND TIMER
+;                  (D6) = INDEX TO TIMER DRIVER ENTRY (NEEDED BY CALLTUST)
+; TIMER IS ALWAYS THE DRIVER W/ UNIT# = MAX_DEVICE_# -2.
+; MAX_DEVICE_# IS THE FIRST WORD OF THE DEVICE TABLE.
+;
+GETTMR      BSR.S      GETDVTBL                  ;A1 = ADDRESS OF DEVICE TABLE
+            MOVE.W     (A1)+,D0                  ;UPDATE PTR TO 1ST ENTRY
+            SUBQ       #2,D0                     ;D0 = UNIT #
+;
+; VERIFY DEVICE MOUNTED AT THE UNIT NUMBER
+;
+            MOVE.L     D0,D6                     ;USE TEMP
+            MULU       #DEVLEN,D6                ;INDEX TO TIMER ENTRY
+            TST.B      MOUNTED(A1,D6.W)          ;IS IT MOUNTED?
+            BNE.S      GTTEXIT                   ;MOUNTED
+            MOVE.W     #CARRYST,CCR              ;SHOW NO TIMER
+GTTEXIT     RTS                                  ;TST ALWAYS CLEARS CARRY
+  page
+;
+; CALLTUST - CALL TIMER UNITSTATUS DIRECTLY
+;           ENTRY : (D0) = UNIT #
+;                   (D1) = BUFFER ADDRESS
+;                   (D2) = CONTROL
+;                   (D4) = COMMAND
+;                   (D6) = INDEX TO TIMER DRIVER ENTRY
+;
+CALLTUST    BSR.S      GETDVTBL                  ;A1 = ADDRESS OF DEVICE TABLE
+            TST.W      (A1)+                     ;ADDRESS OF 1ST ENTRY
+            MOVE.L     DRVADDR(A1,D6.W),A1       ;ADDRESS OF DRIVER
+            JMP        (A1)
+;
+; GETDVTBL - GET DEVICE TABLE ADDRESS
+;           EXIT : (A1) = ADDRESS OF DEVICE TABLE
+;
+GETDVTBL    MOVE.L     PSYSCOM.W,A1              ;SYSCOM ADDRESS
+            MOVE.L     SCUTABL(A1),A1            ;DEVICE TABLE ADDRESS
+            RTS
+  page
+;
+; DATA AREA
+;
+PRMBLK      DATA.W     0,0,0
+            END

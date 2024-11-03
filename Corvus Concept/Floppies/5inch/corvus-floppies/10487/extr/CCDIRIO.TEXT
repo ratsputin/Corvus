@@ -1,0 +1,71 @@
+{ CCDIRIO.TEXT --------------------------------------------------------}
+{
+{       CCDIRIO -- Corvus CONCEPT Volume Directory Unit
+{
+{       (c) Copyright 1982 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  10-06-82  LEF  Original unit
+{
+{----------------------------------------------------------------------}
+{$R-}
+
+UNIT CCdirIO;
+
+INTERFACE
+
+CONST
+      BlockSize = 512;
+      VIDlength = 7;
+      TIDlength = 15;
+      MaxDirEnt = 77;
+
+TYPE
+      dirrange = 0..MaxDirEnt;
+      vid      = string[VIDlength];
+      tid      = string[TIDlength];
+      filekind = (UNTYPEDFILE,XDSKFILE,CODEFILE,TEXTFILE,INFOFILE,
+                  DATAFILE,GRAFFILE,FOTOFILE,SECURDIR);
+
+      daterec  = packed record
+                 year:  0..100; { 100 = temp file flag }
+                 day:   0..31;
+                 month: 0..12;  { 0 = date not meaningful }
+                 end;
+{$P}
+      direntry = packed record
+                 firstblock: integer;
+                 nextblock: integer;
+                 MarkBit: Boolean;
+                 filler: 0..2047;
+                 case fkind: filekind of
+                   SECURDIR,
+                   UNTYPEDFILE:
+                     (dvid: vid;           { Disk volume name }
+                      deovblock: integer;  { Last block of volume }
+                      dnumfiles: integer;  { Number of files }
+                      dloadtime: integer;  { Time of last access }
+                      dlastboot: daterec;  { Most recent date setting }
+                      MemFlipped: Boolean; { TRUE if flipped in memory }
+                      DskFlipped: Boolean);{ TRUE if flipped on disk }
+                   XDSKFILE,CODEFILE,TEXTFILE,INFOFILE,
+                   DATAFILE,GRAFFILE,FOTOFILE:
+                     (dtid: tid;           { Title of file }
+                      dlastbyte: 1..BlockSize; { Bytes in last block }
+                      daccess: daterec);   { Last modification date }
+                 end;
+
+      directory = array [dirrange] of direntry;
+
+PROCEDURE CCdirIOinit;
+
+
+IMPLEMENTATION
+
+PROCEDURE CCdirIOinit;
+      begin end;
+
+end.
+

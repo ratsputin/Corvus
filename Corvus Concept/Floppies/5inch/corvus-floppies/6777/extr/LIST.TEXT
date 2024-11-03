@@ -1,0 +1,234 @@
+(*****************************************************************************)
+(*                                                                           *)
+(*                              File: LIST.TEXT                              *)
+(*                                                                           *)
+(*              (C) Copyright 1982 Silicon Valley Software, Inc.             *)
+(*                                                                           *)
+(*                            All Rights Reserved.               05-Oct-82   *)
+(*                                                                           *)
+(*****************************************************************************)
+
+
+{ Scanner for list directed Read.                     }
+{ Listscan processes:                                 }
+{  if FirstItem                                       }
+{       blank* value  or                              }
+{       nothing (if followed by a nonblank separator) }
+{  else (not FirstItem)                               }
+{       separator value  or                           }
+{       separator (if followed by another separator)  }
+
+function ListScan: Boolean;
+  const DIGITMAX = 30;
+  var Done: Boolean; k: integer;
+      digits: array[1..DIGITMAX] of 0..9;
+      llistch: char; lrecbufp: integer; lint: integer;
+
+  { Gets next nonblank character out of list of formatted records }
+  
+  procedure listgetnonblank;
+  begin {listgetnonblank}
+  while listch = ' ' do
+    if recbufp <= recbuflen 
+    then begin listch := chr(recbuf[recbufp]); recbufp := recbufp + 1; end
+    else begin nextrec; if EofFlag then listch := '/'; end;
+  end; {listgetnonblank}
+  
+  procedure fractionpart;
+    var Negative: Boolean; scale, i, exp: integer;
+  begin {fractionpart}
+  scale := 0;
+  if listch = '.'
+  then begin
+    getch(listch);
+    itemtoken := REALITEM; realval := 0;
+    for i := 1 to k do
+      realval := realval*10 + digits[i];
+    while (listch >= '0') and (listch <= '9') do begin
+      realval :=  realval*10 + ord(listch) - ord('0');
+      scale := scale - 1; getch(listch);
+      end;
+    end; { digits . digits }
+  if (itemtoken = INTITEM) and (listch <> 'E') and (listch <> 'D')
+                           and (listch <> 'e') and (listch <> 'd')
+  then begin { calcintval }
+    intval := 0;
+    for i := 1 to k do
+      intval := intval * 10 + digits[i];
+    end;
+  if (listch = 'E') or (listch = 'D') or (listch = 'e') or (listch = 'd')
+  then begin
+    if itemtoken = INTITEM
+    then begin
+      itemtoken := REALITEM; realval := 0;
+      for i := 1 to k do
+        realval := realval*10 + digits[i];
+      end;
+    getch(listch); Negative := FALSE;
+    if listch = '+' 
+    then getch(listch)
+    else 
+      if listch = '-'
+      then begin getch(listch); Negative := TRUE; end;
+    if (listch < '0') and (listch > '9') then error(87);
+    exp := 0;
+    while (listch >= '0') and (listch <= '9') do begin
+      exp := exp * 10 + ord(listch) - ord('0'); getch(listch);
+      end;
+    if Negative then exp := - exp;
+    scale := scale + exp;
+    end; { listch = 'E' }
+  if itemtoken = REALITEM
+  then 
+    if scale < 0
+    then realval := realval/%_dpwr10(-scale)
+    else
+      if scale > 0
+      then realval := realval*%_dpwr10(scale);
+  end; {fractionpart}
+  
+  procedure initialdigitnumeric;
+  begin {initialdigitnumeric}
+  itemtoken := INTITEM; k := 0;
+  repeat
+    if k < DIGITMAX then k := k + 1 else error(88); 
+    digits[k] := ord(listch) - ord('0'); getch(listch);
+  until (listch < '0') or (listch > '9');
+  fractionpart;
+  end; {initialdigitnumeric}
+  
+  procedure numeric;
+    var NegFlag: Boolean;
+  begin {numeric}
+  NegFlag := listch = '-';
+  if (listch = '+') or (listch = '-') then getch(listch);
+  if (listch >= '0') and (listch <= '9')
+  then initialdigitnumeric
+  else 
+    if listch = '.'
+    then begin k := 0; fractionpart; end
+    else error(89);
+  if NegFlag
+  then
+    if itemtoken = INTITEM then intval := - intval else realval := -realval;
+  end; {numeric}
+  
+  procedure scanlogical;
+  begin {scanlogical}
+  itemtoken := LOGITEM;
+  if (listch = 'T') or (listch = 't') 
+  then intval := 1 
+  else begin
+    intval := 0;
+    if (listch <> 'F') and (listch <> 'f') then error(90);
+    end;
+  repeat
+    getch(listch);
+  until (listch = ' ') or (listch = ',') or (listch = '/');
+  end; {scanlogical}
+  
+  
+begin {ListScan}
+if itemcnt > 1
+then itemcnt := itemcnt - 1
+else begin
+  listgetnonblank;
+  
+  { If FirstItem, than an initial nonblank value separator is a null item. }
+  { If not FirstItem then a nonblank value separator is either a comma,    }
+  { which is to be skipped or a slash, which may as well be processed as   }
+  { a null item.                                                           }
+  
+  if (not FirstItem) and (listch = ',') 
+  then begin getch(listch); listgetnonblank; end;
+  
+  { Should now have first character of value or a value separator in listch. }
+  { See if there is a repeat factor.                                         }
+  
+  itemcnt := 1; { Unless otherwise discovered }
+  if (listch >= '0') and (listch <= '9')
+  then begin { Possible repeat factor, possible data value }
+    { Prepare to backup if not repeat factor }
+    lrecbufp := recbufp; llistch := listch;
+    lint := 0;
+    repeat
+      lint := (10 * lint - ord('0')) + ord(listch);
+      getch(listch);
+    until (listch < '0') or (listch > '9');
+    if listch = '*'
+    then begin { Repeat factor }
+      itemcnt := lint; getch(listch); 
+      if itemcnt <= 0 then error(91);
+      end
+    else begin { Backup } listch := llistch; recbufp := lrecbufp; end;
+    end;
+  
+  { Itemcnt is now set, process the actual value or separator }
+  
+  if (listch = '+') or (listch = '-')
+  then numeric
+  else
+    if (listch >= '0') and (listch <= '9')
+    then initialdigitnumeric
+    else
+      if listch = '.'
+      then begin { Either numeric value or logical value }
+        getch(listch);
+        if (listch >= '0') and (listch <= '9')
+        then begin { Numeric value }
+          recbufp := recbufp - 1; listch := '.'; k := 0; fractionpart; 
+          end
+        else scanlogical;
+        end
+      else
+        if (listch = ',') or (listch = ' ')
+        then itemtoken := NULLITEM
+        else
+          if listch = '/'
+          then begin itemcnt := 32000; itemtoken := NULLITEM; end
+          else
+            if listch = ''''
+            then begin { Character item }
+              charlen := 0; Done := FALSE;
+              repeat
+                while (recbufp > recbuflen) and (not EofFlag) do
+                  nextrec;
+                listch := chr(recbuf[recbufp]); recbufp := recbufp + 1; 
+                while (listch <> '''') and (not EofFlag) do begin
+                  charlen := charlen + 1; charval[charlen] := listch;
+                  while (recbufp > recbuflen) and (not EofFlag) do
+                    nextrec;
+                  listch := chr(recbuf[recbufp]); recbufp := recbufp + 1; 
+                  end;
+                getch(listch);      { Found first ', is there another }
+                if listch = '''' 
+                then begin 
+                  charlen := charlen + 1; charval[charlen] := listch; 
+                  end
+                else Done := TRUE;
+              until Done;
+              itemtoken := CHARITEM;
+              end
+            else 
+              if listch = '('
+              then begin { Complex item }
+                getch(listch); listgetnonblank; numeric;
+                if itemtoken = INTITEM
+                then complexval.realpart := intval
+                else complexval.realpart := realval;
+                listgetnonblank;
+                if listch = ',' then getch(listch) else error(92);
+                listgetnonblank; numeric;
+                if itemtoken = INTITEM
+                then complexval.imagpart := intval
+                else complexval.imagpart := realval;
+                listgetnonblank;
+                if listch = ')' then getch(listch) else error(93);
+                itemtoken := COMPLEXITEM;
+                end
+              else scanlogical;
+  end;
+FirstItem := FALSE; ListScan := itemtoken <> NULLITEM;
+end; {ListScan}
+
+

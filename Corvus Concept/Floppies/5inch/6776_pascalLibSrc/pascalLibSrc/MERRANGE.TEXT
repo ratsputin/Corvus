@@ -1,0 +1,102 @@
+; File: newrange.text
+; Date: 18-Nov-82
+
+        ident   merrange
+        
+        global  %_rchck,%_srchk,%_lrchk
+        extern  %_panic,%_halt,%_prloc
+        
+;
+; $_rchck - Range check
+;
+; Parameters:  ST.W - Value to check
+;              ST.W - Lower bound
+;              ST.W - Upper bound
+;
+; Returns:     ---
+;
+; All regsters are preserved.
+;
+
+%_rchck
+        move.l  d0,-(sp)        ; Save D0
+        move.w  12(sp),d0       ; Fetch value
+        cmp.w   10(sp),d0       ; Compare with lower bound
+        blt.s   rerr            ; Print error if too small
+        cmp.w   8(sp),d0        ; Compare with upper bound
+        bgt.s   rerr            ; Print error if too large
+        move.l  (sp)+,d0        ; Restore D0
+        move.l  (sp),6(sp)      ; Move return address
+        addq.l  #6,sp           ; Pop junk
+        rts
+
+;
+; $_lrchk - Long range check
+;
+; Parameters:  ST.L - Value to check
+;              ST.L - Lower bound
+;              ST.L - Upper bound
+;
+; Returns:     ---
+;
+; All regsters are preserved.
+;
+
+%_lrchk
+        move.l  d0,-(sp)        ; Save D0
+        move.l  16(sp),d0       ; Fetch value
+        cmp.l   12(sp),d0       ; Compare with lower bound
+        blt.s   rerr            ; Print error if too small
+        cmp.l   8(sp),d0        ; Compare with upper bound
+        bgt.s   rerr            ; Print error if too large
+        move.l  (sp)+,d0        ; Restore D0
+        move.l  (sp),12(sp)     ; Move return address
+        adda.w  #12,sp          ; Pop junk
+        rts
+
+rerr    lea     rmess,a0
+        moveq   #12,d0
+        jsr     %_panic         ; Print an error message
+        move.l  4(sp),-(sp)     ; Push return address
+        jsr     %_prloc         ; Print seg/offset
+        move.w  #-1,-(sp)
+        jsr     %_halt          ; Kill this process
+
+;
+; $_srchk - String range check
+;
+; Parameters:  ST.B - Value to check: 0..255
+;              ST.W - Upper bound
+;
+; Returns:     ---
+;
+; All regsters are preserved.
+;
+
+%_srchk
+        move.w  d0,-(sp)        ; Save D0
+        move.b  8(sp),d0        ; Fetch value
+        andi.w  #$ff,d0         ; Make it a word
+        cmp.w   6(sp),d0        ; Compare with upper bound
+        bgt.s   serr            ; Print error if too large
+        move.w  (sp)+,d0        ; Restore D0
+        move.l  (sp),4(sp)      ; Move return address
+        addq.l  #4,sp           ; Pop junk
+        rts
+serr    lea     smess,a0
+        moveq   #19,d0
+        jsr     %_panic         ; Print an error message
+        move.l  2(sp),-(sp)     ; Push return address
+        jsr     %_prloc         ; Print seg/offset
+        move.w  #-1,-(sp)
+        jsr     %_halt          ; Kill this process
+
+        
+;
+; Error messages
+;
+
+rmess   data.b  'Range error '
+smess   data.b  'String range error ',0
+
+        end

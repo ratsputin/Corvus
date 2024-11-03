@@ -1,0 +1,18 @@
+clrwnd
+;
+; File ID: /FCCNSS2/SYSTEM.UPDATE
+;
+; This SYSTEM.UPDATE assumes the volume /SMS exists and
+; is mounted with read/write access.
+;
+pause Continue
+;
+setvol /SMS
+delfil -q super
+krunch -q /SMS
+setvol /FCCNSS2
+cpyfil -q -vSMS super
+krunch -q /SMS
+;
+; SYSTEM.UPDATE complete
+;

@@ -1,0 +1,9 @@
+Corvus Concept w/printed model/serial/rev plate
+  serial 472-E0034-
+  model WSB-1
+  revision A
+
+Contains:
+  Corvus Systems Processor board 8024 REV. 5
+  Corvus Systems Corvus Concept Memory 8051 REV. N daughterboard 
+     w/512KB installed (socketed)

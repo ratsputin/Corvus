@@ -1,0 +1,38 @@
+UNIT BldActEQU;
+
+INTERFACE
+
+CONST
+       ACTSTRLEN       =        7;
+
+TYPE
+       ActStrg         =       STRING[ ACTSTRLEN ];
+
+       InchRcrd        =        record
+                                  SubSprFormAdv : ActStrg;
+                                  NrmlFormAdv   : ActStrg;
+                                  end;
+
+       PitchRcrd       =        record
+                                  NrmlSpacing   : ActStrg;
+                                  Micro1Extra   : ActStrg;
+                                  Micro2Extra   : ActStrg;
+                                  Micro3Extra   : ActStrg;
+                                  end;
+
+       ActionTable     =        record
+                                  ULineOn    : ActStrg;
+                                  ULineOff   : ActStrg;
+                                  BoldOn     : ActStrg;
+                                  BoldOff    : ActStrg;
+                                  RevrsLF    : ActStrg;
+                                  BackSP     : ActStrg;
+                                  SixLnInch  : InchRcrd;
+                                  EightLnIn  : InchRcrd;
+                                  Pitch10    : PitchRcrd;
+                                  Pitch12    : PitchRcrd;
+                                  end;
+
+IMPLEMENTATION
+
+END. {BldActEQU}

@@ -1,0 +1,388 @@
+{ CCOMNIO.TEXT --------------------------------------------------------}
+{
+{       CCOMNIO -- OMNINET Commands Unit for Corvus CONCEPT
+{
+{       (c) Copyright 1982 Corvus Systems, Inc.
+{                          San Jose, California
+{
+{       All Rights Reserved
+{
+{       v 1.0  01-09-82  PHB  Original unit
+{       v 1.1  05-15-82  LEF  CComnIO unit modifications
+{       v 1.2  10-27-82  LEF  OCsndMesg and OCsetRecv call modifications
+{
+{ Purpose:      This UNIT contains procedures which construct
+{       Omninet commands and send them to the Transporter.
+{       It also defines constants and data structures which are
+{       useful when programming an Omninet application.
+{       Hopefully, a Pascal programmer can use this UNIT without
+{       knowing the details of the Transporter interface ...
+{
+{----------------------------------------------------------------------}
+{$R-}
+
+UNIT CVomnIO;
+
+INTERFACE
+  
+USES {$U /CCOS/OS.GLOBALS.OBJ} globals,
+     {$U       BT.CVdefn     } CVDefn;
+
+CONST
+    { Transporter Return Codes }
+    Waiting = $FF;
+    CmdAcpt = $FE;   { command accepted                                }
+    Echoed  = $C0;   { echo command was successful                     }
+
+    GaveUp  = $80;   { aborted a send command after MaxRetries tries   }
+    TooLong = $81;   { last message sent was too long for the receiver }
+    NoSockt = $82;   { sent to an uninitialized socket                 }
+    HdrErr  = $83;   { sender's header length did not match receiver's }
+    BadSock = $84;   { invalid socket number                           }
+    Inuse   = $85;   { tried to set up a receive on an active socket   }
+    BadDest = $86;   { sent to an invalid host number                  }
+
+    OkCode  = 0;     { success!!!                                      }
+
+    NoTrans = -1;    { indicates that we are unable to communicate     }
+                     { with Transporter - strobit failed               }
+
+{$P}
+    { Transporter Opcodes }
+    RecvOp  = $F0;   { SETUPRECV opcode }
+    SendOp  = $40;   { SENDMSG opcode   }
+    InitOp  = $20;   { INIT opcode      }
+    EndOp   = $10;   { ENDRECV opcode   }
+    DebOp   = $08;   { PEEK/POKE opcode }
+    EchoOp  = $02;   { ECHOCMD opcode   }
+    WhoOp   = $01;   { WHOAMI opcode    }
+        
+TYPE
+    pOCrsltRcd = ^OCrsltRcd;
+    OCrsltRcd  = RECORD
+                 Rcode: byte;
+                 Sourc: byte;
+                 Len:   integer;
+                 UCdta: array [0..255] of byte;
+                 END;
+        
+VAR
+    OCresult: integer;    { similar to IORESULT in UCSD Pascal,           }
+                          { may be checked after each Transporter command }
+    OCrslt:   OCrsltRcd;  { result record which is used for all commands  }
+                          { except OCsndMesg and OCsetRecv ...            }
+    OCcurBP:  pBytes;     { current buffer pointer                        }
+    OCcurRP:  pOCrsltRcd; { current result pointer                        }
+
+PROCEDURE CVomnIOinit;
+PROCEDURE OCsndMesg   (bp: pBytes; rp: pOCrsltRcd; sn,dln,hln,dst: integer);
+PROCEDURE OCsetRecv   (bp: pBytes; rp: pOCrsltRcd; sn,dln,hln: integer);
+PROCEDURE OCendRecv   (sn: integer);
+PROCEDURE OCinitTrans;
+PROCEDURE OCechoTrans (dest: integer);
+FUNCTION  OCpeekTrans (adr: integer): byte;
+PROCEDURE OCpokeTrans (adr: integer; val: byte);
+PROCEDURE OCwhoAmI;
+
+IMPLEMENTATION
+
+{$P}
+CONST
+    RdyAdr = $30F7F;  { address of VIA register A, used for OMNINET ready }
+    StrAdr = $30FA1;  { address of Transporter register }
+
+    PeekOp = $00;
+    PokeOp = $FF;
+
+    { offsets into command record for byte fields }
+    Op     = 1;   { opcode }
+    Sock   = 5;   { socket number }
+    HLen   = 11;  { header length }
+    Dest   = 12;  { destination for sends }
+    EDst   = 5;   { destination for echo commands }
+    PePo   = 7;   { peek/poke designator for Deb commands }
+    PoVal  = 8;   { Poke value }
+    PAdr   = 5;   { Transporter Address to peek or poke }
+
+TYPE
+    pOmniCmd = ^OmniCmd;
+
+    OmniCmd = RECORD
+              CASE integer OF
+                 1: (P: RECORD
+                        RP: pOCrsltRcd;
+                        DP: pBytes;
+                        LN: integer;
+                        HL: integer;
+                        end);
+                 2: (A: array [1..12] of byte);
+              END;
+
+    TrixRcd = RECORD
+              CASE integer OF
+                 1: (LNG: longint);
+                 2: (PTR: ^byte);
+                 3: (CPT: pOmniCmd);
+                 4: (RPT: pOCrsltRcd);
+                 5: (ARR: array [0..3] of byte);
+              END;
+
+VAR
+    ocmd:      OmniCmd;    { the command record used for all commands }
+    trslt:     OCrsltRcd;
+    strobeadr: TrixRcd;
+    readyadr:  TrixRcd;
+    cmdadr:    TrixRcd;
+    transrp:   pOCrsltRcd; { result pointer used for short commands }
+
+{$P}
+{---------------------------------------------------------------------}
+{ ready -                                                             }
+{---------------------------------------------------------------------}
+
+FUNCTION ready: boolean;
+    var i: byte; j: integer;
+    begin
+    j := 10000;
+    repeat
+        i := readyadr.PTR^;
+        j := j-1;
+        until (j = 0) or (ODD (i));
+    ready := ODD (i);
+    end;
+
+{---------------------------------------------------------------------}
+{ unsigned - convert byte to unsigned integer                         }
+{---------------------------------------------------------------------}
+
+FUNCTION unsigned (b: byte): integer;
+    begin
+    if b < 0 then unsigned := b + 256
+             else unsigned := b;
+    end;
+
+{---------------------------------------------------------------------}
+{ strobit - strobe command address to Transporter                     }
+{---------------------------------------------------------------------}
+
+FUNCTION strobit: boolean;
+    var i: integer; isready: boolean;
+    begin
+    i := 1;
+    repeat
+        isready := ready;
+        if isready then
+          strobeadr.PTR^ := cmdadr.ARR[i];
+        i := i + 1
+        until (i > 3) or (NOT isready);
+    strobit := isready;
+    end;
+
+{$P}
+{---------------------------------------------------------------------}
+{ doit - "strobes in" the command and waits for the result            }
+{ to change ..... this is used for the simple commands                }
+{---------------------------------------------------------------------}
+
+PROCEDURE doit (cmd: byte);
+    var j: integer;
+    begin
+    OCrslt.Rcode := ORD (Waiting);
+    ocmd.P.RP := @trslt; { must load this pointer BEFORE opcode byte }
+    ocmd.A[Op] := cmd;
+    trslt.Rcode := -1;
+    if strobit
+        then begin
+            j := 10000;
+            repeat
+                j := j - 1
+                until (trslt.Rcode <> -1) or (j = 0);
+            OCrslt := trslt;
+            OCresult := unsigned (OCrslt.Rcode);
+            end
+        else OCresult := NoTrans;
+    end;
+
+{---------------------------------------------------------------------}
+{ cnvsock - convert socket number to Transporter socket number        }
+{---------------------------------------------------------------------}
+
+FUNCTION cnvsock (sn: integer): byte;
+    begin
+    case sn of
+        1, $80: cnvsock := ORD ($80);
+        2, $90: cnvsock := ORD ($90);
+        3, $A0: cnvsock := ORD ($A0);
+        4, $B0: cnvsock := ORD ($B0);
+    {otherwise: cnvsock := ORD ($FF);}
+           end; {case}
+    end;
+
+{$P}
+{---------------------------------------------------------------------}
+{                                                                     }
+{ The following procedures construct Omninet commands and send        }
+{ them to the Transporter.                                            }
+{                                                                     }
+{---------------------------------------------------------------------}
+    
+    
+{---------------------------------------------------------------------}
+{ OCinitTrans - initialize Transporter and determine our host number  }
+{---------------------------------------------------------------------}
+
+PROCEDURE OCinitTrans;
+    begin doit (InitOp); end;
+
+{---------------------------------------------------------------------}
+{ OCwhoAmI - find out what this host number is                        }
+{---------------------------------------------------------------------}
+
+PROCEDURE OCwhoAmI;
+    begin doit (WhoOp); end;
+
+{---------------------------------------------------------------------}
+{ OCechoTrans - echo to specified Transporter                         }
+{---------------------------------------------------------------------}
+
+PROCEDURE OCechoTrans {(dest: integer)};
+    begin ocmd.A[EDst] := dest; doit (EchoOp); end;
+  
+{$P}
+{---------------------------------------------------------------------}
+{ OCsndMesg - send a message to another host...                       }
+{                                                                     }
+{ ASSUMPTIONS:                                                        }
+{    - the body of the message is at the memory location              }
+{      specified by bp.                                               }
+{    - the user header (if any) is at memory location                 }
+{      rp+4.  (The user header is always immediately                  }
+{      following the result vector, which is 4 bytes long.)           }
+{    - the result vector to be modified is at rp                      }
+{---------------------------------------------------------------------}
+
+PROCEDURE OCsndMesg {(bp: pBytes; rp: pOCrsltRcd;
+                      sn,dln,hln,dst: integer)};
+    begin
+    OCcurBP := bp; OCcurRP := rp;
+    with ocmd do begin
+        P.RP := OCcurRP; { must load pointers BEFORE Op and Sock fields }
+        P.DP := OCcurBP;
+        A[Op] := SendOp;
+        A[Sock] := cnvsock (sn);
+        A[HLen] := hln;
+        P.LN := dln;
+        A[Dest] := dst;
+        end;
+    OCcurRP^.Rcode := -1;  {ORD (Waiting);}
+    if strobit
+        then begin
+            repeat until OCcurRP^.Rcode <> -1; {ORD (Waiting);}
+            OCresult := unsigned (OCcurRP^.Rcode);
+            end
+        else OCresult := NoTrans;
+    end;
+
+{$P}
+{---------------------------------------------------------------------}
+{ OCsetRecv - assembles a receive command and sends it to the         }
+{             transporter                                             }
+{             will not return until the command has been accepted...  }
+{---------------------------------------------------------------------}
+
+PROCEDURE OCsetRecv {(bp: pBytes; rp: pOCrsltRcd;
+                      sn,dln,hln: integer)};
+    begin
+    OCcurBP := bp; OCcurRP := rp;
+    with ocmd do begin
+        P.DP := OCcurBP;
+        P.RP := OCcurRP;
+        P.LN := dln;
+        A[Op] := ORD (RecvOp);
+        A[Sock] := cnvsock (sn);
+        A[HLen] := hln;
+        end;
+    OCcurRP^.Rcode := -1; { ORD (Waiting); }
+    if strobit
+        then begin
+            repeat until OCcurRP^.Rcode <> -1; {ORD (Waiting);}
+            OCresult := unsigned (OCcurRP^.Rcode);
+            end
+        else OCresult := NoTrans;
+    end;
+   
+   
+{---------------------------------------------------------------------}
+{ OCendRecv - reset a setup receive                                   }
+{---------------------------------------------------------------------}
+
+PROCEDURE OCendRecv {(sn: integer)};
+    begin
+    ocmd.A[Sock] := cnvsock (sn);
+    doit (EndOp);
+    end;
+
+{$P}
+{---------------------------------------------------------------------}
+{ OCpeekTrans - read from the RAM inside the Transporter              }
+{               if OCresult < 0 then the value returned is undefined  }
+{---------------------------------------------------------------------}
+
+FUNCTION OCpeekTrans {(adr: integer): byte};
+    var x: integer;
+    begin
+    with ocmd do begin
+        P.RP := @trslt;
+        A[Op] := DebOp;
+        A[PePo] := PeekOp; { peek }
+        A[PAdr] := adr DIV 256;
+        A[PAdr+1] := adr MOD 256;
+        end;
+    trslt.Rcode := -1; { ORD (Waiting); }
+    if strobit
+        then begin
+            x := 0;
+            repeat x := x + 1 until (trslt.Rcode <> -1) or (x >= 200);
+            { the peek value could be equal to Waiting !!! }
+            OCrslt := trslt;
+            OCresult := unsigned (OCrslt.Rcode);
+            OCpeekTrans := ORD (OCresult);
+            end
+        else OCresult := NoTrans;
+    end;
+
+{---------------------------------------------------------------------}
+{ OCpokeTrans - write into the Transporter's RAM                      }
+{---------------------------------------------------------------------}
+  
+PROCEDURE OCpokeTrans {(adr: integer; val: byte)};
+    begin
+    with ocmd do begin
+        A[PAdr]   := adr DIV 256;
+        A[PAdr+1] := adr MOD 256;
+        A[PePo]   := ORD (PokeOp);
+        A[PoVal]  := val;
+        end;
+    doit (DebOp);
+    end;
+    
+{$P}
+{---------------------------------------------------------------------}
+{ CVomnIOinit - initialize CComnIO unit                               }
+{---------------------------------------------------------------------}
+
+PROCEDURE CVomnIOinit;
+    begin
+    OCcurBP := NIL;
+    readyadr.LNG := RdyAdr;
+    strobeadr.LNG := StrAdr;
+    cmdadr.CPT := @ocmd;
+    transrp := @OCrslt; { is this pointer necessary?      }
+                        { result pointer points at OCrslt }
+    { this procedure could also initialize the Transporter and Poke }
+    { the proper values for the Transporter parameters which have   }
+    { values other than the default..................               }
+    end;
+
+END.
+

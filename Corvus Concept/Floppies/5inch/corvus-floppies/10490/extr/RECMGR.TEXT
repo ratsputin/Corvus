@@ -1,0 +1,812 @@
+{
+.PG
+}
+function PreWrite: boolean;
+var I: DskBlk;
+    Tmp: integer;
+    cs: integer;
+begin
+  if debug then pcall( 27);
+  cs := cursample;
+  cursample := 1;
+  WkSpErr := 0;
+  if (1<=RecBlk) and (RecBlk<=MaxBfr) then begin
+    if VInfo[RecBlk].Drty=false then begin
+      with V[PriBlk] do begin
+        if BlkAlloc(i) then begin
+          if VLock( Tmp, ord(i), F, F ) then begin
+            V[Tmp] := V[RecBlk];
+            ReleaseBlk( BlkInfo[CurBlk] );
+            with BlkInfo[CurBlk] do begin
+              Adr := i;
+              Dup := false;
+            end;
+            RecBlk := Tmp;
+          end;
+        end;
+        VInfo[RecBlk].Drty := true;
+      end;
+    end;
+  end;
+  PreWrite := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function AsgnRecBuf( Blk: LogBlk; RW: char ): boolean;
+var I: DskBlk;
+    cs: integer;
+begin
+  if debug then pcall(28);
+  cs := cursample;
+  cursample := 2;
+  WkSpErr := 0;
+  if CurFil.Loc<>0 then with V[PriBlk] do begin
+      CurBlk := Blk;
+      if VUnLock( RecBlk ) then begin
+        if (0<=Blk) and (Blk<MaxLogBlk) then begin
+          if BlkInfo[Blk].Adr=0 then begin
+            if BlkAlloc( I ) then begin
+              if Blk>=NumBlks then
+                NumBlks := Blk + 1;
+              BlkInfo[Blk].Adr := I;
+              BlkInfo[Blk].Dup := false;
+              if VLock( RecBlk, BlkInfo[Blk].Adr, F, F ) then begin
+                V[RecBlk].Lim := 0;
+                VInfo[RecBlk].Drty := true;
+              end;
+            end;
+          end else begin
+            if VLock( RecBlk, BlkInfo[Blk].Adr, F, T ) then begin
+              if RW='W' then begin
+                if PreWrite then begin end;
+              end;
+            end;
+          end;
+        end else err(5);
+      end;
+  end else err(28);
+  AsgnRecBuf := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function MakeRoom( Need: integer ): boolean;
+var I,J: integer;
+    cs: integer;
+
+{
+.PG
+}
+  function RoomInBlk: boolean;
+  var Rmndr, Tmp, Fre: integer;
+  begin
+    if debug then pcall(29);
+    WkSpErr := 0;
+    with V[PriBlk] do begin
+       if (CurBlk>0) and (CurByt=1) then begin { try previous block }
+          if VLock( Tmp, BlkInfo[CurBlk-1].Adr, F, T ) then begin
+             Fre := MaxBufNdx-V[Tmp].Lim;
+             if VUnLock( Tmp ) then begin
+                if Fre>=Need then begin
+                   if AsgnRecBuf( CurBlk-1, 'W' ) then
+                      CurByt := V[RecBlk].Lim+1;
+                end;
+             end;
+          end else err(7);
+       end;
+       if WkSpErr=0 then begin
+          if V[RecBlk].Lim+Need>MaxBufNdx then begin { SPLIT BLOCK }
+             if CurByt>1 then begin (* OK to split left *)
+                Rmndr := V[RecBlk].Lim - CurByt + 1;
+                V[RecBlk].Lim := CurByt - 1;
+                if BlkInsert( CurFil, CurBlk ) then begin (* split *)
+                   if VLock(Tmp,BlkInfo[CurBlk].Adr,F,F) then begin
+                      V[Tmp] := V[RecBlk];
+                      VInfo[Tmp].Drty := true;
+                      if VUnLock( Tmp ) then begin
+                         CurBlk := CurBlk + 1;
+                         V[RecBlk].Lim := Rmndr;
+                         if Rmndr>0 then
+                            moveleft( V[RecBlk].Buf[ CurByt ],
+                                      V[RecBlk].Buf[1], Rmndr );
+                         CurByt := 1;
+                      end;
+                   end;
+                end;
+             end;
+             if WkSpErr=0 then begin (* CurByt=1 *)
+                if V[RecBlk].Lim+Need>MaxBufNdx then begin
+                   (* split block right *)
+                   if BlkInsert( CurFil, CurBlk+1 ) then begin
+                      if VLock( Tmp,
+                                BlkInfo[ CurBlk+1 ].Adr,
+                                F, F )
+                      then begin
+                         V[Tmp] := V[RecBlk];
+                         VInfo[Tmp].Drty := true;
+                         if VUnLock( Tmp ) then begin
+                            V[RecBlk].Lim := 0;
+                         end;
+                      end;
+                   end;
+                end;
+             end;
+          end;
+       end;
+    end;
+    RoomInBlk := WkSpErr = 0;
+    if debug then pexit;
+  end;
+
+{
+.PG
+}
+begin
+  if debug then pcall(30);
+  cs := cursample;
+  cursample := 4;
+  WkSpErr := 0;
+  if (Need>=0) and (Need<=MaxRecLen) then begin
+    if RoomInBlk then begin
+      with V[PriBlk] do begin
+        I := CurByt;
+        J := CurByt + Need;
+        LstRec := LstRec + 1;
+      end;
+      with V[RecBlk] do begin
+        if (I<=Lim) then
+          moveright( Buf[I], Buf[J], Lim-I+1 );
+        Lim := Lim + Need;
+      end;
+    end;
+  end else err(25);
+  MakeRoom := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+procedure StuffRec( Len: integer; var Src: Byte );
+var cs: integer;
+begin
+  if debug then pcall(31);
+  cs := cursample;
+  cursample := 5;
+  V[RecBlk].Buf[ V[PriBlk].CurByt ] := CnvIB( Len );
+  if Len>0 then
+    moveleft( Src, V[RecBlk].Buf[ V[PriBlk].CurByt+1 ], Len );
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecHead;
+var cs: integer;
+begin
+  if debug then pcall(32);
+  cs := cursample;
+  cursample := 6;
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    if AsgnRecBuf( 0, 'R' ) then begin
+      CurBlk := 0;
+      CurByt := 1;
+      CurRec := 1;
+    end;
+  end;
+  RecHead := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+procedure PrevRec;
+var Tmp, NTmp: integer;
+    cs: integer;
+begin
+  if debug then pcall(33);
+  cs := cursample;
+  cursample := 7;
+  Tmp := 1;
+  NTmp := CnvBI(V[RecBlk].Buf[Tmp]) + 1 + Tmp;
+  while NTmp<V[PriBlk].CurByt do begin
+    Tmp := NTmp;
+    NTmp := CnvBI(V[RecBlk].Buf[Tmp]) + 1 + Tmp;
+  end;
+  V[PriBlk].CurByt := Tmp;
+  V[PriBlk].CurRec := V[PriBlk].CurRec - 1;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecTail;
+var cs: integer;
+begin
+  if debug then pcall(34);
+  cs := cursample;
+  cursample := 8;
+  WkSpErr := 0;
+  if UseFile( Fil ) then begin
+    if AsgnRecBuf( max(0,V[PriBlk].NumBlks-1), 'R' ) then begin
+      V[PriBlk].CurByt := V[RecBlk].Lim + 1;
+      PrevRec;
+      V[PriBlk].CurRec := Max( 1, V[PriBlk].LstRec );
+    end;
+  end;
+  RecTail := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecSeek;
+var Tmp, NTmp: integer;
+    OCurRec: integer;
+    OCurBlk: DskBlk;
+    OCurByt: integer;
+    cs: integer;
+begin
+  if debug then pcall (35);
+  cs := cursample;
+  cursample := 9;
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    OCurRec := CurRec;
+    OCurBlk := CurBlk;
+    OCurByt := CurByt;
+    if RecNum>0 then begin (* towards end of file *)
+      if AsgnRecBuf( CurBlk, 'R' ) then begin
+        while (RecNum>0) and
+              ((CurBlk<NumBlks-1) or (CurByt<=V[RecBlk].Lim)) and
+              (WkSpErr=0)
+        do begin
+          CurByt := CurByt + CnvBI(V[RecBlk].Buf[CurByt]) + 1;
+          if (CurByt>V[RecBlk].Lim) and (CurBlk<NumBlks-1) then begin
+            if AsgnRecBuf( CurBlk+1, 'R' ) then begin
+              CurByt := 1;
+            end;
+          end;
+          RecNum := RecNum - 1;
+          CurRec := CurRec + 1;
+        end;
+      end;
+    end else if RecNum<0 then begin (* towards beginning of file *)
+      if AsgnRecBuf( CurBlk, 'R' ) then begin
+        if WkSpErr=0 then begin
+          while ((CurBlk>0) or (CurByt>1)) and
+                (RecNum<0) and
+                (WkSpErr=0)
+          do begin
+            if CurByt=1 then begin
+              if AsgnRecBuf( CurBlk-1, 'R' ) then begin
+                CurByt := V[RecBlk].Lim + 1;
+              end;
+            end;
+            if WkSpErr=0 then begin
+              PrevRec;
+              RecNum := RecNum + 1;
+            end;
+          end;
+        end;
+      end;
+    end;
+    if RecNum<>0 then err(24);
+    if WkSpErr<>0 then begin
+      CurByt := OCurByt;
+      CurRec := OCurRec;
+      CurBlk := OCurBlk;
+    end;
+  end;
+  RecSeek := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecGo;
+var x, y, z: integer;
+    Dum: boolean;
+begin
+  if debug then pcall(36);
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    if AsgnRecBuf( CurBlk, 'R' ) then begin
+      if RecNum<>0 then with V[PriBlk] do begin
+        y := RecNum - CurRec;
+        if abs(y)<10 then begin
+           Dum := RecSeek( CurFil, y );
+        end else begin
+           x := RecNum - 1;
+           z := RecNum - LstRec;
+           if abs(x)<abs(y) then begin
+              Dum := RecHead( CurFil );
+              Dum := RecSeek( CurFil, x );
+           end else if abs(z)<abs(y) then begin
+              Dum := RecTail( CurFil );
+              Dum := RecSeek( CurFil, z );
+           end else begin
+              Dum := RecSeek( CurFil, y );
+           end;
+        end;
+      end;
+    end;
+  end;
+  RecGo := WkSpErr=0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecDel;
+var Len, Lim: integer;
+    cs: integer;
+begin
+  if debug then pcall (37);
+  cs := cursample;
+  cursample := 10;
+  WkSpErr := 0;
+  if RecGo( Fil, RecNum ) then with V[PriBlk] do begin
+    if PreWrite then begin
+      if CurByt<=V[RecBlk].Lim then begin
+        LstRec := LstRec - 1;
+        Len := CnvBI(V[RecBlk].Buf[CurByt]) + 1;
+        if Len+CurByt<=MaxBufNdx then
+          moveleft( V[RecBlk].Buf[Len+CurByt],
+                    V[RecBlk].Buf[CurByt],
+                    V[RecBlk].Lim-(CurByt+Len)+1 );
+        V[RecBlk].Lim := V[RecBlk].Lim - Len;
+        if V[RecBlk].Lim<1 then begin (* empty block *)
+          if BlkDelete( CurFil, CurBlk ) then begin
+            (* released empty block *)
+            if NumBlks<=CurBlk then begin
+              if RecTail(CurFil) then begin
+                if LstRec>0 then begin
+                  if RecSeek( CurFil, 1 ) then begin end;
+                end;
+                {resynch pointers to last rec}
+              end;
+            end;
+          end;
+        end else if V[RecBlk].Lim<CurByt then begin
+          if CurRec<=LstRec then begin
+            if AsgnRecBuf( CurBlk+1, 'R' ) then begin
+              CurByt := 1;
+              (* deleted last rec in block *)
+            end;
+          end;
+        end;
+      end else err(24);
+    end;
+  end;
+  RecDel := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecIns;
+var cs: integer;
+begin
+    if debug then pcall(38);
+    cs := cursample;
+    cursample := 11;
+  WkSpErr := 0;
+  if RecGo( Fil, RecNum ) then with V[PriBlk] do begin
+    if PreWrite then begin
+      if MakeRoom( Len+1 ) then
+        StuffRec( Len, Src );
+    end;
+  end;
+  RecIns := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecApp;
+begin
+  if debug then pcall(39);
+  WkSpErr := 0;
+  if RecSeek( Fil, 1 ) then begin
+    if RecIns( Fil, 0, Len, Src ) then begin
+    end;
+  end;
+  RecApp := WkSpErr = 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecPush;
+var cs: integer;
+begin
+  if debug then pcall(40);
+  cs := cursample;
+  cursample := 12;
+  WkSpErr := 0;
+  if RecHead( Fil ) then begin
+    if RecIns( Fil, 0, Len, Src ) then begin
+    end;
+  end;
+  RecPush := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecPop;
+var cs: integer;
+begin
+  if debug then pcall(41);
+  cs := cursample;
+  cursample := 13;
+  WkSpErr := 0;
+  if RecHead( Fil ) then begin
+    if RecGet( Fil, 0, Len, Dst ) then begin
+      if RecDel( Fil, 0 ) then begin
+      end;
+    end;
+  end;
+  RecPop := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecQ;
+var cs: integer;
+begin
+  if debug then pcall(42);
+  cs := cursample;
+  cursample := 14;
+  WkSpErr := 0;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    if AsgnRecBuf( max(0,NumBlks-1), 'W' ) then begin
+      CurByt := V[RecBlk].Lim + 1;
+      CurRec := LstRec + 1;
+      if MakeRoom( Len+1 ) then begin
+        StuffRec( Len, Src );
+      end;
+    end;
+  end;
+  RecQ := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecDQ;
+begin
+  if debug then pcall(43);
+  RecDQ := RecPop( Fil, Len, Src );
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecGet;
+var cs: integer;
+begin
+  if debug then pcall(44);
+  cs := cursample;
+  cursample := 15;
+  WkSpErr := 0;
+  if RecGo( Fil, RecNum ) then with V[PriBlk] do begin
+    if CurByt<=V[RecBlk].Lim then begin
+      Len := CnvBI(V[RecBlk].Buf[CurByt]);
+      if Len>0 then
+        moveleft( V[RecBlk].Buf[CurByt+1], Dst, Len );
+    end else err(24);
+  end;
+  RecGet := WkSpErr = 0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecPut;
+var cs: integer;
+begin
+  if debug then pcall(45);
+  cs := cursample;
+  cursample := 16;
+  WkSpErr := 0;
+  if RecDel( Fil, RecNum ) then begin end;
+  if WkSpErr=24 then WkSpErr := 0;
+  if WkSpErr=0 then begin
+    if RecIns( Fil, 0, Len, Src ) then begin end;
+  end;
+  RecPut := WkSpErr=0;
+  cursample := cs;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function LstFrqChr( var Pat: StrTyp ): integer;
+var
+  FrqData: string[100];
+  Frq: array[ char ] of integer;
+  Max, I, J: integer;
+begin
+  if debug then pcall(46);
+  FrqData := concat(
+             ' EeTtNnIiOoSsRrAaLlHhFfUuCcDdPpYy-Mm.GgBb0,WwKkXx$Vv1(32',
+             '"'':*56974Qq8/Jj?%Zz><~}|{\_^]\[@=;+&#!' );
+  fillchar( Frq, sizeof( Frq ), chr( 0 ) );
+
+  for I := 1 to length (FrqData) do begin
+    Frq[ FrqData[I] ] := I;
+  end;
+
+  Max := 1;
+  for I := 2 to length( Pat ) do begin
+    if Frq[ Pat[I] ]>Frq[ Pat[Max] ] then Max := I;
+  end;
+  LstFrqChr := Max;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function InRec( Ndx, L: integer; var R: integer ): boolean;
+var I, J: integer;
+begin
+  if debug then pcall(47);
+  InRec := true;
+  I := 1;
+  while I <= V[RecBlk].Lim do begin
+    J := I + CnvBI(V[RecBlk].Buf[I]) + 1;
+    if (I<Ndx) and (Ndx<=J-L) then begin
+      R := I;
+      if debug then pexit;
+      exit( InRec );
+    end;
+    I := J;
+  end;
+  InRec := false;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function Match( Ndx: integer; var Pat: StrTyp ):boolean;
+
+var Eq: boolean;
+    BC1,
+    I: integer;
+
+begin
+  if debug then pcall(48);
+  Eq := (1<=Ndx) and (Ndx<=MaxBufNdx-length(Pat)+1);
+  I := 0;
+  while Eq and (I<length( Pat ) ) do begin
+    I := I + 1;
+
+    BC1 := CnvBI(V[RecBlk].Buf[NDX+I-1]);
+    If BC1 In [97..122] Then BC1 := BC1 - 32;
+    Eq := BC1 = Ord(UpperCase(Pat[I]))
+
+(*  Eq := UpperCase( chr(V[RecBlk].Buf[Ndx+I-1]) ) = UpperCase( Pat[I] );  *)
+  end;
+  Match := Eq;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecDiff( A, B: integer ): integer;
+var Cnt: integer;
+begin
+  if debug then pcall(49);
+  Cnt := 0;
+  while A<B do begin
+    A := A + CnvBI( V[RecBlk].Buf[A] ) + 1;
+    Cnt := Cnt + 1;
+  end;
+  RecDiff := Cnt;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function LRBufScan ( var Ndx: integer; var Pat: StrTyp; LFC: integer ) : boolean;
+
+var SLst : integer;
+    Fnd: boolean;
+    U,L: char;
+    ONdx: integer;
+
+begin
+  if debug then pcall(50);
+  SLst := V[RecBlk].Lim + 1;
+  ONdx := Ndx;
+  Fnd := false;
+  U := Pat[LFC];     { Index of least frequently used character }
+  L := Pat[LFC];
+  if Pat[LFC] in ['A'..'Z'] then
+    L := chr( ord(Pat[LFC]) + 32 );  { Lower case version }
+  if Pat[LFC] in ['a'..'z'] then
+    U := chr( ord(Pat[LFC]) - 32 );  { Upper case version }
+  while (Ndx<SLst) and not Fnd do begin
+    Ndx := Ndx + 1;
+    if Ndx<Slst then
+      Ndx := Ndx +
+             min( scaneq( SLst-Ndx, U, V[RecBlk].Buf[NDX] ),
+                  scaneq( SLst-Ndx, L, V[RecBlk].Buf[NDX]));
+    if Ndx<SLst then begin
+      if Match( Ndx-LFC+1, Pat ) then begin
+        if InRec( Ndx-LFC+1, length( Pat ), Ndx ) then begin
+          Fnd := true;
+        end;
+      end;
+    end;
+  end;
+  V[PriBlk].CurRec := V[PriBlk].CurRec + RecDiff( ONdx, Ndx );
+  LRBufScan := Fnd;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecFndNxt;
+
+var LFC: integer;
+    OCurBlk : DskBlk;
+    OCurByt : integer;
+    OCurRec : integer;
+    Done: boolean;
+    Fnd: boolean;
+
+begin
+  if debug then pcall(51);
+  Fnd := false;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    OCurBlk := CurBlk;
+    OCurByt := CurByt;
+    OCurRec := CurRec;
+    if RecSeek( CurFil, 1 ) then begin
+      LFC := LstFrqChr( Pat );
+      Done := false;
+      repeat
+        Fnd := LRBufScan( CurByt, Pat, LFC );
+        Done := Fnd or (CurBlk>=NumBlks-1);
+        if not Done then begin
+          if AsgnRecBuf( CurBlk+1, 'R' ) then begin
+            CurByt := 1
+          end
+        end;
+      until Done or (WkSpErr<>0)
+    end;
+    if not Fnd then begin
+      CurBlk := OCurBlk;
+      CurByt := OCurByt;
+      CurRec := OCurRec
+    end
+  end;
+  RecFndNxt := Fnd;
+  WkSpErr := 0;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RLBufScan (var Ndx: integer;var Pat: StrTyp;LFC: integer): boolean;
+var SLst : integer;
+    Fnd: boolean;
+    U,L: char;
+    ONdx: integer;
+begin
+  if debug then pcall(52);
+  U := Pat[LFC];
+  L := Pat[LFC];
+  if Pat[LFC] in ['A'..'Z'] then
+    L := chr( ord(Pat[LFC]) + 32 );
+  if Pat[LFC] in ['a'..'z'] then
+    U := chr( ord(Pat[LFC]) - 32 );
+  ONdx := Ndx;
+  Fnd := false;
+  while (Ndx>1) and not Fnd do begin
+    Ndx := Ndx - 1;
+    Ndx := Ndx +
+           max( scaneq( -Ndx, U, V[RecBlk].Buf[Ndx] ),
+                scaneq( -Ndx, L, V[RecBlk].Buf[Ndx] ) );
+    if Ndx>0 then begin
+      if Match( Ndx-LFC+1, Pat ) then begin
+        if InRec( Ndx-LFC+1, length( Pat ), Ndx ) then begin
+          Fnd := true;
+        end;
+      end;
+    end;
+  end;
+  Ndx := max( 1, Ndx );
+  V[PriBlk].CurRec := V[PriBlk].CurRec - RecDiff( Ndx, ONdx );
+  RLBufScan := Fnd;
+  if debug then pexit;
+end;
+
+{
+.PG
+}
+function RecFndPrv;
+var LFC: integer;
+    OCurBlk : DskBlk;
+    OCurByt : integer;
+    OCurRec : integer;
+    Done: boolean;
+    Fnd: boolean;
+begin
+  if debug then pcall(53);
+  Fnd := false;
+  if UseFile( Fil ) then with V[PriBlk] do begin
+    OCurBlk := CurBlk;
+    OCurByt := CurByt;
+    OCurRec := CurRec;
+    if AsgnRecBuf( CurBlk, 'R' ) then begin
+      LFC := LstFrqChr( Pat );
+      Done := false;
+      repeat
+        Fnd := RLBufScan( CurByt, Pat, LFC );
+        Done := Fnd or (CurBlk<=0);
+        if not Done then begin
+          if AsgnRecBuf( CurBlk-1, 'R' ) then begin
+            CurByt := V[RecBlk].Lim + 1;
+          end;
+        end;
+      until Done or (WkSpErr<>0);
+    end;
+    if not Fnd then begin
+      CurBlk := OCurBlk;
+      CurByt := OCurByt;
+      CurRec := OCurRec;
+    end;
+  end;
+  RecFndPrv := Fnd;
+  WkSpErr := 0;
+  if debug then pexit;
+end;
+
+
+

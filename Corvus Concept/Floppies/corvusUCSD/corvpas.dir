@@ -1,0 +1,14 @@
+
+Directory of UCSD disk image file 'corvpas.raw'
+
+Unknown density, disk image size 737280, 1440 blocks of 512 bytes each
+
+Volume FPASCAL has 7 files,  0 to 6 (6), eov 1440, size 0, free 763
+
+ 1: PASCAL          Data 20-Sep-83    6- 203( 197), 100864+512= 101376 bytes
+ 2: PASCTERRS.TEXT  Text 20-Sep-83  203- 217(  14),  7168+512=  7680 bytes
+ 3: CODE            Data 20-Sep-83  217- 304(  87), 44544+512= 45056 bytes
+ 4: PASLIB.OBJ      Data 20-Sep-83  304- 409( 105), 53760+512= 54272 bytes
+ 5: CCLIB.OBJ       Data 20-Sep-83  409- 625( 216), 110592+512= 111104 bytes
+ 6: C2LIB.OBJ       Data 20-Sep-83  625- 673(  48), 24576+512= 25088 bytes
+ 7: SYSTEM.UPDATE   Text 20-Sep-83  673- 677(   4),  2048+512=  2560 bytes

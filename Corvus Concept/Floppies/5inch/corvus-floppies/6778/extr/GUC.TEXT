@@ -1,0 +1,47 @@
+UNIT util_complex;
+{$%+}
+{ Copyright Richard E. James III, 1981 }
+
+INTERFACE
+
+IMPLEMENTATION
+
+TYPE ERR_TYPE = 0..5;
+     SIX_CHAR_NAME = PACKED ARRAY[1..6] OF CHAR;
+     COMPLEX = RECORD
+                 re: REAL;
+                 im: REAL;
+               END;
+
+PROCEDURE %rep_error ( nam: SIX_CHAR_NAME;  err: ERR_TYPE);   EXTERNAL;
+FUNCTION %t_check ( VAR err: ERR_TYPE;  r: REAL) : ERR_TYPE;  EXTERNAL;
+
+PROCEDURE %_cerr 
+  (VAR result:COMPLEX;  
+   VAR routine_name:SIX_CHAR_NAME;  len: INTEGER;
+   VAR error:LONGINT);   
+BEGIN 
+   %rep_error(routine_name, error); 
+   result.re := 0.0;   result.im := 0.0;  
+END;  
+
+{  Routine to test for illegal numbers.
+Return an error code as function result & 1st parameter.  }
+  
+FUNCTION %c_cck
+  (VAR error: LONGINT;
+   VAR value:COMPLEX) 
+   : LONGINT;
+VAR err, dummy: ERR_TYPE;
+BEGIN 
+   dummy := %t_check(err, value.re);
+   if err = 0 THEN BEGIN 
+      dummy := %t_check(err, value.im);
+   END; 
+   IF err=0 THEN %c_cck:=1     {Fortran true}
+            ELSE %c_cck:=0;    {Fortran false}
+   error := err;
+END;
+
+END.
+  

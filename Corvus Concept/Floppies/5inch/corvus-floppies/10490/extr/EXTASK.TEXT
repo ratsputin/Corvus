@@ -1,0 +1,145 @@
+{$S EX}
+
+procedure EXTask;
+
+var
+  CurWnd  : pWndRcd;
+  ArgV    : ^StrTyp;
+  LX,
+  LY,
+  i,
+  iost    : integer;
+  HeapMark: ^longint;
+  Junk,
+  FtoC,
+  Exes    : StrTyp;
+  MemSav,
+  Done    : Boolean;
+
+    function SetUpCallWin: boolean;
+    var iost, i: integer;
+    begin
+       FlushNewTxt;
+       if memavail<50000 then begin
+          TellUsr( Msg(MGGENL,13) );
+          SetUpCallWin := false;
+       end else begin
+          SetUpCallWin := true;
+          BkGrndOK := false;
+          If Not ProgFlg Then If not WkSpClose then
+             Warn( Msg(MGWKSP,86) );
+          mark( HeapMark );
+       end;
+    end;
+
+
+    procedure SetUpSuspWin;
+    var iost: integer;
+        Dum: boolean;
+    begin
+       Release( HeapMark );
+       If Not ProgFlg Then If not WkSpOpen( WkSpNam ) then
+          Warn( Msg(MGWKSP,32));
+       BkGrndOK := true;
+
+       if not PrintEnable then begin
+          Dum := unitbusy(6);
+          PrintEnable := ioresult=0;
+          if PrintEnable then TellUsr( Msg(MGPRNT,51) );
+       end;
+       LoadLabels( Menu1Frame );
+       ResetCmdKey;
+    end;
+
+    Procedure GetExternals;
+
+    Begin
+      FtoC := FNam;
+      if PmtStr(Msg(MGFile,23),Exes) then { eA"Specifye@ eAexternals..."e@ }
+          FtoC := Concat(FtoC,' ',Exes);
+    End;
+
+
+    Procedure SaveDisplay;
+
+    { eAAttempte@ eAtoe@ eAsavee@ eAdisplaye@ eAtoe@ eAae@ eAdiske@ eAfile.e@ eAIfe@ eAerror,e@ eAsavee@ eAtoe@ eAmemorye@ }
+
+    Begin
+      MemSav := False;
+      SetOrigin (0,0,GrfQgrAbs);
+      CurWnd := pOSCurWnd;           { eAGete@ eAcurrente@ eAwindowe@ eArecorde@ }
+      LX := CurWnd^.lngthx+1;
+      LY := CurWnd^.lngthy+1;
+      I := DspToDsk('WPDISP',0,0,LX,LY);
+      If I <> 0 Then Begin        { eADiske@ eAsavee@ eAfailed...e@ }
+        MemSav := True;
+        If AloGrfPic(LX,LY,0) Then i := RdDisp(GrfPicPtr,0,0,LX,LY);  { eAScreene@ eAsavede@ }
+        If I <> 0 Then Begin
+          WriteLn;
+          WriteLn('Window save failed, result = ',i:0);
+          Exit(EXTask)
+          End
+        End
+      Else RelGrfPic                 { eAReleasee@ eAmemorye@ eAaftere@ eAsuccessfule@ eAdiske@ eAwritee@ }
+    End;
+
+
+    Procedure RestoreDisplay;
+
+    Begin
+      If MemSav Then Begin
+        i := WrDisp(GrfPicPtr,0,0,LX,LY,1);
+        If I <> 0 Then ReDraw(WinTop);    { eACouldn'te@ eAgete@ eApic,e@ eAredrawe@ eAscreene@ }
+        RelGrfPic;                        { eAScreene@ eArestorede@ }
+        End
+      Else Begin
+        I := DskToDsp('WPDISP',0,0,1,True);
+        If I <> 0 Then ReDraw(WinTop)
+        End
+    End;
+
+begin
+  LoadLabels( ExFrame );
+  Done := false;
+  FtoC := FNam;
+  Exes := '';
+  while not Done do begin
+    NextCmd;
+    Case Cmd Of
+      KF10 : Done := True;
+      KF1  : GetExternals;
+      KF5  : Begin
+               if SetUpCallWin then begin
+                 ReleaseMsgs;                     { eAFreee@ eAupe@ eAae@ eAlote@ eAofe@ eAdatae@ eAspacee@ }
+                 KeepCnt := 0;                    { eANoe@ eAdictionarye@ eAstuffe@ eAlefte@ eAone@ eAthee@ eAheap!e@ }
+                 ArgV := @FtoC;
+(*               SaveDisplay;      *)
+                 LblsOff;
+                 Write(chr(27),'J');
+                 iost := call( '!EX', input, output, ArgV, 1 );
+                 Bell(BelWrn);
+                 UnitClear(2);
+                 WriteLn;
+                 WriteLn('Press <RETURN>...');
+                 ReadLn(Junk);
+(*               RestoreDisplay;   *)
+                 Write(chr(27),'J');
+                 ReFresh;
+                 InitMessages('WPSYSMSG');        { eARetreivee@ eAthee@ eAmessagese@ }
+                 SetUpSuspWin;
+                 LblsOn
+                 End
+             End;
+      KTEXT: Begin
+               PushCBuf(Key);
+               Cmd := KTASK;
+               Key := Chr(TIDEdit); Done := True
+               End;
+      Otherwise : Done := Not LocalEdit
+      End;
+   Cmd := KTASK;
+   Key := chr(TIDEdit)
+   end
+end;
+
+

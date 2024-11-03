@@ -1,0 +1,6 @@
+Floppy Controller card (8" floppy controller)
+installed in slot 3
+U15 is:
+   AM27LS19DC
+   8211DM
+   label residue

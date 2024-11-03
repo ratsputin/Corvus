@@ -1,0 +1,473 @@
+{$S EDIT}
+
+procedure Center( L, R: integer );
+
+var
+  TmpTxt: BA;
+  Ind, Lst, Len, CtrCol, NewNdx: integer;
+
+begin
+   CtrCol := (L+R) div 2;
+   CvtToNdx( L, R );
+   Ind := SpanNE( NewTxt, L, ' ' );
+   Lst := BkSpanNe( NewTxt, R-1, ' ' );
+   Len := BANdxToCol( Lst, NewTxt ) - BANdxToCol( Ind, NewTxt ) + 1;
+   if Len>0 then begin
+      TmpTxt := NewTxt;
+      fillchar( NewTxt[L], R-L, ' ' );
+      NewNdx := BAColToNdx( CtrCol - (Len Div 2), NewTxt );
+      moveleft( TmpTxt[Ind], NewTxt[NewNdx], Lst-Ind+1 );
+      NewTxtMty := false;
+   end;
+   SetUpNewTxt( CurLin+1 );
+end;
+
+
+procedure FlushLeft( L, R: integer );
+var Ind: integer;
+begin
+   CvtToNdx( L, R );
+   Ind := SpanNE( NewTxt, L, ' ' ) - L;
+   if (Ind>0) and (Ind+L<R) then begin
+      BADelByt( NewTxt, L, Ind );
+      BAInsByt( NewTxt, R-Ind, Ind, BlkStr[1] );
+      NewTxtMty := false;
+   end;
+   SetUpNewTxt( CurLin+1 );
+end;
+
+
+procedure FlushRight( L, R: integer );
+var Ind: integer;
+begin
+   CvtToNdx( L, R );
+   Ind := R-1 - BkSpanNE( NewTxt, R-1, ' ' );
+   if (Ind>0) and (R-Ind>L) then begin
+      BADelByt( NewTxt, R-Ind, Ind );
+      BAInsByt( NewTxt, L, Ind, BlkStr[1] );
+      NewTxtMty := false;
+   end;
+   SetUpNewTxt( CurLin+1 );
+end;
+
+
+procedure CutSentence;
+var Done: boolean;
+    RCol: integer;
+
+procedure CutText( RCol: integer );
+var
+  Counter,
+  Len, R, L, W, NxtLin: integer;
+  E     : EnhSetTyp;
+  Enh   : array[1..3] of byte;
+  LinImg: BA;
+  Visible : Boolean;
+begin
+  if YnkMty then begin
+    YnkMty := false;
+    PstWid := 0;
+    if not FilClear( YnkFid ) then PrntWkSpErr;
+  end;
+
+  Enh[1] := 27;
+  Enh[2] := ord('e');
+  L := BAColToNdx( CurCol, NewTxt );
+  W := min( YnkWid, max(0,RCol-CurCol+1) );
+  R := BAColToNdx( RCol+1, NewTxt );
+  PstWid := max( PstWid, W );
+  EnhAtCol( NewTxt, CurCol, E );
+  LinImg := BlkStr;
+  moveleft( NewTxt[L], LinImg[1], R-L );
+  if (E<>[]) and not BAMatch(NewTxt,L,EnhCod) then begin
+    CnvEnhByt( E, Enh[3] );
+    BAInsByt( LinImg, 1, 3, Enh[1] );
+  end;
+  Len := BkSpanNE( LinImg, MaxLinLen, ' ' );
+  EnhAtCol( LinImg, LastNB(LinImg)+1, E );
+  if E<>[] then begin
+    CnvEnhByt( [], Enh[3] );
+    BAInsByt( LinImg, Len+1, 3, Enh[1] );
+    Len := Len + 3;
+  end;
+  if not RecQ( YnkFid, Len, LinImg[1] ) then PrntWkSpErr;
+
+  NxtLin := LinNewTxt + 1;
+  if (CurCol+W<>R) and not BAMatch(NewTxt,R,EnhCod) then begin
+     EnhAtCol( NewTxt, CurCol+W, E );
+     if (E<>[]) or (CurCol>FirstNB(NewTxt)) then begin
+        CnvEnhByt( E, Enh[3] );
+        BAInsByt( NewTxt, R, 3, Enh[1] );
+     end;
+  end;
+  fillchar( NewTxt[L], R-L, ' ' );
+  ShowLine( CurLin );
+  R := SpanNE( NewTxt, R, ' ' );
+  BADelByt( NewTxt, L, R-L );
+  NewTxtMty := false;
+  Counter := 1;
+  Visible := False;
+  Repeat
+    If NewTxt[Counter] > 32 Then Begin         { eAPossiblee@ eAvisiblee@ eAcharactere@ }
+      If Counter > 1 Then If NewTxt[Counter-1] <> 27 Then Visible := True
+      End;
+    Counter := Counter + 1
+  Until Visible or (Counter > L);
+
+ (*  if (SpanNE( NewTxt, 1, ' ' )>MaxLinLen) then begin  *)
+ If Not Visible Then Begin
+     FlushNewTxt;
+     DeleteLine( LinNewTxt );
+     SetUpNewTxt( CurLin );
+     CurCol := FirstNB( NewTxt );
+  end else if LastNB(NewTxt)<CurCol then begin
+     SetUpNewTxt( CurLin+1 );
+     CurCol := FirstNB( NewTxt );
+  end else if FirstNB(NewTxt)>CurCol then begin
+     BADelByt( NewTxt, CurCol, FirstNB(NewTxt)-CurCol );
+     NewTxtMty := false;
+     FlushNewTxt;
+  end else begin
+     FlushNewTxt;
+  end;
+end;
+
+{
+.PG
+}
+function Find( C: char ): integer;
+var i, j: integer;
+begin
+   j := CurCol;
+   repeat
+      i := SpanEQ( NewTxt, j, C );
+      j := SpanNE( NewTxt, i+1, ' ' );
+   until (i+1<j) or (j>=MaxLinLen);
+   Find := i;
+end;
+
+{
+.PG
+}
+function EndOfPhrase( var Col: integer ): boolean;
+var Lst: integer;
+begin
+   Lst := LastNB( NewTxt );
+   Col := Lst;
+   Col := min( Col, Find( '.' ) );
+   Col := min( Col, Find( '?' ) );
+   Col := min( Col, Find( '!' ) );
+   EndOfPhrase := chr(NewTxt[Col]) in ['.','?','!'];
+end;
+
+{
+CUTWORDS *MAIN*
+}
+begin
+  if YnkFid.Loc=TxtFid.Loc then begin
+    Bell( BelWrn );
+    TellUsr( Msg(MGMOVE,2) );
+  end else if WrtOK then begin
+    BeginEvent;
+
+    repeat
+      Done := EndOfPhrase( RCol ) or not UsrIdle;
+      CutText( RCol );
+    until Done;
+
+    EndEvent;
+  end;
+end;
+
+
+procedure DoCopy( Cut: boolean; T, B, L, R: integer );
+var Lst,i,Lns: integer;
+    DelCutLin: boolean;
+
+  procedure CutLine( Chg: boolean );
+
+  var
+    Len, R, L, W, NxtLin: integer;
+    E: EnhSetTyp;
+    Enh: array[1..3] of byte;
+    LinImg: BA;
+
+  begin
+    if YnkMty then begin
+      YnkMty := false;
+      PstWid := 0;
+      if not FilClear( YnkFid ) then PrntWkSpErr
+      end;
+
+    Enh[1] := 27;
+    Enh[2] := ord('e');
+    L := BAColToNdx( CurCol, NewTxt );
+    W := min( YnkWid, max(0,LastNB(NewTxt)-CurCol+1) );
+    R := BAColToNdx( CurCol+W, NewTxt );
+    PstWid := max( PstWid, W );
+    EnhAtCol( NewTxt, CurCol, E );
+    LinImg := BlkStr;
+    moveleft( NewTxt[L], LinImg[1], R-L );
+    if (E<>[]) and not BAMatch(NewTxt,L,EnhCod) then begin
+      CnvEnhByt( E, Enh[3] );
+      BAInsByt( LinImg, 1, 3, Enh[1] );
+    end;
+    Len := BkSpanNE( LinImg, MaxLinLen, ' ' );
+    EnhAtCol( LinImg, LastNB(LinImg)+1, E );
+    if E<>[] then begin
+      CnvEnhByt( [], Enh[3] );
+      BAInsByt( LinImg, Len+1, 3, Enh[1] );
+      Len := Len + 3;
+      end;
+    if not RecQ( YnkFid, Len, LinImg[1] ) then PrntWkSpErr;
+
+    NxtLin := LinNewTxt + 1;
+    if Chg then begin
+       if WrtOk then begin
+          if (CurCol+W<>R) and not BAMatch(NewTxt,R,EnhCod) then begin
+             EnhAtCol( NewTxt, CurCol+W, E );
+             if (E<>[]) or (CurCol>FirstNB(NewTxt)) then begin
+                CnvEnhByt( E, Enh[3] );
+                BAInsByt( NewTxt, R, 3, Enh[1] );
+             end;
+          end;
+          fillchar( NewTxt[L], R-L, ' ' );
+          BADelByt( NewTxt, L, R-L );
+          NewTxtMty := false;
+          if DelCutLin and (SpanNE( NewTxt, 1, ' ' )>MaxLinLen) then begin
+             FlushNewTxt;
+             DeleteLine( LinNewTxt );
+             NxtLin := NxtLin - 1;
+          end else begin
+             DelCutLin := false;
+          end;
+       end;
+    end;
+    SetUpNewTxt( NxtLin );
+  end;
+
+{
+DOCOPY *MAIN*
+}
+begin
+  if YnkFid.Loc=TxtFid.Loc then begin
+    Bell( BelWrn );
+    TellUsr( Msg(MGMOVE,2) );
+  end else begin
+    Lst := LstLin;
+    If T < Lst Then Btm := False;
+    Lns := B-T+1;
+    YnkWid := R-L+1;
+    CurCol := L;
+    DelCutLin := true;
+    SetUpNewTxt( T );
+    if Lns>1 then begin
+      DpyChg := false;
+      BeginEvent;
+    end;
+
+    for i := 1 to Lns do begin
+      If Btm Then Begin
+        Bell(BelErr);
+        TellUsr(Msg(MGGenl,59));       { eA"Ate@ eAbottome@ eAofe@ eAworkad."e@ }
+        Exit(DoCopy)
+        End;
+      If i = Lst Then Btm := True;
+      CutLine( Cut );
+      UpdtGauge( i, Lns );
+    end;
+
+    if Lns>1 then EndEvent;
+    if not Cut and UserIdle then TellUsr( Msg(MGMOVE,4));
+  end;
+end;
+
+
+procedure Paste( Opt: integer );
+var LinImg,Rmdr: BA;
+    ActWid: integer;
+    Lin, CLin,J,K,R,W,L, Siz, Cur,CurNdx, TrlBlk: integer;
+    E: EnhSetTyp;
+    Enh: array [1..3] of byte;
+    Dum: boolean;
+
+
+   procedure PasteLin;
+   begin
+      NewTxt := BlkStr;
+      moveleft( LinImg[1], NewTxt[CurNdx], L );
+      InsertLine( CLin, NewTxt );
+   end;
+
+
+   procedure PasteOvr;
+   begin
+      R := BAColToNdx( CurCol+W, NewTxt );
+      EnhAtCol( NewTxt, CurCol+W, E );
+      BADelByt( NewTxt, CurNdx, R-CurNdx );
+      if E<>[] then begin
+         CnvEnhByt( E, Enh[3] );
+         BAInsByt( NewTxt, CurNdx, 3, Enh[1] );
+      end;
+      if TrlBlk>0 then
+         BAInsByt( NewTxt, CurNdx, TrlBlk, BlkStr[1] );
+      BAInsByt( NewTxt, CurNdx, L, LinImg[1] );
+      NewTxtMty := false;
+      FlushNewTxt;
+   end;
+
+
+   procedure PasteCol;
+   begin
+      if TrlBlk>0 then
+         BAInsByt( NewTxt, CurNdx, TrlBlk, BlkStr[1] );
+      BAInsByt( NewTxt, CurNdx, L, LinImg[1] );
+      NewTxtMty := false;
+      FlushNewTxt;
+   end;
+
+
+   procedure PasteWrd;
+   var i: integer;
+   begin
+      if Siz=1 then begin
+         BAInsByt( NewTxt, CurNdx, L+1, LinImg[1] );
+         NewTxtMty := false;
+         FlushNewTxt;
+      end else if Lin=1 then begin
+         Rmdr := BlkStr;
+         i := MaxLinLen - CurNdx + 1;
+         moveleft( NewTxt[CurNdx], Rmdr[1], i );
+         fillchar( NewTxt[CurNdx], i, ' ' );
+         BAInsByt( NewTxt, CurNdx, L, LinImg[1] );
+         NewTxtMty := false;
+         FlushNewTxt;
+      end else if Lin=Siz then begin
+         BAInsByt( Rmdr, 1, L+1, LinImg[1] );
+         InsertLine( CLin, Rmdr );
+      end else begin
+         InsertLine( CLin, LinImg );
+      end;
+   end;
+
+
+begin                             { eAPastee@ }
+  if WrtOK then begin
+     if YnkWid=MaxLinLen then YnkWid := PstWid;
+     CLin := CurLin;
+     FLUSHNEWTXT;
+     ACTWID := MAXLINLEN - CURCOL + 1;
+     IF ACTWID>YNKWID THEN ACTWID := YNKWID;
+     Enh[1] := 27;
+     Enh[2] := ord('e');
+
+     BeginEvent;
+     TellUsr( Msg(MGMOVE,5) );
+     if FilNumRecs( YnkFid, Siz ) then;
+     Cur := 0;
+     if RecHead( YnkFid ) then begin
+        LinImg := BlkStr;
+        for Lin := 1 to Siz do begin
+           Dum := RecGet( YnkFid, Lin, L, LinImg[1] );  { eAGete@ eAthee@ eAlinee@ eAtoe@ eApastee@ }
+           UpdtGauge( Cur, Siz );
+           Cur := Cur + 1;
+           SetUpNewTxt( CLin );
+           CurNdx := BAColToNdx( CurCol, NewTxt );
+           L := min( L, MaxLinLen-CurNdx+1 );
+           W := BANdxToCol( L, LinImg );
+           TrlBlk := ActWid - W;
+           case Opt of
+              1: PasteLin;
+              2: PasteOvr;
+              3: PasteWrd;
+              4: PasteCol;
+           end;
+           if CLin=LstLin then
+              AppendLine( LstLin, BlkStr );
+           CLin := CLin + 1;
+           LinImg := BlkStr;                           { eACleare@ eAlinee@ eAimagee@ eAbuffere@ }
+        end;
+     end else PrntWkSpErr;
+     TellUsr( Msg(MGGENL,10) );
+     EndEvent;
+     SetUpNewTxt( CLin );
+  end;
+  YnkMty := True;
+end;
+
+
+procedure DoPaste( Opt: integer );
+var i: integer;
+begin
+  if YnkFid.Loc=TxtFid.Loc then begin
+    Bell( BelWrn );
+    TellUsr( Msg(MGMOVE,2) );
+  end else begin
+    if FilNumRecs( YnkFid, I ) then begin
+      if I>1 then DpyChg := false;
+    end;
+    Paste( Opt );
+  end;
+end;
+
+
+procedure ShiftLeft( W: integer );
+begin
+   BADelByt( NewTxt, 1, W );
+   NewTxtMty := false;
+   SetUpNewTxt( CurLin+1 );
+end;
+
+
+procedure ShiftRight( W: integer );
+begin
+   BAInsByt( NewTxt, 1, W, BlkStr[1] );
+   NewTxtMty := false;
+   SetUpNewTxt( CurLin+1 );
+end;
+
+
+procedure CopyTask;
+
+var Dum, Done: boolean;
+    ShiftWid: integer;
+
+begin
+   If DirFID.LOC = TxtFID.Loc Then Begin
+     Bell(BelWrn);
+     Cmd := KTASK;
+     Key := Chr(TIDEdit);
+     Done := True;
+     TellUsr(Msg(MGMove,8))             { eA"Can'te@ eAmovee@ eAdire@ eAentries!"e@ }
+     End
+   Else Begin
+     LoadLabels( CopyFrame );
+     ShiftWid := 1;
+     Done := false;
+     while not Done do begin
+       NextCmd;
+       case Cmd of
+         KF1: DoCopy( true, CurLin, CurLin, CurCol, MaxLinLen );
+         KF2: DoCopy( false, CurLin, CurLin, CurCol, MaxLinLen );
+         KF3: Begin
+                Dum := FilClear(YnkFID);
+                Btm := False;
+                Bell(BelAck);
+                TellUsr(Msg(MGMove,7))  { eA"Copye@ eAbuffere@ eAcleared."e@ }
+                End;
+         KF4: DoPaste( 1 );
+         KF5: DoPaste( 3 );
+         KF6: ShiftLeft( ShiftWid );
+         KF7: ShiftRight( ShiftWid );
+         KF8: FlushLeft( LftMar, MaxLinLen );
+         KF9: FlushRight( 1, RhtMar );
+         KF11:CutSentence;
+         KF14:DoPaste( 2 );
+         KF15:DoPaste( 4 );
+         KF16:Dum := PmtInt( Msg(MGMOVE,6), ShiftWid );
+         KF18:Center( LftMar, RhtMar );
+         otherwise: Done := not LocalEdit;
+         end
+      end
+    End
+end;

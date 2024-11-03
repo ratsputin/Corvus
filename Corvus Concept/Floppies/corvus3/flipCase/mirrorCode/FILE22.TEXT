@@ -1,0 +1,336 @@
+{  file  Mirr1.text   }
+
+{$P*************************************************************}
+  {                                                             }
+  {     SetSize -- sets the Drive #, and Image sizes for        }
+  {                     restore/ backup                         }
+  {                                                             }
+  {*************************************************************}
+  
+  procedure SetSize(Comment: string;
+                    var Drive,IStart,DStart,Size:INTEGER; optype:ops);
+  
+  var Seiz: INTEGER;
+  
+                
+    procedure error(comment:STRING);
+    begin
+    writeln;write(beep,'***  NO Such ',comment,'  ***');
+    exit(dispatch);
+    end;
+    
+    procedure WhichVolume(comment:STRING);
+    var i:integer;
+      
+    begin
+    if not drvtblOK then CheckDrives(NumDrives,VirDrives,PhysDrives);
+    drvtblOK:=true;
+    if not VoltblOK then GetVT;
+    voltblOK:=true;
+    Find(comment, Drive, IStart, DStart, Size);
+    if size=0 then error('volume');
+    end;
+    
+    procedure WhichDrive(kind:DrvReality);
+    var Seiz: integer[5];
+    begin
+    writeln;
+    if kind=virtual then write ('   which Drive? ')
+       else write ('   which Physical Drive? ');
+    if not drvtblOK then CheckDrives(NumDrives,VirDrives,PhysDrives);
+    drvtblOK:=true;
+    if getnum(Drive)<>normal then exit(dispatch);
+    if (Drive<0) or (Drive>NumDrives) then error('Drive');
+    if kind=physical then
+      while not PhysDrives[Drive].physdr do Drive:=Drive-1;
+    if kind=virtual then Seiz:=VirDrives[Drive].capacity
+      else Seiz:=PhysDrives[Drive].capacity;
+    if seiz div 256 < 128 then size:=trunc(Seiz)
+      else size:=-27076;                { hard-wired for the 20MB }
+    end;
+    
+    function DrOffset(drv:integer):integer; 
+     var offset: integer;                  { calculate distance into an image }
+    begin
+    Offset:=0;
+    if not PhysDrives[drv].PhysDr then
+      repeat
+        drv:=drv-1;
+        Offset:=Offset + trunc(VirDrives[drv].capacity);
+       until PhysDrives[drv].PhysDr=true;
+    DrOffset:=offset;
+    end;
+         
+    procedure Xtract;
+    begin
+    writeln; write('Xtract a V(olume D(rive M(anual: ');
+    case getbyte of
+      '!': exit(dispatch);
+      'V': begin
+           warn;
+           WhichVolume('From');
+           IStart:=DStart;
+           Seiz:=Size;
+           writeln; write('   From a D(rive P(hys-Drv Image? ');
+           case getbyte of
+             '!': exit(dispatch);
+             'P': IStart:=IStart+ DrOffset(Drive);
+             'D': {nop};
+            end;
+           writeln;
+           WhichVolume('To');
+           if Seiz<>Size then
+             begin
+             writeln; writeln(beep,'*** Size Mismatch ***');
+             exit(dispatch);
+             end;
+           end;
+      'D': begin
+           WhichDrive(virtual);
+           IStart:=DrOffset(Drive);
+           end;
+      'M': begin
+           writeln; 
+           write('  Start image read at: ');
+           if getnum(IStart)<>normal then exit(dispatch);
+           write(' Read how many blocks: ');
+           if getnum(Size)<>normal then exit(dispatch);
+           write('     Restore to drive: ');
+           if getnum(Drive)<>normal then exit(dispatch);
+           write('    Starting at block: ');
+           if getnum(DStart)<>normal then exit(dispatch);
+           end;
+     end;
+     end; { procedure Xtract }
+    
+  begin
+  Size:=0;
+  Drive:=1;
+  DStart:=0;
+  IStart:=-1;                   { informs restore this is not an extract }
+  if optype=aRestore then
+    write(Comment,' V(olume D(rive P(hys-Drv M(an X(traction: ')   {2.0}
+   else
+    write(Comment,' V(olume D(rive P(hys-Drv M(an: ');
+  case getbyte of
+    'V': begin          { line deleted -- 2.0}
+         WhichVolume('');
+         end;
+    'X': begin
+         IStart:=0;
+         if optype<>aRestore then exit(dispatch);
+         Xtract;
+         end;
+    'D': WhichDrive(virtual);
+    'P': WhichDrive(physical);
+    'M': begin                                          {2.0}
+         write('     How many blocks: ');
+         if getnum(Size)<>normal then exit(dispatch);
+         write('           For drive: ');
+         if getnum(Drive)<>normal then exit(dispatch);
+         write('   Starting at block: ');
+         if getnum(DStart)<>normal then exit(dispatch);
+         end;
+    '!': exit(dispatch);
+   end;
+  if Size=0 then exit(dispatch);
+  end;
+  
+{$P}{*************************************************************}
+  {                                                             }
+  {     fastforward  -- general postion tape forward routine    }
+  {                                                             }
+  {*************************************************************}
+    
+    
+    function fudge(x:integer):integer;
+        { this function represents the number of frames per 512-byte
+          block when multiplied by 8;  the div4 and div8 produce the
+          factor of 3 per block (2 copies+1 polar bear); }
+    begin
+    fudge:=x div 4 + x div 8 ;
+    end;
+    
+  
+  procedure FastForward(distance:integer);
+  var i:integer;
+  begin
+  
+      { mirror jump forward command                   }
+      {  10, 7, lsb(blocks div 256), msb(blocks div 256)   }
+      { returns: 0                                         }
+  
+  distance:=(distance-49) div 32;           {# of blocks div 256}
+                                            { always undershoot }
+  if distance<2 then exit(FastForward);    { not far enough away }
+  push(STOP); wait(24);
+  if debug then writeln('jump forward ',distance,' blocks (*256)');
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=7; 
+  XCV.int[3]:=lsb(distance); XCV.int[4]:=msb(distance);
+  Send(XCV);
+  Recv(XCV);
+  end;
+
+{$P}{*************************************************************}
+  {                                                             }
+  {     rewind  -- general rewind tape routine                  }
+  {                                                             }
+  {*************************************************************}
+  
+  procedure rewind(distance:integer);
+  var i:integer;
+  begin
+  
+      { mirror jump reverse command                   }
+      {  10, 8, lsb(blocks div 256), msb(blocks div 256)   }
+      { returns: 0                                         }
+      
+  push(stop); wait(21);                     { avoid bang-bang control }
+  distance:=distance div 32 + 1;           {# of blocks div 256 + overshoot }
+  
+  if debug then writeln('jump reverse ',distance,' blocks (*256)');
+  
+  XCV.len:=4;
+  XCV.int[1]:=10; XCV.int[2]:=8; 
+  XCV.int[3]:=lsb(distance); XCV.int[4]:=msb(distance);
+  Send(XCV);
+  Recv(XCV);
+  end;
+  
+      
+  {$P*********************************************************************}
+  {                                                                     }
+  {     Where Am I routine                                              }
+  {                                                                     }
+  {*********************************************************************}
+  
+  procedure WhrAmI(Cmd:INTEGER);
+  begin
+      { mirror WhereAmI? command        }
+      {   10,  9,  0,  Cmd              }
+      {  Cmd is a tape postioning command issued following operation }
+      
+      {  returns:  retcd, fileID, Redundancy indication (0=dual, 1=quad),  }
+      {                 record type (F8-head, F1-tail, F6/06-data [hex])   }
+      {                 record # LSB,MSB,XSB,  image size LSB,MSB,XSB      }
+      
+    XCV.len:=4;
+    XCV.int[1]:=10; XCV.int[2]:=9; XCV.int[3]:=0; XCV.int[4]:=Cmd;
+    Send(XCV);
+    Recv(XCV);
+    MirCHK;
+  end;
+  
+  
+  {$P}{*************************************************************}
+  {                                                             }
+  {     findEOF is used for all image searchs:                  }
+  {             after using the mirror fast-forward/ rewind     }
+  {             commands the findEOF command places the tape    }
+  {             at the trailer of the specified file ID         }
+  {                                                             }
+  {*************************************************************}
+  
+  procedure findEOF(ID,nextop:integer);
+  const  dirsize=200;
+         hdsize=80;
+         tlsize=50;
+         
+  var i,offset,distance:integer;
+    
+    procedure PosCorrect;
+    var  rectype,LastID,imlen,imrec: INTEGER;
+      
+      procedure NextJump;
+        
+        procedure revcase;
+        begin
+        case rectype of
+          241: distance:=-fudge(HdSize + imlen + TlSize);
+          248: distance:=-fudge(HdSize + TLSIZE);
+          6,246: distance:=-fudge(HdSize + imrec + TLSIZE);
+         end;
+        for i:=LastID-1 downto ID+1 do
+          distance:=distance - fudge(Direc[i].len + HdSize + TlSize);
+        end;
+        
+        procedure forwcase;
+        begin
+        IF LASTID=0 THEN 
+          IF RECTYPE=248 THEN 
+            DISTANCE:=FUDGE(DIRSIZE)
+           ELSE
+            DISTANCE:=0
+         ELSE
+          case rectype of
+            248: distance:=fudge(imlen);
+            6,246: distance:=fudge(imlen - imrec);
+           end;
+        for i:=LastID+1 to ID do
+          distance:=distance + fudge(Direc[i].len + HdSize + TlSize);
+        end;
+      
+      begin
+      distance:=0;
+      if LastID>ID then
+        revcase
+       else
+        forwcase;
+      end;
+      
+     
+    begin       { where the hell am I? and should I repostion tape? }
+    repeat
+      wait(22);
+      WhrAmI(Play);
+      distance:=0;
+      imlen:=XCV.int[9]*256 + XCV.int[8];
+      imrec:=XCV.int[6]*256 + XCV.int[5];
+      rectype:=XCV.int[4];
+      LastID:=XCV.int[2];
+        
+      if debug then writeln('ID=',XCV.int[2],'  type=',XCV.int[4],'   rec #',
+                            imrec,'  of size=',imlen);
+      NextJump;
+      if distance>0 then FastForward(distance)
+       else if distance<0 then Rewind(-distance);
+     until LastID=ID;                   { I must be close enough }
+    end;
+      
+  
+  
+  begin
+  IF NODIR THEN WRITELN(' REWINDING TO START OF TAPE')
+   ELSE writeln(' Find END of Image #',ID);
+  if ID=0 then 
+    begin
+    push(REW);
+    while status(rewinding) do wait(25);      { allow a rewind to finish }
+    end
+   else
+    PosCorrect;
+    
+  IF NOT NODIR THEN
+    BEGIN
+      
+      { mirror goto to next EOF command }
+      {   10,  10,  0,  0               }
+      {  returns:  retcd, fileID        }
+      
+    XCV.len:=4;
+    XCV.int[1]:=10; XCV.int[2]:=10; XCV.int[3]:=0; XCV.int[4]:=nextop;
+    Send(XCV);
+    Recv(XCV);
+    MirCHK;
+    if debug then writeln('EOF ',XCV.int[2],'=?',ID);
+    if XCV.int[2]<>ID then
+      begin
+      writeln('*** retry of find EOI ',ID,' (AT EOI ',XCV.int[2],') ***');
+      PUSH(STOP);
+      findEOF(ID,nextop);
+      end;
+    writeln(' Tape at END of Image #',ID);
+    END;
+  end;
+
